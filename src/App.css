@@ -40,3 +40,38 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Estilos globales para hacer el proyecto responsive */
+body {
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Utilizando flexbox y grid para responsividad */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Ajustes para pantallas pequeñas */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 0.5rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .navbar ul {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .navbar li {
+    margin-bottom: 0.5rem;
+  }
+}
