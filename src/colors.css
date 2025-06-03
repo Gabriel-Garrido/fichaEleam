@@ -1,0 +1,10 @@
+/* Archivo de colores para el proyecto FichaEleam */
+
+:root {
+  --color-primary: #38b2ac; /* Teal */
+  --color-secondary: #81e6d9; /* Light Teal */
+  --color-accent: #2c7a7b; /* Dark Teal */
+  --color-background: #edf2f7; /* Light Gray */
+  --color-text: #2d3748; /* Dark Gray */
+  --color-button-hover: #319795; /* Hover Teal */
+}
