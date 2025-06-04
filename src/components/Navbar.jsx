@@ -61,12 +61,17 @@ function Navbar({ isLoggedIn }) {
         </button>
         <ul
           className={`absolute top-16 left-0 w-full bg-[var(--color-primary)] text-white flex flex-col items-center space-y-4 py-4 sm:space-y-0 sm:py-0 sm:static sm:flex-row sm:justify-end sm:space-x-8 transition-all duration-300 ease-in-out ${
-            menuOpen || window.innerWidth >= 640 ? "opacity-100 scale-100" : "opacity-0 scale-95 hidden"
+            menuOpen || window.innerWidth >= 640
+              ? "opacity-100 scale-100"
+              : "opacity-0 scale-95 hidden"
           }`}
           role="menu"
         >
           {menuItems.map((item, index) => (
-            <li key={index} className="px-4 py-2 hover:bg-[var(--color-secondary)] rounded-md transition-colors duration-200">
+            <li
+              key={index}
+              className="px-4 py-2 hover:bg-[var(--color-secondary)] rounded-md transition-colors duration-200"
+            >
               {item.action ? (
                 <button
                   onClick={() => {

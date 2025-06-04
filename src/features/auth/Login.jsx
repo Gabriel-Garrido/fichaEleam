@@ -1,17 +1,18 @@
-import React, { useState, useContext } from "react";
+import React, { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
 import { login } from "./authService";
-import { AuthContext } from "../../context/AuthContext";
+import { useLoading, useAuth } from "../../context/AuthContext";
+import Loading from "../../components/Loading";
 
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const { loading, setLoading } = useLoading();
+  const { authLoading, user } = useAuth();
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -28,19 +29,12 @@ function Login() {
     }
   };
 
-  console.log("Estado de usuario en AuthContext:", user);
-  console.log("Estado de carga en AuthContext:", loading);
+  if (authLoading) {
+    return <Loading message="Verificando autenticación..." />;
+  }
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--color-background)]">
-        <div className="p-6 sm:p-12 bg-gradient-to-b from-[var(--color-primary)] to-[var(--color-secondary)] rounded-3xl shadow-2xl max-w-full sm:max-w-4xl text-center">
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-white mb-4 sm:mb-6">
-            Cargando...
-          </h1>
-        </div>
-      </div>
-    );
+    return <Loading message="Iniciando sesión..." />;
   }
 
   if (user) {
@@ -49,33 +43,44 @@ function Login() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--color-background)]">
-      <div className="p-6 sm:p-12 bg-gradient-to-b from-[var(--color-primary)] to-[var(--color-secondary)] rounded-3xl shadow-2xl transform transition duration-500 hover:scale-105 max-w-full sm:max-w-4xl text-center">
-        <h1 className="text-3xl sm:text-5xl font-extrabold text-white mb-4 sm:mb-6">
+      <div className="p-8 sm:p-12 bg-white rounded-3xl shadow-lg max-w-full sm:max-w-md text-center">
+        <h1 className="text-4xl font-bold text-[var(--color-primary)] mb-6">
           Iniciar Sesión
         </h1>
-        <form
-          className="bg-white p-8 rounded shadow-md w-96"
-          onSubmit={handleLogin}
-        >
-          {error && <p className="text-red-500 mb-4">{error}</p>}
+        <form className="space-y-6" onSubmit={handleLogin}>
           <Input
             type="email"
-            placeholder="Correo Electrónico"
-            className="mb-4 w-full border border-[var(--color-primary)] focus:ring-[var(--color-secondary)]"
+            name="email"
+            placeholder="Correo electrónico"
+            className="w-full border border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-secondary)] rounded-md px-4 py-2"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <Input
             type="password"
+            name="password"
             placeholder="Contraseña"
-            className="mb-4 w-full border border-[var(--color-primary)] focus:ring-[var(--color-secondary)]"
+            className="w-full border border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-secondary)] rounded-md px-4 py-2"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <Button className="bg-[var(--color-primary)] text-white w-full hover:bg-[var(--color-button-hover)]">
-            Entrar
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+          <Button
+            type="submit"
+            className="w-full bg-[var(--color-primary)] text-white py-3 rounded-md hover:bg-[var(--color-button-hover)] transition-all duration-300"
+          >
+            Iniciar Sesión
           </Button>
         </form>
+        <p className="text-sm text-gray-500 mt-4">
+          ¿No tienes una cuenta?{" "}
+          <span
+            className="text-[var(--color-primary)] cursor-pointer hover:underline"
+            onClick={() => navigate("/register")}
+          >
+            Regístrate
+          </span>
+        </p>
       </div>
     </div>
   );

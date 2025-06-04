@@ -1,39 +1,49 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useContext } from "react";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+import Loading from "../components/Loading";
 
 const auth = getAuth();
 
-export const AuthContext = createContext();
+const AuthContext = createContext();
+const LoadingContext = createContext();
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    console.log("AuthContext useEffect triggered");
-    console.log("Firebase auth object:", auth);
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log("onAuthStateChanged callback executed");
-      console.log("Current user:", currentUser);
-      if (currentUser) {
-        console.log("Usuario autenticado:", currentUser);
-      } else {
-        console.log("No hay usuario autenticado");
-      }
       setUser(currentUser);
-      setLoading(false);
+      setAuthLoading(false);
     });
 
-    return () => {
-      console.log("AuthContext cleanup triggered");
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
-      {children}
+    <AuthContext.Provider value={{ user, setUser, authLoading }}>
+      {authLoading ? <Loading message="Verificando autenticación..." /> : children}
     </AuthContext.Provider>
   );
-};
+}
+
+export function LoadingProvider({ children }) {
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <LoadingContext.Provider value={{ loading, setLoading }}>
+      {loading && <Loading message="Cargando..." />}
+      {children}
+    </LoadingContext.Provider>
+  );
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+export function useLoading() {
+  return useContext(LoadingContext);
+}
+
+export { AuthContext, LoadingContext };
