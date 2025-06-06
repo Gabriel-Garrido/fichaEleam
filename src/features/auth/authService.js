@@ -4,6 +4,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../../services/firebaseConfig";
 
 const auth = getAuth(app);
 
@@ -50,6 +52,26 @@ export const register = async (data) => {
     return userCredential.user;
   } catch (error) {
     console.error("Error en el registro:", error);
+    throw error;
+  }
+};
+
+/**
+ * Crea un documento en la colección "usuarios" en Firestore.
+ * @param {string} uid - UID del usuario.
+ * @param {Object} data - Datos del usuario.
+ * @returns {Promise<void>} - Promesa que se resuelve cuando el documento se crea.
+ */
+export const createUserInFirestore = async (uid, data) => {
+  try {
+    const userRef = doc(db, "usuarios", uid);
+    await setDoc(userRef, {
+      ...data,
+      creadoEn: new Date().toISOString(),
+    });
+    console.log("Usuario creado en Firestore:", data);
+  } catch (error) {
+    console.error("Error al crear usuario en Firestore:", error);
     throw error;
   }
 };

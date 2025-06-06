@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../services/firebaseConfig";
+import { auth } from "../../services/firebaseConfig";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
 import { useLoading, useAuth } from "../../context/AuthContext";
 import Loading from "../../components/Loading";
+import { createUserInFirestore } from "./authService";
 
 function Register() {
   const [userData, setUserData] = useState({
@@ -56,15 +56,21 @@ function Register() {
         userData.email,
         userData.password
       );
-      const userRef = doc(db, "users", userCredential.user.uid);
-      await setDoc(userRef, {
+      const { uid } = userCredential.user;
+
+      // Crear documento en Firestore
+      await createUserInFirestore(uid, {
         nombre: userData.nombre,
         email: userData.email,
+        rol: "usuario", // Rol predeterminado
       });
+
       navigate("/dashboard");
     } catch (err) {
       console.error("Error en el registro:", err);
-      setError("No se pudo completar el registro. Por favor, inténtalo de nuevo.");
+      setError(
+        "No se pudo completar el registro. Por favor, inténtalo de nuevo."
+      );
     } finally {
       setLoading(false);
     }
