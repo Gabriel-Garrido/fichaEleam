@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createVitalSigns } from "./vitalSignsService";
 import { getResidents } from "../residents/residentService";
+import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 
@@ -24,6 +25,7 @@ const INITIAL = {
 
 function VitalSignsForm() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get("residenteId");
 
@@ -31,7 +33,7 @@ function VitalSignsForm() {
   const [residents, setResidents] = useState([]);
   const [saving, setSaving] = useState(false);
   const [loadingRes, setLoadingRes] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null); // inline errors only (resident required)
 
   useEffect(() => {
     getResidents("activo")
@@ -73,13 +75,14 @@ function VitalSignsForm() {
         observaciones: form.observaciones || null,
       };
       await createVitalSigns(payload);
+      toast("Signos vitales registrados correctamente.", "success");
       if (preselectedId) {
         navigate(`/residents/${preselectedId}`);
       } else {
         navigate("/vital-signs");
       }
-    } catch (err) {
-      setError("Error al guardar: " + err.message);
+    } catch {
+      toast("No se pudo guardar el registro.", "error");
     } finally {
       setSaving(false);
     }

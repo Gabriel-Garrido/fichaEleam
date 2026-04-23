@@ -47,52 +47,53 @@ Las variables con prefijo `VITE_` son expuestas al cliente (comportamiento está
 
 ```
 src/
-├── components/          # Componentes UI reutilizables
-│   ├── Button.jsx
-│   ├── Input.jsx
-│   ├── Loading.jsx
-│   ├── Modal.jsx
-│   ├── Navbar.jsx
-│   └── ProtectedRoute.jsx
+├── components/
+│   ├── Button.jsx          # Botón base con type="button" por defecto
+│   ├── ErrorBoundary.jsx   # Class component; muestra stack trace solo en DEV
+│   ├── Input.jsx           # Input que propaga todos los props
+│   ├── Loading.jsx         # Spinner inline con prop message
+│   ├── Modal.jsx           # Modal genérico
+│   ├── Navbar.jsx          # Nav responsivo con active state por ruta
+│   ├── ProtectedRoute.jsx  # Redirige a /login si no hay sesión
+│   └── Toast.jsx           # ToastProvider + useToast() hook
 ├── context/
-│   ├── AuthContext.jsx       # Auth + Loading contexts, useAuth(), useLoading()
-│   └── ResidentContext.jsx   # Context de residentes (legacy, no en uso activo)
+│   └── AuthContext.jsx     # useAuth() + useLoading(); escucha onAuthStateChange
 ├── features/
-│   ├── accreditation/        # Sistema de acreditación SEREMI
-│   │   ├── AccreditationDashboard.jsx
-│   │   ├── AccreditationCategory.jsx
-│   │   ├── AccreditationUpload.jsx
-│   │   └── accreditationService.js
+│   ├── accreditation/
+│   │   ├── AccreditationDashboard.jsx  # Progreso global + lista de categorías
+│   │   ├── AccreditationCategory.jsx   # Documentos por categoría + signed URLs
+│   │   ├── AccreditationUpload.jsx     # Subida con validación MIME + tamaño
+│   │   └── accreditationService.js     # CRUD + sanitizeFilename + getSignedUrl
 │   ├── auth/
 │   │   ├── Login.jsx
-│   │   ├── Register.jsx
-│   │   ├── authService.js    # login(), register(), logout()
-│   │   └── useAuth.js        # Re-exporta useAuth desde AuthContext
+│   │   ├── Register.jsx                # Valida email con validateEmail()
+│   │   ├── authService.js              # login(), register(), logout()
+│   │   └── useAuth.js                  # Re-exporta useAuth desde AuthContext
 │   ├── dashboard/
-│   │   └── AdminDashboard.jsx  # Dashboard principal con stats y acciones rápidas
+│   │   └── AdminDashboard.jsx          # Stats + acciones rápidas
 │   ├── landing/
 │   │   └── LandingPage.jsx
-│   ├── observations/          # Observaciones diarias
-│   │   ├── ObservationForm.jsx
-│   │   ├── ObservationList.jsx
+│   ├── observations/
+│   │   ├── ObservationForm.jsx         # 12 tipos de observación; usa useToast
+│   │   ├── ObservationList.jsx         # Filtro por residente; useCallback fetch
 │   │   └── observationsService.js
-│   ├── residents/             # Gestión de residentes
-│   │   ├── ResidentDetails.jsx
-│   │   ├── ResidentForm.jsx
-│   │   ├── ResidentList.jsx
+│   ├── residents/
+│   │   ├── ResidentDetails.jsx         # Ficha completa con links a signos/obs
+│   │   ├── ResidentForm.jsx            # Validación RUT mod-11; errores inline
+│   │   ├── ResidentList.jsx            # Búsqueda + filtro estado; useCallback
 │   │   └── residentService.js
-│   └── vitalSigns/            # Signos vitales
-│       ├── VitalSignsForm.jsx
-│       ├── VitalSignsList.jsx
+│   └── vitalSigns/
+│       ├── VitalSignsForm.jsx          # Todos los parámetros clínicos; useToast
+│       ├── VitalSignsList.jsx          # Tabla con alertas de valores críticos
 │       └── vitalSignsService.js
 ├── routes/
-│   └── AppRouter.jsx          # Todas las rutas de la app
+│   └── AppRouter.jsx                   # Rutas con ProtectedRoute
 ├── services/
-│   └── supabaseConfig.js      # Cliente Supabase singleton
+│   └── supabaseConfig.js               # Cliente Supabase singleton; falla si faltan env vars
 └── utils/
     ├── constants.js
     ├── dateUtils.js
-    └── validators.js
+    └── validators.js                   # validateEmail, validateRut (mod-11), formatRut
 ```
 
 ---
@@ -119,10 +120,10 @@ Ficha maestra de cada residente del ELEAM.
 |---------|-------------|
 | id | UUID PK |
 | nombre, apellido | Nombre completo |
-| rut | RUT chileno (único) |
+| rut | RUT chileno (único, opcional) |
 | fecha_nacimiento, sexo, estado_civil | Datos personales |
 | diagnostico_principal | Diagnóstico base |
-| alergias | Array de texto |
+| alergias | `text[]` — array de alergias |
 | indice_barthel | Entero 0-100 |
 | nivel_dependencia | leve/moderado/severo/total |
 | fecha_ingreso, fecha_egreso | Fechas de estadía |
@@ -136,11 +137,11 @@ Registro diario por turno de signos vitales.
 | residente_id | FK → residentes |
 | fecha_hora | Timestamp del registro |
 | turno | mañana/tarde/noche |
-| presion_sistolica, presion_diastolica | mmHg |
-| frecuencia_cardiaca | lpm |
-| frecuencia_respiratoria | rpm |
-| temperatura | °C |
-| saturacion_oxigeno | % (0-100) |
+| presion_sistolica, presion_diastolica | mmHg (check 50–300 / 30–200) |
+| frecuencia_cardiaca | lpm (check 20–300) |
+| frecuencia_respiratoria | rpm (check 5–60) |
+| temperatura | °C (check 30–45) |
+| saturacion_oxigeno | % (check 0–100) |
 | glucosa | mg/dL |
 | peso | kg |
 | dolor_escala | 0-10 |
@@ -158,7 +159,7 @@ Notas de turno, incidentes, procedimientos.
 | requiere_seguimiento | Boolean |
 
 #### `categorias_acreditacion`
-10 categorías fijas según DS 14/2017. Se insertan via SQL seed.
+10 categorías fijas según DS 14/2017. Se insertan vía SQL seed con `ON CONFLICT DO UPDATE`.
 
 #### `documentos_acreditacion`
 Documentos subidos para cada categoría de acreditación.
@@ -166,9 +167,11 @@ Documentos subidos para cada categoría de acreditación.
 |---------|-------------|
 | categoria_id | FK → categorias_acreditacion |
 | nombre | Nombre descriptivo del documento |
-| archivo_url | URL en Supabase Storage |
+| storage_path | Ruta relativa en Supabase Storage (NO URL pública) |
 | estado | pendiente/subido/aprobado/rechazado/vencido |
 | fecha_vencimiento | Para certificados con vencimiento |
+
+> **Nota**: se guarda `storage_path` (ej. `acreditacion/uuid/timestamp_archivo.pdf`), no una URL. La URL firmada se genera en el cliente con `getSignedUrl()` cuando el usuario quiere ver el archivo.
 
 ---
 
@@ -187,7 +190,7 @@ Documentos subidos para cada categoría de acreditación.
 | CAT-09 | Registros de Atención Diaria |
 | CAT-10 | Actividades y Rehabilitación |
 
-Cada categoría tiene un listado de `documentos_requeridos` (array JSON) que se muestra como checklist en la UI.
+Cada categoría tiene `documentos_requeridos` (array JSON) que se muestra como checklist en `AccreditationCategory.jsx`.
 
 ---
 
@@ -225,7 +228,7 @@ Supabase Auth con email/password. El flujo:
 1. `register()` → `supabase.auth.signUp()` + upsert en `profiles`
 2. Trigger de Supabase crea el perfil automáticamente (fallback)
 3. `login()` → `supabase.auth.signInWithPassword()`
-4. `AuthContext` mantiene la sesión activa y provee `user` y `profile`
+4. `AuthContext` escucha `onAuthStateChange` y expone `user`, `profile`, `authLoading`
 5. `ProtectedRoute` redirige a `/login` si no hay sesión
 
 ---
@@ -233,39 +236,98 @@ Supabase Auth con email/password. El flujo:
 ## Supabase Storage
 
 **Buckets:**
-- `documentos-acreditacion` — Archivos de acreditación (privado)
+- `documentos-acreditacion` — Archivos de acreditación (privado, 10 MB máx.)
 - `residentes-archivos` — Archivos de residentes (privado)
 
-Los archivos se almacenan con path `acreditacion/{categoriaId}/{timestamp}_{nombre}`.
+**Tipos MIME permitidos en `documentos-acreditacion`:**
+`application/pdf`, `image/jpeg`, `image/png`, `image/webp`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
 
-Para acceder a archivos privados se debe generar una URL firmada con `supabase.storage.createSignedUrl()` (mejora futura).
+Los archivos se almacenan en: `acreditacion/{categoriaId}/{timestamp}_{nombre_sanitizado}`
+
+**Acceso a archivos:** se genera una URL firmada de 1 hora con `supabase.storage.from('documentos-acreditacion').createSignedUrl(path, 3600)`. Las URLs cacheadas en el estado local expiran; se regeneran al hacer clic en "Ver".
 
 ---
 
 ## Row Level Security (RLS)
 
-Todas las tablas tienen RLS habilitado. La política base es:
-- Cualquier usuario **autenticado** (`auth.role() = 'authenticated'`) puede leer, insertar y actualizar.
-- Los usuarios solo ven su propio perfil en `profiles`.
+Todas las tablas tienen RLS habilitado. Patrón usado:
 
-Para entornos multi-establecimiento, extender con una columna `establecimiento_id` y políticas por establecimiento.
+```sql
+-- Correcto (evita cache de role stale):
+(select auth.uid()) is not null
+
+-- Evitado (patrón antiguo/deprecated):
+auth.role() = 'authenticated'
+```
+
+### Políticas implementadas
+
+| Tabla | SELECT | INSERT | UPDATE | DELETE |
+|-------|--------|--------|--------|--------|
+| profiles | propio perfil | propio | propio | — |
+| residentes | autenticado | autenticado | autenticado | autenticado |
+| signos_vitales | autenticado | autenticado | autenticado | autenticado |
+| observaciones_diarias | autenticado | autenticado | autenticado | autenticado |
+| categorias_acreditacion | autenticado | — | — | — |
+| documentos_acreditacion | autenticado | autenticado | autenticado | autenticado |
+
+**Storage policies** (scoped a `bucket_id = 'documentos-acreditacion'`):
+- SELECT / INSERT / DELETE: `(select auth.uid()) is not null`
 
 ---
 
-## Migración desde Firebase
+## Seguridad — Decisiones Clave
 
-El proyecto fue migrado de Firebase a Supabase. Cambios principales:
+### Sanitización de nombres de archivo
+`accreditationService.js` → `sanitizeFilename()`: elimina `..`, `/`, `\` y caracteres especiales para prevenir path traversal en Storage.
 
-| Antes (Firebase) | Después (Supabase) |
-|-----------------|-------------------|
-| `firebaseConfig.js` | `supabaseConfig.js` |
-| `getAuth()` + `onAuthStateChanged` | `supabase.auth.getSession()` + `onAuthStateChange` |
-| `createUserWithEmailAndPassword` | `supabase.auth.signUp()` |
-| `signInWithEmailAndPassword` | `supabase.auth.signInWithPassword()` |
-| `auth.signOut()` | `supabase.auth.signOut()` |
-| Firestore `doc/setDoc` | `supabase.from().insert/update/select` |
-| Firebase Storage | `supabase.storage.from().upload()` |
-| `serviceAccountKey.json` (Admin SDK) | No necesario (RLS reemplaza al Admin SDK) |
+### Validación de archivos en el cliente
+`AccreditationUpload.jsx` → `validateFile()`: comprueba MIME type (whitelist) y tamaño (≤ 10 MB) antes de hacer el upload. El check se aplica tanto al input como al drag-and-drop.
+
+### Sin URLs públicas de Storage
+Se usa `storage_path` (ruta relativa) en la base de datos, no una URL pública. `getSignedUrl()` genera URLs temporales de 1 hora.
+
+### ErrorBoundary seguro
+`ErrorBoundary.jsx` muestra el stack trace del error solo si `import.meta.env.DEV` es `true`. En producción muestra únicamente un mensaje genérico.
+
+### Headers de seguridad (Vite dev)
+`vite.config.js` inyecta: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=()`.
+
+---
+
+## Componentes Compartidos
+
+### `Toast.jsx`
+- `<ToastProvider>` envuelve toda la app en `main.jsx`
+- `useToast()` devuelve una función `toast(message, type)` donde `type` es `success | error | warning | info`
+- Auto-dismiss a los 4 segundos; también dismissible manualmente
+- `aria-live="polite"` para accesibilidad
+
+### `ErrorBoundary.jsx`
+- Class component que captura errores no manejados en el árbol de React
+- Botón "Recargar página" para recovery
+- Stack trace visible solo en desarrollo
+
+### `Loading.jsx`
+- Spinner inline con prop `message` (default: `"Cargando..."`)
+- No es full-screen; se inserta en el flujo del documento
+
+### `Button.jsx`
+- `type="button"` por defecto (evita submit accidental en formularios)
+- Propaga `disabled`, `className` y `...rest`
+
+---
+
+## Validadores (`utils/validators.js`)
+
+### `validateRut(rut)`
+Valida RUT chileno con algoritmo módulo-11. Acepta formatos `12345678-9`, `12.345.678-9` o sin formato. Retorna `true` si el RUT está vacío (campo opcional).
+
+### `formatRut(rut)`
+Formatea un RUT al estilo `XX.XXX.XXX-X`.
+
+### `validateEmail(email)`
+Regex básico de validación de email. Usado en Register.jsx antes de enviar a Supabase.
 
 ---
 
@@ -273,9 +335,9 @@ El proyecto fue migrado de Firebase a Supabase. Cambios principales:
 
 1. Crear proyecto en [supabase.com](https://supabase.com)
 2. Ir a **SQL Editor** y ejecutar `supabase_schema.sql`
-3. Ir a **Storage** y crear los buckets `documentos-acreditacion` y `residentes-archivos` (si el SQL no los crea automáticamente)
+3. Verificar en **Storage** que el bucket `documentos-acreditacion` fue creado
 4. Ir a **Project Settings → API** y copiar `Project URL` y `anon public` key
-5. Crear `.env` con esas credenciales
+5. Crear `.env` con esas credenciales (ver `.env.example`)
 
 ---
 
@@ -283,9 +345,9 @@ El proyecto fue migrado de Firebase a Supabase. Cambios principales:
 
 - Autenticación por roles (admin vs. enfermera vs. médico) con acceso diferenciado
 - Exportación PDF de fichas clínicas y listas de signos vitales
-- URLs firmadas para descarga segura de documentos privados
-- Soporte multi-establecimiento (columna `establecimiento_id`)
+- Soporte multi-establecimiento (columna `establecimiento_id` + políticas RLS por establecimiento)
 - Módulo de medicamentos con kardex digital
 - Notificaciones de documentos próximos a vencer
-- Módulo de agenda/citas médicas
+- Módulo de agenda / citas médicas
 - Dashboard de analytics con gráficos de signos vitales históricos
+- Confirmación de email al registrarse

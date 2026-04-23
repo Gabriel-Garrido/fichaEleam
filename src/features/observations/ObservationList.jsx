@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getObservations, deleteObservation } from "./observationsService";
 import { getResidents } from "../residents/residentService";
+import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 
@@ -31,6 +32,7 @@ const TIPO_LABEL = {
 
 function ObservationList() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get("residenteId");
 
@@ -42,20 +44,30 @@ function ObservationList() {
 
   useEffect(() => { getResidents().then(setResidents).catch(() => {}); }, []);
 
-  useEffect(() => {
+  const fetchRecords = useCallback(async () => {
     setLoading(true);
-    getObservations(filtroResidente || null)
-      .then(setRecords)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    setError(null);
+    try {
+      const data = await getObservations(filtroResidente || null);
+      setRecords(data);
+    } catch {
+      setError("No se pudo cargar las observaciones.");
+    } finally {
+      setLoading(false);
+    }
   }, [filtroResidente]);
+
+  useEffect(() => { fetchRecords(); }, [fetchRecords]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("¿Eliminar esta observación?")) return;
     try {
       await deleteObservation(id);
       setRecords((prev) => prev.filter((r) => r.id !== id));
-    } catch (err) { setError(err.message); }
+      toast("Observación eliminada.", "success");
+    } catch {
+      toast("No se pudo eliminar la observación.", "error");
+    }
   };
 
   if (loading) return <Loading message="Cargando observaciones..." />;
@@ -72,7 +84,12 @@ function ObservationList() {
         </Button>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">{error}</div>}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex justify-between items-center">
+          <span>{error}</span>
+          <button onClick={fetchRecords} className="underline text-sm ml-2">Reintentar</button>
+        </div>
+      )}
 
       <div className="mb-4">
         <select value={filtroResidente} onChange={(e) => setFiltroResidente(e.target.value)}

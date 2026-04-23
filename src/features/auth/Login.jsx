@@ -16,55 +16,47 @@ function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
     try {
-      const user = await login({ email, password });
-      console.log("Usuario logueado:", user);
-      navigate("/dashboard"); // Redirige al dashboard
-    } catch (err) {
-      console.error("Error en el login:", err);
+      await login({ email, password });
+      navigate("/dashboard");
+    } catch {
       setError("Credenciales inválidas. Por favor, inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }
   };
 
-  if (authLoading) {
-    return <Loading message="Verificando autenticación..." />;
-  }
-
-  if (loading) {
-    return <Loading message="Iniciando sesión..." />;
-  }
-
-  if (user) {
-    return <Navigate to="/dashboard" />; // Redirigir directamente al dashboard
-  }
+  if (authLoading || loading) return <Loading message="Verificando autenticación..." />;
+  if (user) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--color-background)]">
-      <div className="p-8 sm:p-12 bg-white rounded-3xl shadow-lg max-w-full sm:max-w-md text-center">
-        <h1 className="text-4xl font-bold text-[var(--color-primary)] mb-6">
-          Iniciar Sesión
-        </h1>
+      <div className="p-8 sm:p-12 bg-white rounded-3xl shadow-lg w-full max-w-md text-center">
+        <h1 className="text-4xl font-bold text-[var(--color-primary)] mb-6">Iniciar Sesión</h1>
         <form className="space-y-6" onSubmit={handleLogin}>
           <Input
             type="email"
             name="email"
             placeholder="Correo electrónico"
+            autoComplete="email"
             className="w-full border border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-secondary)] rounded-md px-4 py-2"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            required
           />
           <Input
             type="password"
             name="password"
             placeholder="Contraseña"
+            autoComplete="current-password"
             className="w-full border border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-secondary)] rounded-md px-4 py-2"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            required
           />
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p className="text-red-500 text-sm" role="alert">{error}</p>}
           <Button
             type="submit"
             className="w-full bg-[var(--color-primary)] text-white py-3 rounded-md hover:bg-[var(--color-button-hover)] transition-all duration-300"

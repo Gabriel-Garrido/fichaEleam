@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createObservation } from "./observationsService";
 import { getResidents } from "../residents/residentService";
+import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 
@@ -22,6 +23,7 @@ const TIPOS = [
 
 function ObservationForm() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get("residenteId");
 
@@ -56,10 +58,11 @@ function ObservationForm() {
     setSaving(true);
     try {
       await createObservation(form);
+      toast("Observación guardada correctamente.", "success");
       if (preselectedId) navigate(`/residents/${preselectedId}`);
       else navigate("/observations");
-    } catch (err) {
-      setError("Error al guardar: " + err.message);
+    } catch {
+      toast("No se pudo guardar la observación.", "error");
     } finally {
       setSaving(false);
     }

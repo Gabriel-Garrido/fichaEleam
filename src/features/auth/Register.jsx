@@ -5,6 +5,7 @@ import Button from "../../components/Button";
 import { useLoading, useAuth } from "../../context/AuthContext";
 import Loading from "../../components/Loading";
 import { register } from "./authService";
+import { validateEmail } from "../../utils/validators";
 
 function Register() {
   const [userData, setUserData] = useState({
@@ -35,6 +36,10 @@ function Register() {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError(null);
+    if (!validateEmail(userData.email)) {
+      setError("El correo electrónico no es válido.");
+      return;
+    }
     const passwordError = validatePassword();
     if (passwordError) {
       setError(passwordError);
