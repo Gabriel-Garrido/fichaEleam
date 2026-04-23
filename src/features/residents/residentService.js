@@ -1,39 +1,61 @@
-/**
- * Servicio de gestión de residentes.
- * Contiene funciones para obtener y agregar residentes.
- */
+import { supabase } from "../../services/supabaseConfig";
 
-/**
- * Obtiene la lista de residentes.
- * @returns {Promise<Array>} - Lista de residentes.
- */
-export const getResidents = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/residents`);
-    if (!response.ok) throw new Error("Failed to fetch residents");
-    return await response.json();
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
+export const getResidents = async (estado = null) => {
+  let query = supabase
+    .from("residentes")
+    .select("*")
+    .order("apellido", { ascending: true });
+
+  if (estado) query = query.eq("estado", estado);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
 };
 
-/**
- * Agrega un nuevo residente.
- * @param {Object} data - Datos del residente.
- * @returns {Promise<Object>} - Respuesta del servidor.
- */
-export const addResident = async (data) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/residents`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error("Failed to add resident");
-    return await response.json();
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
+export const getResidentById = async (id) => {
+  const { data, error } = await supabase
+    .from("residentes")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const createResident = async (residentData) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from("residentes")
+    .insert({ ...residentData, creado_por: user?.id })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateResident = async (id, residentData) => {
+  const { data, error } = await supabase
+    .from("residentes")
+    .update({ ...residentData, actualizado_en: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteResident = async (id) => {
+  const { error } = await supabase.from("residentes").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const getResidentStats = async () => {
+  const { data, error } = await supabase.from("residentes").select("estado");
+  if (error) throw error;
+  const total = data.length;
+  const activos = data.filter((r) => r.estado === "activo").length;
+  const hospitalizados = data.filter((r) => r.estado === "hospitalizado").length;
+  const egresados = data.filter((r) => r.estado === "egresado").length;
+  return { total, activos, hospitalizados, egresados };
 };

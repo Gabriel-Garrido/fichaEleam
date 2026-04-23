@@ -1,18 +1,13 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
-import { useContext } from "react";
-import { AuthContext } from "../context/AuthContext";
+import { useAuth } from "../context/AuthContext";
+import Loading from "./Loading";
 
 function ProtectedRoute({ children }) {
-  const { user, loading } = useContext(AuthContext);
+  const { user, authLoading } = useAuth();
 
-  if (loading) {
-    return <div>Cargando...</div>; // Mostrar indicador de carga
-  }
-
-  if (!user) {
-    return <Navigate to="/login" />; // Redirigir al login si no está autenticado
-  }
+  if (authLoading) return <Loading message="Verificando sesión..." />;
+  if (!user) return <Navigate to="/login" replace />;
 
   return children;
 }

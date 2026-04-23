@@ -1,7 +1,8 @@
 import React from "react";
+import { Navigate } from "react-router-dom";
 
 function ClinicalRecordForm() {
-  return <div>Clinical Record Form Component</div>;
+  return <Navigate to="/observations/new" replace />;
 }
 
 export default ClinicalRecordForm;

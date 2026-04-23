@@ -1,1 +1,2 @@
-export const API_BASE_URL = "https://api.example.com";
+export const APP_NAME = "FichaEleam";
+export const APP_VERSION = "2.0.0";

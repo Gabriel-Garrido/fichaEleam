@@ -1,7 +1,8 @@
 import React from "react";
+import { Navigate } from "react-router-dom";
 
 function DocumentList() {
-  return <div>Document List Component</div>;
+  return <Navigate to="/accreditation" replace />;
 }
 
 export default DocumentList;
