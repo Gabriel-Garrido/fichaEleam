@@ -1,136 +1,65 @@
-import React, { useContext } from "react";
+import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { AuthContext } from "../context/AuthContext";
+import { useAuth } from "../context/AuthContext";
+
 import Login from "../features/auth/Login";
 import Register from "../features/auth/Register";
+import LandingPage from "../features/landing/LandingPage";
+
 import ResidentList from "../features/residents/ResidentList";
 import ResidentForm from "../features/residents/ResidentForm";
 import ResidentDetails from "../features/residents/ResidentDetails";
-import ClinicalRecordList from "../features/clinicalRecords/ClinicalRecordList";
-import ClinicalRecordForm from "../features/clinicalRecords/ClinicalRecordForm";
-import ClinicalRecordDetails from "../features/clinicalRecords/ClinicalRecordDetails";
-import DocumentUpload from "../features/documents/DocumentUpload";
-import DocumentList from "../features/documents/DocumentList";
+
+import VitalSignsList from "../features/vitalSigns/VitalSignsList";
+import VitalSignsForm from "../features/vitalSigns/VitalSignsForm";
+
+import ObservationList from "../features/observations/ObservationList";
+import ObservationForm from "../features/observations/ObservationForm";
+
+import AccreditationDashboard from "../features/accreditation/AccreditationDashboard";
+import AccreditationCategory from "../features/accreditation/AccreditationCategory";
+import AccreditationUpload from "../features/accreditation/AccreditationUpload";
+
 import AdminDashboard from "../features/dashboard/AdminDashboard";
-import ResidentDashboard from "../features/dashboard/ResidentDashboard";
 import Navbar from "../components/Navbar";
-import LandingPage from "../features/landing/LandingPage";
 import ProtectedRoute from "../components/ProtectedRoute";
 
 function AppRouter() {
-  const { user, loading } = useContext(AuthContext);
-
-  if (loading) {
-    return <div>Cargando...</div>; // Mostrar un indicador de carga mientras se verifica el estado de autenticación
-  }
+  const { user } = useAuth();
 
   return (
     <>
-      <Navbar isLoggedIn={!!user} />{" "}
-      {/* Renderiza Navbar para todos los usuarios */}
+      <Navbar isLoggedIn={!!user} />
       <Routes>
-        <Route
-          path="/"
-          element={user ? <Navigate to="/dashboard" /> : <LandingPage />}
-        />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route
-          path="/residents"
-          element={
-            <ProtectedRoute>
-              <ResidentList />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/residents/new"
-          element={
-            <ProtectedRoute>
-              <ResidentForm />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/residents/:id"
-          element={
-            <ProtectedRoute>
-              <ResidentDetails />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/clinical-records"
-          element={
-            <ProtectedRoute>
-              <ClinicalRecordList />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/clinical-records/new"
-          element={
-            <ProtectedRoute>
-              <ClinicalRecordForm />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/clinical-records/:id"
-          element={
-            <ProtectedRoute>
-              <ClinicalRecordDetails />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/documents/upload"
-          element={
-            <ProtectedRoute>
-              <DocumentUpload />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/documents"
-          element={
-            <ProtectedRoute>
-              <DocumentList />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/dashboard/admin"
-          element={
-            <ProtectedRoute>
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/dashboard/resident"
-          element={
-            <ProtectedRoute>
-              <ResidentDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/resident-dashboard"
-          element={
-            <ProtectedRoute>
-              <ResidentDashboard />
-            </ProtectedRoute>
-          }
-        />
+        {/* Públicas */}
+        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+
+        {/* Dashboard */}
+        <Route path="/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+
+        {/* Residentes */}
+        <Route path="/residents" element={<ProtectedRoute><ResidentList /></ProtectedRoute>} />
+        <Route path="/residents/new" element={<ProtectedRoute><ResidentForm /></ProtectedRoute>} />
+        <Route path="/residents/:id" element={<ProtectedRoute><ResidentDetails /></ProtectedRoute>} />
+        <Route path="/residents/:id/edit" element={<ProtectedRoute><ResidentForm /></ProtectedRoute>} />
+
+        {/* Signos Vitales */}
+        <Route path="/vital-signs" element={<ProtectedRoute><VitalSignsList /></ProtectedRoute>} />
+        <Route path="/vital-signs/new" element={<ProtectedRoute><VitalSignsForm /></ProtectedRoute>} />
+
+        {/* Observaciones */}
+        <Route path="/observations" element={<ProtectedRoute><ObservationList /></ProtectedRoute>} />
+        <Route path="/observations/new" element={<ProtectedRoute><ObservationForm /></ProtectedRoute>} />
+
+        {/* Acreditación */}
+        <Route path="/accreditation" element={<ProtectedRoute><AccreditationDashboard /></ProtectedRoute>} />
+        <Route path="/accreditation/category/:id" element={<ProtectedRoute><AccreditationCategory /></ProtectedRoute>} />
+        <Route path="/accreditation/upload" element={<ProtectedRoute><AccreditationUpload /></ProtectedRoute>} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to={user ? "/dashboard" : "/"} replace />} />
       </Routes>
     </>
   );

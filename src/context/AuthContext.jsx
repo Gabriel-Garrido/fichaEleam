@@ -1,27 +1,47 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { supabase } from "../services/supabaseConfig";
 import Loading from "../components/Loading";
-
-const auth = getAuth();
 
 const AuthContext = createContext();
 const LoadingContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) fetchProfile(session.user.id);
       setAuthLoading(false);
     });
 
-    return () => unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          fetchProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  const fetchProfile = async (userId) => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
+    if (data) setProfile(data);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, setUser, authLoading }}>
+    <AuthContext.Provider value={{ user, profile, setUser, authLoading }}>
       {authLoading ? <Loading message="Verificando autenticación..." /> : children}
     </AuthContext.Provider>
   );

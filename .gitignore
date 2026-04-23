@@ -40,3 +40,10 @@ psd
 thumb
 sketch
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Supabase
+serviceAccountKey.json

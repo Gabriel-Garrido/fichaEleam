@@ -1,7 +1,8 @@
 import React from "react";
+import { Navigate } from "react-router-dom";
 
 function ResidentDashboard() {
-  return <div>Resident Dashboard Component</div>;
+  return <Navigate to="/dashboard" replace />;
 }
 
 export default ResidentDashboard;

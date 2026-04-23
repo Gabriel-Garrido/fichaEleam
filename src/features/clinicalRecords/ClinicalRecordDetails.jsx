@@ -1,7 +1,8 @@
 import React from "react";
+import { Navigate } from "react-router-dom";
 
 function ClinicalRecordDetails() {
-  return <div>Clinical Record Details Component</div>;
+  return <Navigate to="/observations" replace />;
 }
 
 export default ClinicalRecordDetails;
