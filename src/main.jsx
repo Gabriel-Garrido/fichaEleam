@@ -4,16 +4,21 @@ import App from "./App";
 import "./index.css";
 import { AuthProvider, LoadingProvider } from "./context/AuthContext";
 import { BrowserRouter } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { ToastProvider } from "./components/Toast";
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <LoadingProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
-    </LoadingProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <LoadingProvider>
+          <BrowserRouter>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </BrowserRouter>
+        </LoadingProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

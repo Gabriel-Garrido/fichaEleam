@@ -4,6 +4,27 @@ import { getCategories, uploadAccreditationDocument } from "./accreditationServi
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "image/jpeg",
+  "image/png",
+]);
+
+function validateFile(f) {
+  if (!ALLOWED_MIME_TYPES.has(f.type)) {
+    return "Tipo de archivo no permitido. Use PDF, Word, Excel o imágenes JPG/PNG.";
+  }
+  if (f.size > MAX_FILE_SIZE_BYTES) {
+    return `El archivo supera el tamaño máximo de 10 MB (actual: ${(f.size / 1024 / 1024).toFixed(1)} MB).`;
+  }
+  return null;
+}
+
 function AccreditationUpload() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -34,11 +55,18 @@ function AccreditationUpload() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const pickFile = (f) => {
+    if (!f) return;
+    const err = validateFile(f);
+    if (err) { setError(err); return; }
+    setError(null);
+    setFile(f);
+  };
+
   const handleFileDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped) setFile(dropped);
+    pickFile(e.dataTransfer.files[0]);
   };
 
   const handleSubmit = async (e) => {
@@ -46,12 +74,16 @@ function AccreditationUpload() {
     setError(null);
     if (!form.categoriaId) { setError("Debe seleccionar una categoría."); return; }
     if (!form.nombre.trim()) { setError("El nombre del documento es obligatorio."); return; }
+    if (file) {
+      const err = validateFile(file);
+      if (err) { setError(err); return; }
+    }
     setSaving(true);
     try {
       await uploadAccreditationDocument({
         categoriaId: form.categoriaId,
-        nombre: form.nombre,
-        descripcion: form.descripcion || null,
+        nombre: form.nombre.trim(),
+        descripcion: form.descripcion.trim() || null,
         fechaVencimiento: form.fechaVencimiento || null,
         file: file || null,
       });
@@ -66,7 +98,9 @@ function AccreditationUpload() {
   if (loadingCats) return <Loading message="Cargando categorías..." />;
 
   const selectedCat = categories.find((c) => c.id === form.categoriaId);
-  const requiredDocs = selectedCat?.documentos_requeridos ?? [];
+  const requiredDocs = Array.isArray(selectedCat?.documentos_requeridos)
+    ? selectedCat.documentos_requeridos
+    : [];
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -77,7 +111,7 @@ function AccreditationUpload() {
         <h1 className="text-3xl font-bold text-[var(--color-primary)]">Subir Documento de Acreditación</h1>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">{error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4" role="alert">{error}</div>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -106,6 +140,7 @@ function AccreditationUpload() {
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Nombre del documento *</label>
               <input type="text" name="nombre" value={form.nombre} onChange={handleChange} required
+                maxLength={200}
                 placeholder="Ej: Resolución de autorización sanitaria 2024"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]" />
             </div>
@@ -113,6 +148,7 @@ function AccreditationUpload() {
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Descripción</label>
               <textarea name="descripcion" value={form.descripcion} onChange={handleChange} rows={2}
+                maxLength={500}
                 placeholder="Descripción opcional del documento..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]" />
             </div>
@@ -143,7 +179,7 @@ function AccreditationUpload() {
                 <p className="text-sm text-gray-400">{(file.size / 1024).toFixed(1)} KB</p>
                 <button
                   type="button"
-                  onClick={() => setFile(null)}
+                  onClick={() => { setFile(null); setError(null); }}
                   className="mt-2 text-xs text-red-500 hover:underline"
                 >
                   Quitar archivo
@@ -159,10 +195,10 @@ function AccreditationUpload() {
                     type="file"
                     className="hidden"
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                    onChange={(e) => setFile(e.target.files[0] ?? null)}
+                    onChange={(e) => pickFile(e.target.files[0] ?? null)}
                   />
                 </label>
-                <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel, imágenes (máx. 10 MB)</p>
+                <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel, imágenes JPG/PNG (máx. 10 MB)</p>
               </div>
             )}
           </div>
