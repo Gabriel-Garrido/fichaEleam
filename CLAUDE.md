@@ -242,7 +242,7 @@ Supabase Auth con email/password. El flujo:
 **Tipos MIME permitidos en `documentos-acreditacion`:**
 `application/pdf`, `image/jpeg`, `image/png`, `image/webp`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
 
-Los archivos se almacenan en: `acreditacion/{categoriaId}/{timestamp}_{nombre_sanitizado}`
+Los archivos se almacenan en: `acreditacion/{eleamId}/{categoriaId}/{timestamp}_{nombre_sanitizado}`
 
 **Acceso a archivos:** se genera una URL firmada de 1 hora con `supabase.storage.from('documentos-acreditacion').createSignedUrl(path, 3600)`. Las URLs cacheadas en el estado local expiran; se regeneran al hacer clic en "Ver".
 
@@ -260,29 +260,72 @@ Todas las tablas tienen RLS habilitado. Patrón usado:
 auth.role() = 'authenticated'
 ```
 
+### Modelo multi-tenant
+
+Cada ELEAM es un tenant independiente. El aislamiento funciona así:
+
+1. `profiles.eleam_id` vincula cada usuario a su ELEAM.
+2. Las tablas de datos (`residentes`, `documentos_acreditacion`) tienen columna `eleam_id`.
+3. Las tablas derivadas (`signos_vitales`, `observaciones_diarias`) se aislan via JOIN con `residentes.eleam_id`.
+4. RLS verifica el `eleam_id` del perfil del usuario autenticado en cada operación.
+
+```sql
+-- Patrón RLS para tabla con eleam_id directo:
+(select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+
+-- Patrón RLS para tabla con FK a residentes:
+residente_id in (
+  select id from public.residentes
+  where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+)
+```
+
+### Patrón getMyContext() / getMyEleamId()
+
+Los servicios que insertan datos obtienen el `eleam_id` del perfil en el servidor, no confían en ningún parámetro enviado por el cliente:
+
+```js
+// accreditationService.js
+async function getMyContext() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data } = await supabase.from("profiles").select("eleam_id").eq("id", user.id).single();
+  return { userId: user.id, eleamId: data.eleam_id };
+}
+```
+
+Esto garantiza que aunque el cliente envíe un `eleam_id` malicioso, el INSERT siempre usa el del perfil.
+
 ### Políticas implementadas
 
 | Tabla | SELECT | INSERT | UPDATE | DELETE |
 |-------|--------|--------|--------|--------|
 | profiles | propio perfil | propio | propio | — |
-| residentes | autenticado | autenticado | autenticado | autenticado |
-| signos_vitales | autenticado | autenticado | autenticado | autenticado |
-| observaciones_diarias | autenticado | autenticado | autenticado | autenticado |
+| eleams | propio ELEAM | autenticado | admin_eleam | — |
+| residentes | mismo eleam_id | mismo eleam_id | mismo eleam_id | mismo eleam_id |
+| signos_vitales | residente del ELEAM | residente del ELEAM | residente del ELEAM | residente del ELEAM |
+| observaciones_diarias | residente del ELEAM | residente del ELEAM | residente del ELEAM | residente del ELEAM |
 | categorias_acreditacion | autenticado | — | — | — |
-| documentos_acreditacion | autenticado | autenticado | autenticado | autenticado |
+| documentos_acreditacion | mismo eleam_id | mismo eleam_id | mismo eleam_id | mismo eleam_id |
 
 **Storage policies** (scoped a `bucket_id = 'documentos-acreditacion'`):
 - SELECT / INSERT / DELETE: `(select auth.uid()) is not null`
+
+**Storage path**: `acreditacion/{eleamId}/{categoriaId}/{timestamp}_{filename}` — el `eleamId` en el path asegura aislamiento físico adicional en Storage.
 
 ---
 
 ## Seguridad — Decisiones Clave
 
 ### Sanitización de nombres de archivo
-`accreditationService.js` → `sanitizeFilename()`: elimina `..`, `/`, `\` y caracteres especiales para prevenir path traversal en Storage.
+`accreditationService.js` → `sanitizeFilename()`: elimina `..`, `/`, `\` y caracteres especiales para prevenir path traversal en Storage. Whitelist de extensiones: `pdf`, `doc`, `docx`, `xls`, `xlsx`, `jpg`, `jpeg`, `png`.
 
 ### Validación de archivos en el cliente
 `AccreditationUpload.jsx` → `validateFile()`: comprueba MIME type (whitelist) y tamaño (≤ 10 MB) antes de hacer el upload. El check se aplica tanto al input como al drag-and-drop.
+
+### Validación de UUID en parámetros de ruta y query
+Todos los componentes que reciben IDs desde la URL (`:id` params o `?residenteId=`) los validan con `isValidUUID()` antes de usarlos. Si el UUID es inválido: redirigen al listado o muestran error, sin hacer queries a la DB.
+
+Archivos con validación: `ResidentDetails.jsx`, `ResidentForm.jsx`, `VitalSignsForm.jsx`, `ObservationForm.jsx`, `AccreditationUpload.jsx`, `residentService.js`.
 
 ### Sin URLs públicas de Storage
 Se usa `storage_path` (ruta relativa) en la base de datos, no una URL pública. `getSignedUrl()` genera URLs temporales de 1 hora.
@@ -292,6 +335,9 @@ Se usa `storage_path` (ruta relativa) en la base de datos, no una URL pública. 
 
 ### Headers de seguridad (Vite dev)
 `vite.config.js` inyecta: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=()`.
+
+### Modal accesible
+`Modal.jsx` implementa: `role="dialog"`, `aria-modal="true"`, cierre con tecla Escape, cierre al hacer clic en el backdrop, `aria-label="Cerrar"` en el botón X, y `z-index: 50` para superposición correcta.
 
 ---
 
@@ -320,14 +366,20 @@ Se usa `storage_path` (ruta relativa) en la base de datos, no una URL pública. 
 
 ## Validadores (`utils/validators.js`)
 
+### `validateEmail(email)`
+Regex estricto: requiere `@`, dominio y TLD de al menos 2 caracteres. Usado en `Register.jsx` antes de enviar a Supabase. Maneja `null`/`undefined` sin lanzar excepción.
+
+### `isValidUUID(str)`
+Valida formato UUID v4 (`/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i`). Usado en todos los componentes que reciben IDs desde URL params y en `residentService.js` antes de queries a la DB.
+
 ### `validateRut(rut)`
 Valida RUT chileno con algoritmo módulo-11. Acepta formatos `12345678-9`, `12.345.678-9` o sin formato. Retorna `true` si el RUT está vacío (campo opcional).
 
 ### `formatRut(rut)`
 Formatea un RUT al estilo `XX.XXX.XXX-X`.
 
-### `validateEmail(email)`
-Regex básico de validación de email. Usado en Register.jsx antes de enviar a Supabase.
+### `validatePhone(phone)`
+Valida número de teléfono chileno. Acepta `+56912345678`, `912345678` o formatos internacionales de 9-12 dígitos. Retorna `true` si está vacío (campo opcional).
 
 ---
 
