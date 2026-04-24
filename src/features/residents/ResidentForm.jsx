@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createResident, updateResident, getResidentById } from "./residentService";
-import { validateRut, formatRut } from "../../utils/validators";
+import { validateRut, formatRut, isValidUUID } from "../../utils/validators";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
@@ -30,6 +30,11 @@ export default function ResidentForm() {
 
   useEffect(() => {
     if (!isEditing) return;
+    if (!isValidUUID(id)) {
+      toast("ID de residente inválido.", "error");
+      navigate("/residents");
+      return;
+    }
     getResidentById(id)
       .then((data) =>
         setForm({

@@ -1,14 +1,36 @@
 import { supabase } from "../../services/supabaseConfig";
 
-const SIGNED_URL_EXPIRY = 60 * 60; // 1 hora en segundos
+const SIGNED_URL_EXPIRY = 60 * 60; // 1 hora
+
+// Extensiones permitidas — whitelist estricta para prevenir subida de ejecutables
+const ALLOWED_EXTENSIONS = new Set(["pdf", "doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png"]);
 
 function sanitizeFilename(name) {
-  return name
+  const sanitized = name
+    .replace(/\.\./g, "_")       // bloquea path traversal (..)
+    .replace(/[/\\]/g, "_")      // bloquea separadores de ruta
     .replace(/[^a-zA-Z0-9._\-áéíóúÁÉÍÓÚñÑ ]/g, "_")
-    .replace(/\.\./g, "_")
-    .replace(/\//g, "_")
-    .replace(/\\/g, "_")
-    .substring(0, 100);
+    .replace(/^\.+/, "_")        // bloquea puntos al inicio
+    .substring(0, 100)
+    .trim();
+
+  const ext = sanitized.split(".").pop()?.toLowerCase() ?? "";
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    return `documento_${Date.now()}.pdf`;
+  }
+  return sanitized || `archivo_${Date.now()}`;
+}
+
+async function getMyContext() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado.");
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("eleam_id")
+    .eq("id", user.id)
+    .single();
+  if (error || !data?.eleam_id) throw new Error("ELEAM no encontrado para este usuario.");
+  return { userId: user.id, eleamId: data.eleam_id };
 }
 
 export const getCategories = async () => {
@@ -21,6 +43,7 @@ export const getCategories = async () => {
 };
 
 export const getDocumentsByCategory = async (categoriaId) => {
+  // RLS filtra automáticamente por eleam_id
   const { data, error } = await supabase
     .from("documentos_acreditacion")
     .select("*")
@@ -49,26 +72,19 @@ export const getSignedUrl = async (storagePath) => {
 };
 
 export const uploadAccreditationDocument = async ({
-  categoriaId,
-  nombre,
-  descripcion,
-  fechaVencimiento,
-  file,
+  categoriaId, nombre, descripcion, fechaVencimiento, file,
 }) => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { userId, eleamId } = await getMyContext();
 
-  if (!user) throw new Error("No autenticado.");
-
-  let storagePath = null;
+  let storagePath   = null;
   let archivoNombre = null;
-  let archivoTipo = null;
+  let archivoTipo   = null;
   let archivoTamaño = null;
 
   if (file) {
     const safeName = sanitizeFilename(file.name);
-    storagePath = `acreditacion/${categoriaId}/${Date.now()}_${safeName}`;
+    // Path incluye eleamId para aislamiento completo en Storage
+    storagePath = `acreditacion/${eleamId}/${categoriaId}/${Date.now()}_${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("documentos-acreditacion")
@@ -76,24 +92,25 @@ export const uploadAccreditationDocument = async ({
 
     if (uploadError) throw uploadError;
 
-    archivoNombre = file.name;
-    archivoTipo = file.type;
+    archivoNombre = file.name.substring(0, 255);
+    archivoTipo   = file.type;
     archivoTamaño = file.size;
   }
 
   const { data, error } = await supabase
     .from("documentos_acreditacion")
     .insert({
-      categoria_id: categoriaId,
+      categoria_id:      categoriaId,
+      eleam_id:          eleamId,
       nombre,
-      descripcion: descripcion || null,
-      storage_path: storagePath,
-      archivo_nombre: archivoNombre,
-      archivo_tipo: archivoTipo,
-      archivo_tamaño: archivoTamaño,
+      descripcion:       descripcion || null,
+      storage_path:      storagePath,
+      archivo_nombre:    archivoNombre,
+      archivo_tipo:      archivoTipo,
+      archivo_tamaño:    archivoTamaño,
       fecha_vencimiento: fechaVencimiento || null,
-      estado: file ? "subido" : "pendiente",
-      subido_por: user.id,
+      estado:            file ? "subido" : "pendiente",
+      subido_por:        userId,
     })
     .select()
     .single();
@@ -137,14 +154,14 @@ export const getAccreditationProgress = async () => {
   if (docsError) throw docsError;
 
   const categoriesList = categories ?? [];
-  const docsList = docs ?? [];
+  const docsList       = docs ?? [];
 
   return categoriesList.map((cat) => {
     const catDocs = docsList.filter((d) => d.categoria_id === cat.id);
     const subidos = catDocs.filter((d) => ["subido", "aprobado"].includes(d.estado)).length;
     return {
       ...cat,
-      total: catDocs.length,
+      total:      catDocs.length,
       subidos,
       porcentaje: catDocs.length > 0 ? Math.round((subidos / catDocs.length) * 100) : 0,
     };

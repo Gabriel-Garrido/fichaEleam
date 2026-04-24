@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getResidentById } from "./residentService";
+import { isValidUUID } from "../../utils/validators";
 import Loading from "../../components/Loading";
 import Button from "../../components/Button";
 
@@ -20,6 +21,11 @@ function ResidentDetails() {
   const [tab, setTab] = useState("info");
 
   useEffect(() => {
+    if (!isValidUUID(id)) {
+      setError("ID de residente inválido.");
+      setLoading(false);
+      return;
+    }
     getResidentById(id)
       .then(setResident)
       .catch((err) => setError("Error al cargar residente: " + err.message))

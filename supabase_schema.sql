@@ -639,3 +639,173 @@ create trigger on_auth_user_created
 --    UPDATE public.profiles
 --    SET rol='superadmin', eleam_id='a0000000-0000-0000-0000-000000000001'
 --    WHERE email='demo@fichaeleam.cl';
+
+-- ============================================================
+-- MULTI-TENANCY: eleam_id en tablas de datos
+-- Ejecutar después del bloque SaaS anterior.
+-- Garantiza aislamiento completo de datos entre ELEAMs.
+-- ============================================================
+
+-- ── Columna eleam_id en residentes ───────────────────────────
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'residentes' and column_name = 'eleam_id'
+  ) then
+    alter table public.residentes
+      add column eleam_id uuid references public.eleams(id) on delete restrict;
+  end if;
+end $$;
+
+-- ── RLS residentes: solo el propio ELEAM ─────────────────────
+drop policy if exists "residentes_select" on public.residentes;
+drop policy if exists "residentes_insert" on public.residentes;
+drop policy if exists "residentes_update" on public.residentes;
+drop policy if exists "residentes_delete" on public.residentes;
+
+create policy "residentes_select" on public.residentes for select
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "residentes_insert" on public.residentes for insert
+  with check (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "residentes_update" on public.residentes for update
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  )
+  with check (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "residentes_delete" on public.residentes for delete
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+-- ── RLS signos_vitales: aislamiento vía residentes.eleam_id ──
+drop policy if exists "sv_select" on public.signos_vitales;
+drop policy if exists "sv_insert" on public.signos_vitales;
+drop policy if exists "sv_update" on public.signos_vitales;
+drop policy if exists "sv_delete" on public.signos_vitales;
+drop policy if exists "signos_vitales_select" on public.signos_vitales;
+drop policy if exists "signos_vitales_insert" on public.signos_vitales;
+drop policy if exists "signos_vitales_update" on public.signos_vitales;
+drop policy if exists "signos_vitales_delete" on public.signos_vitales;
+
+create policy "sv_select" on public.signos_vitales for select
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "sv_insert" on public.signos_vitales for insert
+  with check (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "sv_update" on public.signos_vitales for update
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "sv_delete" on public.signos_vitales for delete
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+-- ── RLS observaciones_diarias: aislamiento vía residentes ────
+drop policy if exists "obs_select" on public.observaciones_diarias;
+drop policy if exists "obs_insert" on public.observaciones_diarias;
+drop policy if exists "obs_update" on public.observaciones_diarias;
+drop policy if exists "obs_delete" on public.observaciones_diarias;
+drop policy if exists "observaciones_select" on public.observaciones_diarias;
+drop policy if exists "observaciones_insert" on public.observaciones_diarias;
+drop policy if exists "observaciones_update" on public.observaciones_diarias;
+drop policy if exists "observaciones_delete" on public.observaciones_diarias;
+
+create policy "obs_select" on public.observaciones_diarias for select
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "obs_insert" on public.observaciones_diarias for insert
+  with check (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "obs_update" on public.observaciones_diarias for update
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "obs_delete" on public.observaciones_diarias for delete
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+-- ── eleam_id en documentos_acreditacion ──────────────────────
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'documentos_acreditacion' and column_name = 'eleam_id'
+  ) then
+    alter table public.documentos_acreditacion
+      add column eleam_id uuid references public.eleams(id) on delete restrict;
+  end if;
+end $$;
+
+drop policy if exists "docs_select" on public.documentos_acreditacion;
+drop policy if exists "docs_insert" on public.documentos_acreditacion;
+drop policy if exists "docs_update" on public.documentos_acreditacion;
+drop policy if exists "docs_delete" on public.documentos_acreditacion;
+drop policy if exists "documentos_select" on public.documentos_acreditacion;
+drop policy if exists "documentos_insert" on public.documentos_acreditacion;
+drop policy if exists "documentos_update" on public.documentos_acreditacion;
+drop policy if exists "documentos_delete" on public.documentos_acreditacion;
+
+create policy "docs_select" on public.documentos_acreditacion for select
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "docs_insert" on public.documentos_acreditacion for insert
+  with check (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "docs_update" on public.documentos_acreditacion for update
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "docs_delete" on public.documentos_acreditacion for delete
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );

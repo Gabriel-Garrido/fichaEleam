@@ -19,8 +19,10 @@ function VitalSignsList() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    getResidents().then(setResidents).catch(() => {});
-  }, []);
+    getResidents()
+      .then(setResidents)
+      .catch(() => toast("No se pudo cargar la lista de residentes.", "warning"));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
