@@ -498,3 +498,144 @@ on conflict (codigo) do update set
   nombre                = excluded.nombre,
   descripcion           = excluded.descripcion,
   documentos_requeridos = excluded.documentos_requeridos;
+
+-- ============================================================
+-- MÓDULO SAAS: ELEAMS + PAGO + ROLES
+-- Ejecutar después del schema base para habilitar la lógica
+-- de suscripción y multi-ELEAM.
+-- ============================================================
+
+-- ── Tabla: eleams ────────────────────────────────────────────
+-- Representa cada establecimiento cliente.
+-- El pago está asociado al ELEAM, no al usuario individual.
+create table if not exists public.eleams (
+  id               uuid primary key default gen_random_uuid(),
+  nombre           text not null,
+  rut_empresa      text unique,
+  email_admin      text not null,
+  pago_activo      boolean not null default false,
+  plan             text default 'mensual',
+  fecha_pago       timestamptz,
+  creado_en        timestamptz not null default now()
+);
+
+alter table public.eleams enable row level security;
+
+-- Cada usuario ve solo el ELEAM al que pertenece
+create policy "eleams_select_own" on public.eleams for select
+  using (
+    id in (
+      select eleam_id from public.profiles
+      where id = (select auth.uid())
+    )
+  );
+
+-- Cualquier usuario autenticado puede crear su ELEAM (registro)
+create policy "eleams_insert_auth" on public.eleams for insert
+  with check ((select auth.uid()) is not null);
+
+-- Solo el admin del ELEAM puede actualizarlo
+create policy "eleams_update_admin" on public.eleams for update
+  using (
+    id in (
+      select eleam_id from public.profiles
+      where id = (select auth.uid()) and rol = 'admin_eleam'
+    )
+  )
+  with check (
+    id in (
+      select eleam_id from public.profiles
+      where id = (select auth.uid()) and rol = 'admin_eleam'
+    )
+  );
+
+-- ── Agregar eleam_id a profiles (si no existe) ────────────────
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'profiles' and column_name = 'eleam_id'
+  ) then
+    alter table public.profiles
+      add column eleam_id uuid references public.eleams(id) on delete set null;
+  end if;
+end $$;
+
+-- ── Actualizar constraint de roles en profiles ─────────────────
+-- Se mantienen roles legacy para compatibilidad.
+alter table public.profiles
+  drop constraint if exists profiles_rol_check;
+
+alter table public.profiles
+  add constraint profiles_rol_check
+  check (rol in ('admin_eleam', 'funcionario', 'superadmin', 'admin', 'usuario', 'enfermera', 'medico'));
+
+-- ── Policy INSERT en profiles (necesaria para registro manual) ──
+drop policy if exists "profiles_own_insert" on public.profiles;
+create policy "profiles_own_insert" on public.profiles for insert
+  with check ((select auth.uid()) = id);
+
+-- ── ELEAM de prueba con pago siempre activo ───────────────────
+-- Este registro permite que el usuario de prueba acceda sin pago real.
+-- IMPORTANTE: eliminar o deshabilitar al integrar el sistema de pago real.
+insert into public.eleams (id, nombre, email_admin, pago_activo, plan)
+values (
+  'a0000000-0000-0000-0000-000000000001'::uuid,
+  'ELEAM Demo — FichaEleam',
+  'demo@fichaeleam.cl',
+  true,   -- ← pago_activo = true permanente para pruebas
+  'demo'
+)
+on conflict (id) do update set
+  pago_activo = true,
+  nombre      = excluded.nombre;
+
+-- ── Trigger actualizado: incluye rol y eleam_id ───────────────
+-- Si el usuario se registra con email demo@fichaeleam.cl,
+-- se asocia automáticamente al ELEAM de prueba como superadmin.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_rol      text := 'admin_eleam';
+  v_eleam_id uuid := null;
+begin
+  -- El email de prueba obtiene superadmin con pago activo permanente
+  if new.email = 'demo@fichaeleam.cl' then
+    v_rol      := 'superadmin';
+    v_eleam_id := 'a0000000-0000-0000-0000-000000000001'::uuid;
+  end if;
+
+  insert into public.profiles (id, nombre, email, rol, eleam_id)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email, '@', 1)),
+    new.email,
+    v_rol,
+    v_eleam_id
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+-- Recrear el trigger
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- ── Instrucciones para el usuario de prueba ──────────────────
+-- 1. Crear el usuario en Supabase Dashboard → Authentication → Users:
+--       Email: demo@fichaeleam.cl
+--       Password: FichaEleam2025!
+-- 2. O usar la API: supabase.auth.signUp({ email, password })
+-- 3. El trigger automáticamente lo asocia al ELEAM de prueba
+--    con rol='superadmin' y pago_activo=true.
+-- 4. Si el usuario ya existe, ejecutar manualmente:
+--    UPDATE public.profiles
+--    SET rol='superadmin', eleam_id='a0000000-0000-0000-0000-000000000001'
+--    WHERE email='demo@fichaeleam.cl';

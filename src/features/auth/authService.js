@@ -6,6 +6,15 @@ export const login = async ({ email, password }) => {
   return data.user;
 };
 
+export const loginWithGoogle = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${window.location.origin}/dashboard` },
+  });
+  if (error) throw error;
+  return data;
+};
+
 export const register = async ({ nombre, email, password }) => {
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -15,13 +24,20 @@ export const register = async ({ nombre, email, password }) => {
   if (error) throw error;
 
   if (data.user) {
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: data.user.id,
+    // Crear ELEAM con pago inactivo — el admin deberá activarlo en /pago
+    const { data: eleamData } = await supabase
+      .from("eleams")
+      .insert({ nombre: `ELEAM de ${nombre}`, email_admin: email, pago_activo: false })
+      .select()
+      .single();
+
+    await supabase.from("profiles").upsert({
+      id:       data.user.id,
       nombre,
       email,
-      rol: "usuario",
+      rol:      "admin_eleam",
+      eleam_id: eleamData?.id ?? null,
     });
-    if (profileError) throw profileError;
   }
   return data.user;
 };
