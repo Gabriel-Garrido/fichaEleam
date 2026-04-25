@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createVitalSigns } from "./vitalSignsService";
 import { getResidents } from "../residents/residentService";
+import { isValidUUID } from "../../utils/validators";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
@@ -27,7 +28,8 @@ function VitalSignsForm() {
   const navigate = useNavigate();
   const toast = useToast();
   const [searchParams] = useSearchParams();
-  const preselectedId = searchParams.get("residenteId");
+  const rawId = searchParams.get("residenteId");
+  const preselectedId = rawId && isValidUUID(rawId) ? rawId : null;
 
   const [form, setForm] = useState({ ...INITIAL, residente_id: preselectedId ?? "" });
   const [residents, setResidents] = useState([]);

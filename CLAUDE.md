@@ -48,16 +48,17 @@ Las variables con prefijo `VITE_` son expuestas al cliente (comportamiento está
 ```
 src/
 ├── components/
-│   ├── Button.jsx          # Botón base con type="button" por defecto
-│   ├── ErrorBoundary.jsx   # Class component; muestra stack trace solo en DEV
-│   ├── Input.jsx           # Input que propaga todos los props
-│   ├── Loading.jsx         # Spinner inline con prop message
-│   ├── Modal.jsx           # Modal genérico
-│   ├── Navbar.jsx          # Nav responsivo con active state por ruta
-│   ├── ProtectedRoute.jsx  # Redirige a /login si no hay sesión
-│   └── Toast.jsx           # ToastProvider + useToast() hook
+│   ├── Button.jsx           # Botón base con type="button" por defecto
+│   ├── ErrorBoundary.jsx    # Class component; muestra stack trace solo en DEV
+│   ├── Input.jsx            # Input que propaga todos los props
+│   ├── Loading.jsx          # Spinner inline con prop message
+│   ├── Modal.jsx            # Modal accesible: Escape, backdrop, role="dialog"
+│   ├── Navbar.jsx           # Nav sin prop isLoggedIn; lee useAuth() directamente
+│   ├── ProtectedRoute.jsx   # Redirige a /login si no hay sesión o pago activo
+│   ├── SuperAdminRoute.jsx  # Redirige a /dashboard si rol !== 'superadmin'
+│   └── Toast.jsx            # ToastProvider + useToast() hook
 ├── context/
-│   └── AuthContext.jsx     # useAuth() + useLoading(); escucha onAuthStateChange
+│   └── AuthContext.jsx      # useAuth() + useLoading(); escucha onAuthStateChange
 ├── features/
 │   ├── accreditation/
 │   │   ├── AccreditationDashboard.jsx  # Progreso global + lista de categorías
@@ -70,30 +71,34 @@ src/
 │   │   ├── authService.js              # login(), register(), logout()
 │   │   └── useAuth.js                  # Re-exporta useAuth desde AuthContext
 │   ├── dashboard/
-│   │   └── AdminDashboard.jsx          # Stats + acciones rápidas
+│   │   ├── AdminDashboard.jsx          # Stats + follow-ups + docs por vencer
+│   │   └── dashboardService.js         # loadDashboard() con Promise.allSettled
 │   ├── landing/
 │   │   └── LandingPage.jsx
 │   ├── observations/
-│   │   ├── ObservationForm.jsx         # 12 tipos de observación; usa useToast
-│   │   ├── ObservationList.jsx         # Filtro por residente; useCallback fetch
-│   │   └── observationsService.js
+│   │   ├── ObservationForm.jsx         # 12 tipos; usa useToast
+│   │   ├── ObservationList.jsx         # Filtros: residente, tipo, fecha, seguimiento
+│   │   └── observationsService.js      # getObservations({ desde, hasta, tipo, soloSeguimiento })
 │   ├── residents/
-│   │   ├── ResidentDetails.jsx         # Ficha completa con links a signos/obs
-│   │   ├── ResidentForm.jsx            # Validación RUT mod-11; errores inline
+│   │   ├── ResidentDetails.jsx         # Tabs lazy: info, signos (5 recientes), observaciones (5 recientes)
+│   │   ├── ResidentForm.jsx            # Campos: escala_katz, fecha_egreso, motivo_egreso
 │   │   ├── ResidentList.jsx            # Búsqueda + filtro estado; useCallback
 │   │   └── residentService.js
+│   ├── superadmin/
+│   │   ├── SuperAdminDashboard.jsx     # Métricas, tabla ELEAMs, pagos, modales edición/pago
+│   │   └── superadminService.js        # getMetrics, getAllEleams, updateEleam, registerPayment
 │   └── vitalSigns/
 │       ├── VitalSignsForm.jsx          # Todos los parámetros clínicos; useToast
-│       ├── VitalSignsList.jsx          # Tabla con alertas de valores críticos
-│       └── vitalSignsService.js
+│       ├── VitalSignsList.jsx          # Tabla + filtros fecha desde/hasta + residente
+│       └── vitalSignsService.js        # getVitalSigns({ desde, hasta, limit })
 ├── routes/
-│   └── AppRouter.jsx                   # Rutas con ProtectedRoute
+│   └── AppRouter.jsx                   # Rutas con ProtectedRoute + /superadmin con SuperAdminRoute
 ├── services/
-│   └── supabaseConfig.js               # Cliente Supabase singleton; falla si faltan env vars
+│   └── supabaseConfig.js               # Cliente Supabase singleton; null si faltan env vars
 └── utils/
     ├── constants.js
     ├── dateUtils.js
-    └── validators.js                   # validateEmail, validateRut (mod-11), formatRut
+    └── validators.js                   # validateEmail, validateRut, isValidUUID, validatePhone
 ```
 
 ---
@@ -111,7 +116,7 @@ Extiende `auth.users`. Se crea automáticamente vía trigger `on_auth_user_creat
 | id | uuid (FK → auth.users) | PK |
 | nombre | text | Nombre del usuario |
 | email | text | Correo |
-| rol | text | `admin`, `usuario`, `enfermera`, `medico` |
+| rol | text | `admin_eleam`, `funcionario`, `superadmin` |
 | creado_en | timestamptz | Fecha de creación |
 
 #### `residentes`
@@ -242,7 +247,7 @@ Supabase Auth con email/password. El flujo:
 **Tipos MIME permitidos en `documentos-acreditacion`:**
 `application/pdf`, `image/jpeg`, `image/png`, `image/webp`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
 
-Los archivos se almacenan en: `acreditacion/{categoriaId}/{timestamp}_{nombre_sanitizado}`
+Los archivos se almacenan en: `acreditacion/{eleamId}/{categoriaId}/{timestamp}_{nombre_sanitizado}`
 
 **Acceso a archivos:** se genera una URL firmada de 1 hora con `supabase.storage.from('documentos-acreditacion').createSignedUrl(path, 3600)`. Las URLs cacheadas en el estado local expiran; se regeneran al hacer clic en "Ver".
 
@@ -260,29 +265,88 @@ Todas las tablas tienen RLS habilitado. Patrón usado:
 auth.role() = 'authenticated'
 ```
 
+### Modelo multi-tenant
+
+Cada ELEAM es un tenant independiente. El aislamiento funciona así:
+
+1. `profiles.eleam_id` vincula cada usuario a su ELEAM.
+2. Las tablas de datos (`residentes`, `documentos_acreditacion`) tienen columna `eleam_id`.
+3. Las tablas derivadas (`signos_vitales`, `observaciones_diarias`) se aislan via JOIN con `residentes.eleam_id`.
+4. RLS verifica el `eleam_id` del perfil del usuario autenticado en cada operación.
+
+```sql
+-- Patrón RLS para tabla con eleam_id directo:
+(select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+
+-- Patrón RLS para tabla con FK a residentes:
+residente_id in (
+  select id from public.residentes
+  where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+)
+```
+
+### Patrón getMyContext() / getMyEleamId()
+
+Los servicios que insertan datos obtienen el `eleam_id` del perfil en el servidor, no confían en ningún parámetro enviado por el cliente:
+
+```js
+// accreditationService.js
+async function getMyContext() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data } = await supabase.from("profiles").select("eleam_id").eq("id", user.id).single();
+  return { userId: user.id, eleamId: data.eleam_id };
+}
+```
+
+Esto garantiza que aunque el cliente envíe un `eleam_id` malicioso, el INSERT siempre usa el del perfil.
+
 ### Políticas implementadas
 
 | Tabla | SELECT | INSERT | UPDATE | DELETE |
 |-------|--------|--------|--------|--------|
-| profiles | propio perfil | propio | propio | — |
-| residentes | autenticado | autenticado | autenticado | autenticado |
-| signos_vitales | autenticado | autenticado | autenticado | autenticado |
-| observaciones_diarias | autenticado | autenticado | autenticado | autenticado |
+| profiles | propio perfil **o** superadmin | propio | propio | — |
+| eleams | propio ELEAM **o** superadmin | autenticado **o** superadmin | admin_eleam **o** superadmin | — |
+| residentes | mismo eleam_id **o** superadmin | mismo eleam_id | mismo eleam_id | mismo eleam_id |
+| signos_vitales | residente del ELEAM | residente del ELEAM | residente del ELEAM | residente del ELEAM |
+| observaciones_diarias | residente del ELEAM | residente del ELEAM | residente del ELEAM | residente del ELEAM |
 | categorias_acreditacion | autenticado | — | — | — |
-| documentos_acreditacion | autenticado | autenticado | autenticado | autenticado |
+| documentos_acreditacion | mismo eleam_id | mismo eleam_id | mismo eleam_id | mismo eleam_id |
+| pagos | mismo eleam_id (solo SELECT) **o** superadmin (todo) | superadmin | superadmin | superadmin |
 
 **Storage policies** (scoped a `bucket_id = 'documentos-acreditacion'`):
-- SELECT / INSERT / DELETE: `(select auth.uid()) is not null`
+- SELECT / INSERT / DELETE: path scoped por `eleam_id` (`split_part(name, '/', 2)`)
+
+**Storage path**: `acreditacion/{eleamId}/{categoriaId}/{timestamp}_{filename}` — el `eleamId` en el path asegura aislamiento físico adicional en Storage.
+
+### Función `is_superadmin()`
+
+```sql
+create or replace function public.is_superadmin()
+  returns boolean language sql stable security definer
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = (select auth.uid()) and rol = 'superadmin'
+  );
+$$;
+```
+
+Todas las políticas de superadmin llaman a esta función en lugar de hardcodear la condición, lo que permite futuros cambios de rol sin tocar cada política.
 
 ---
 
 ## Seguridad — Decisiones Clave
 
 ### Sanitización de nombres de archivo
-`accreditationService.js` → `sanitizeFilename()`: elimina `..`, `/`, `\` y caracteres especiales para prevenir path traversal en Storage.
+`accreditationService.js` → `sanitizeFilename()`: elimina `..`, `/`, `\` y caracteres especiales para prevenir path traversal en Storage. Whitelist de extensiones: `pdf`, `doc`, `docx`, `xls`, `xlsx`, `jpg`, `jpeg`, `png`.
 
 ### Validación de archivos en el cliente
 `AccreditationUpload.jsx` → `validateFile()`: comprueba MIME type (whitelist) y tamaño (≤ 10 MB) antes de hacer el upload. El check se aplica tanto al input como al drag-and-drop.
+
+### Validación de UUID en parámetros de ruta y query
+Todos los componentes que reciben IDs desde la URL (`:id` params o `?residenteId=`) los validan con `isValidUUID()` antes de usarlos. Si el UUID es inválido: redirigen al listado o muestran error, sin hacer queries a la DB.
+
+Archivos con validación: `ResidentDetails.jsx`, `ResidentForm.jsx`, `VitalSignsForm.jsx`, `ObservationForm.jsx`, `AccreditationUpload.jsx`, `residentService.js`.
 
 ### Sin URLs públicas de Storage
 Se usa `storage_path` (ruta relativa) en la base de datos, no una URL pública. `getSignedUrl()` genera URLs temporales de 1 hora.
@@ -292,6 +356,9 @@ Se usa `storage_path` (ruta relativa) en la base de datos, no una URL pública. 
 
 ### Headers de seguridad (Vite dev)
 `vite.config.js` inyecta: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=()`.
+
+### Modal accesible
+`Modal.jsx` implementa: `role="dialog"`, `aria-modal="true"`, cierre con tecla Escape, cierre al hacer clic en el backdrop, `aria-label="Cerrar"` en el botón X, y `z-index: 50` para superposición correcta.
 
 ---
 
@@ -320,14 +387,20 @@ Se usa `storage_path` (ruta relativa) en la base de datos, no una URL pública. 
 
 ## Validadores (`utils/validators.js`)
 
+### `validateEmail(email)`
+Regex estricto: requiere `@`, dominio y TLD de al menos 2 caracteres. Usado en `Register.jsx` antes de enviar a Supabase. Maneja `null`/`undefined` sin lanzar excepción.
+
+### `isValidUUID(str)`
+Valida formato UUID v4 (`/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i`). Usado en todos los componentes que reciben IDs desde URL params y en `residentService.js` antes de queries a la DB.
+
 ### `validateRut(rut)`
 Valida RUT chileno con algoritmo módulo-11. Acepta formatos `12345678-9`, `12.345.678-9` o sin formato. Retorna `true` si el RUT está vacío (campo opcional).
 
 ### `formatRut(rut)`
 Formatea un RUT al estilo `XX.XXX.XXX-X`.
 
-### `validateEmail(email)`
-Regex básico de validación de email. Usado en Register.jsx antes de enviar a Supabase.
+### `validatePhone(phone)`
+Valida número de teléfono chileno. Acepta `+56912345678`, `912345678` o formatos internacionales de 9-12 dígitos. Retorna `true` si está vacío (campo opcional).
 
 ---
 
@@ -341,13 +414,69 @@ Regex básico de validación de email. Usado en Register.jsx antes de enviar a S
 
 ---
 
+## Superadmin — Gestión del Negocio
+
+Rol `superadmin` reservado para el dueño/operador de la plataforma FichaEleam.
+
+### Ruta y acceso
+
+- Ruta: `/superadmin`
+- Guard: `SuperAdminRoute` (`src/components/SuperAdminRoute.jsx`) — redirige a `/dashboard` si `profile.rol !== 'superadmin'`
+- Aparece en el Navbar solo cuando `profile.rol === 'superadmin'`
+
+### Cómo crear el primer superadmin
+
+```sql
+-- Ejecutar en Supabase SQL Editor después de registrar la cuenta:
+UPDATE public.profiles
+SET rol = 'superadmin'
+WHERE email = 'operador@fichaeleam.cl';
+```
+
+El superadmin no necesita `eleam_id`. `pagoActivo` siempre es `true` para este rol.
+
+### Funcionalidades del panel
+
+| Sección | Descripción |
+|---------|-------------|
+| Métricas del negocio | ELEAMs totales, activos, demos, nuevos este mes, residentes, ingresos del mes (CLP) |
+| Tabla de ELEAMs | Listado completo con búsqueda por nombre/email, plan, estado, vencimiento |
+| Editar ELEAM | Activar/desactivar suscripción, cambiar plan, límite de residentes, fecha de vencimiento, notas internas |
+| Registrar Pago | Asociar pago a ELEAM (monto, plan, método) — activa suscripción automáticamente |
+| Historial de pagos | Últimos 20 pagos con ELEAM, monto, plan y estado |
+
+### Tabla `pagos`
+
+Registro manual de pagos. No es una integración con pasarela (eso es trabajo futuro).
+
+```sql
+pagos (
+  eleam_id uuid,      -- FK a eleams
+  monto integer,      -- CLP, > 0
+  plan text,          -- 'mensual' | 'anual'
+  fecha_inicio date,
+  fecha_fin date,
+  metodo_pago text,   -- texto libre
+  estado text,        -- 'pendiente' | 'completado' | 'fallido' | 'reembolsado'
+  registrado_por uuid -- FK a auth.users (superadmin que registró)
+)
+```
+
+### Seguridad del superadmin
+
+- Las políticas RLS llaman a `public.is_superadmin()` (función `security definer`)
+- El superadmin no puede modificar RLS ni el schema (eso requiere service role en el servidor)
+- Los datos de un ELEAM (signos, observaciones) NO son accesibles al superadmin a menos que se agreguen políticas explícitas — actualmente solo accede a `eleams`, `profiles`, `residentes` (solo conteo) y `pagos`
+
+---
+
 ## Posibles Mejoras Futuras
 
-- Autenticación por roles (admin vs. enfermera vs. médico) con acceso diferenciado
+- Integración con pasarela de pago (Transbank / Stripe) para activación automática de suscripciones
+- Envío de email de bienvenida y recordatorio de vencimiento al admin del ELEAM
+- Dashboard de analytics: gráficos de crecimiento de ELEAMs, MRR histórico, churn
 - Exportación PDF de fichas clínicas y listas de signos vitales
-- Soporte multi-establecimiento (columna `establecimiento_id` + políticas RLS por establecimiento)
 - Módulo de medicamentos con kardex digital
-- Notificaciones de documentos próximos a vencer
+- Notificaciones push de documentos próximos a vencer
 - Módulo de agenda / citas médicas
-- Dashboard de analytics con gráficos de signos vitales históricos
 - Confirmación de email al registrarse

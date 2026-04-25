@@ -1,13 +1,15 @@
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-import Login from "../features/auth/Login";
-import Register from "../features/auth/Register";
-import LandingPage from "../features/landing/LandingPage";
+import Login        from "../features/auth/Login";
+import Register     from "../features/auth/Register";
+import LandingPage  from "../features/landing/LandingPage";
+import DemoPage     from "../features/demo/DemoPage";
+import PaymentPage  from "../features/payment/PaymentPage";
 
-import ResidentList from "../features/residents/ResidentList";
-import ResidentForm from "../features/residents/ResidentForm";
+import ResidentList    from "../features/residents/ResidentList";
+import ResidentForm    from "../features/residents/ResidentForm";
 import ResidentDetails from "../features/residents/ResidentDetails";
 
 import VitalSignsList from "../features/vitalSigns/VitalSignsList";
@@ -17,48 +19,56 @@ import ObservationList from "../features/observations/ObservationList";
 import ObservationForm from "../features/observations/ObservationForm";
 
 import AccreditationDashboard from "../features/accreditation/AccreditationDashboard";
-import AccreditationCategory from "../features/accreditation/AccreditationCategory";
-import AccreditationUpload from "../features/accreditation/AccreditationUpload";
+import AccreditationCategory  from "../features/accreditation/AccreditationCategory";
+import AccreditationUpload    from "../features/accreditation/AccreditationUpload";
 
-import AdminDashboard from "../features/dashboard/AdminDashboard";
-import Navbar from "../components/Navbar";
-import ProtectedRoute from "../components/ProtectedRoute";
+import AdminDashboard      from "../features/dashboard/AdminDashboard";
+import SuperAdminDashboard from "../features/superadmin/SuperAdminDashboard";
+
+import Navbar          from "../components/Navbar";
+import ProtectedRoute  from "../components/ProtectedRoute";
+import SuperAdminRoute from "../components/SuperAdminRoute";
+
+const NO_NAVBAR_PATHS = ["/", "/demo", "/pago"];
 
 function AppRouter() {
-  const { user } = useAuth();
+  const { user }      = useAuth();
+  const { pathname }  = useLocation();
+  const showNavbar    = !NO_NAVBAR_PATHS.includes(pathname);
 
   return (
     <>
-      <Navbar isLoggedIn={!!user} />
+      {showNavbar && <Navbar />}
       <Routes>
-        {/* Públicas */}
-        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+        {/* ── Públicas ──────────────────────────────────────── */}
+        <Route path="/"         element={<LandingPage />} />
+        <Route path="/login"    element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+        <Route path="/demo"     element={<DemoPage />} />
+        <Route path="/pago"     element={<PaymentPage />} />
 
-        {/* Dashboard */}
+        {/* ── Protegidas (requieren sesión + pago activo) ──── */}
         <Route path="/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
 
-        {/* Residentes */}
-        <Route path="/residents" element={<ProtectedRoute><ResidentList /></ProtectedRoute>} />
-        <Route path="/residents/new" element={<ProtectedRoute><ResidentForm /></ProtectedRoute>} />
-        <Route path="/residents/:id" element={<ProtectedRoute><ResidentDetails /></ProtectedRoute>} />
+        <Route path="/residents"          element={<ProtectedRoute><ResidentList /></ProtectedRoute>} />
+        <Route path="/residents/new"      element={<ProtectedRoute><ResidentForm /></ProtectedRoute>} />
+        <Route path="/residents/:id"      element={<ProtectedRoute><ResidentDetails /></ProtectedRoute>} />
         <Route path="/residents/:id/edit" element={<ProtectedRoute><ResidentForm /></ProtectedRoute>} />
 
-        {/* Signos Vitales */}
-        <Route path="/vital-signs" element={<ProtectedRoute><VitalSignsList /></ProtectedRoute>} />
+        <Route path="/vital-signs"     element={<ProtectedRoute><VitalSignsList /></ProtectedRoute>} />
         <Route path="/vital-signs/new" element={<ProtectedRoute><VitalSignsForm /></ProtectedRoute>} />
 
-        {/* Observaciones */}
-        <Route path="/observations" element={<ProtectedRoute><ObservationList /></ProtectedRoute>} />
+        <Route path="/observations"     element={<ProtectedRoute><ObservationList /></ProtectedRoute>} />
         <Route path="/observations/new" element={<ProtectedRoute><ObservationForm /></ProtectedRoute>} />
 
-        {/* Acreditación */}
-        <Route path="/accreditation" element={<ProtectedRoute><AccreditationDashboard /></ProtectedRoute>} />
+        <Route path="/accreditation"              element={<ProtectedRoute><AccreditationDashboard /></ProtectedRoute>} />
         <Route path="/accreditation/category/:id" element={<ProtectedRoute><AccreditationCategory /></ProtectedRoute>} />
-        <Route path="/accreditation/upload" element={<ProtectedRoute><AccreditationUpload /></ProtectedRoute>} />
+        <Route path="/accreditation/upload"       element={<ProtectedRoute><AccreditationUpload /></ProtectedRoute>} />
 
-        {/* Fallback */}
+        {/* ── Superadmin (requiere rol superadmin) ─────────── */}
+        <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
+
+        {/* ── Fallback ──────────────────────────────────────── */}
         <Route path="*" element={<Navigate to={user ? "/dashboard" : "/"} replace />} />
       </Routes>
     </>

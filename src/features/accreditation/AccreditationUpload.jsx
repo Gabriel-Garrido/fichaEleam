@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCategories, uploadAccreditationDocument } from "./accreditationService";
+import { isValidUUID } from "../../utils/validators";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 
@@ -28,7 +29,8 @@ function validateFile(f) {
 function AccreditationUpload() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const preselectedCat = searchParams.get("categoriaId");
+  const rawCat = searchParams.get("categoriaId");
+  const preselectedCat = rawCat && isValidUUID(rawCat) ? rawCat : null;
 
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({

@@ -498,3 +498,596 @@ on conflict (codigo) do update set
   nombre                = excluded.nombre,
   descripcion           = excluded.descripcion,
   documentos_requeridos = excluded.documentos_requeridos;
+
+-- ============================================================
+-- MÓDULO SAAS: ELEAMS + PAGO + ROLES
+-- Ejecutar después del schema base para habilitar la lógica
+-- de suscripción y multi-ELEAM.
+-- ============================================================
+
+-- ── Tabla: eleams ────────────────────────────────────────────
+-- Representa cada establecimiento cliente.
+-- El pago está asociado al ELEAM, no al usuario individual.
+create table if not exists public.eleams (
+  id               uuid primary key default gen_random_uuid(),
+  nombre           text not null,
+  rut_empresa      text unique,
+  email_admin      text not null,
+  pago_activo      boolean not null default false,
+  plan             text default 'mensual',
+  fecha_pago       timestamptz,
+  creado_en        timestamptz not null default now()
+);
+
+alter table public.eleams enable row level security;
+
+-- Cada usuario ve solo el ELEAM al que pertenece
+create policy "eleams_select_own" on public.eleams for select
+  using (
+    id in (
+      select eleam_id from public.profiles
+      where id = (select auth.uid())
+    )
+  );
+
+-- Cualquier usuario autenticado puede crear su ELEAM (registro)
+create policy "eleams_insert_auth" on public.eleams for insert
+  with check ((select auth.uid()) is not null);
+
+-- Solo el admin del ELEAM puede actualizarlo
+create policy "eleams_update_admin" on public.eleams for update
+  using (
+    id in (
+      select eleam_id from public.profiles
+      where id = (select auth.uid()) and rol = 'admin_eleam'
+    )
+  )
+  with check (
+    id in (
+      select eleam_id from public.profiles
+      where id = (select auth.uid()) and rol = 'admin_eleam'
+    )
+  );
+
+-- ── Agregar eleam_id a profiles (si no existe) ────────────────
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'profiles' and column_name = 'eleam_id'
+  ) then
+    alter table public.profiles
+      add column eleam_id uuid references public.eleams(id) on delete set null;
+  end if;
+end $$;
+
+-- ── Actualizar constraint de roles en profiles ─────────────────
+-- Se mantienen roles legacy para compatibilidad.
+alter table public.profiles
+  drop constraint if exists profiles_rol_check;
+
+alter table public.profiles
+  add constraint profiles_rol_check
+  check (rol in ('admin_eleam', 'funcionario', 'superadmin', 'admin', 'usuario', 'enfermera', 'medico'));
+
+-- ── Policy INSERT en profiles (necesaria para registro manual) ──
+drop policy if exists "profiles_own_insert" on public.profiles;
+create policy "profiles_own_insert" on public.profiles for insert
+  with check ((select auth.uid()) = id);
+
+-- ── ELEAM de prueba con pago siempre activo ───────────────────
+-- Este registro permite que el usuario de prueba acceda sin pago real.
+-- IMPORTANTE: eliminar o deshabilitar al integrar el sistema de pago real.
+insert into public.eleams (id, nombre, email_admin, pago_activo, plan)
+values (
+  'a0000000-0000-0000-0000-000000000001'::uuid,
+  'ELEAM Demo — FichaEleam',
+  'demo@fichaeleam.cl',
+  true,   -- ← pago_activo = true permanente para pruebas
+  'demo'
+)
+on conflict (id) do update set
+  pago_activo = true,
+  nombre      = excluded.nombre;
+
+-- ── Trigger actualizado: incluye rol y eleam_id ───────────────
+-- Si el usuario se registra con email demo@fichaeleam.cl,
+-- se asocia automáticamente al ELEAM de prueba como superadmin.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_rol      text := 'admin_eleam';
+  v_eleam_id uuid := null;
+begin
+  -- El email de prueba obtiene superadmin con pago activo permanente
+  if new.email = 'demo@fichaeleam.cl' then
+    v_rol      := 'superadmin';
+    v_eleam_id := 'a0000000-0000-0000-0000-000000000001'::uuid;
+  end if;
+
+  insert into public.profiles (id, nombre, email, rol, eleam_id)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email, '@', 1)),
+    new.email,
+    v_rol,
+    v_eleam_id
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+-- Recrear el trigger
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- ── Instrucciones para el usuario de prueba ──────────────────
+-- 1. Crear el usuario en Supabase Dashboard → Authentication → Users:
+--       Email: demo@fichaeleam.cl
+--       Password: FichaEleam2025!
+-- 2. O usar la API: supabase.auth.signUp({ email, password })
+-- 3. El trigger automáticamente lo asocia al ELEAM de prueba
+--    con rol='superadmin' y pago_activo=true.
+-- 4. Si el usuario ya existe, ejecutar manualmente:
+--    UPDATE public.profiles
+--    SET rol='superadmin', eleam_id='a0000000-0000-0000-0000-000000000001'
+--    WHERE email='demo@fichaeleam.cl';
+
+-- ============================================================
+-- MULTI-TENANCY: eleam_id en tablas de datos
+-- Ejecutar después del bloque SaaS anterior.
+-- Garantiza aislamiento completo de datos entre ELEAMs.
+-- ============================================================
+
+-- ── Columna eleam_id en residentes ───────────────────────────
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'residentes' and column_name = 'eleam_id'
+  ) then
+    alter table public.residentes
+      add column eleam_id uuid references public.eleams(id) on delete restrict;
+  end if;
+end $$;
+
+-- ── RLS residentes: solo el propio ELEAM ─────────────────────
+drop policy if exists "residentes_select" on public.residentes;
+drop policy if exists "residentes_insert" on public.residentes;
+drop policy if exists "residentes_update" on public.residentes;
+drop policy if exists "residentes_delete" on public.residentes;
+
+create policy "residentes_select" on public.residentes for select
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "residentes_insert" on public.residentes for insert
+  with check (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "residentes_update" on public.residentes for update
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  )
+  with check (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "residentes_delete" on public.residentes for delete
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+-- ── RLS signos_vitales: aislamiento vía residentes.eleam_id ──
+drop policy if exists "sv_select" on public.signos_vitales;
+drop policy if exists "sv_insert" on public.signos_vitales;
+drop policy if exists "sv_update" on public.signos_vitales;
+drop policy if exists "sv_delete" on public.signos_vitales;
+drop policy if exists "signos_vitales_select" on public.signos_vitales;
+drop policy if exists "signos_vitales_insert" on public.signos_vitales;
+drop policy if exists "signos_vitales_update" on public.signos_vitales;
+drop policy if exists "signos_vitales_delete" on public.signos_vitales;
+
+create policy "sv_select" on public.signos_vitales for select
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "sv_insert" on public.signos_vitales for insert
+  with check (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "sv_update" on public.signos_vitales for update
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "sv_delete" on public.signos_vitales for delete
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+-- ── RLS observaciones_diarias: aislamiento vía residentes ────
+drop policy if exists "obs_select" on public.observaciones_diarias;
+drop policy if exists "obs_insert" on public.observaciones_diarias;
+drop policy if exists "obs_update" on public.observaciones_diarias;
+drop policy if exists "obs_delete" on public.observaciones_diarias;
+drop policy if exists "observaciones_select" on public.observaciones_diarias;
+drop policy if exists "observaciones_insert" on public.observaciones_diarias;
+drop policy if exists "observaciones_update" on public.observaciones_diarias;
+drop policy if exists "observaciones_delete" on public.observaciones_diarias;
+
+create policy "obs_select" on public.observaciones_diarias for select
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "obs_insert" on public.observaciones_diarias for insert
+  with check (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "obs_update" on public.observaciones_diarias for update
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+create policy "obs_delete" on public.observaciones_diarias for delete
+  using (
+    residente_id in (
+      select id from public.residentes
+      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+    )
+  );
+
+-- ── eleam_id en documentos_acreditacion ──────────────────────
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'documentos_acreditacion' and column_name = 'eleam_id'
+  ) then
+    alter table public.documentos_acreditacion
+      add column eleam_id uuid references public.eleams(id) on delete restrict;
+  end if;
+end $$;
+
+drop policy if exists "docs_select" on public.documentos_acreditacion;
+drop policy if exists "docs_insert" on public.documentos_acreditacion;
+drop policy if exists "docs_update" on public.documentos_acreditacion;
+drop policy if exists "docs_delete" on public.documentos_acreditacion;
+drop policy if exists "documentos_select" on public.documentos_acreditacion;
+drop policy if exists "documentos_insert" on public.documentos_acreditacion;
+drop policy if exists "documentos_update" on public.documentos_acreditacion;
+drop policy if exists "documentos_delete" on public.documentos_acreditacion;
+
+create policy "docs_select" on public.documentos_acreditacion for select
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "docs_insert" on public.documentos_acreditacion for insert
+  with check (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "docs_update" on public.documentos_acreditacion for update
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+create policy "docs_delete" on public.documentos_acreditacion for delete
+  using (
+    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
+  );
+
+-- ============================================================
+-- SCHEMA v3 — FichaEleam
+-- Mejoras de modelo, performance e integridad.
+-- Seguro para re-ejecución: todas las sentencias son idempotentes.
+-- ============================================================
+
+-- ── 1. Función set_updated_at (reemplaza new Date() en JS) ──
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.actualizado_en = now();
+  return new;
+end;
+$$;
+
+-- ── 2. Corregir valores de rol (eliminar legacy) ─────────────
+update public.profiles
+  set rol = 'funcionario'
+  where rol in ('usuario', 'enfermera', 'medico');
+
+update public.profiles
+  set rol = 'admin_eleam'
+  where rol = 'admin';
+
+alter table public.profiles
+  drop constraint if exists profiles_rol_check;
+
+alter table public.profiles
+  add constraint profiles_rol_check
+  check (rol in ('admin_eleam', 'funcionario', 'superadmin'));
+
+-- ── 3. rut único por ELEAM (no globalmente) ──────────────────
+alter table public.residentes
+  drop constraint if exists residentes_rut_key;
+
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'residentes_rut_eleam_unique'
+  ) then
+    alter table public.residentes
+      add constraint residentes_rut_eleam_unique
+      unique (rut, eleam_id);
+  end if;
+end $$;
+
+-- ── 4. Índices de performance ─────────────────────────────────
+-- profiles.eleam_id — subquery en cada política RLS de datos
+create index if not exists idx_profiles_eleam_id
+  on public.profiles(eleam_id);
+
+-- residentes.eleam_id — subquery en RLS de signos_vitales y observaciones
+create index if not exists idx_residentes_eleam_id
+  on public.residentes(eleam_id);
+
+-- documentos_acreditacion.eleam_id — RLS directa
+create index if not exists idx_documentos_eleam_id
+  on public.documentos_acreditacion(eleam_id);
+
+-- Partial index para alertas del dashboard (seguimientos pendientes)
+create index if not exists idx_observaciones_seguimiento
+  on public.observaciones_diarias(residente_id, fecha_hora desc)
+  where requiere_seguimiento = true;
+
+-- Índice compuesto para documentos por vencer (query del dashboard)
+create index if not exists idx_documentos_eleam_vencimiento
+  on public.documentos_acreditacion(eleam_id, fecha_vencimiento)
+  where fecha_vencimiento is not null;
+
+-- ── 5. Nuevas columnas en eleams ──────────────────────────────
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='telefono'
+  ) then alter table public.eleams add column telefono text; end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='fecha_vencimiento_suscripcion'
+  ) then alter table public.eleams add column fecha_vencimiento_suscripcion timestamptz; end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='max_residentes'
+  ) then
+    -- NULL = ilimitado (tier demo/free). Integer para planes de pago.
+    alter table public.eleams add column max_residentes integer;
+  end if;
+end $$;
+
+-- CHECK en plan (demo seed ya usa 'demo', seguro)
+alter table public.eleams
+  drop constraint if exists eleams_plan_check;
+alter table public.eleams
+  add constraint eleams_plan_check
+  check (plan in ('demo', 'mensual', 'anual', 'inactivo') or plan is null);
+
+-- ── 6. observaciones_diarias — columna actualizado_en ────────
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='observaciones_diarias'
+    and column_name='actualizado_en'
+  ) then
+    alter table public.observaciones_diarias
+      add column actualizado_en timestamptz not null default now();
+    update public.observaciones_diarias set actualizado_en = creado_en;
+  end if;
+end $$;
+
+drop trigger if exists trg_observaciones_updated_at on public.observaciones_diarias;
+create trigger trg_observaciones_updated_at
+  before update on public.observaciones_diarias
+  for each row execute function public.set_updated_at();
+
+-- ── 7. signos_vitales — columna creado_en (audit trail) ──────
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='signos_vitales'
+    and column_name='creado_en'
+  ) then
+    alter table public.signos_vitales
+      add column creado_en timestamptz not null default now();
+    update public.signos_vitales set creado_en = fecha_hora;
+  end if;
+end $$;
+
+-- ── 8. Triggers updated_at para residentes y documentos ──────
+drop trigger if exists trg_residentes_updated_at on public.residentes;
+create trigger trg_residentes_updated_at
+  before update on public.residentes
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_documentos_updated_at on public.documentos_acreditacion;
+create trigger trg_documentos_updated_at
+  before update on public.documentos_acreditacion
+  for each row execute function public.set_updated_at();
+
+-- ── 9. Storage policies con scope por eleam_id en el path ────
+-- Path: acreditacion/{eleamId}/{categoriaId}/{timestamp}_{filename}
+-- split_part(name, '/', 2) extrae el eleam_id del path.
+drop policy if exists "storage_acreditacion_select" on storage.objects;
+drop policy if exists "storage_acreditacion_insert" on storage.objects;
+drop policy if exists "storage_acreditacion_delete" on storage.objects;
+
+create policy "storage_acreditacion_select"
+  on storage.objects for select
+  using (
+    bucket_id = 'documentos-acreditacion'
+    and split_part(name, '/', 2) = (
+      select eleam_id::text from public.profiles
+      where id = (select auth.uid())
+    )
+  );
+
+create policy "storage_acreditacion_insert"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'documentos-acreditacion'
+    and split_part(name, '/', 2) = (
+      select eleam_id::text from public.profiles
+      where id = (select auth.uid())
+    )
+  );
+
+create policy "storage_acreditacion_delete"
+  on storage.objects for delete
+  using (
+    bucket_id = 'documentos-acreditacion'
+    and split_part(name, '/', 2) = (
+      select eleam_id::text from public.profiles
+      where id = (select auth.uid())
+    )
+  );
+
+
+-- ════════════════════════════════════════════════════════════════
+-- v4: Superadmin — rol, políticas globales, tabla pagos
+-- Ejecutar en Supabase Dashboard → SQL Editor
+-- ════════════════════════════════════════════════════════════════
+
+-- ── 1. Columna notas_admin en eleams ────────────────────────────
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='notas_admin'
+  ) then
+    alter table public.eleams add column notas_admin text;
+  end if;
+end $$;
+
+-- ── 2. Función helper: es superadmin el usuario actual ──────────
+create or replace function public.is_superadmin()
+  returns boolean
+  language sql stable security definer
+  set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = (select auth.uid())
+      and rol = 'superadmin'
+  );
+$$;
+
+-- ── 3. Políticas RLS superadmin en eleams ───────────────────────
+-- Superadmin puede ver y editar TODOS los ELEAMs
+drop policy if exists "superadmin_select_eleams"  on public.eleams;
+drop policy if exists "superadmin_update_eleams"  on public.eleams;
+drop policy if exists "superadmin_insert_eleams"  on public.eleams;
+
+create policy "superadmin_select_eleams" on public.eleams
+  for select using (public.is_superadmin());
+
+create policy "superadmin_update_eleams" on public.eleams
+  for update using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+create policy "superadmin_insert_eleams" on public.eleams
+  for insert with check (public.is_superadmin());
+
+-- ── 4. Política RLS superadmin en profiles ──────────────────────
+-- Superadmin puede ver todos los perfiles
+drop policy if exists "superadmin_select_profiles" on public.profiles;
+
+create policy "superadmin_select_profiles" on public.profiles
+  for select using (public.is_superadmin());
+
+-- ── 5. Política RLS superadmin en residentes ────────────────────
+-- Superadmin puede ver todos los residentes (para métricas)
+drop policy if exists "superadmin_select_residentes" on public.residentes;
+
+create policy "superadmin_select_residentes" on public.residentes
+  for select using (public.is_superadmin());
+
+-- ── 6. Tabla pagos ──────────────────────────────────────────────
+create table if not exists public.pagos (
+  id                  uuid        primary key default gen_random_uuid(),
+  eleam_id            uuid        not null references public.eleams(id) on delete cascade,
+  monto               integer     not null check (monto > 0),
+  moneda              text        not null default 'CLP',
+  plan                text        not null check (plan in ('mensual', 'anual')),
+  fecha_pago          timestamptz not null default now(),
+  fecha_inicio        date        not null,
+  fecha_fin           date,
+  metodo_pago         text,
+  referencia_externa  text,
+  estado              text        not null default 'completado'
+                        check (estado in ('pendiente', 'completado', 'fallido', 'reembolsado')),
+  notas               text,
+  registrado_por      uuid        references auth.users(id),
+  creado_en           timestamptz not null default now()
+);
+
+alter table public.pagos enable row level security;
+
+-- Superadmin: acceso total a pagos
+drop policy if exists "superadmin_all_pagos" on public.pagos;
+create policy "superadmin_all_pagos" on public.pagos
+  for all
+  using    (public.is_superadmin())
+  with check (public.is_superadmin());
+
+-- Admin del ELEAM puede ver los pagos de su propio ELEAM
+drop policy if exists "eleam_select_pagos" on public.pagos;
+create policy "eleam_select_pagos" on public.pagos
+  for select using (
+    eleam_id = (
+      select eleam_id from public.profiles
+      where id = (select auth.uid())
+    )
+  );
+
+-- Índices para pagos
+create index if not exists idx_pagos_eleam_id   on public.pagos(eleam_id);
+create index if not exists idx_pagos_fecha_pago on public.pagos(fecha_pago desc);
+
+-- ── 7. Cómo crear un superadmin ─────────────────────────────────
+-- Después de que el usuario se registre, ejecutar en SQL Editor:
+-- update public.profiles set rol = 'superadmin' where email = 'tu@email.com';
+-- El superadmin NO necesita eleam_id y tiene acceso a todos los datos.
