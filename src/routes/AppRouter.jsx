@@ -22,28 +22,30 @@ import AccreditationDashboard from "../features/accreditation/AccreditationDashb
 import AccreditationCategory  from "../features/accreditation/AccreditationCategory";
 import AccreditationUpload    from "../features/accreditation/AccreditationUpload";
 
-import AdminDashboard  from "../features/dashboard/AdminDashboard";
+import AdminDashboard      from "../features/dashboard/AdminDashboard";
+import SuperAdminDashboard from "../features/superadmin/SuperAdminDashboard";
+
 import Navbar          from "../components/Navbar";
 import ProtectedRoute  from "../components/ProtectedRoute";
+import SuperAdminRoute from "../components/SuperAdminRoute";
 
-// Rutas donde NO se muestra el Navbar global (tienen su propio header)
 const NO_NAVBAR_PATHS = ["/", "/demo", "/pago"];
 
 function AppRouter() {
-  const { user }   = useAuth();
-  const { pathname } = useLocation();
-  const showNavbar = !NO_NAVBAR_PATHS.includes(pathname);
+  const { user }      = useAuth();
+  const { pathname }  = useLocation();
+  const showNavbar    = !NO_NAVBAR_PATHS.includes(pathname);
 
   return (
     <>
-      {showNavbar && <Navbar isLoggedIn={!!user} />}
+      {showNavbar && <Navbar />}
       <Routes>
         {/* ── Públicas ──────────────────────────────────────── */}
-        <Route path="/"      element={<LandingPage />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route path="/"         element={<LandingPage />} />
+        <Route path="/login"    element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
-        <Route path="/demo"  element={<DemoPage />} />
-        <Route path="/pago"  element={<PaymentPage />} />
+        <Route path="/demo"     element={<DemoPage />} />
+        <Route path="/pago"     element={<PaymentPage />} />
 
         {/* ── Protegidas (requieren sesión + pago activo) ──── */}
         <Route path="/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
@@ -59,9 +61,12 @@ function AppRouter() {
         <Route path="/observations"     element={<ProtectedRoute><ObservationList /></ProtectedRoute>} />
         <Route path="/observations/new" element={<ProtectedRoute><ObservationForm /></ProtectedRoute>} />
 
-        <Route path="/accreditation"                  element={<ProtectedRoute><AccreditationDashboard /></ProtectedRoute>} />
-        <Route path="/accreditation/category/:id"     element={<ProtectedRoute><AccreditationCategory /></ProtectedRoute>} />
-        <Route path="/accreditation/upload"           element={<ProtectedRoute><AccreditationUpload /></ProtectedRoute>} />
+        <Route path="/accreditation"              element={<ProtectedRoute><AccreditationDashboard /></ProtectedRoute>} />
+        <Route path="/accreditation/category/:id" element={<ProtectedRoute><AccreditationCategory /></ProtectedRoute>} />
+        <Route path="/accreditation/upload"       element={<ProtectedRoute><AccreditationUpload /></ProtectedRoute>} />
+
+        {/* ── Superadmin (requiere rol superadmin) ─────────── */}
+        <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
 
         {/* ── Fallback ──────────────────────────────────────── */}
         <Route path="*" element={<Navigate to={user ? "/dashboard" : "/"} replace />} />

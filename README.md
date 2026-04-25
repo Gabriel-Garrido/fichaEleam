@@ -162,15 +162,61 @@ Verifica en orden:
 
 | Rol | Descripción |
 |-----|-------------|
-| `admin_eleam` | Administrador del ELEAM. Crea la cuenta, es responsable del pago, puede gestionar usuarios. |
-| `funcionario` | Personal del ELEAM. Accede si el ELEAM tiene pago activo. No gestiona pagos. |
-| `superadmin` | Rol especial para pruebas. Siempre tiene pago activo independientemente del ELEAM. |
+| `admin_eleam` | Administrador del ELEAM. Crea la cuenta, es responsable del pago, puede gestionar usuarios del propio establecimiento. |
+| `funcionario` | Personal del ELEAM (enfermeras, técnicos, etc.). Accede si el ELEAM tiene pago activo. |
+| `superadmin` | Dueño/operador de la plataforma FichaEleam. Acceso global: ve y gestiona todos los ELEAMs, registra pagos, monitorea métricas del negocio. |
 
 El pago activo se verifica así:
 
 ```js
 const pagoActivo = profile?.rol === "superadmin" || eleam?.pago_activo === true;
 ```
+
+---
+
+## Panel Superadmin (`/superadmin`)
+
+Ruta exclusiva para usuarios con `rol = 'superadmin'`. Protegida por `SuperAdminRoute` que redirige a `/dashboard` si el rol no coincide.
+
+### Funcionalidades
+
+| Sección | Descripción |
+|---------|-------------|
+| Métricas | ELEAMs totales, suscripciones activas, demos, nuevos registros del mes, residentes totales, ingresos del mes (suma de pagos CLP) |
+| Tabla de ELEAMs | Lista completa con búsqueda, plan, estado (activo/inactivo), fecha de vencimiento, fecha de registro |
+| Editar ELEAM | Activar/desactivar suscripción, cambiar plan, ajustar máx. de residentes, establecer fecha de vencimiento, notas internas |
+| Registrar Pago | Asignar pago a ELEAM (monto CLP, plan, método, notas) — activa automáticamente la suscripción |
+| Últimos Pagos | Historial de los 20 pagos más recientes con ELEAM, monto, plan y estado |
+
+### Cómo crear el primer superadmin
+
+1. Registrar una cuenta normal en la aplicación.
+2. Ir a **Supabase Dashboard → SQL Editor** y ejecutar:
+
+```sql
+UPDATE public.profiles
+SET rol = 'superadmin'
+WHERE email = 'tu@email.com';
+```
+
+3. Cerrar sesión y volver a iniciar sesión.
+4. Navegar a `/superadmin` — la ruta aparece automáticamente en el Navbar.
+
+> El superadmin **no necesita** un ELEAM asociado. Las políticas RLS (`is_superadmin()`) le dan acceso de lectura global y acceso de escritura a `eleams` y `pagos`.
+
+### Tabla `pagos`
+
+Registra cada pago recibido de un ELEAM. No es una integración con pasarela de pago (eso es futuro), sino un registro manual hecho por el superadmin.
+
+| Columna | Descripción |
+|---------|-------------|
+| `eleam_id` | FK → eleams |
+| `monto` | Monto en CLP (entero, > 0) |
+| `plan` | `mensual` o `anual` |
+| `fecha_inicio` / `fecha_fin` | Período de vigencia del pago |
+| `metodo_pago` | Transferencia, tarjeta, etc. (texto libre) |
+| `estado` | `pendiente`, `completado`, `fallido`, `reembolsado` |
+| `registrado_por` | UUID del superadmin que registró el pago |
 
 ---
 
@@ -249,28 +295,31 @@ src/
 ├── components/
 │   ├── Button.jsx, Input.jsx, Loading.jsx   # UI base
 │   ├── ErrorBoundary.jsx                    # Captura errores no manejados
-│   ├── Navbar.jsx                           # Nav de la app autenticada
+│   ├── Modal.jsx                            # Modal accesible (Escape, backdrop, aria)
+│   ├── Navbar.jsx                           # Nav global (lee useAuth, sin props)
 │   ├── ProtectedRoute.jsx                   # Guarda sesión + pago activo
+│   ├── SuperAdminRoute.jsx                  # Guarda exclusiva rol superadmin
 │   ├── SupabaseError.jsx                    # Error cuando Supabase no responde
 │   └── Toast.jsx                            # Sistema de notificaciones
 ├── context/
 │   └── AuthContext.jsx    # user, profile, eleam, pagoActivo, profileLoading
 ├── features/
 │   ├── accreditation/     # Documentación SEREMI DS 14/2017
-│   ├── auth/              # Login (Google + email), Register, authService
-│   ├── dashboard/         # Panel principal con stats
+│   ├── auth/              # Login (email/password), Register, authService
+│   ├── dashboard/         # AdminDashboard + dashboardService (loadDashboard)
 │   ├── demo/              # DemoPage, mockData, demoService (localStorage)
 │   ├── landing/           # LandingPage de alta conversión
-│   ├── observations/      # Observaciones diarias
-│   ├── payment/           # PaymentPage (placeholder)
-│   ├── residents/         # CRUD de residentes
-│   └── vitalSigns/        # Registro de signos vitales
+│   ├── observations/      # Observaciones diarias (filtros fecha + tipo)
+│   ├── payment/           # PaymentPage (placeholder integración pago)
+│   ├── residents/         # CRUD residentes (escala Katz, egreso, tabs lazy)
+│   ├── superadmin/        # SuperAdminDashboard + superadminService
+│   └── vitalSigns/        # Registro de signos vitales (filtros fecha)
 ├── routes/
-│   └── AppRouter.jsx      # Rutas + ocultamiento de Navbar en páginas públicas
+│   └── AppRouter.jsx      # Rutas + /superadmin + ocultamiento de Navbar
 ├── services/
-│   └── supabaseConfig.js  # Cliente Supabase (null si no configurado) + isSupabaseConfigured
+│   └── supabaseConfig.js  # Cliente Supabase (null si no configurado)
 └── utils/
-    └── validators.js      # validateEmail, validateRut (mod-11), formatRut
+    └── validators.js      # validateEmail, validateRut (mod-11), isValidUUID, validatePhone
 ```
 
 ---

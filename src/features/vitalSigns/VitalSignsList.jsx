@@ -6,17 +6,28 @@ import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 
+function firstOfMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function VitalSignsList() {
   const navigate = useNavigate();
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get("residenteId");
 
-  const [records, setRecords] = useState([]);
-  const [residents, setResidents] = useState([]);
+  const [records, setRecords]           = useState([]);
+  const [residents, setResidents]       = useState([]);
   const [filtroResidente, setFiltroResidente] = useState(preselectedId ?? "");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [filtroDesde, setFiltroDesde]   = useState(firstOfMonth());
+  const [filtroHasta, setFiltroHasta]   = useState(today());
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
 
   useEffect(() => {
     getResidents()
@@ -28,16 +39,25 @@ function VitalSignsList() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getVitalSigns(filtroResidente || null);
+      const data = await getVitalSigns(filtroResidente || null, {
+        desde: filtroDesde || null,
+        hasta: filtroHasta || null,
+      });
       setRecords(data);
     } catch {
       setError("No se pudo cargar los registros de signos vitales.");
     } finally {
       setLoading(false);
     }
-  }, [filtroResidente]);
+  }, [filtroResidente, filtroDesde, filtroHasta]);
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+  const clearFilters = () => {
+    setFiltroResidente("");
+    setFiltroDesde(firstOfMonth());
+    setFiltroHasta(today());
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm("¿Eliminar este registro?")) return;
@@ -59,7 +79,13 @@ function VitalSignsList() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-3xl font-bold text-[var(--color-primary)]">Signos Vitales</h1>
         <Button
-          onClick={() => navigate(preselectedId ? `/vital-signs/new?residenteId=${preselectedId}` : "/vital-signs/new")}
+          onClick={() =>
+            navigate(
+              preselectedId
+                ? `/vital-signs/new?residenteId=${preselectedId}`
+                : "/vital-signs/new"
+            )
+          }
           className="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
         >
           + Nuevo Registro
@@ -73,30 +99,58 @@ function VitalSignsList() {
         </div>
       )}
 
-      <div className="mb-4">
-        <select
-          value={filtroResidente}
-          onChange={(e) => setFiltroResidente(e.target.value)}
-          className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Residente</label>
+          <select
+            value={filtroResidente}
+            onChange={(e) => setFiltroResidente(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+          >
+            <option value="">Todos los residentes</option>
+            {residents.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.apellido}, {r.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Desde</label>
+          <input
+            type="date"
+            value={filtroDesde}
+            onChange={(e) => setFiltroDesde(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Hasta</label>
+          <input
+            type="date"
+            value={filtroHasta}
+            onChange={(e) => setFiltroHasta(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+          />
+        </div>
+        <button
+          onClick={clearFilters}
+          className="text-sm text-gray-500 hover:text-gray-700 underline py-2"
         >
-          <option value="">Todos los residentes</option>
-          {residents.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.apellido}, {r.nombre}
-            </option>
-          ))}
-        </select>
+          Limpiar filtros
+        </button>
       </div>
 
       {records.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
           <div className="text-5xl mb-4">📊</div>
-          <p>No hay registros de signos vitales.</p>
+          <p>No hay registros para el período seleccionado.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl shadow-sm border border-gray-100">
           <table className="min-w-full bg-white text-sm">
-            <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
               <tr>
                 <th className="px-4 py-3 text-left">Residente</th>
                 <th className="px-4 py-3 text-left">Fecha/Hora</th>
@@ -115,12 +169,19 @@ function VitalSignsList() {
               {records.map((r) => (
                 <tr key={r.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-800">
-                    {r.residentes ? `${r.residentes.apellido}, ${r.residentes.nombre}` : "—"}
+                    {r.residentes
+                      ? `${r.residentes.apellido}, ${r.residentes.nombre}`
+                      : "—"}
                   </td>
                   <td className="px-4 py-3 text-gray-600">
-                    {new Date(r.fecha_hora).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}
+                    {new Date(r.fecha_hora).toLocaleString("es-CL", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
                   </td>
-                  <td className="px-4 py-3 text-center">{formatPA(r.presion_sistolica, r.presion_diastolica)}</td>
+                  <td className="px-4 py-3 text-center">
+                    {formatPA(r.presion_sistolica, r.presion_diastolica)}
+                  </td>
                   <td className="px-4 py-3 text-center">{r.frecuencia_cardiaca ?? "—"}</td>
                   <td className="px-4 py-3 text-center">{r.frecuencia_respiratoria ?? "—"}</td>
                   <td className={`px-4 py-3 text-center font-medium ${r.temperatura > 37.5 ? "text-red-600" : "text-gray-700"}`}>
@@ -137,7 +198,9 @@ function VitalSignsList() {
                       </span>
                     ) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-center capitalize text-gray-500">{r.turno ?? "—"}</td>
+                  <td className="px-4 py-3 text-center capitalize text-gray-500">
+                    {r.turno ?? "—"}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => handleDelete(r.id)}

@@ -48,16 +48,17 @@ Las variables con prefijo `VITE_` son expuestas al cliente (comportamiento está
 ```
 src/
 ├── components/
-│   ├── Button.jsx          # Botón base con type="button" por defecto
-│   ├── ErrorBoundary.jsx   # Class component; muestra stack trace solo en DEV
-│   ├── Input.jsx           # Input que propaga todos los props
-│   ├── Loading.jsx         # Spinner inline con prop message
-│   ├── Modal.jsx           # Modal genérico
-│   ├── Navbar.jsx          # Nav responsivo con active state por ruta
-│   ├── ProtectedRoute.jsx  # Redirige a /login si no hay sesión
-│   └── Toast.jsx           # ToastProvider + useToast() hook
+│   ├── Button.jsx           # Botón base con type="button" por defecto
+│   ├── ErrorBoundary.jsx    # Class component; muestra stack trace solo en DEV
+│   ├── Input.jsx            # Input que propaga todos los props
+│   ├── Loading.jsx          # Spinner inline con prop message
+│   ├── Modal.jsx            # Modal accesible: Escape, backdrop, role="dialog"
+│   ├── Navbar.jsx           # Nav sin prop isLoggedIn; lee useAuth() directamente
+│   ├── ProtectedRoute.jsx   # Redirige a /login si no hay sesión o pago activo
+│   ├── SuperAdminRoute.jsx  # Redirige a /dashboard si rol !== 'superadmin'
+│   └── Toast.jsx            # ToastProvider + useToast() hook
 ├── context/
-│   └── AuthContext.jsx     # useAuth() + useLoading(); escucha onAuthStateChange
+│   └── AuthContext.jsx      # useAuth() + useLoading(); escucha onAuthStateChange
 ├── features/
 │   ├── accreditation/
 │   │   ├── AccreditationDashboard.jsx  # Progreso global + lista de categorías
@@ -70,30 +71,34 @@ src/
 │   │   ├── authService.js              # login(), register(), logout()
 │   │   └── useAuth.js                  # Re-exporta useAuth desde AuthContext
 │   ├── dashboard/
-│   │   └── AdminDashboard.jsx          # Stats + acciones rápidas
+│   │   ├── AdminDashboard.jsx          # Stats + follow-ups + docs por vencer
+│   │   └── dashboardService.js         # loadDashboard() con Promise.allSettled
 │   ├── landing/
 │   │   └── LandingPage.jsx
 │   ├── observations/
-│   │   ├── ObservationForm.jsx         # 12 tipos de observación; usa useToast
-│   │   ├── ObservationList.jsx         # Filtro por residente; useCallback fetch
-│   │   └── observationsService.js
+│   │   ├── ObservationForm.jsx         # 12 tipos; usa useToast
+│   │   ├── ObservationList.jsx         # Filtros: residente, tipo, fecha, seguimiento
+│   │   └── observationsService.js      # getObservations({ desde, hasta, tipo, soloSeguimiento })
 │   ├── residents/
-│   │   ├── ResidentDetails.jsx         # Ficha completa con links a signos/obs
-│   │   ├── ResidentForm.jsx            # Validación RUT mod-11; errores inline
+│   │   ├── ResidentDetails.jsx         # Tabs lazy: info, signos (5 recientes), observaciones (5 recientes)
+│   │   ├── ResidentForm.jsx            # Campos: escala_katz, fecha_egreso, motivo_egreso
 │   │   ├── ResidentList.jsx            # Búsqueda + filtro estado; useCallback
 │   │   └── residentService.js
+│   ├── superadmin/
+│   │   ├── SuperAdminDashboard.jsx     # Métricas, tabla ELEAMs, pagos, modales edición/pago
+│   │   └── superadminService.js        # getMetrics, getAllEleams, updateEleam, registerPayment
 │   └── vitalSigns/
 │       ├── VitalSignsForm.jsx          # Todos los parámetros clínicos; useToast
-│       ├── VitalSignsList.jsx          # Tabla con alertas de valores críticos
-│       └── vitalSignsService.js
+│       ├── VitalSignsList.jsx          # Tabla + filtros fecha desde/hasta + residente
+│       └── vitalSignsService.js        # getVitalSigns({ desde, hasta, limit })
 ├── routes/
-│   └── AppRouter.jsx                   # Rutas con ProtectedRoute
+│   └── AppRouter.jsx                   # Rutas con ProtectedRoute + /superadmin con SuperAdminRoute
 ├── services/
-│   └── supabaseConfig.js               # Cliente Supabase singleton; falla si faltan env vars
+│   └── supabaseConfig.js               # Cliente Supabase singleton; null si faltan env vars
 └── utils/
     ├── constants.js
     ├── dateUtils.js
-    └── validators.js                   # validateEmail, validateRut (mod-11), formatRut
+    └── validators.js                   # validateEmail, validateRut, isValidUUID, validatePhone
 ```
 
 ---
@@ -111,7 +116,7 @@ Extiende `auth.users`. Se crea automáticamente vía trigger `on_auth_user_creat
 | id | uuid (FK → auth.users) | PK |
 | nombre | text | Nombre del usuario |
 | email | text | Correo |
-| rol | text | `admin`, `usuario`, `enfermera`, `medico` |
+| rol | text | `admin_eleam`, `funcionario`, `superadmin` |
 | creado_en | timestamptz | Fecha de creación |
 
 #### `residentes`
@@ -299,18 +304,34 @@ Esto garantiza que aunque el cliente envíe un `eleam_id` malicioso, el INSERT s
 
 | Tabla | SELECT | INSERT | UPDATE | DELETE |
 |-------|--------|--------|--------|--------|
-| profiles | propio perfil | propio | propio | — |
-| eleams | propio ELEAM | autenticado | admin_eleam | — |
-| residentes | mismo eleam_id | mismo eleam_id | mismo eleam_id | mismo eleam_id |
+| profiles | propio perfil **o** superadmin | propio | propio | — |
+| eleams | propio ELEAM **o** superadmin | autenticado **o** superadmin | admin_eleam **o** superadmin | — |
+| residentes | mismo eleam_id **o** superadmin | mismo eleam_id | mismo eleam_id | mismo eleam_id |
 | signos_vitales | residente del ELEAM | residente del ELEAM | residente del ELEAM | residente del ELEAM |
 | observaciones_diarias | residente del ELEAM | residente del ELEAM | residente del ELEAM | residente del ELEAM |
 | categorias_acreditacion | autenticado | — | — | — |
 | documentos_acreditacion | mismo eleam_id | mismo eleam_id | mismo eleam_id | mismo eleam_id |
+| pagos | mismo eleam_id (solo SELECT) **o** superadmin (todo) | superadmin | superadmin | superadmin |
 
 **Storage policies** (scoped a `bucket_id = 'documentos-acreditacion'`):
-- SELECT / INSERT / DELETE: `(select auth.uid()) is not null`
+- SELECT / INSERT / DELETE: path scoped por `eleam_id` (`split_part(name, '/', 2)`)
 
 **Storage path**: `acreditacion/{eleamId}/{categoriaId}/{timestamp}_{filename}` — el `eleamId` en el path asegura aislamiento físico adicional en Storage.
+
+### Función `is_superadmin()`
+
+```sql
+create or replace function public.is_superadmin()
+  returns boolean language sql stable security definer
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = (select auth.uid()) and rol = 'superadmin'
+  );
+$$;
+```
+
+Todas las políticas de superadmin llaman a esta función en lugar de hardcodear la condición, lo que permite futuros cambios de rol sin tocar cada política.
 
 ---
 
@@ -393,13 +414,69 @@ Valida número de teléfono chileno. Acepta `+56912345678`, `912345678` o format
 
 ---
 
+## Superadmin — Gestión del Negocio
+
+Rol `superadmin` reservado para el dueño/operador de la plataforma FichaEleam.
+
+### Ruta y acceso
+
+- Ruta: `/superadmin`
+- Guard: `SuperAdminRoute` (`src/components/SuperAdminRoute.jsx`) — redirige a `/dashboard` si `profile.rol !== 'superadmin'`
+- Aparece en el Navbar solo cuando `profile.rol === 'superadmin'`
+
+### Cómo crear el primer superadmin
+
+```sql
+-- Ejecutar en Supabase SQL Editor después de registrar la cuenta:
+UPDATE public.profiles
+SET rol = 'superadmin'
+WHERE email = 'operador@fichaeleam.cl';
+```
+
+El superadmin no necesita `eleam_id`. `pagoActivo` siempre es `true` para este rol.
+
+### Funcionalidades del panel
+
+| Sección | Descripción |
+|---------|-------------|
+| Métricas del negocio | ELEAMs totales, activos, demos, nuevos este mes, residentes, ingresos del mes (CLP) |
+| Tabla de ELEAMs | Listado completo con búsqueda por nombre/email, plan, estado, vencimiento |
+| Editar ELEAM | Activar/desactivar suscripción, cambiar plan, límite de residentes, fecha de vencimiento, notas internas |
+| Registrar Pago | Asociar pago a ELEAM (monto, plan, método) — activa suscripción automáticamente |
+| Historial de pagos | Últimos 20 pagos con ELEAM, monto, plan y estado |
+
+### Tabla `pagos`
+
+Registro manual de pagos. No es una integración con pasarela (eso es trabajo futuro).
+
+```sql
+pagos (
+  eleam_id uuid,      -- FK a eleams
+  monto integer,      -- CLP, > 0
+  plan text,          -- 'mensual' | 'anual'
+  fecha_inicio date,
+  fecha_fin date,
+  metodo_pago text,   -- texto libre
+  estado text,        -- 'pendiente' | 'completado' | 'fallido' | 'reembolsado'
+  registrado_por uuid -- FK a auth.users (superadmin que registró)
+)
+```
+
+### Seguridad del superadmin
+
+- Las políticas RLS llaman a `public.is_superadmin()` (función `security definer`)
+- El superadmin no puede modificar RLS ni el schema (eso requiere service role en el servidor)
+- Los datos de un ELEAM (signos, observaciones) NO son accesibles al superadmin a menos que se agreguen políticas explícitas — actualmente solo accede a `eleams`, `profiles`, `residentes` (solo conteo) y `pagos`
+
+---
+
 ## Posibles Mejoras Futuras
 
-- Autenticación por roles (admin vs. enfermera vs. médico) con acceso diferenciado
+- Integración con pasarela de pago (Transbank / Stripe) para activación automática de suscripciones
+- Envío de email de bienvenida y recordatorio de vencimiento al admin del ELEAM
+- Dashboard de analytics: gráficos de crecimiento de ELEAMs, MRR histórico, churn
 - Exportación PDF de fichas clínicas y listas de signos vitales
-- Soporte multi-establecimiento (columna `establecimiento_id` + políticas RLS por establecimiento)
 - Módulo de medicamentos con kardex digital
-- Notificaciones de documentos próximos a vencer
+- Notificaciones push de documentos próximos a vencer
 - Módulo de agenda / citas médicas
-- Dashboard de analytics con gráficos de signos vitales históricos
 - Confirmación de email al registrarse
