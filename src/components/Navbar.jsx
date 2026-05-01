@@ -8,7 +8,7 @@ function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile, eleam } = useAuth();
+  const { user, profile, eleam, pagoActivo, profileLoading } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -20,9 +20,11 @@ function Navbar() {
   };
 
   const isActive = (path) => location.pathname.startsWith(path);
+  const homePath = user
+    ? pagoActivo ? "/dashboard" : "/pago?sinAcceso=1"
+    : "/";
 
-  const menuItems = user
-    ? [
+  const activeItems = [
         { label: "Dashboard", path: "/dashboard" },
         { label: "Residentes", path: "/residents" },
         { label: "Signos Vitales", path: "/vital-signs" },
@@ -32,7 +34,16 @@ function Navbar() {
           ? [{ label: "Superadmin", path: "/superadmin" }]
           : []),
         { label: "Cerrar sesión", action: handleLogout },
-      ]
+      ];
+
+  const inactiveItems = [
+    { label: "Activar ELEAM", path: "/pago?sinAcceso=1" },
+    { label: "Demo", path: "/demo" },
+    { label: "Cerrar sesión", action: handleLogout },
+  ];
+
+  const menuItems = user
+    ? pagoActivo ? activeItems : inactiveItems
     : [
         { label: "Inicio", path: "/" },
         { label: "Iniciar sesión", path: "/login" },
@@ -43,7 +54,7 @@ function Navbar() {
       <div className="container mx-auto px-4 flex justify-between items-center h-14">
         <div
           className="text-lg font-bold cursor-pointer tracking-tight shrink-0"
-          onClick={() => navigate(user ? "/dashboard" : "/")}
+          onClick={() => navigate(homePath)}
         >
           FichaEleam
         </div>
@@ -58,6 +69,11 @@ function Navbar() {
               {eleam?.nombre && (
                 <div className="text-xs text-white/60 leading-tight truncate">
                   {eleam.nombre}
+                </div>
+              )}
+              {user && !profileLoading && !pagoActivo && (
+                <div className="text-[10px] text-amber-100 leading-tight">
+                  Activación pendiente
                 </div>
               )}
             </div>
@@ -111,6 +127,11 @@ function Navbar() {
               </div>
               {eleam?.nombre && (
                 <div className="text-xs text-white/60 truncate">{eleam.nombre}</div>
+              )}
+              {!profileLoading && !pagoActivo && (
+                <div className="text-[11px] text-amber-100 mt-0.5">
+                  Activación pendiente
+                </div>
               )}
             </div>
           )}

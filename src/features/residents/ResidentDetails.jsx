@@ -6,12 +6,25 @@ import { getObservations } from "../observations/observationsService";
 import { isValidUUID } from "../../utils/validators";
 import Loading from "../../components/Loading";
 import Button from "../../components/Button";
+import VitalCard from "../vitalSigns/VitalCard";
+import {
+  VITAL_DEFS,
+  STATUS,
+  recordOverallLabel,
+} from "../vitalSigns/vitalRanges";
 
 const ESTADO_BADGE = {
-  activo:        "bg-green-100 text-green-800",
-  hospitalizado: "bg-yellow-100 text-yellow-800",
-  egresado:      "bg-gray-100 text-gray-700",
-  fallecido:     "bg-red-100 text-red-800",
+  activo:        "bg-emerald-100 text-emerald-800 border border-emerald-200",
+  hospitalizado: "bg-amber-100 text-amber-800 border border-amber-200",
+  egresado:      "bg-gray-100 text-gray-700 border border-gray-200",
+  fallecido:     "bg-rose-100 text-rose-800 border border-rose-200",
+};
+
+const DEPENDENCIA_TONE = {
+  leve:     "bg-emerald-50 text-emerald-700 border-emerald-200",
+  moderado: "bg-amber-50 text-amber-700 border-amber-200",
+  severo:   "bg-orange-50 text-orange-700 border-orange-200",
+  total:    "bg-rose-50 text-rose-700 border-rose-200",
 };
 
 const TIPO_LABEL = {
@@ -23,21 +36,43 @@ const TIPO_LABEL = {
 };
 
 const TIPO_BADGE = {
-  caida:                      "bg-red-100 text-red-700",
+  caida:                      "bg-rose-100 text-rose-700",
   incidente:                  "bg-orange-100 text-orange-700",
   visita_medica:              "bg-blue-100 text-blue-700",
   curacion:                   "bg-purple-100 text-purple-700",
-  administracion_medicamento: "bg-yellow-100 text-yellow-700",
+  administracion_medicamento: "bg-amber-100 text-amber-700",
   observacion_general:        "bg-gray-100 text-gray-700",
 };
 
+function initials(nombre = "", apellido = "") {
+  return ((nombre[0] || "") + (apellido[0] || "")).toUpperCase() || "?";
+}
+
+function calcAge(fechaNacimiento) {
+  if (!fechaNacimiento) return null;
+  const fn = new Date(fechaNacimiento);
+  if (isNaN(fn)) return null;
+  const today = new Date();
+  let age = today.getFullYear() - fn.getFullYear();
+  const m = today.getMonth() - fn.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < fn.getDate())) age--;
+  return age;
+}
+
+function daysSince(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
 function ResidentDetails() {
-  const { id }     = useParams();
-  const navigate   = useNavigate();
+  const { id } = useParams();
+  const navigate = useNavigate();
   const [resident, setResident] = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
-  const [tab, setTab]           = useState("info");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [tab, setTab] = useState("info");
 
   useEffect(() => {
     if (!isValidUUID(id)) {
@@ -55,6 +90,9 @@ function ResidentDetails() {
   if (error)   return <div className="p-8 text-red-600">{error}</div>;
   if (!resident) return <div className="p-8 text-gray-500">Residente no encontrado.</div>;
 
+  const age = calcAge(resident.fecha_nacimiento);
+  const stayDays = daysSince(resident.fecha_ingreso);
+
   const tabs = [
     { id: "info",          label: "Información" },
     { id: "signos",        label: "Signos Vitales" },
@@ -62,65 +100,106 @@ function ResidentDetails() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => navigate("/residents")}
-          className="text-[var(--color-primary)] hover:underline text-sm"
-        >
-          ← Volver a residentes
-        </button>
-      </div>
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      <button
+        onClick={() => navigate("/residents")}
+        className="text-[var(--color-primary)] hover:underline text-sm mb-4 inline-flex items-center gap-1"
+      >
+        ← Volver a residentes
+      </button>
 
-      {/* Header card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold text-gray-800">
-                {resident.apellido}, {resident.nombre}
-              </h1>
-              <span
-                className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  ESTADO_BADGE[resident.estado]
-                }`}
-              >
-                {resident.estado}
-              </span>
+      {/* Header card — moderno con avatar, datos clave y acciones */}
+      <div className="relative bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+        <div className="h-20 bg-gradient-to-r from-[var(--color-secondary)] via-[var(--color-primary)] to-[var(--color-accent)]" />
+        <div className="px-6 pb-6">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-10">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-[var(--color-primary)] shadow-md ring-4 ring-white">
+              {initials(resident.nombre, resident.apellido)}
             </div>
-            <div className="text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-1">
-              {resident.rut && <span>RUT: {resident.rut}</span>}
-              {resident.habitacion && (
-                <span>Hab. {resident.habitacion} — Cama {resident.cama}</span>
-              )}
-              {resident.fecha_ingreso && (
-                <span>
-                  Ingreso:{" "}
-                  {new Date(resident.fecha_ingreso).toLocaleDateString("es-CL")}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold text-gray-800 truncate">
+                  {resident.nombre} {resident.apellido}
+                </h1>
+                <span
+                  className={`text-xs font-medium px-2.5 py-0.5 rounded-full capitalize ${
+                    ESTADO_BADGE[resident.estado] ?? "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {resident.estado}
                 </span>
-              )}
+              </div>
+              <div className="text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                {age != null && <span>{age} años</span>}
+                {resident.sexo && <span className="capitalize">{resident.sexo}</span>}
+                {resident.rut && <span>RUT: {resident.rut}</span>}
+                {resident.habitacion && (
+                  <span>
+                    🛏️ Hab. {resident.habitacion}
+                    {resident.cama ? ` · Cama ${resident.cama}` : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => navigate(`/residents/${id}/edit`)}
+                className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-[var(--color-button-hover)] text-sm shadow-sm"
+              >
+                Editar
+              </Button>
+              <Button
+                onClick={() => navigate(`/vital-signs/new?residenteId=${id}`)}
+                className="bg-white text-[var(--color-primary)] border border-[var(--color-primary)] px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
+              >
+                + Signos
+              </Button>
+              <Button
+                onClick={() => navigate(`/observations/new?residenteId=${id}`)}
+                className="bg-white text-[var(--color-primary)] border border-[var(--color-primary)] px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
+              >
+                + Observación
+              </Button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => navigate(`/residents/${id}/edit`)}
-              className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-[var(--color-button-hover)] text-sm"
-            >
-              Editar
-            </Button>
-            <Button
-              onClick={() => navigate(`/vital-signs/new?residenteId=${id}`)}
-              className="bg-white text-[var(--color-primary)] border border-[var(--color-primary)] px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
-            >
-              + Signos
-            </Button>
-            <Button
-              onClick={() => navigate(`/observations/new?residenteId=${id}`)}
-              className="bg-white text-[var(--color-primary)] border border-[var(--color-primary)] px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
-            >
-              + Observación
-            </Button>
+
+          {/* Quick info strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+            <QuickStat
+              label="Ingreso"
+              value={
+                resident.fecha_ingreso
+                  ? new Date(resident.fecha_ingreso + "T12:00:00").toLocaleDateString("es-CL")
+                  : "—"
+              }
+              sub={stayDays != null ? `${stayDays} días en ELEAM` : undefined}
+            />
+            <QuickStat
+              label="Dependencia"
+              value={resident.nivel_dependencia ?? "—"}
+              tone={DEPENDENCIA_TONE[resident.nivel_dependencia]}
+              capitalize
+            />
+            <QuickStat
+              label="Índice Barthel"
+              value={resident.indice_barthel != null ? `${resident.indice_barthel}/100` : "—"}
+            />
+            <QuickStat
+              label="Diagnóstico"
+              value={resident.diagnostico_principal || "—"}
+              truncate
+            />
           </div>
+
+          {resident.alergias?.length > 0 && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+              <span aria-hidden className="text-rose-500">⚠️</span>
+              <div className="text-sm text-rose-700">
+                <span className="font-semibold">Alergias:</span>{" "}
+                {resident.alergias.join(", ")}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -144,6 +223,25 @@ function ResidentDetails() {
       {tab === "info"          && <InfoTab resident={resident} />}
       {tab === "signos"        && <SignosTab residenteId={id} navigate={navigate} />}
       {tab === "observaciones" && <ObservacionesTab residenteId={id} navigate={navigate} />}
+    </div>
+  );
+}
+
+function QuickStat({ label, value, sub, tone, capitalize, truncate }) {
+  return (
+    <div className={`rounded-xl border bg-white px-3 py-2.5 ${tone || "border-gray-100"}`}>
+      <div className="text-[10px] uppercase tracking-wide text-gray-400 font-medium">
+        {label}
+      </div>
+      <div
+        className={`text-sm font-semibold text-gray-800 ${capitalize ? "capitalize" : ""} ${
+          truncate ? "truncate" : ""
+        }`}
+        title={truncate ? value : undefined}
+      >
+        {value}
+      </div>
+      {sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -195,7 +293,7 @@ function InfoTab({ resident }) {
               <dt className="text-xs text-gray-400 uppercase tracking-wide">Alergias</dt>
               <dd className="flex flex-wrap gap-1 mt-1">
                 {resident.alergias.map((a) => (
-                  <span key={a} className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">
+                  <span key={a} className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full">
                     {a}
                   </span>
                 ))}
@@ -240,33 +338,32 @@ function SignosTab({ residenteId, navigate }) {
   const [error, setError]     = useState(null);
   const loaded                = useRef(false);
 
-  useEffect(() => {
-    if (loaded.current) return;
-    loaded.current = true;
-    getVitalSigns(residenteId, { limit: 5 })
-      .then(setRecords)
-      .catch(() => setError("No se pudo cargar los signos vitales."))
-      .finally(() => setLoading(false));
-  }, [residenteId]);
-
-  const refresh = () => {
+  const load = () => {
     setLoading(true);
     setError(null);
-    loaded.current = false;
     getVitalSigns(residenteId, { limit: 5 })
       .then((d) => { setRecords(d); loaded.current = true; })
       .catch(() => setError("No se pudo cargar los signos vitales."))
       .finally(() => setLoading(false));
   };
 
+  useEffect(() => {
+    if (loaded.current) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [residenteId]);
+
   if (loading) return <Loading message="Cargando signos vitales..." />;
 
+  const latest = records[0];
+  const overall = latest ? recordOverallLabel(latest) : null;
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-gray-700">Últimos 5 registros</h3>
-        <div className="flex gap-2">
-          <button onClick={refresh} className="text-xs text-gray-500 hover:text-gray-700 underline">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-gray-700">Signos vitales recientes</h3>
+        <div className="flex gap-3">
+          <button onClick={load} className="text-xs text-gray-500 hover:text-gray-700 underline">
             Actualizar
           </button>
           <button
@@ -279,13 +376,13 @@ function SignosTab({ residenteId, navigate }) {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           {error}
         </div>
       )}
 
       {records.length === 0 ? (
-        <div className="text-center py-10 text-gray-500">
+        <div className="text-center py-10 text-gray-500 bg-white rounded-xl border border-gray-100">
           <div className="text-4xl mb-3">📊</div>
           <p className="text-sm mb-3">No hay registros de signos vitales.</p>
           <button
@@ -296,55 +393,155 @@ function SignosTab({ residenteId, navigate }) {
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-100">
-          <table className="min-w-full bg-white text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-              <tr>
-                <th className="px-3 py-3 text-left">Fecha/Hora</th>
-                <th className="px-3 py-3 text-center">P/A</th>
-                <th className="px-3 py-3 text-center">FC</th>
-                <th className="px-3 py-3 text-center">Temp.</th>
-                <th className="px-3 py-3 text-center">SatO₂</th>
-                <th className="px-3 py-3 text-center">Dolor</th>
-                <th className="px-3 py-3 text-center">Turno</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {records.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2.5 text-gray-600">
-                    {new Date(r.fecha_hora).toLocaleString("es-CL", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    {r.presion_sistolica && r.presion_diastolica
-                      ? `${r.presion_sistolica}/${r.presion_diastolica}`
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">{r.frecuencia_cardiaca ?? "—"}</td>
-                  <td className={`px-3 py-2.5 text-center font-medium ${r.temperatura > 37.5 ? "text-red-600" : "text-gray-700"}`}>
-                    {r.temperatura != null ? `${r.temperatura}°` : "—"}
-                  </td>
-                  <td className={`px-3 py-2.5 text-center font-medium ${r.saturacion_oxigeno != null && r.saturacion_oxigeno < 95 ? "text-red-600" : "text-gray-700"}`}>
-                    {r.saturacion_oxigeno != null ? `${r.saturacion_oxigeno}%` : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    {r.dolor_escala != null ? (
-                      <span className={`font-medium ${r.dolor_escala >= 7 ? "text-red-600" : r.dolor_escala >= 4 ? "text-yellow-600" : "text-green-600"}`}>
-                        {r.dolor_escala}/10
-                      </span>
-                    ) : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-center capitalize text-gray-400">{r.turno ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Snapshot del último registro con tarjetas grandes */}
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-gray-400">Último registro</div>
+                <div className="text-sm font-medium text-gray-700">
+                  {new Date(latest.fecha_hora).toLocaleString("es-CL", {
+                    dateStyle: "long",
+                    timeStyle: "short",
+                  })}
+                  {latest.turno && (
+                    <span className="ml-2 text-gray-400 capitalize">· Turno {latest.turno}</span>
+                  )}
+                </div>
+              </div>
+              {overall && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS[overall.status].badge}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${STATUS[overall.status].dot}`} />
+                  {overall.label}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4">
+              <VitalCard
+                icon={VITAL_DEFS.presion.icon}
+                label={VITAL_DEFS.presion.label}
+                value={VITAL_DEFS.presion.format(latest.presion_sistolica, latest.presion_diastolica)}
+                unit={VITAL_DEFS.presion.unit}
+                status={VITAL_DEFS.presion.statusFor(latest)}
+                normal={VITAL_DEFS.presion.normal}
+              />
+              <VitalCard
+                icon={VITAL_DEFS.fc.icon}
+                label={VITAL_DEFS.fc.label}
+                value={VITAL_DEFS.fc.format(latest.frecuencia_cardiaca)}
+                unit={VITAL_DEFS.fc.unit}
+                status={VITAL_DEFS.fc.statusFor(latest)}
+                normal={VITAL_DEFS.fc.normal}
+              />
+              <VitalCard
+                icon={VITAL_DEFS.fr.icon}
+                label={VITAL_DEFS.fr.label}
+                value={VITAL_DEFS.fr.format(latest.frecuencia_respiratoria)}
+                unit={VITAL_DEFS.fr.unit}
+                status={VITAL_DEFS.fr.statusFor(latest)}
+                normal={VITAL_DEFS.fr.normal}
+              />
+              <VitalCard
+                icon={VITAL_DEFS.temp.icon}
+                label={VITAL_DEFS.temp.label}
+                value={VITAL_DEFS.temp.format(latest.temperatura)}
+                status={VITAL_DEFS.temp.statusFor(latest)}
+                normal={VITAL_DEFS.temp.normal}
+              />
+              <VitalCard
+                icon={VITAL_DEFS.spo2.icon}
+                label={VITAL_DEFS.spo2.label}
+                value={VITAL_DEFS.spo2.format(latest.saturacion_oxigeno)}
+                status={VITAL_DEFS.spo2.statusFor(latest)}
+                normal={VITAL_DEFS.spo2.normal}
+              />
+              <VitalCard
+                icon={VITAL_DEFS.glucosa.icon}
+                label={VITAL_DEFS.glucosa.label}
+                value={VITAL_DEFS.glucosa.format(latest.glucosa)}
+                unit={VITAL_DEFS.glucosa.unit}
+                status={VITAL_DEFS.glucosa.statusFor(latest)}
+                normal={VITAL_DEFS.glucosa.normal}
+              />
+              <VitalCard
+                icon={VITAL_DEFS.dolor.icon}
+                label={VITAL_DEFS.dolor.label}
+                value={VITAL_DEFS.dolor.format(latest.dolor_escala)}
+                status={VITAL_DEFS.dolor.statusFor(latest)}
+                normal={VITAL_DEFS.dolor.normal}
+              />
+            </div>
+          </section>
+
+          {/* Histórico breve */}
+          {records.length > 1 && (
+            <section className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+                Registros anteriores
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                    <tr>
+                      <th className="px-3 py-2.5 text-left">Fecha/Hora</th>
+                      <th className="px-3 py-2.5 text-center">P/A</th>
+                      <th className="px-3 py-2.5 text-center">FC</th>
+                      <th className="px-3 py-2.5 text-center">Temp</th>
+                      <th className="px-3 py-2.5 text-center">SatO₂</th>
+                      <th className="px-3 py-2.5 text-center">Dolor</th>
+                      <th className="px-3 py-2.5 text-center">Turno</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {records.slice(1).map((r) => (
+                      <HistoryRow key={r.id} r={r} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+function HistoryRow({ r }) {
+  const cellTone = (status) => {
+    const s = STATUS[status];
+    if (status === "critical") return `font-semibold ${s.text}`;
+    if (status === "warning") return `font-medium ${s.text}`;
+    if (status === "unknown") return "text-gray-300";
+    return "text-gray-700";
+  };
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-3 py-2.5 text-gray-600">
+        {new Date(r.fecha_hora).toLocaleString("es-CL", {
+          dateStyle: "short",
+          timeStyle: "short",
+        })}
+      </td>
+      <td className={`px-3 py-2.5 text-center tabular-nums ${cellTone(VITAL_DEFS.presion.statusFor(r))}`}>
+        {VITAL_DEFS.presion.format(r.presion_sistolica, r.presion_diastolica)}
+      </td>
+      <td className={`px-3 py-2.5 text-center tabular-nums ${cellTone(VITAL_DEFS.fc.statusFor(r))}`}>
+        {VITAL_DEFS.fc.format(r.frecuencia_cardiaca)}
+      </td>
+      <td className={`px-3 py-2.5 text-center tabular-nums ${cellTone(VITAL_DEFS.temp.statusFor(r))}`}>
+        {VITAL_DEFS.temp.format(r.temperatura)}
+      </td>
+      <td className={`px-3 py-2.5 text-center tabular-nums ${cellTone(VITAL_DEFS.spo2.statusFor(r))}`}>
+        {VITAL_DEFS.spo2.format(r.saturacion_oxigeno)}
+      </td>
+      <td className={`px-3 py-2.5 text-center tabular-nums ${cellTone(VITAL_DEFS.dolor.statusFor(r))}`}>
+        {VITAL_DEFS.dolor.format(r.dolor_escala)}
+      </td>
+      <td className="px-3 py-2.5 text-center capitalize text-gray-400">{r.turno ?? "—"}</td>
+    </tr>
   );
 }
 
@@ -356,24 +553,20 @@ function ObservacionesTab({ residenteId, navigate }) {
   const [error, setError]     = useState(null);
   const loaded                = useRef(false);
 
-  useEffect(() => {
-    if (loaded.current) return;
-    loaded.current = true;
-    getObservations(residenteId, { limit: 5 })
-      .then(setRecords)
-      .catch(() => setError("No se pudo cargar las observaciones."))
-      .finally(() => setLoading(false));
-  }, [residenteId]);
-
-  const refresh = () => {
+  const load = () => {
     setLoading(true);
     setError(null);
-    loaded.current = false;
     getObservations(residenteId, { limit: 5 })
       .then((d) => { setRecords(d); loaded.current = true; })
       .catch(() => setError("No se pudo cargar las observaciones."))
       .finally(() => setLoading(false));
   };
+
+  useEffect(() => {
+    if (loaded.current) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [residenteId]);
 
   if (loading) return <Loading message="Cargando observaciones..." />;
 
@@ -382,7 +575,7 @@ function ObservacionesTab({ residenteId, navigate }) {
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-semibold text-gray-700">Últimas 5 observaciones</h3>
         <div className="flex gap-2">
-          <button onClick={refresh} className="text-xs text-gray-500 hover:text-gray-700 underline">
+          <button onClick={load} className="text-xs text-gray-500 hover:text-gray-700 underline">
             Actualizar
           </button>
           <button
@@ -401,7 +594,7 @@ function ObservacionesTab({ residenteId, navigate }) {
       )}
 
       {records.length === 0 ? (
-        <div className="text-center py-10 text-gray-500">
+        <div className="text-center py-10 text-gray-500 bg-white rounded-xl border border-gray-100">
           <div className="text-4xl mb-3">📋</div>
           <p className="text-sm mb-3">No hay observaciones registradas.</p>
           <button

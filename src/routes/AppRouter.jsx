@@ -28,13 +28,20 @@ import SuperAdminDashboard from "../features/superadmin/SuperAdminDashboard";
 import Navbar          from "../components/Navbar";
 import ProtectedRoute  from "../components/ProtectedRoute";
 import SuperAdminRoute from "../components/SuperAdminRoute";
+import Loading         from "../components/Loading";
 
-const NO_NAVBAR_PATHS = ["/", "/demo", "/pago"];
+const NO_NAVBAR_PATHS = ["/", "/login", "/register", "/demo", "/pago"];
 
 function AppRouter() {
-  const { user }      = useAuth();
+  const { user, pagoActivo, profileLoading } = useAuth();
   const { pathname }  = useLocation();
   const showNavbar    = !NO_NAVBAR_PATHS.includes(pathname);
+  const signedInRedirect = profileLoading
+    ? <Loading message="Verificando acceso..." />
+    : <Navigate to={pagoActivo ? "/dashboard" : "/pago?sinAcceso=1"} replace />;
+  const fallbackPath = user
+    ? pagoActivo ? "/dashboard" : "/pago?sinAcceso=1"
+    : "/";
 
   return (
     <>
@@ -42,8 +49,8 @@ function AppRouter() {
       <Routes>
         {/* ── Públicas ──────────────────────────────────────── */}
         <Route path="/"         element={<LandingPage />} />
-        <Route path="/login"    element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+        <Route path="/login"    element={user ? signedInRedirect : <Login />} />
+        <Route path="/register" element={user ? signedInRedirect : <Register />} />
         <Route path="/demo"     element={<DemoPage />} />
         <Route path="/pago"     element={<PaymentPage />} />
 
@@ -69,7 +76,7 @@ function AppRouter() {
         <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
 
         {/* ── Fallback ──────────────────────────────────────── */}
-        <Route path="*" element={<Navigate to={user ? "/dashboard" : "/"} replace />} />
+        <Route path="*" element={<Navigate to={fallbackPath} replace />} />
       </Routes>
     </>
   );

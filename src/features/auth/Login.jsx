@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
 import { login, loginWithGoogle } from "./authService";
 import { useAuth, useLoading } from "../../context/AuthContext";
-import { isSupabaseConfigured } from "../../services/supabaseConfig";
+import { isSupabaseConfigured, supabaseConfigError } from "../../services/supabaseConfig";
 import Loading from "../../components/Loading";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
@@ -20,14 +20,16 @@ function GoogleIcon() {
 
 function SinSupabase() {
   const navigate = useNavigate();
+  const message = supabaseConfigError === "invalid-url"
+    ? "La URL de Supabase no tiene un formato válido. Revisa VITE_SUPABASE_URL en tu archivo .env."
+    : "El inicio de sesión requiere conexión a la base de datos. Configura las variables de entorno para activar esta función.";
   return (
     <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center">
         <div className="text-4xl mb-4">🔧</div>
         <h2 className="text-xl font-bold text-gray-800 mb-2">Supabase no configurado</h2>
         <p className="text-gray-500 text-sm mb-6">
-          El inicio de sesión requiere conexión a la base de datos. Configura las
-          variables de entorno para activar esta función.
+          {message}
         </p>
         <button
           onClick={() => navigate("/demo")}
@@ -45,7 +47,7 @@ function SinSupabase() {
 
 export default function Login() {
   const navigate   = useNavigate();
-  const { authLoading, user } = useAuth();
+  const { authLoading, user, supabaseError, authNotice } = useAuth();
   const { loading, setLoading } = useLoading();
 
   const [email,    setEmail]    = useState("");
@@ -59,13 +61,18 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (!email.trim() || !password) {
+      setError("Ingresa tu correo y contraseña para continuar.");
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
       await login({ email, password });
       navigate("/dashboard");
-    } catch {
-      setError("Correo o contraseña incorrectos. Inténtalo de nuevo.");
+    } catch (err) {
+      console.warn("Error de login:", err);
+      setError("No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -77,8 +84,9 @@ export default function Login() {
     try {
       await loginWithGoogle();
       // La redirección la maneja Supabase OAuth (va a /dashboard)
-    } catch {
-      setError("No se pudo iniciar sesión con Google. Inténtalo de nuevo.");
+    } catch (err) {
+      console.warn("Error de Google OAuth:", err);
+      setError("Google no respondió como esperábamos. Intenta otra vez en unos segundos.");
       setGoogleLoading(false);
     }
   };
@@ -96,6 +104,12 @@ export default function Login() {
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">Bienvenido de vuelta</h1>
         <p className="text-sm text-gray-500 mb-6">Ingresa a tu cuenta para continuar</p>
+
+        {(supabaseError || authNotice) && (
+          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {authNotice || "La conexión con Supabase está tardando más de lo habitual. Puedes intentar iniciar sesión nuevamente."}
+          </div>
+        )}
 
         {/* Google */}
         <button

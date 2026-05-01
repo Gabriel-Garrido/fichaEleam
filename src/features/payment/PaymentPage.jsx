@@ -1,5 +1,7 @@
 import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { logout } from "../auth/authService";
 
 const PLANES = [
   { residentes: "Hasta 14",  precio: "$50.000",  desc: "Ideal para residencias pequeñas" },
@@ -20,7 +22,23 @@ const INCLUYE = [
 export default function PaymentPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { user, profile, eleam, pagoActivo } = useAuth();
   const sinAcceso = params.get("sinAcceso") === "1";
+  const accountEmail = profile?.email || user?.email || "";
+  const eleamName = eleam?.nombre || "mi ELEAM";
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate("/login", { replace: true });
+    }
+  };
+
+  const mailSubject = encodeURIComponent(`Activar FichaEleam - ${eleamName}`);
+  const mailBody = encodeURIComponent(
+    `Hola, quiero activar FichaEleam para ${eleamName}.\n\nCorreo de cuenta: ${accountEmail}\nPlan de interés: \nCantidad de residentes: \n`
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -30,9 +48,22 @@ export default function PaymentPage() {
           <button onClick={() => navigate("/")} className="text-xl font-black text-[var(--color-primary)] tracking-tight">
             FichaEleam
           </button>
-          <button onClick={() => navigate("/login")} className="text-sm text-[var(--color-primary)] hover:underline">
-            Ya tengo cuenta
-          </button>
+          <div className="flex items-center gap-3">
+            {user && pagoActivo && (
+              <button onClick={() => navigate("/dashboard")} className="text-sm text-[var(--color-primary)] hover:underline">
+                Ir al panel
+              </button>
+            )}
+            {user ? (
+              <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-700">
+                Cerrar sesión
+              </button>
+            ) : (
+              <button onClick={() => navigate("/login")} className="text-sm text-[var(--color-primary)] hover:underline">
+                Ya tengo cuenta
+              </button>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -41,14 +72,29 @@ export default function PaymentPage() {
         {/* Banner sin acceso */}
         {sinAcceso && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
-            <div className="text-amber-500 text-2xl shrink-0">⚠️</div>
+            <div className="text-amber-500 text-2xl shrink-0">!</div>
             <div>
-              <h3 className="font-bold text-amber-800 mb-1">Tu ELEAM no tiene suscripción activa</h3>
+              <h3 className="font-bold text-amber-800 mb-1">
+                {user ? "Tu sesión está activa, falta activar el ELEAM" : "Tu ELEAM no tiene suscripción activa"}
+              </h3>
               <p className="text-sm text-amber-700">
-                Para acceder a la plataforma, el administrador del establecimiento debe activar el plan mensual.
-                Selecciona el plan que corresponde al tamaño de tu residencia.
+                Para acceder al panel de gestión, el establecimiento debe quedar habilitado.
+                {user && accountEmail ? ` Estás conectado como ${accountEmail}.` : " Selecciona el plan que corresponde al tamaño de tu residencia."}
               </p>
             </div>
+          </div>
+        )}
+
+        {user && eleam && (
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-8 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Cuenta conectada</p>
+              <h2 className="font-bold text-gray-800">{eleam.nombre}</h2>
+              <p className="text-sm text-gray-500">{accountEmail}</p>
+            </div>
+            <span className={`self-start sm:self-auto rounded-full px-3 py-1 text-xs font-semibold ${pagoActivo ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
+              {pagoActivo ? "Suscripción activa" : "Activación pendiente"}
+            </span>
           </div>
         )}
 
@@ -132,7 +178,7 @@ export default function PaymentPage() {
         {/* CTA */}
         <div className="text-center space-y-4">
           <a
-            href="mailto:contacto@fichaeleam.cl?subject=Activar%20FichaEleam"
+            href={`mailto:contacto@fichaeleam.cl?subject=${mailSubject}&body=${mailBody}`}
             className="inline-flex bg-[var(--color-primary)] text-white font-bold py-3.5 px-10 rounded-xl hover:bg-[var(--color-button-hover)] transition-all shadow-md hover:shadow-lg text-base"
           >
             Contactar para activar mi ELEAM →

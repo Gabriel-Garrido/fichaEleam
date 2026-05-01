@@ -1,23 +1,43 @@
 import { supabase } from "../../services/supabaseConfig";
 
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error("Supabase no está configurado.");
+  }
+  return supabase;
+}
+
 export const login = async ({ email, password }) => {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const client = requireSupabase();
+  const { data, error } = await client.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  });
   if (error) throw error;
   return data.user;
 };
 
 export const loginWithGoogle = async () => {
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  const client = requireSupabase();
+  const { data, error } = await client.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${window.location.origin}/dashboard` },
+    options: {
+      redirectTo: `${window.location.origin}/dashboard`,
+      queryParams: {
+        access_type: "offline",
+        prompt: "select_account",
+      },
+    },
   });
   if (error) throw error;
   return data;
 };
 
 export const register = async ({ nombre, email, password }) => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
+  const client = requireSupabase();
+  const cleanEmail = email.trim();
+  const { data, error } = await client.auth.signUp({
+    email: cleanEmail,
     password,
     options: { data: { nombre } },
   });
@@ -25,16 +45,16 @@ export const register = async ({ nombre, email, password }) => {
 
   if (data.user) {
     // Crear ELEAM con pago inactivo — el admin deberá activarlo en /pago
-    const { data: eleamData } = await supabase
+    const { data: eleamData } = await client
       .from("eleams")
-      .insert({ nombre: `ELEAM de ${nombre}`, email_admin: email, pago_activo: false })
+      .insert({ nombre: `ELEAM de ${nombre}`, email_admin: cleanEmail, pago_activo: false })
       .select()
       .single();
 
-    await supabase.from("profiles").upsert({
+    await client.from("profiles").upsert({
       id:       data.user.id,
       nombre,
-      email,
+      email:    cleanEmail,
       rol:      "admin_eleam",
       eleam_id: eleamData?.id ?? null,
     });
@@ -43,6 +63,7 @@ export const register = async ({ nombre, email, password }) => {
 };
 
 export const logout = async () => {
-  const { error } = await supabase.auth.signOut();
+  const client = requireSupabase();
+  const { error } = await client.auth.signOut();
   if (error) throw error;
 };

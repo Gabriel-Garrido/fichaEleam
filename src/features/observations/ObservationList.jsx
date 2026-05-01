@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getObservations, deleteObservation } from "./observationsService";
 import { getResidents } from "../residents/residentService";
+import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
@@ -45,6 +46,8 @@ function today() {
 function ObservationList() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { profile } = useAuth();
+  const canDelete = profile?.rol === "admin_eleam" || profile?.rol === "superadmin";
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get("residenteId");
 
@@ -237,12 +240,14 @@ function ObservationList() {
                       timeStyle: "short",
                     })}
                   </span>
-                  <button
-                    onClick={() => handleDelete(r.id)}
-                    className="text-red-400 hover:text-red-600 text-xs"
-                  >
-                    Eliminar
-                  </button>
+                  {canDelete && (
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      className="text-red-400 hover:text-red-600 text-xs"
+                    >
+                      Eliminar
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

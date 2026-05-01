@@ -56,7 +56,8 @@ Esto crea todas las tablas, políticas RLS, Storage buckets, las 10 categorías 
 
 1. En Supabase, ir a **Authentication → Providers → Google**.
 2. Habilitar y agregar las credenciales OAuth de Google Cloud Console.
-3. Agregar `http://localhost:5173` como URL de redireccionamiento autorizado en Google.
+3. En Google Cloud Console, agregar `http://localhost:5173` como origen autorizado.
+4. En Supabase, confirmar que **Site URL** apunte a `http://localhost:5173` en desarrollo y que las redirect URLs incluyan `http://localhost:5173/**`.
 
 ---
 
@@ -102,15 +103,17 @@ Con Supabase configurado:
 **No se conecta a Supabase.** Funciona completamente offline.
 
 Condiciones:
-- Datos de ejemplo precargados (3 residentes, signos vitales, observaciones)
+- Datos de ejemplo precargados (5 residentes, signos vitales, observaciones y acreditación)
 - El usuario puede agregar registros — se guardan solo en `localStorage` del navegador
 - Banner amarillo permanente: "Datos ficticios — solo en este navegador"
 - Mensajes de conversión integrados en cada pestaña
 - CTA a `/pago` en múltiples puntos
 - Botón "Borrar datos" limpia el localStorage del demo
-- Pestañas: Dashboard, Residentes, Signos Vitales, Observaciones
+- Pestañas: Dashboard, Residentes, Signos Vitales, Observaciones y Acreditación
 
 Los datos del demo se almacenan en `localStorage` bajo la clave `fichaeleam_demo_v1`.
+
+El dashboard del demo replica los indicadores operativos principales: índice operativo, prioridades del turno, alertas clínicas, documentos por vencer, matriz de riesgo y acciones sugeridas para administración de ELEAM.
 
 ### Pago (`/pago`)
 
@@ -153,8 +156,12 @@ Verifica en orden:
 1. `authLoading || profileLoading` → muestra spinner
 2. `supabaseError` → muestra pantalla de error controlada
 3. `!user` → redirige a `/login`
-4. `!pagoActivo` → redirige a `/pago?sinAcceso=1`
-5. Renderiza el componente hijo
+4. `!profile` → redirige a `/pago?sinAcceso=1`
+5. `requireActive && !pagoActivo` → redirige a `/pago?sinAcceso=1`
+6. `allowedRoles` no coincide → redirige a `/dashboard` o `/pago`
+7. Renderiza el componente hijo
+
+El Navbar usa el mismo estado de autorización: una cuenta sin activación ve solo Demo, Activar ELEAM y Cerrar sesión. Las vistas operativas quedan ocultas y bloqueadas por ruta.
 
 ---
 
@@ -165,6 +172,8 @@ Verifica en orden:
 | `admin_eleam` | Administrador del ELEAM. Crea la cuenta, es responsable del pago, puede gestionar usuarios del propio establecimiento. |
 | `funcionario` | Personal del ELEAM (enfermeras, técnicos, etc.). Accede si el ELEAM tiene pago activo. |
 | `superadmin` | Dueño/operador de la plataforma FichaEleam. Acceso global: ve y gestiona todos los ELEAMs, registra pagos, monitorea métricas del negocio. |
+
+En la UI, las acciones destructivas o administrativas se limitan a `admin_eleam` y `superadmin`. El personal funcionario puede consultar y registrar información operativa sin ver controles de eliminación o cambio de estado administrativo.
 
 El pago activo se verifica así:
 
@@ -297,7 +306,7 @@ src/
 │   ├── ErrorBoundary.jsx                    # Captura errores no manejados
 │   ├── Modal.jsx                            # Modal accesible (Escape, backdrop, aria)
 │   ├── Navbar.jsx                           # Nav global (lee useAuth, sin props)
-│   ├── ProtectedRoute.jsx                   # Guarda sesión + pago activo
+│   ├── ProtectedRoute.jsx                   # Guarda sesión, cuenta activa y roles
 │   ├── SuperAdminRoute.jsx                  # Guarda exclusiva rol superadmin
 │   ├── SupabaseError.jsx                    # Error cuando Supabase no responde
 │   └── Toast.jsx                            # Sistema de notificaciones
@@ -313,7 +322,7 @@ src/
 │   ├── payment/           # PaymentPage (placeholder integración pago)
 │   ├── residents/         # CRUD residentes (escala Katz, egreso, tabs lazy)
 │   ├── superadmin/        # SuperAdminDashboard + superadminService
-│   └── vitalSigns/        # Registro de signos vitales (filtros fecha)
+│   └── vitalSigns/        # Registro de signos vitales, rangos clínicos y tarjetas visuales
 ├── routes/
 │   └── AppRouter.jsx      # Rutas + /superadmin + ocultamiento de Navbar
 ├── services/
@@ -333,3 +342,15 @@ src/
 **Netlify**: crear `public/_redirects` con `/* /index.html 200`.
 **Vercel**: automático con framework React/Vite.
 **Nginx**: `try_files $uri $uri/ /index.html;`
+
+---
+
+## UX operativa
+
+La interfaz está pensada para equipos ELEAM que trabajan por turnos:
+
+- Dashboard con prioridades del turno, alertas clínicas, acreditación, ocupación y seguimiento pendiente.
+- Signos vitales con rangos visuales por parámetro: normal, atención y crítico.
+- Formularios que advierten cuando no hay residentes activos antes de intentar guardar.
+- Listas con filtros rápidos, tarjetas legibles y tablas compactas para uso repetido.
+- Navegación protegida según sesión, pago activo y rol del usuario.

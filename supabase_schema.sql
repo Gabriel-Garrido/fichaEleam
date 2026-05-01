@@ -30,10 +30,12 @@ create table if not exists public.profiles (
 alter table public.profiles enable row level security;
 
 -- Política: cada usuario ve y edita solo su propio perfil
+drop policy if exists "profiles_own_select" on public.profiles;
 create policy "profiles_own_select"
   on public.profiles for select
   using ((select auth.uid()) = id);
 
+drop policy if exists "profiles_own_update" on public.profiles;
 create policy "profiles_own_update"
   on public.profiles for update
   using ((select auth.uid()) = id)
@@ -109,19 +111,23 @@ create table if not exists public.residentes (
 
 alter table public.residentes enable row level security;
 
+drop policy if exists "residentes_select" on public.residentes;
 create policy "residentes_select"
   on public.residentes for select
   using ((select auth.uid()) is not null);
 
+drop policy if exists "residentes_insert" on public.residentes;
 create policy "residentes_insert"
   on public.residentes for insert
   with check ((select auth.uid()) is not null);
 
+drop policy if exists "residentes_update" on public.residentes;
 create policy "residentes_update"
   on public.residentes for update
   using ((select auth.uid()) is not null)
   with check ((select auth.uid()) is not null);
 
+drop policy if exists "residentes_delete" on public.residentes;
 create policy "residentes_delete"
   on public.residentes for delete
   using ((select auth.uid()) is not null);
@@ -154,19 +160,23 @@ create table if not exists public.signos_vitales (
 
 alter table public.signos_vitales enable row level security;
 
+drop policy if exists "signos_select" on public.signos_vitales;
 create policy "signos_select"
   on public.signos_vitales for select
   using ((select auth.uid()) is not null);
 
+drop policy if exists "signos_insert" on public.signos_vitales;
 create policy "signos_insert"
   on public.signos_vitales for insert
   with check ((select auth.uid()) is not null);
 
+drop policy if exists "signos_update" on public.signos_vitales;
 create policy "signos_update"
   on public.signos_vitales for update
   using ((select auth.uid()) is not null)
   with check ((select auth.uid()) is not null);
 
+drop policy if exists "signos_delete" on public.signos_vitales;
 create policy "signos_delete"
   on public.signos_vitales for delete
   using ((select auth.uid()) is not null);
@@ -195,19 +205,23 @@ create table if not exists public.observaciones_diarias (
 
 alter table public.observaciones_diarias enable row level security;
 
+drop policy if exists "observaciones_select" on public.observaciones_diarias;
 create policy "observaciones_select"
   on public.observaciones_diarias for select
   using ((select auth.uid()) is not null);
 
+drop policy if exists "observaciones_insert" on public.observaciones_diarias;
 create policy "observaciones_insert"
   on public.observaciones_diarias for insert
   with check ((select auth.uid()) is not null);
 
+drop policy if exists "observaciones_update" on public.observaciones_diarias;
 create policy "observaciones_update"
   on public.observaciones_diarias for update
   using ((select auth.uid()) is not null)
   with check ((select auth.uid()) is not null);
 
+drop policy if exists "observaciones_delete" on public.observaciones_diarias;
 create policy "observaciones_delete"
   on public.observaciones_diarias for delete
   using ((select auth.uid()) is not null);
@@ -228,6 +242,7 @@ create table if not exists public.categorias_acreditacion (
 -- Sin RLS (solo lectura, datos de referencia no sensibles)
 alter table public.categorias_acreditacion enable row level security;
 
+drop policy if exists "categorias_select_all" on public.categorias_acreditacion;
 create policy "categorias_select_all"
   on public.categorias_acreditacion for select
   using (true);
@@ -260,19 +275,23 @@ create table if not exists public.documentos_acreditacion (
 
 alter table public.documentos_acreditacion enable row level security;
 
+drop policy if exists "documentos_select" on public.documentos_acreditacion;
 create policy "documentos_select"
   on public.documentos_acreditacion for select
   using ((select auth.uid()) is not null);
 
+drop policy if exists "documentos_insert" on public.documentos_acreditacion;
 create policy "documentos_insert"
   on public.documentos_acreditacion for insert
   with check ((select auth.uid()) is not null);
 
+drop policy if exists "documentos_update" on public.documentos_acreditacion;
 create policy "documentos_update"
   on public.documentos_acreditacion for update
   using ((select auth.uid()) is not null)
   with check ((select auth.uid()) is not null);
 
+drop policy if exists "documentos_delete" on public.documentos_acreditacion;
 create policy "documentos_delete"
   on public.documentos_acreditacion for delete
   using ((select auth.uid()) is not null);
@@ -308,6 +327,7 @@ values ('residentes-archivos', 'residentes-archivos', false)
 on conflict (id) do nothing;
 
 -- Políticas de Storage: acotadas a usuarios autenticados y por bucket
+drop policy if exists "storage_acreditacion_select" on storage.objects;
 create policy "storage_acreditacion_select"
   on storage.objects for select
   using (
@@ -315,6 +335,7 @@ create policy "storage_acreditacion_select"
     and (select auth.uid()) is not null
   );
 
+drop policy if exists "storage_acreditacion_insert" on storage.objects;
 create policy "storage_acreditacion_insert"
   on storage.objects for insert
   with check (
@@ -322,6 +343,7 @@ create policy "storage_acreditacion_insert"
     and (select auth.uid()) is not null
   );
 
+drop policy if exists "storage_acreditacion_delete" on storage.objects;
 create policy "storage_acreditacion_delete"
   on storage.objects for delete
   using (
@@ -329,6 +351,7 @@ create policy "storage_acreditacion_delete"
     and (select auth.uid()) is not null
   );
 
+drop policy if exists "storage_residentes_select" on storage.objects;
 create policy "storage_residentes_select"
   on storage.objects for select
   using (
@@ -336,6 +359,7 @@ create policy "storage_residentes_select"
     and (select auth.uid()) is not null
   );
 
+drop policy if exists "storage_residentes_insert" on storage.objects;
 create policy "storage_residentes_insert"
   on storage.objects for insert
   with check (
@@ -522,6 +546,7 @@ create table if not exists public.eleams (
 alter table public.eleams enable row level security;
 
 -- Cada usuario ve solo el ELEAM al que pertenece
+drop policy if exists "eleams_select_own" on public.eleams;
 create policy "eleams_select_own" on public.eleams for select
   using (
     id in (
@@ -531,10 +556,12 @@ create policy "eleams_select_own" on public.eleams for select
   );
 
 -- Cualquier usuario autenticado puede crear su ELEAM (registro)
+drop policy if exists "eleams_insert_auth" on public.eleams;
 create policy "eleams_insert_auth" on public.eleams for insert
   with check ((select auth.uid()) is not null);
 
 -- Solo el admin del ELEAM puede actualizarlo
+drop policy if exists "eleams_update_admin" on public.eleams;
 create policy "eleams_update_admin" on public.eleams for update
   using (
     id in (
@@ -687,6 +714,10 @@ create policy "residentes_delete" on public.residentes for delete
   );
 
 -- ── RLS signos_vitales: aislamiento vía residentes.eleam_id ──
+drop policy if exists "signos_select" on public.signos_vitales;
+drop policy if exists "signos_insert" on public.signos_vitales;
+drop policy if exists "signos_update" on public.signos_vitales;
+drop policy if exists "signos_delete" on public.signos_vitales;
 drop policy if exists "sv_select" on public.signos_vitales;
 drop policy if exists "sv_insert" on public.signos_vitales;
 drop policy if exists "sv_update" on public.signos_vitales;
@@ -918,7 +949,9 @@ do $$ begin
   ) then
     alter table public.observaciones_diarias
       add column actualizado_en timestamptz not null default now();
-    update public.observaciones_diarias set actualizado_en = creado_en;
+    update public.observaciones_diarias
+      set actualizado_en = creado_en
+      where actualizado_en is distinct from creado_en;
   end if;
 end $$;
 
@@ -935,7 +968,9 @@ do $$ begin
   ) then
     alter table public.signos_vitales
       add column creado_en timestamptz not null default now();
-    update public.signos_vitales set creado_en = fecha_hora;
+    update public.signos_vitales
+      set creado_en = fecha_hora
+      where creado_en is distinct from fecha_hora;
   end if;
 end $$;
 
@@ -956,6 +991,9 @@ create trigger trg_documentos_updated_at
 drop policy if exists "storage_acreditacion_select" on storage.objects;
 drop policy if exists "storage_acreditacion_insert" on storage.objects;
 drop policy if exists "storage_acreditacion_delete" on storage.objects;
+drop policy if exists "storage_residentes_select" on storage.objects;
+drop policy if exists "storage_residentes_insert" on storage.objects;
+drop policy if exists "storage_residentes_delete" on storage.objects;
 
 create policy "storage_acreditacion_select"
   on storage.objects for select

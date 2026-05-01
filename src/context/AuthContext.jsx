@@ -12,22 +12,74 @@ export function AuthProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [supabaseError, setSupabaseError]   = useState(false);
+  const [authNotice, setAuthNotice]         = useState(null);
 
-  const fetchProfileAndEleam = useCallback(async (userId) => {
+  const fetchProfileAndEleam = useCallback(async (authUser) => {
     if (!supabase) return;
+    const userId = typeof authUser === "string" ? authUser : authUser?.id;
+    const email = typeof authUser === "string" ? null : authUser?.email;
+    const metadata = typeof authUser === "string" ? {} : (authUser?.user_metadata ?? {});
+    const displayName =
+      metadata.nombre ||
+      metadata.full_name ||
+      metadata.name ||
+      email?.split("@")[0] ||
+      "Usuario";
+
+    if (!userId) return;
+
     setProfileLoading(true);
+    setAuthNotice(null);
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("profiles")
         .select("*, eleams(*)")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
-      if (error || !data) { setProfileLoading(false); return; }
+      if (error) throw error;
+
+      if (!data && email) {
+        const { data: newEleam, error: eleamError } = await supabase
+          .from("eleams")
+          .insert({
+            nombre: `ELEAM de ${displayName}`,
+            email_admin: email,
+            pago_activo: false,
+          })
+          .select()
+          .maybeSingle();
+
+        const profilePayload = {
+          id: userId,
+          nombre: displayName,
+          email,
+          rol: "admin_eleam",
+          eleam_id: eleamError ? null : newEleam?.id ?? null,
+        };
+
+        const { data: createdProfile, error: profileError } = await supabase
+          .from("profiles")
+          .upsert(profilePayload)
+          .select("*, eleams(*)")
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+        data = createdProfile;
+
+        if (eleamError) {
+          setAuthNotice("Tu cuenta se creó, pero aún falta asociarla a un ELEAM. Puedes continuar desde el panel de pago.");
+        }
+      }
+
+      if (!data) {
+        setAuthNotice("No pudimos cargar tu perfil todavía. Intenta nuevamente en unos segundos.");
+        return;
+      }
 
       // Si el usuario no tiene ELEAM asociado, crear uno automáticamente
-      if (!data.eleam_id) {
-        const { data: newEleam } = await supabase
+      if (!data.eleam_id && data.rol !== "superadmin") {
+        const { data: newEleam, error: eleamError } = await supabase
           .from("eleams")
           .insert({
             nombre: `ELEAM de ${data.nombre}`,
@@ -35,23 +87,26 @@ export function AuthProvider({ children }) {
             pago_activo: false,
           })
           .select()
-          .single();
+          .maybeSingle();
 
-        if (newEleam) {
-          await supabase
+        if (!eleamError && newEleam) {
+          const { error: updateError } = await supabase
             .from("profiles")
-            .update({ eleam_id: newEleam.id, rol: "admin_eleam" })
+            .update({ eleam_id: newEleam.id })
             .eq("id", userId);
+          if (updateError) throw updateError;
           data.eleam_id = newEleam.id;
           data.eleams   = newEleam;
-          data.rol      = "admin_eleam";
+        } else {
+          setAuthNotice("Tu sesión está activa, pero aún no se pudo crear el ELEAM asociado.");
         }
       }
 
       setProfile(data);
       setEleam(data.eleams ?? null);
-    } catch {
-      // perfil todavía no disponible (trigger puede tardar ms)
+    } catch (error) {
+      console.warn("No se pudo cargar el perfil:", error);
+      setAuthNotice("Iniciaste sesión, pero no pudimos cargar todos los datos de tu cuenta.");
     } finally {
       setProfileLoading(false);
     }
@@ -67,7 +122,7 @@ export function AuthProvider({ children }) {
       .then(({ data: { session }, error }) => {
         if (error) throw error;
         setUser(session?.user ?? null);
-        if (session?.user) fetchProfileAndEleam(session.user.id);
+        if (session?.user) fetchProfileAndEleam(session.user);
         setAuthLoading(false);
       })
       .catch(() => {
@@ -79,10 +134,11 @@ export function AuthProvider({ children }) {
       (_event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
-          fetchProfileAndEleam(session.user.id);
+          fetchProfileAndEleam(session.user);
         } else {
           setProfile(null);
           setEleam(null);
+          setAuthNotice(null);
         }
       }
     );
@@ -103,8 +159,9 @@ export function AuthProvider({ children }) {
     pagoActivo,
     profileLoading,
     authLoading,
+    authNotice,
     supabaseError: supabaseError || !isSupabaseConfigured,
-    refetchProfile: () => user && fetchProfileAndEleam(user.id),
+    refetchProfile: () => user && fetchProfileAndEleam(user),
   };
 
   if (authLoading) return <Loading message="Verificando autenticación..." />;

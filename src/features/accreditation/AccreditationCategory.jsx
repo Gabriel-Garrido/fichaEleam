@@ -9,6 +9,7 @@ import {
 } from "./accreditationService";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
+import { useAuth } from "../../context/AuthContext";
 
 const ESTADO_STYLES = {
   pendiente: "bg-gray-100 text-gray-600",
@@ -29,6 +30,8 @@ const ESTADO_LABEL = {
 function AccreditationCategory() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const canManageDocuments = profile?.rol === "admin_eleam" || profile?.rol === "superadmin";
 
   const [category, setCategory] = useState(null);
   const [documents, setDocuments] = useState([]);
@@ -242,23 +245,27 @@ function AccreditationCategory() {
                       {loadingUrl === doc.id ? "Cargando..." : "Ver archivo"}
                     </button>
                   )}
-                  <select
-                    value={doc.estado}
-                    onChange={(e) => handleStatusChange(doc.id, e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-secondary)] bg-white"
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="subido">Subido</option>
-                    <option value="aprobado">Aprobado</option>
-                    <option value="rechazado">Rechazado</option>
-                    <option value="vencido">Vencido</option>
-                  </select>
-                  <button
-                    onClick={() => handleDelete(doc.id, doc.storage_path)}
-                    className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                  >
-                    Eliminar
-                  </button>
+                  {canManageDocuments && (
+                    <>
+                      <select
+                        value={doc.estado}
+                        onChange={(e) => handleStatusChange(doc.id, e.target.value)}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-secondary)] bg-white"
+                      >
+                        <option value="pendiente">Pendiente</option>
+                        <option value="subido">Subido</option>
+                        <option value="aprobado">Aprobado</option>
+                        <option value="rechazado">Rechazado</option>
+                        <option value="vencido">Vencido</option>
+                      </select>
+                      <button
+                        onClick={() => handleDelete(doc.id, doc.storage_path)}
+                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                      >
+                        Eliminar
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
