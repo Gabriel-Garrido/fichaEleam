@@ -123,18 +123,29 @@ Con Supabase configurado:
 
 **No se conecta a Supabase.** Funciona completamente offline.
 
-Condiciones:
-- Datos de ejemplo precargados (5 residentes, signos vitales, observaciones y acreditación)
-- El usuario puede agregar registros — se guardan solo en `localStorage` del navegador
-- Banner amarillo permanente: "Datos ficticios — solo en este navegador"
-- Mensajes de conversión integrados en cada pestaña
-- CTA a `/pago` en múltiples puntos
-- Botón "Borrar datos" limpia el localStorage del demo
-- Pestañas: Dashboard, Residentes, Signos Vitales, Observaciones y Acreditación
+El demo está pensado para **clientes potenciales** y se divide en tres
+perfiles, todos accesibles desde el selector en `/demo`:
 
-Los datos del demo se almacenan en `localStorage` bajo la clave `fichaeleam_demo_v1`.
+| Ruta | Perfil | Pensado para |
+|------|--------|--------------|
+| `/demo/admin`       | Soy dueño/director del ELEAM | El que firma la suscripción: ve dashboard, residentes, signos, observaciones, acreditación SEREMI, etc. |
+| `/demo/funcionario` | Trabajo en un ELEAM | Personal de turno: registra signos vitales y observaciones; consulta acreditación pero no la modifica. |
+| `/demo/familiar`    | Tengo un familiar en un ELEAM | Familiar autorizado: ve a su residente, sus signos y observaciones recientes y registra visitas. |
 
-El dashboard del demo replica los indicadores operativos principales: índice operativo, prioridades del turno, alertas clínicas, documentos por vencer, matriz de riesgo y acciones sugeridas para administración de ELEAM.
+> El rol `superadmin` **no** tiene demo público — es exclusivo del
+> dueño/operador de la plataforma (tú).
+
+Condiciones del demo:
+- Cada perfil muestra solo lo que ese rol vería en la versión real,
+  con un banner amarillo permanente indicando "Estás explorando como
+  [perfil]".
+- Datos de ejemplo precargados (5 residentes, signos vitales,
+  observaciones, acreditación, visitas familiares).
+- Lo que el usuario ingresa en el demo de admin/funcionario se guarda
+  en `localStorage` (`fichaeleam_demo_v1`); las visitas del demo
+  familiar viven solo en estado de la sesión (no persiste entre recargas).
+- Cada banner ofrece "Cambiar perfil" para volver al selector y
+  "Activar versión real" para ir a `/pago`.
 
 ### Pago (`/pago`)
 
@@ -407,7 +418,7 @@ En `AuthContext`, la variable `pagoActivo` es `true` si `profile.rol === 'supera
 |------|--------------------|-----------------------------|
 | `/` | No | Funciona normalmente |
 | `/login` | No* | Muestra pantalla informativa + botón al demo |
-| `/demo` | No | Funciona completamente con mock data |
+| `/demo`, `/demo/admin`, `/demo/funcionario`, `/demo/familiar` | No | Selector + 3 demos por perfil, mock data |
 | `/pago` | No | Funciona normalmente |
 | `/dashboard` | Sí | Muestra pantalla de error controlada |
 | `/residents/*` | Sí | Muestra pantalla de error controlada |
@@ -637,7 +648,7 @@ src/
 │   ├── accreditation/     # Documentación SEREMI DS 14/2017
 │   ├── auth/              # Login (email/password), Register, authService
 │   ├── dashboard/         # AdminDashboard + dashboardService (loadDashboard)
-│   ├── demo/              # DemoPage, mockData, demoService (localStorage)
+│   ├── demo/              # DemoSelector + DemoPage(role) + FamiliarDemoPage, mockData, demoService
 │   ├── landing/           # LandingPage de alta conversión
 │   ├── observations/      # Observaciones diarias (filtros fecha + tipo)
 │   ├── payment/           # PaymentPage (placeholder integración pago)

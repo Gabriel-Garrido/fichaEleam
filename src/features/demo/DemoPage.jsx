@@ -149,15 +149,30 @@ function daysUntil(date) {
 
 /* ── Banner demo (sticky) ───────────────────────────────── */
 
-function DemoBanner({ onClear }) {
+const ROLE_LABEL = {
+  admin:       { txt: "Administrador del ELEAM", short: "Admin" },
+  funcionario: { txt: "Personal del ELEAM",       short: "Funcionario" },
+};
+
+function DemoBanner({ onClear, role }) {
   const navigate = useNavigate();
+  const label = ROLE_LABEL[role]?.txt ?? "Administrador del ELEAM";
   return (
     <div className="sticky top-0 z-40 bg-amber-500 text-white px-4 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm shadow-md">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <span className="bg-white/30 text-white text-xs font-bold px-2 py-0.5 rounded-full">DEMO</span>
-        <span>Datos ficticios — la información ingresada se guarda <strong>solo en este navegador</strong>.</span>
+        <span>
+          Estás explorando el demo como <strong>{label}</strong>.
+          Datos ficticios — solo en este navegador.
+        </span>
       </div>
       <div className="flex items-center gap-3 shrink-0">
+        <button
+          onClick={() => navigate("/demo")}
+          className="text-white/80 hover:text-white underline text-xs transition-colors"
+        >
+          Cambiar perfil
+        </button>
         <button onClick={onClear} className="text-white/80 hover:text-white underline text-xs transition-colors">
           Borrar datos
         </button>
@@ -1574,11 +1589,12 @@ function TabObservaciones() {
   );
 }
 
-function TabAcreditacion() {
+function TabAcreditacion({ role }) {
   const docs = DEMO_DOCUMENTS;
   const completed = docs.filter((d) => d.estado === "aprobado" || d.estado === "subido").length;
   const pct = Math.round((completed / docs.length) * 100);
   const vencen = docs.filter((d) => d.fecha_vencimiento && daysUntil(d.fecha_vencimiento) <= 30);
+  const canManage = role !== "funcionario";
 
   return (
     <div className="space-y-5">
@@ -1588,13 +1604,20 @@ function TabAcreditacion() {
           <p className="text-sm text-gray-500">
             Estado documental demo para fiscalización DS 14/2017.
           </p>
+          {!canManage && (
+            <p className="text-xs text-gray-400 mt-1">
+              Como funcionario puedes consultar el estado; las cargas las hace el administrador.
+            </p>
+          )}
         </div>
-        <button
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[var(--color-button-hover)] transition-colors"
-        >
-          Subir documento demo
-        </button>
+        {canManage && (
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[var(--color-button-hover)] transition-colors"
+          >
+            Subir documento demo
+          </button>
+        )}
       </div>
 
       <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -1664,7 +1687,8 @@ function TabAcreditacion() {
 }
 
 /* ── Componente principal ────────────────────────────────── */
-export default function DemoPage() {
+// role: 'admin' | 'funcionario' — determina qué acciones admin se ocultan.
+export default function DemoPage({ role = "admin" }) {
   const navigate = useNavigate();
   const [tab, setTab] = useState("dashboard");
   const [cleared, setCleared] = useState(false);
@@ -1677,16 +1701,16 @@ export default function DemoPage() {
   };
 
   const tabContent = {
-    dashboard:  <TabDashboard key={`d-${cleared}`} setTab={setTab} />,
-    residentes: <TabResidentes key={`r-${cleared}`} />,
-    signos:     <TabSignos key={`s-${cleared}`} />,
+    dashboard:  <TabDashboard    key={`d-${cleared}`} setTab={setTab} />,
+    residentes: <TabResidentes   key={`r-${cleared}`} />,
+    signos:     <TabSignos       key={`s-${cleared}`} />,
     obs:        <TabObservaciones key={`o-${cleared}`} />,
-    acreditacion: <TabAcreditacion key={`a-${cleared}`} />,
+    acreditacion: <TabAcreditacion key={`a-${cleared}`} role={role} />,
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <DemoBanner onClear={handleClear} />
+      <DemoBanner onClear={handleClear} role={role} />
 
       <div className="bg-white border-b border-gray-200 px-4 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-12">

@@ -14,7 +14,7 @@ La experiencia está orientada a personal ELEAM que trabaja por turnos y necesit
 - Signos vitales con rangos visuales por parámetro y estado global del registro.
 - Formularios con avisos claros cuando no hay residentes activos disponibles.
 - Acciones destructivas o administrativas visibles solo para `admin_eleam` y `superadmin`.
-- Demo offline con residentes, signos vitales, observaciones y acreditación para mostrar el flujo completo sin Supabase.
+- Demo offline en `/demo` con selector de perfil (Admin / Funcionario / Familiar) — sin demo de superadmin (rol exclusivo del operador).
 
 ---
 
@@ -733,3 +733,48 @@ de visita). El familiar solo registra las suyas (RLS exige
   no pertenece al ELEAM, o si supera `max_funcionarios` del plan.
 - `mp-webhook` valida HMAC, deduplica con `mp_request_id` y nunca
   confía en el body — re-fetch del recurso vía API MP.
+
+---
+
+## v8 — Demo dividido por perfil (sin superadmin)
+
+### Decisión
+
+El demo público (`/demo`) ahora muestra un **selector de perfiles**
+y NO incluye la experiencia superadmin (rol exclusivo del operador
+de la plataforma). Los tres demos son cliente-céntricos: el dueño del
+ELEAM, el funcionario y el familiar.
+
+### Rutas y archivos
+
+| Ruta | Componente | Notas |
+|------|-----------|-------|
+| `/demo` | `DemoSelector` | 3 cards con copy "Soy dueño/director", "Trabajo en un ELEAM", "Tengo un familiar". |
+| `/demo/admin` | `DemoPage role="admin"` | Vista completa del operativo (residentes, signos, obs, acreditación con upload). |
+| `/demo/funcionario` | `DemoPage role="funcionario"` | Igual que admin pero **sin** botón "Subir documento" en acreditación; copy explícito de los límites. |
+| `/demo/familiar` | `FamiliarDemoPage` | Portal limitado: 1 residente, último signos vitales, observaciones recientes, registro de visitas en estado local. |
+
+`DemoPage` recibe un prop `role` y `TabAcreditacion` lo respeta para
+ocultar acciones admin. El `DemoBanner` muestra el nombre del perfil
+("Estás explorando el demo como Personal del ELEAM…") y un link
+"Cambiar perfil" que vuelve al selector.
+
+### Datos del demo
+
+- Mock data en `mockData.js` (5 residentes, signos, observaciones).
+- El demo admin/funcionario persiste lo que el usuario crea en
+  `localStorage` (`fichaeleam_demo_v1`) — clear desde el banner.
+- El demo familiar usa el primer residente de `MOCK_RESIDENTS` y un
+  parentesco fijo "Hija". Las visitas viven solo en estado local
+  del componente (no persisten).
+
+### Implicaciones
+
+- El usuario interno `demo@fichaeleam.cl` (superadmin con ELEAM demo)
+  sigue siendo válido como cuenta de prueba para el operador, pero
+  ya no aparece referenciado en ningún flujo de demo público.
+- El Navbar para `superadmin sin eleam_id` (operador real) sigue
+  mostrando el link "Demo" → lleva al selector — útil para que el
+  operador muestre la app a clientes.
+- Las landing/marketing CTAs apuntan a `/demo` (selector); ya no
+  llevan directo a la vista admin.

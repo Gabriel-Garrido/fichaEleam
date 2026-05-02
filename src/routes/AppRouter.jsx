@@ -2,13 +2,15 @@ import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-import Login         from "../features/auth/Login";
-import Register      from "../features/auth/Register";
-import LandingPage   from "../features/landing/LandingPage";
-import DemoPage      from "../features/demo/DemoPage";
-import PaymentPage   from "../features/payment/PaymentPage";
-import PaymentReturn from "../features/payment/PaymentReturn";
-import TeamManagement from "../features/team/TeamManagement";
+import Login            from "../features/auth/Login";
+import Register         from "../features/auth/Register";
+import LandingPage      from "../features/landing/LandingPage";
+import DemoSelector     from "../features/demo/DemoSelector";
+import DemoPage         from "../features/demo/DemoPage";
+import FamiliarDemoPage from "../features/demo/FamiliarDemoPage";
+import PaymentPage      from "../features/payment/PaymentPage";
+import PaymentReturn    from "../features/payment/PaymentReturn";
+import TeamManagement   from "../features/team/TeamManagement";
 
 import ResidentList    from "../features/residents/ResidentList";
 import ResidentForm    from "../features/residents/ResidentForm";
@@ -35,7 +37,11 @@ import ProtectedRoute  from "../components/ProtectedRoute";
 import SuperAdminRoute from "../components/SuperAdminRoute";
 import Loading         from "../components/Loading";
 
-const NO_NAVBAR_PATHS = ["/", "/login", "/register", "/demo", "/pago", "/pago/return"];
+const NO_NAVBAR_PATHS = [
+  "/", "/login", "/register",
+  "/demo", "/demo/admin", "/demo/funcionario", "/demo/familiar",
+  "/pago", "/pago/return",
+];
 
 // Roles abreviados para legibilidad de las rutas
 const STAFF = ["admin_eleam", "funcionario"];
@@ -60,8 +66,11 @@ function AppRouter() {
         <Route path="/"            element={<LandingPage />} />
         <Route path="/login"       element={user ? signedInRedirect : <Login />} />
         <Route path="/register"    element={user ? signedInRedirect : <Register />} />
-        <Route path="/demo"        element={<DemoPage />} />
-        <Route path="/pago"        element={<PaymentPage />} />
+        <Route path="/demo"             element={<DemoSelector />} />
+        <Route path="/demo/admin"       element={<DemoPage role="admin" />} />
+        <Route path="/demo/funcionario" element={<DemoPage role="funcionario" />} />
+        <Route path="/demo/familiar"    element={<FamiliarDemoPage />} />
+        <Route path="/pago"             element={<PaymentPage />} />
         <Route path="/pago/return" element={<PaymentReturn />} />
 
         {/* ── Staff (admin_eleam + funcionario): operación clínica ─ */}
