@@ -27,6 +27,9 @@ import AccreditationUpload    from "../features/accreditation/AccreditationUploa
 import AdminDashboard      from "../features/dashboard/AdminDashboard";
 import SuperAdminDashboard from "../features/superadmin/SuperAdminDashboard";
 
+import FamiliarPortal  from "../features/familiar/FamiliarPortal";
+import FamiliarVisitas from "../features/familiar/FamiliarVisitas";
+
 import Navbar          from "../components/Navbar";
 import ProtectedRoute  from "../components/ProtectedRoute";
 import SuperAdminRoute from "../components/SuperAdminRoute";
@@ -34,57 +37,96 @@ import Loading         from "../components/Loading";
 
 const NO_NAVBAR_PATHS = ["/", "/login", "/register", "/demo", "/pago", "/pago/return"];
 
+// Roles abreviados para legibilidad de las rutas
+const STAFF = ["admin_eleam", "funcionario"];
+const ADMIN = ["admin_eleam"];
+const ADMIN_OR_STAFF = STAFF;
+
 function AppRouter() {
-  const { user, pagoActivo, profileLoading } = useAuth();
+  const { user, profileLoading, homePath } = useAuth();
   const { pathname }  = useLocation();
   const showNavbar    = !NO_NAVBAR_PATHS.includes(pathname);
+
   const signedInRedirect = profileLoading
     ? <Loading message="Verificando acceso..." />
-    : <Navigate to={pagoActivo ? "/dashboard" : "/pago?sinAcceso=1"} replace />;
-  const fallbackPath = user
-    ? pagoActivo ? "/dashboard" : "/pago?sinAcceso=1"
-    : "/";
+    : <Navigate to={homePath} replace />;
+  const fallbackPath = user ? homePath : "/";
 
   return (
     <>
       {showNavbar && <Navbar />}
       <Routes>
         {/* ── Públicas ──────────────────────────────────────── */}
-        <Route path="/"         element={<LandingPage />} />
-        <Route path="/login"    element={user ? signedInRedirect : <Login />} />
-        <Route path="/register" element={user ? signedInRedirect : <Register />} />
-        <Route path="/demo"     element={<DemoPage />} />
+        <Route path="/"            element={<LandingPage />} />
+        <Route path="/login"       element={user ? signedInRedirect : <Login />} />
+        <Route path="/register"    element={user ? signedInRedirect : <Register />} />
+        <Route path="/demo"        element={<DemoPage />} />
         <Route path="/pago"        element={<PaymentPage />} />
         <Route path="/pago/return" element={<PaymentReturn />} />
 
-        {/* ── Protegidas (requieren sesión + pago activo) ──── */}
-        <Route path="/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+        {/* ── Staff (admin_eleam + funcionario): operación clínica ─ */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AdminDashboard /></ProtectedRoute>
+        } />
 
+        <Route path="/residents" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><ResidentList /></ProtectedRoute>
+        } />
+        <Route path="/residents/new" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><ResidentForm /></ProtectedRoute>
+        } />
+        <Route path="/residents/:id" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><ResidentDetails /></ProtectedRoute>
+        } />
+        <Route path="/residents/:id/edit" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><ResidentForm /></ProtectedRoute>
+        } />
+
+        <Route path="/vital-signs" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><VitalSignsList /></ProtectedRoute>
+        } />
+        <Route path="/vital-signs/new" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><VitalSignsForm /></ProtectedRoute>
+        } />
+
+        <Route path="/observations" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><ObservationList /></ProtectedRoute>
+        } />
+        <Route path="/observations/new" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><ObservationForm /></ProtectedRoute>
+        } />
+
+        <Route path="/accreditation" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationDashboard /></ProtectedRoute>
+        } />
+        <Route path="/accreditation/category/:id" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationCategory /></ProtectedRoute>
+        } />
+        <Route path="/accreditation/upload" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationUpload /></ProtectedRoute>
+        } />
+
+        {/* ── Solo admin del ELEAM ──────────────────────────────── */}
         <Route path="/equipo" element={
-          <ProtectedRoute allowedRoles={["admin_eleam","superadmin"]}>
-            <TeamManagement />
+          <ProtectedRoute allowedRoles={ADMIN}><TeamManagement /></ProtectedRoute>
+        } />
+
+        {/* ── Familiar (sin requireActive: depende del ELEAM) ───── */}
+        <Route path="/familiar" element={
+          <ProtectedRoute allowedRoles={["familiar"]} requireActive={false}>
+            <FamiliarPortal />
+          </ProtectedRoute>
+        } />
+        <Route path="/familiar/visitas" element={
+          <ProtectedRoute allowedRoles={["familiar"]} requireActive={false}>
+            <FamiliarVisitas />
           </ProtectedRoute>
         } />
 
-        <Route path="/residents"          element={<ProtectedRoute><ResidentList /></ProtectedRoute>} />
-        <Route path="/residents/new"      element={<ProtectedRoute><ResidentForm /></ProtectedRoute>} />
-        <Route path="/residents/:id"      element={<ProtectedRoute><ResidentDetails /></ProtectedRoute>} />
-        <Route path="/residents/:id/edit" element={<ProtectedRoute><ResidentForm /></ProtectedRoute>} />
-
-        <Route path="/vital-signs"     element={<ProtectedRoute><VitalSignsList /></ProtectedRoute>} />
-        <Route path="/vital-signs/new" element={<ProtectedRoute><VitalSignsForm /></ProtectedRoute>} />
-
-        <Route path="/observations"     element={<ProtectedRoute><ObservationList /></ProtectedRoute>} />
-        <Route path="/observations/new" element={<ProtectedRoute><ObservationForm /></ProtectedRoute>} />
-
-        <Route path="/accreditation"              element={<ProtectedRoute><AccreditationDashboard /></ProtectedRoute>} />
-        <Route path="/accreditation/category/:id" element={<ProtectedRoute><AccreditationCategory /></ProtectedRoute>} />
-        <Route path="/accreditation/upload"       element={<ProtectedRoute><AccreditationUpload /></ProtectedRoute>} />
-
-        {/* ── Superadmin (requiere rol superadmin) ─────────── */}
+        {/* ── Superadmin ─────────────────────────────────────────── */}
         <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
 
-        {/* ── Fallback ──────────────────────────────────────── */}
+        {/* ── Fallback ───────────────────────────────────────────── */}
         <Route path="*" element={<Navigate to={fallbackPath} replace />} />
       </Routes>
     </>

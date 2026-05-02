@@ -104,8 +104,8 @@ export function AuthProvider({ children }) {
         } else {
           setAuthNotice("Tu sesión está activa, pero aún no se pudo crear el ELEAM asociado.");
         }
-      } else if (!data.eleam_id && data.rol === "funcionario") {
-        setAuthNotice("Tu cuenta está marcada como funcionario pero no tiene un ELEAM asociado. Contacta al administrador.");
+      } else if (!data.eleam_id && (data.rol === "funcionario" || data.rol === "familiar")) {
+        setAuthNotice("Tu cuenta no tiene un ELEAM asociado. Contacta al administrador del establecimiento.");
       }
 
       setProfile(data);
@@ -162,9 +162,22 @@ export function AuthProvider({ children }) {
 
   const plan = eleam?.planes ?? null;
   const subscriptionStatus = eleam?.subscription_status ?? "inactivo";
-  const isAdminEleam = profile?.rol === "admin_eleam";
-  const isFuncionario = profile?.rol === "funcionario";
-  const isSuperadmin = profile?.rol === "superadmin";
+  const rol = profile?.rol ?? null;
+  const isAdminEleam  = rol === "admin_eleam";
+  const isFuncionario = rol === "funcionario";
+  const isFamiliar    = rol === "familiar";
+  const isSuperadmin  = rol === "superadmin";
+  const isStaff       = isAdminEleam || isFuncionario;
+
+  // Ruta inicial según rol/estado de suscripción.
+  // Se usa en el Navbar y en redirecciones del Router.
+  let homePath = "/";
+  if (user) {
+    if (isSuperadmin)            homePath = "/superadmin";
+    else if (isFamiliar)         homePath = "/familiar";
+    else if (pagoActivo)         homePath = "/dashboard";
+    else                         homePath = "/pago?sinAcceso=1";
+  }
 
   const value = {
     user,
@@ -173,9 +186,13 @@ export function AuthProvider({ children }) {
     plan,
     subscriptionStatus,
     pagoActivo,
+    rol,
     isAdminEleam,
     isFuncionario,
+    isFamiliar,
     isSuperadmin,
+    isStaff,
+    homePath,
     profileLoading,
     authLoading,
     authNotice,

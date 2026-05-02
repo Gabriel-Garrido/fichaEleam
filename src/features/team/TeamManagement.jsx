@@ -8,14 +8,18 @@ import Loading from "../../components/Loading";
 import {
   getTeamMembers,
   getPendingInvitations,
-  inviteFuncionario,
+  inviteMember,
   revokeInvitation,
+  getEleamResidentes,
+  getEleamFamiliares,
+  unlinkFamiliarResidente,
 } from "./teamService";
 
 const ROLE_LABEL = {
   admin_eleam: { txt: "Administrador", cls: "bg-indigo-100 text-indigo-700" },
   funcionario: { txt: "Funcionario", cls: "bg-emerald-100 text-emerald-700" },
-  superadmin:  { txt: "Superadmin",   cls: "bg-amber-100 text-amber-800" },
+  familiar:    { txt: "Familiar",    cls: "bg-sky-100 text-sky-700" },
+  superadmin:  { txt: "Superadmin",  cls: "bg-amber-100 text-amber-800" },
 };
 
 function formatDate(iso) {
@@ -32,23 +36,33 @@ export default function TeamManagement() {
   const toast = useToast();
   const { eleam, plan, isAdminEleam, pagoActivo } = useAuth();
 
-  const [members, setMembers] = useState([]);
-  const [invites, setInvites] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [lastInvite, setLastInvite] = useState(null);
+  const [tab,        setTab]        = useState("funcionarios"); // 'funcionarios' | 'familiares'
+  const [members,    setMembers]    = useState([]);
+  const [invites,    setInvites]    = useState([]);
+  const [residentes, setResidentes] = useState([]);
+  const [familiares, setFamiliares] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+
+  // Form state
+  const [email,       setEmail]       = useState("");
+  const [residenteId, setResidenteId] = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
+  const [lastInvite,  setLastInvite]  = useState(null);
 
   const refresh = useCallback(async () => {
     if (!eleam?.id) return;
     setLoading(true);
     try {
-      const [m, inv] = await Promise.all([
+      const [m, inv, res, fam] = await Promise.all([
         getTeamMembers(eleam.id),
         getPendingInvitations(eleam.id),
+        getEleamResidentes(eleam.id),
+        getEleamFamiliares(eleam.id),
       ]);
       setMembers(m);
       setInvites(inv);
+      setResidentes(res);
+      setFamiliares(fam);
     } catch (e) {
       toast(e.message || "Error cargando equipo", "error");
     } finally {
@@ -78,7 +92,7 @@ export default function TeamManagement() {
       <div className="max-w-3xl mx-auto px-4 py-12 text-center">
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Activa tu suscripción</h1>
         <p className="text-gray-500 mb-6">
-          Para invitar funcionarios, primero el ELEAM debe tener una suscripción activa.
+          Para invitar funcionarios o familiares, primero el ELEAM debe tener una suscripción activa.
         </p>
         <Button
           className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-xl"
@@ -90,20 +104,27 @@ export default function TeamManagement() {
     );
   }
 
-  const funcionarios = members.filter((m) => m.rol === "funcionario");
-  const admins = members.filter((m) => m.rol === "admin_eleam");
-  const maxFunc = plan?.max_funcionarios ?? eleam?.max_funcionarios ?? null;
-  const totalContados = funcionarios.length + invites.length;
-  const limiteAlcanzado = maxFunc !== null && totalContados >= maxFunc;
+  const funcionarios     = members.filter((m) => m.rol === "funcionario");
+  const admins           = members.filter((m) => m.rol === "admin_eleam");
+  const invitesFunc      = invites.filter((i) => (i.rol ?? "funcionario") === "funcionario");
+  const invitesFam       = invites.filter((i) => i.rol === "familiar");
+  const maxFunc          = plan?.max_funcionarios ?? eleam?.max_funcionarios ?? null;
+  const cuposFuncOcupados = funcionarios.length + invitesFunc.length;
+  const limiteAlcanzado  = maxFunc !== null && cuposFuncOcupados >= maxFunc;
 
   const handleInvite = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setLastInvite(null);
     try {
-      const res = await inviteFuncionario(email.trim());
+      const res = await inviteMember({
+        email: email.trim(),
+        rol: tab === "familiares" ? "familiar" : "funcionario",
+        residenteId: tab === "familiares" ? residenteId || null : null,
+      });
       setLastInvite(res);
       setEmail("");
+      setResidenteId("");
       toast("Invitación creada", "success");
       await refresh();
     } catch (err) {
@@ -124,6 +145,17 @@ export default function TeamManagement() {
     }
   };
 
+  const handleUnlink = async (profileId, residenteId, nombre) => {
+    if (!window.confirm(`Quitar el acceso de ${nombre} al residente?`)) return;
+    try {
+      await unlinkFamiliarResidente(profileId, residenteId);
+      toast("Vínculo eliminado", "info");
+      await refresh();
+    } catch (e) {
+      toast(e.message || "Error", "error");
+    }
+  };
+
   const copy = (text) => {
     navigator.clipboard?.writeText(text)
       .then(() => toast("Copiado al portapapeles", "success"))
@@ -138,53 +170,113 @@ export default function TeamManagement() {
         <div>
           <h1 className="text-2xl font-black text-gray-800">Equipo del ELEAM</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Invita funcionarios al ELEAM. No pagan suscripción mientras la suya esté activa.
+            Funcionarios trabajan en el ELEAM. Familiares acceden de forma limitada
+            al residente que les vinculaste.
           </p>
         </div>
         <div className="text-sm text-gray-600 bg-white border rounded-xl px-4 py-2">
           Funcionarios: <span className="font-bold">{funcionarios.length}</span>
-          {" "}
-          {maxFunc !== null && (
-            <span className="text-gray-400">/ {maxFunc} (plan)</span>
-          )}
-          {invites.length > 0 && (
-            <span className="text-amber-700 ml-2">
-              · {invites.length} invitación{invites.length === 1 ? "" : "es"} pendiente{invites.length === 1 ? "" : "s"}
-            </span>
-          )}
+          {maxFunc !== null && <span className="text-gray-400"> / {maxFunc} (plan)</span>}
+          {" · "}
+          Familiares: <span className="font-bold">{familiares.length}</span>
         </div>
       </header>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-200">
+        {[
+          { key: "funcionarios", label: `Funcionarios (${funcionarios.length})` },
+          { key: "familiares",   label: `Familiares (${familiares.length})` },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setLastInvite(null); setEmail(""); setResidenteId(""); }}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+              tab === t.key
+                ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                : "border-transparent text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Form invitación */}
       <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="font-bold text-gray-800 mb-3">Invitar funcionario</h2>
-        {limiteAlcanzado && (
+        <h2 className="font-bold text-gray-800 mb-3">
+          Invitar {tab === "familiares" ? "familiar" : "funcionario"}
+        </h2>
+
+        {tab === "funcionarios" && limiteAlcanzado && (
           <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-            Llegaste al máximo del plan. Cancela una invitación pendiente o
-            actualiza el plan para sumar más funcionarios.
+            Llegaste al máximo de funcionarios del plan. Cancela una invitación
+            pendiente o actualiza el plan para sumar más.
           </p>
         )}
-        <form onSubmit={handleInvite} className="flex gap-3 items-end flex-wrap">
-          <div className="flex-1 min-w-[220px]">
+
+        {tab === "familiares" && residentes.length === 0 && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+            Necesitas crear un residente antes de poder invitar familiares.
+          </p>
+        )}
+
+        <form onSubmit={handleInvite} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
             <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">
-              Correo del funcionario
+              Correo del {tab === "familiares" ? "familiar" : "funcionario"}
             </label>
             <Input
               type="email"
               required
-              placeholder="funcionario@correo.cl"
+              placeholder={tab === "familiares" ? "familia@correo.cl" : "funcionario@correo.cl"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={submitting || limiteAlcanzado}
+              disabled={
+                submitting ||
+                (tab === "funcionarios" && limiteAlcanzado) ||
+                (tab === "familiares" && residentes.length === 0)
+              }
             />
           </div>
-          <Button
-            type="submit"
-            disabled={submitting || limiteAlcanzado || !email}
-            className="bg-[var(--color-primary)] text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
-          >
-            {submitting ? "Generando..." : "Invitar"}
-          </Button>
+
+          {tab === "familiares" && (
+            <div>
+              <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">
+                Residente vinculado
+              </label>
+              <select
+                required
+                value={residenteId}
+                onChange={(e) => setResidenteId(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
+                disabled={submitting || residentes.length === 0}
+              >
+                <option value="">Selecciona un residente...</option>
+                {residentes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.apellido}, {r.nombre}
+                    {r.habitacion ? ` · Hab. ${r.habitacion}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className={`${tab === "familiares" ? "sm:col-span-2" : ""} text-right`}>
+            <Button
+              type="submit"
+              disabled={
+                submitting ||
+                !email ||
+                (tab === "funcionarios" && limiteAlcanzado) ||
+                (tab === "familiares" && (!residenteId || residentes.length === 0))
+              }
+              className="bg-[var(--color-primary)] text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+            >
+              {submitting ? "Generando..." : "Invitar"}
+            </Button>
+          </div>
         </form>
 
         {lastInvite?.invite_url && (
@@ -203,60 +295,126 @@ export default function TeamManagement() {
               </button>
             </div>
             <p className="text-xs text-emerald-700 mt-2">
-              El link expira en 7 días. El funcionario debe registrarse usando el mismo correo.
+              El link expira en 7 días. {lastInvite.email} debe registrarse usando exactamente ese correo.
             </p>
           </div>
         )}
       </section>
 
-      {/* Listado equipo */}
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="font-bold text-gray-800 mb-3">Miembros</h2>
-        {members.length === 0 ? (
-          <p className="text-sm text-gray-500">Sin miembros todavía.</p>
-        ) : (
-          <ul className="divide-y">
-            {[...admins, ...funcionarios].map((m) => {
-              const role = ROLE_LABEL[m.rol] ?? { txt: m.rol, cls: "bg-gray-100 text-gray-700" };
-              return (
-                <li key={m.id} className="py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-800 truncate">{m.nombre}</p>
-                    <p className="text-sm text-gray-500 truncate">{m.email}</p>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${role.cls}`}>
-                    {role.txt}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      {/* Listado funcionarios */}
+      {tab === "funcionarios" && (
+        <>
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h2 className="font-bold text-gray-800 mb-3">Equipo del ELEAM</h2>
+            {members.length === 0 ? (
+              <p className="text-sm text-gray-500">Sin miembros todavía.</p>
+            ) : (
+              <ul className="divide-y">
+                {[...admins, ...funcionarios].map((m) => {
+                  const role = ROLE_LABEL[m.rol] ?? { txt: m.rol, cls: "bg-gray-100 text-gray-700" };
+                  return (
+                    <li key={m.id} className="py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-800 truncate">{m.nombre}</p>
+                        <p className="text-sm text-gray-500 truncate">{m.email}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${role.cls}`}>
+                        {role.txt}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
 
-      {/* Invitaciones pendientes */}
-      {invites.length > 0 && (
-        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="font-bold text-gray-800 mb-3">Invitaciones pendientes</h2>
-          <ul className="divide-y">
-            {invites.map((inv) => (
-              <li key={inv.id} className="py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold text-gray-800 truncate">{inv.email}</p>
-                  <p className="text-xs text-gray-500">
-                    Expira {formatDate(inv.expira_en)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleRevoke(inv.id)}
-                  className="text-rose-600 text-sm hover:underline"
-                >
-                  Eliminar
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+          {invitesFunc.length > 0 && (
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <h2 className="font-bold text-gray-800 mb-3">Invitaciones de funcionarios</h2>
+              <ul className="divide-y">
+                {invitesFunc.map((inv) => (
+                  <li key={inv.id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-800 truncate">{inv.email}</p>
+                      <p className="text-xs text-gray-500">Expira {formatDate(inv.expira_en)}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRevoke(inv.id)}
+                      className="text-rose-600 text-sm hover:underline"
+                    >
+                      Eliminar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
+
+      {/* Listado familiares */}
+      {tab === "familiares" && (
+        <>
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h2 className="font-bold text-gray-800 mb-3">Familiares vinculados</h2>
+            {familiares.length === 0 ? (
+              <p className="text-sm text-gray-500">Aún no hay familiares vinculados a residentes.</p>
+            ) : (
+              <ul className="divide-y">
+                {familiares.map((row) => (
+                  <li key={`${row.profile_id}-${row.residente_id}`} className="py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-800 truncate">
+                        {row.profiles?.nombre ?? "—"}
+                      </p>
+                      <p className="text-sm text-gray-500 truncate">
+                        {row.profiles?.email ?? "—"}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Vinculado a: {row.residentes?.apellido}, {row.residentes?.nombre}
+                        {row.parentesco ? <> · {row.parentesco}</> : null}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleUnlink(row.profile_id, row.residente_id, row.profiles?.nombre ?? row.profiles?.email)}
+                      className="text-rose-600 text-sm hover:underline shrink-0"
+                    >
+                      Quitar acceso
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {invitesFam.length > 0 && (
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <h2 className="font-bold text-gray-800 mb-3">Invitaciones de familiares</h2>
+              <ul className="divide-y">
+                {invitesFam.map((inv) => {
+                  const res = residentes.find((r) => r.id === inv.residente_id);
+                  return (
+                    <li key={inv.id} className="py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-800 truncate">{inv.email}</p>
+                        <p className="text-xs text-gray-500">
+                          {res ? <>Vinculado a: {res.apellido}, {res.nombre}</> : "Residente desconocido"}
+                          {" · "}Expira {formatDate(inv.expira_en)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRevoke(inv.id)}
+                        className="text-rose-600 text-sm hover:underline"
+                      >
+                        Eliminar
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

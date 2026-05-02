@@ -67,7 +67,11 @@ export default function PaymentPage() {
   useEffect(() => {
     let active = true;
     setLoadingPlans(true);
-    Promise.allSettled([getActivePlans(), user ? getMyPayments() : Promise.resolve([])])
+    // Solo el admin del ELEAM puede ver el historial de pagos.
+    Promise.allSettled([
+      getActivePlans(),
+      isAdminEleam ? getMyPayments() : Promise.resolve([]),
+    ])
       .then(([p1, p2]) => {
         if (!active) return;
         if (p1.status === "fulfilled") setPlans(p1.value);
@@ -75,7 +79,7 @@ export default function PaymentPage() {
       })
       .finally(() => active && setLoadingPlans(false));
     return () => { active = false; };
-  }, [user]);
+  }, [user, isAdminEleam]);
 
   const handleLogout = async () => {
     try { await logout(); } finally { navigate("/login", { replace: true }); }
@@ -87,7 +91,10 @@ export default function PaymentPage() {
       return;
     }
     if (!isAdminEleam) {
-      toast("Solo el admin del ELEAM puede activar la suscripción.", "warning");
+      toast(
+        "Solo el administrador del ELEAM puede contratar la suscripción. Contáctalo para que active el plan.",
+        "warning",
+      );
       return;
     }
     setLoadingAction(true);
@@ -164,6 +171,26 @@ export default function PaymentPage() {
               <p className="text-sm text-amber-700">
                 Para acceder al panel de gestión, el establecimiento debe quedar habilitado.
                 {user && accountEmail ? ` Estás conectado como ${accountEmail}.` : " Selecciona el plan que corresponde al tamaño de tu residencia."}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {user && !isAdminEleam && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
+            <div className="shrink-0 mt-0.5 w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-blue-800 text-sm mb-1">
+                La suscripción la administra el dueño del ELEAM
+              </h3>
+              <p className="text-sm text-blue-700">
+                Tu acceso está incluido sin costo mientras el administrador
+                del ELEAM mantenga la suscripción activa. Si crees que la
+                suscripción debería estar activa, contáctalo.
               </p>
             </div>
           </div>

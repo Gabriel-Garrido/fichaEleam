@@ -188,19 +188,68 @@ El Navbar usa el mismo estado de autorización: una cuenta sin activación ve so
 
 ## Roles de usuario
 
-| Rol | Descripción |
-|-----|-------------|
-| `admin_eleam` | Administrador del ELEAM. Crea la cuenta, es responsable del pago, puede gestionar usuarios del propio establecimiento. |
-| `funcionario` | Personal del ELEAM (enfermeras, técnicos, etc.). Accede si el ELEAM tiene pago activo. |
-| `superadmin` | Dueño/operador de la plataforma FichaEleam. Acceso global: ve y gestiona todos los ELEAMs, registra pagos, monitorea métricas del negocio. |
+| Rol | Quién es | Pago | Acceso principal |
+|-----|---------|------|------------------|
+| `superadmin` | Dueño/operador de FichaEleam (tú) | n/a | `/superadmin` — métricas, todos los ELEAMs, pagos. |
+| `admin_eleam` | Dueño/responsable del ELEAM | **Paga** | Operación clínica + `/equipo` + `/pago`. |
+| `funcionario` | Personal clínico del ELEAM (enfermeras, TENS, médicos) | Heredado del admin | Operación clínica de **su ELEAM**. Sin acciones administrativas. |
+| `familiar` | Familiar de un residente | Heredado del admin | Solo `/familiar` (un portal limitado a SU residente). |
 
-En la UI, las acciones destructivas o administrativas se limitan a `admin_eleam` y `superadmin`. El personal funcionario puede consultar y registrar información operativa sin ver controles de eliminación o cambio de estado administrativo.
+### Matriz de permisos
+
+| Acción / Vista                                  | superadmin | admin_eleam | funcionario | familiar |
+|-------------------------------------------------|:----------:|:-----------:|:-----------:|:--------:|
+| `/superadmin` (métricas + ELEAMs + pagos)       |     ✅     |             |             |          |
+| `/dashboard` (panel del ELEAM)                  |            |     ✅      |     ✅      |          |
+| `/residents` listar / crear residentes          |            |     ✅      |     ✅      |          |
+| Editar residente                                |            |     ✅      |     ✅      |          |
+| Eliminar residente                              |            |     ✅      |             |          |
+| Registrar signos vitales / observaciones        |            |     ✅      |     ✅      |          |
+| Eliminar signos vitales / observaciones         |            |     ✅      |             |          |
+| Subir / consultar acreditación                  |            |     ✅      |     ✅      |          |
+| Eliminar documentos de acreditación             |            |     ✅      |             |          |
+| `/equipo` invitar funcionarios y familiares     |            |     ✅      |             |          |
+| `/pago` contratar / cancelar suscripción        |            |     ✅      |             |          |
+| Ver historial de pagos del ELEAM                |     ✅     |     ✅      |             |          |
+| `/familiar` portal de su residente              |            |             |             |    ✅    |
+| `/familiar/visitas` registrar visitas familiares|            |             |             |    ✅    |
+
+### Cómo se crean
+
+- **`superadmin`** se crea manualmente con SQL (ver más abajo).
+- **`admin_eleam`** se crea solo: cualquier persona que se registra desde
+  `/register` sin token de invitación queda como admin de un nuevo ELEAM.
+- **`funcionario`** SOLO se crea por invitación desde `/equipo` (admin
+  pulsa "Invitar funcionario", se genera un link de un solo uso que el
+  funcionario abre y completa el registro).
+- **`familiar`** igual que el funcionario, pero el admin elige
+  obligatoriamente un **residente** del ELEAM al que se vinculará el
+  familiar. El familiar solo verá ese residente.
+
+### Cómo se garantiza esto en la BD
+
+- RLS de `profiles_admin_eleam_select` permite al admin ver miembros de su ELEAM.
+- Trigger `prevent_role_eleam_escalation` impide que un usuario
+  cambie su `rol` o `eleam_id` por sí mismo.
+- Trigger `handle_new_user` solo asigna `rol` distinto de `admin_eleam`
+  si el signup trae un `invite_token` válido (token + email + no usado +
+  no expirado), validado contra `funcionario_invitaciones`.
+- `familiar_can_view_residente()` (security definer) restringe RLS de
+  `residentes`, `signos_vitales`, `observaciones_diarias` y
+  `visitas_familiar` para que el familiar solo vea SU residente.
+- `documentos_acreditacion` y `pagos` no son visibles para `familiar`.
 
 El pago activo se verifica así:
 
 ```js
-const pagoActivo = profile?.rol === "superadmin" || eleam?.pago_activo === true;
+const pagoActivo = profile?.rol === "superadmin"
+  || ["activo", "en_gracia"].includes(eleam?.subscription_status)
+  || eleam?.pago_activo === true;
 ```
+
+> Tanto el `funcionario` como el `familiar` heredan el acceso del
+> `admin_eleam`: si el admin deja de pagar, todos los del mismo ELEAM
+> pierden acceso.
 
 ---
 

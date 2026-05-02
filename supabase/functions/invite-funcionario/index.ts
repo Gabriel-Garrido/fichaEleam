@@ -1,15 +1,16 @@
 // POST /functions/v1/invite-funcionario
 //
-// Body: { email: string }
+// Body: { email: string, rol?: 'funcionario' | 'familiar', residente_id?: uuid }
 //
 // Crea una invitación en `funcionario_invitaciones` y devuelve la URL
-// de registro `/register?invite=<token>` para enviársela al funcionario.
+// de registro `/register?invite=<token>` para enviársela al destinatario.
 //
 // Reglas:
 //   • Solo admin_eleam puede invitar.
 //   • El ELEAM debe estar con suscripción activa o en gracia.
-//   • Respeta el límite max_funcionarios del plan (chequeo proactivo;
-//     el trigger en profiles es la barrera definitiva al hacer signup).
+//   • Si rol='familiar' → residente_id es obligatorio y debe pertenecer al ELEAM.
+//   • Si rol='funcionario' → respeta max_funcionarios del plan.
+//   • El nombre histórico del endpoint se conserva por compatibilidad.
 
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
@@ -39,10 +40,23 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "Solo admin del ELEAM" }, 403);
     }
 
-    const { email } = await req.json().catch(() => ({}));
-    const cleanEmail = String(email ?? "").trim().toLowerCase();
+    const body = await req.json().catch(() => ({}));
+    const cleanEmail = String(body.email ?? "").trim().toLowerCase();
+    const rol = String(body.rol ?? "funcionario").trim();
+    const residenteId: string | null = body.residente_id
+      ? String(body.residente_id).trim()
+      : null;
+
     if (!cleanEmail || !EMAIL_RE.test(cleanEmail)) {
       return jsonResponse(req, { error: "Email inválido" }, 400);
+    }
+    if (!["funcionario", "familiar"].includes(rol)) {
+      return jsonResponse(req, { error: "Rol inválido" }, 400);
+    }
+    if (rol === "familiar" && !residenteId) {
+      return jsonResponse(req, {
+        error: "Para invitar a un familiar debes seleccionar un residente",
+      }, 400);
     }
 
     const sb = adminClient();
@@ -61,35 +75,52 @@ Deno.serve(async (req) => {
       }, 403);
     }
 
-    // Contar funcionarios actuales y límite del plan
-    const { data: plan } = eleam.plan_id
-      ? await sb.from("planes").select("max_funcionarios").eq("id", eleam.plan_id).maybeSingle()
-      : { data: null } as { data: { max_funcionarios: number | null } | null };
-    const maxFunc = plan?.max_funcionarios ?? eleam.max_funcionarios ?? null;
-
-    if (maxFunc !== null) {
-      const { count: actuales } = await sb
-        .from("profiles")
-        .select("id", { head: true, count: "exact" })
-        .eq("eleam_id", eleam.id)
-        .eq("rol", "funcionario");
-
-      const { count: pendientes } = await sb
-        .from("funcionario_invitaciones")
-        .select("id", { head: true, count: "exact" })
-        .eq("eleam_id", eleam.id)
-        .eq("usado", false)
-        .gt("expira_en", new Date().toISOString());
-
-      const total = (actuales ?? 0) + (pendientes ?? 0);
-      if (total >= maxFunc) {
+    // Si es familiar, validar que el residente pertenezca al ELEAM
+    if (rol === "familiar") {
+      const { data: res } = await sb
+        .from("residentes")
+        .select("id, eleam_id, nombre, apellido")
+        .eq("id", residenteId!)
+        .maybeSingle();
+      if (!res || res.eleam_id !== eleam.id) {
         return jsonResponse(req, {
-          error: `El plan permite máximo ${maxFunc} funcionarios. Cancela invitaciones pendientes o actualiza el plan.`,
-        }, 409);
+          error: "El residente no pertenece a tu ELEAM",
+        }, 400);
       }
     }
 
-    // Anular invitaciones pendientes previas para el mismo email
+    // Solo aplicamos el límite de plan a funcionarios (los familiares no consumen cupo)
+    if (rol === "funcionario") {
+      const { data: plan } = eleam.plan_id
+        ? await sb.from("planes").select("max_funcionarios").eq("id", eleam.plan_id).maybeSingle()
+        : { data: null } as { data: { max_funcionarios: number | null } | null };
+      const maxFunc = plan?.max_funcionarios ?? eleam.max_funcionarios ?? null;
+
+      if (maxFunc !== null) {
+        const { count: actuales } = await sb
+          .from("profiles")
+          .select("id", { head: true, count: "exact" })
+          .eq("eleam_id", eleam.id)
+          .eq("rol", "funcionario");
+
+        const { count: pendientes } = await sb
+          .from("funcionario_invitaciones")
+          .select("id", { head: true, count: "exact" })
+          .eq("eleam_id", eleam.id)
+          .eq("rol", "funcionario")
+          .eq("usado", false)
+          .gt("expira_en", new Date().toISOString());
+
+        const total = (actuales ?? 0) + (pendientes ?? 0);
+        if (total >= maxFunc) {
+          return jsonResponse(req, {
+            error: `El plan permite máximo ${maxFunc} funcionarios. Cancela invitaciones pendientes o actualiza el plan.`,
+          }, 409);
+        }
+      }
+    }
+
+    // Anular invitaciones pendientes previas del mismo email/rol
     await sb
       .from("funcionario_invitaciones")
       .delete()
@@ -104,6 +135,8 @@ Deno.serve(async (req) => {
         eleam_id: eleam.id,
         email: cleanEmail,
         token,
+        rol,
+        residente_id: residenteId,
         creado_por: user.id,
       });
     if (insErr) {
@@ -120,6 +153,8 @@ Deno.serve(async (req) => {
       ok: true,
       invite_url,
       email: cleanEmail,
+      rol,
+      residente_id: residenteId,
       eleam_nombre: eleam.nombre,
     });
   } catch (e) {

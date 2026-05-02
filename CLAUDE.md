@@ -613,3 +613,56 @@ porque usamos el flujo de redirect (no Bricks/card tokenization).
 5. Trigger `handle_new_user` valida (token + email + no usado + no expirado),
    asigna `rol='funcionario'` + `eleam_id` correcto y marca la invitación
    como usada.
+
+---
+
+## Roles y permisos (v6 — incluye `familiar`)
+
+Cuatro roles con jerarquía clara:
+
+| Rol           | Quién                                       | Paga | Vista principal       |
+|---------------|--------------------------------------------|------|------------------------|
+| `superadmin`  | Dueño/operador de FichaEleam                | n/a  | `/superadmin`          |
+| `admin_eleam` | Dueño del ELEAM, paga la suscripción        | sí   | `/dashboard`+`/equipo` |
+| `funcionario` | Personal clínico del ELEAM                  | no   | `/dashboard`           |
+| `familiar`    | Familiar de un residente, vista limitada    | no   | `/familiar`            |
+
+### Helpers expuestos por `useAuth()`
+
+- `rol` — string del rol del usuario
+- `isAdminEleam`, `isFuncionario`, `isFamiliar`, `isSuperadmin`, `isStaff`
+- `homePath` — ruta inicial coherente con el rol y la suscripción
+
+### Reglas server-side
+
+- `prevent_role_eleam_escalation`: bloquea cambios de `rol` o `eleam_id` por usuario común.
+- `handle_new_user`: solo asigna rol distinto a `admin_eleam` si el `invite_token`
+  pertenece a `funcionario_invitaciones` (token + email + no usado + no expirado).
+- `familiar_residentes` (PK `(profile_id, residente_id)`): vínculo solo el admin
+  puede crear/eliminar; el familiar puede leer los suyos.
+- `familiar_can_view_residente(rid)` y `my_familiar_residente_ids()` se usan en
+  RLS de `residentes`, `signos_vitales`, `observaciones_diarias`, `visitas_familiar`.
+- `pagos` SELECT solo `admin_eleam` (no funcionario ni familiar) o superadmin.
+- `documentos_acreditacion` no es accesible al familiar.
+
+### Tablas nuevas
+
+- `familiar_residentes (profile_id, residente_id, parentesco, creado_por, creado_en)` PK compuesta.
+- `visitas_familiar (id, residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por)`.
+- `funcionario_invitaciones.rol` (`funcionario` | `familiar`) y
+  `funcionario_invitaciones.residente_id` (obligatorio para familiar).
+
+### Frontend
+
+- `src/features/familiar/FamiliarPortal.jsx` — vista del residente con últimos
+  signos vitales, observaciones y visitas; botón "registrar visita ahora".
+- `src/features/familiar/FamiliarVisitas.jsx` — historial + formulario.
+- `src/features/familiar/familiarService.js` — wrappers Supabase (RLS hace el filtro).
+- `src/components/Navbar.jsx` — `buildMenu({rol, pagoActivo, ...})` produce
+  menús distintos por rol; el familiar solo ve "Mi residente" y "Visitas".
+- `src/components/ProtectedRoute.jsx` — usa `homePath` para evitar loops y
+  redirigir según rol; expone `allowedRoles` por ruta.
+- `src/routes/AppRouter.jsx` — todas las rutas declaran `allowedRoles`
+  (constantes `STAFF`, `ADMIN`, `["familiar"]`, etc.).
+- `src/features/team/TeamManagement.jsx` — tabs Funcionarios / Familiares
+  con selector de residente para invitaciones de familiares.

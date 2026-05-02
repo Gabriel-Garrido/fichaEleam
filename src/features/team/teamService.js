@@ -25,7 +25,7 @@ export async function getPendingInvitations(eleamId) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("funcionario_invitaciones")
-    .select("id, email, token, expira_en, creado_en, usado")
+    .select("id, email, token, expira_en, creado_en, usado, rol, residente_id")
     .eq("eleam_id", eleamId)
     .eq("usado", false)
     .gt("expira_en", new Date().toISOString())
@@ -35,14 +35,57 @@ export async function getPendingInvitations(eleamId) {
 }
 
 // Crea invitación llamando a la Edge Function.
-export async function inviteFuncionario(email) {
+// rol: 'funcionario' | 'familiar'. Si es familiar, residenteId obligatorio.
+export async function inviteMember({ email, rol = "funcionario", residenteId = null }) {
   const sb = ensureSupabase();
   const { data, error } = await sb.functions.invoke("invite-funcionario", {
-    body: { email },
+    body: { email, rol, residente_id: residenteId },
   });
   if (error) throw new Error(error.message ?? "No se pudo invitar");
   if (data?.error) throw new Error(data.error);
   return data;
+}
+
+// Mantengo la firma anterior por compatibilidad con código viejo.
+export async function inviteFuncionario(email) {
+  return inviteMember({ email, rol: "funcionario" });
+}
+
+// Lista los residentes activos del ELEAM, para asociar familiares.
+export async function getEleamResidentes(eleamId) {
+  if (!eleamId) return [];
+  const sb = ensureSupabase();
+  const { data, error } = await sb
+    .from("residentes")
+    .select("id, nombre, apellido, estado, habitacion")
+    .eq("eleam_id", eleamId)
+    .order("apellido", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Lista los familiares vinculados a residentes del ELEAM (vista del admin).
+export async function getEleamFamiliares(eleamId) {
+  if (!eleamId) return [];
+  const sb = ensureSupabase();
+  // Traemos los vínculos cuyas residentes pertenecen al ELEAM.
+  const { data, error } = await sb
+    .from("familiar_residentes")
+    .select("profile_id, residente_id, parentesco, residentes(eleam_id, nombre, apellido), profiles(id, nombre, email, rol)")
+    .order("creado_en", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).filter((row) => row.residentes?.eleam_id === eleamId);
+}
+
+// Quita el vínculo familiar↔residente.
+export async function unlinkFamiliarResidente(profileId, residenteId) {
+  const sb = ensureSupabase();
+  const { error } = await sb
+    .from("familiar_residentes")
+    .delete()
+    .eq("profile_id", profileId)
+    .eq("residente_id", residenteId);
+  if (error) throw error;
 }
 
 // Elimina una invitación pendiente.

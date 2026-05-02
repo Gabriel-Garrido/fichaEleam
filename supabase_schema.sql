@@ -1625,3 +1625,392 @@ create or replace view public.eleam_subscription_summary as
   left join public.planes p on p.id = e.plan_id;
 
 -- Las vistas heredan la RLS de las tablas subyacentes (eleams).
+
+
+-- ════════════════════════════════════════════════════════════════
+-- v6: Rol "familiar" — acceso de solo lectura al residente vinculado
+--
+-- Modelo:
+--   • El admin del ELEAM crea un perfil "familiar" mediante invitación
+--     (mismo flujo que funcionario, con campo extra residente_id).
+--   • El familiar accede a un portal limitado donde ve los registros
+--     de atención (signos vitales, observaciones) de SU residente
+--     y registra visitas familiares.
+--   • RLS estricto: el familiar sólo ve datos del/los residentes
+--     vinculados en familiar_residentes — nunca ve otros pacientes.
+-- ════════════════════════════════════════════════════════════════
+
+-- ── 1. Habilitar 'familiar' en el constraint de roles ───────────
+alter table public.profiles
+  drop constraint if exists profiles_rol_check;
+alter table public.profiles
+  add constraint profiles_rol_check
+  check (rol in ('admin_eleam','funcionario','familiar','superadmin'));
+
+-- ── 2. Tabla de vínculo familiar ↔ residente(s) ─────────────────
+create table if not exists public.familiar_residentes (
+  profile_id    uuid not null references public.profiles(id)   on delete cascade,
+  residente_id  uuid not null references public.residentes(id) on delete cascade,
+  parentesco    text,
+  creado_por    uuid references auth.users(id) on delete set null,
+  creado_en     timestamptz not null default now(),
+  primary key (profile_id, residente_id)
+);
+
+alter table public.familiar_residentes enable row level security;
+
+create index if not exists idx_familiar_residentes_profile
+  on public.familiar_residentes(profile_id);
+create index if not exists idx_familiar_residentes_residente
+  on public.familiar_residentes(residente_id);
+
+-- ── 3. Helpers RLS ──────────────────────────────────────────────
+
+-- ¿El usuario actual es familiar autorizado para ver este residente?
+create or replace function public.familiar_can_view_residente(rid uuid)
+  returns boolean
+  language sql stable security definer
+  set search_path = public
+as $$
+  select exists (
+    select 1 from public.familiar_residentes
+    where profile_id = (select auth.uid())
+      and residente_id = rid
+  );
+$$;
+
+-- Lista de residente_ids del familiar autenticado (para queries)
+create or replace function public.my_familiar_residente_ids()
+  returns setof uuid
+  language sql stable security definer
+  set search_path = public
+as $$
+  select residente_id from public.familiar_residentes
+  where profile_id = (select auth.uid());
+$$;
+
+-- ── 4. Políticas RLS para familiar_residentes ───────────────────
+
+drop policy if exists "fr_select_self_or_admin" on public.familiar_residentes;
+create policy "fr_select_self_or_admin" on public.familiar_residentes
+  for select using (
+    profile_id = (select auth.uid())                                         -- el propio familiar ve sus vínculos
+    or public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and residente_id in (select id from public.residentes
+                              where eleam_id = public.my_eleam_id()))
+  );
+
+drop policy if exists "fr_insert_admin" on public.familiar_residentes;
+create policy "fr_insert_admin" on public.familiar_residentes
+  for insert with check (
+    public.my_rol() = 'admin_eleam'
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "fr_delete_admin" on public.familiar_residentes;
+create policy "fr_delete_admin" on public.familiar_residentes
+  for delete using (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam'
+        and residente_id in (select id from public.residentes
+                              where eleam_id = public.my_eleam_id()))
+  );
+
+-- ── 5. Tabla visitas_familiar ───────────────────────────────────
+-- Registro de visitas familiares al residente. Útil para que el
+-- equipo del ELEAM sepa quién pasó a ver al residente.
+create table if not exists public.visitas_familiar (
+  id            uuid        primary key default gen_random_uuid(),
+  residente_id  uuid        not null references public.residentes(id) on delete cascade,
+  profile_id    uuid        references public.profiles(id) on delete set null,
+  fecha_hora    timestamptz not null default now(),
+  duracion_min  integer     check (duracion_min is null or duracion_min between 1 and 1440),
+  notas         text,
+  registrado_por uuid       references auth.users(id) on delete set null,
+  creado_en     timestamptz not null default now()
+);
+
+alter table public.visitas_familiar enable row level security;
+
+create index if not exists idx_visitas_residente_fecha
+  on public.visitas_familiar(residente_id, fecha_hora desc);
+
+-- SELECT: familiar ve visitas de SUS residentes; staff del ELEAM ve todas las del ELEAM.
+drop policy if exists "vf_select" on public.visitas_familiar;
+create policy "vf_select" on public.visitas_familiar
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() = 'familiar'
+        and residente_id in (select public.my_familiar_residente_ids()))
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and residente_id in (select id from public.residentes
+                              where eleam_id = public.my_eleam_id()))
+  );
+
+-- INSERT: familiar registra su propia visita; staff registra visitas del ELEAM.
+drop policy if exists "vf_insert" on public.visitas_familiar;
+create policy "vf_insert" on public.visitas_familiar
+  for insert with check (
+    (public.my_rol() = 'familiar'
+       and residente_id in (select public.my_familiar_residente_ids())
+       and profile_id   = (select auth.uid()))
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and residente_id in (select id from public.residentes
+                              where eleam_id = public.my_eleam_id()))
+  );
+
+-- DELETE: solo el autor o el admin del ELEAM
+drop policy if exists "vf_delete" on public.visitas_familiar;
+create policy "vf_delete" on public.visitas_familiar
+  for delete using (
+    public.is_superadmin()
+    or profile_id = (select auth.uid())
+    or (public.my_rol() = 'admin_eleam'
+        and residente_id in (select id from public.residentes
+                              where eleam_id = public.my_eleam_id()))
+  );
+
+-- ── 6. Ampliar funcionario_invitaciones para soportar familiares ─
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='funcionario_invitaciones' and column_name='rol'
+  ) then
+    alter table public.funcionario_invitaciones
+      add column rol text not null default 'funcionario'
+        check (rol in ('funcionario','familiar'));
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='funcionario_invitaciones' and column_name='residente_id'
+  ) then
+    alter table public.funcionario_invitaciones
+      add column residente_id uuid references public.residentes(id) on delete cascade;
+  end if;
+end $$;
+
+-- ── 7. handle_new_user — soporta rol y residente_id de la invitación
+create or replace function public.handle_new_user()
+  returns trigger
+  language plpgsql
+  security definer
+  set search_path = public
+as $$
+declare
+  v_rol         text  := 'admin_eleam';
+  v_eleam_id    uuid  := null;
+  v_token       text;
+  v_invitacion  record;
+begin
+  -- Cuenta demo (siempre superadmin con ELEAM demo activo)
+  if new.email = 'demo@fichaeleam.cl' then
+    insert into public.profiles (id, nombre, email, rol, eleam_id)
+    values (new.id,
+            coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)),
+            new.email,
+            'superadmin',
+            'a0000000-0000-0000-0000-000000000001'::uuid)
+    on conflict (id) do nothing;
+    return new;
+  end if;
+
+  v_token := new.raw_user_meta_data->>'invite_token';
+
+  if v_token is not null and v_token <> '' then
+    select i.* into v_invitacion
+    from public.funcionario_invitaciones i
+    where i.token = v_token
+      and lower(i.email) = lower(new.email)
+      and i.usado = false
+      and i.expira_en > now()
+    limit 1;
+
+    if found then
+      v_eleam_id := v_invitacion.eleam_id;
+      v_rol      := coalesce(v_invitacion.rol, 'funcionario');
+      update public.funcionario_invitaciones
+        set usado = true, usado_en = now()
+        where id = v_invitacion.id;
+    end if;
+  end if;
+
+  insert into public.profiles (id, nombre, email, rol, eleam_id)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)),
+    new.email,
+    v_rol,
+    v_eleam_id
+  )
+  on conflict (id) do nothing;
+
+  -- Si la invitación es de familiar y trae residente_id → vincular
+  if v_rol = 'familiar' and v_invitacion.residente_id is not null then
+    insert into public.familiar_residentes (profile_id, residente_id, creado_por)
+    values (new.id, v_invitacion.residente_id, v_invitacion.creado_por)
+    on conflict do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- ── 8. RLS extendida — familiar puede leer SU residente y registros
+-- Reescribimos las políticas SELECT para incorporar el path de familiar.
+
+-- residentes
+drop policy if exists "residentes_select" on public.residentes;
+create policy "residentes_select" on public.residentes
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and eleam_id = public.my_eleam_id())
+    or (public.my_rol() = 'familiar'
+        and id in (select public.my_familiar_residente_ids()))
+  );
+
+-- signos_vitales
+drop policy if exists "sv_select" on public.signos_vitales;
+create policy "sv_select" on public.signos_vitales
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and residente_id in (select id from public.residentes
+                              where eleam_id = public.my_eleam_id()))
+    or (public.my_rol() = 'familiar'
+        and residente_id in (select public.my_familiar_residente_ids()))
+  );
+
+-- observaciones_diarias
+drop policy if exists "obs_select" on public.observaciones_diarias;
+create policy "obs_select" on public.observaciones_diarias
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and residente_id in (select id from public.residentes
+                              where eleam_id = public.my_eleam_id()))
+    or (public.my_rol() = 'familiar'
+        and residente_id in (select public.my_familiar_residente_ids()))
+  );
+
+-- documentos_acreditacion: NO acceso para familiar; mantener sólo staff.
+drop policy if exists "docs_select" on public.documentos_acreditacion;
+create policy "docs_select" on public.documentos_acreditacion
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and eleam_id = public.my_eleam_id())
+  );
+
+-- ── 9. Reforzar residentes_insert/update/delete: solo admin_eleam puede borrar
+drop policy if exists "residentes_insert" on public.residentes;
+create policy "residentes_insert" on public.residentes
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "residentes_update" on public.residentes;
+create policy "residentes_update" on public.residentes
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  )
+  with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "residentes_delete" on public.residentes;
+create policy "residentes_delete" on public.residentes
+  for delete using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- ── 10. signos_vitales / observaciones — INSERT/UPDATE/DELETE solo staff
+-- (familiar NO puede modificar registros clínicos; solo lectura.)
+drop policy if exists "sv_insert" on public.signos_vitales;
+create policy "sv_insert" on public.signos_vitales
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "sv_update" on public.signos_vitales;
+create policy "sv_update" on public.signos_vitales
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "sv_delete" on public.signos_vitales;
+create policy "sv_delete" on public.signos_vitales
+  for delete using (
+    public.my_rol() = 'admin_eleam'
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "obs_insert" on public.observaciones_diarias;
+create policy "obs_insert" on public.observaciones_diarias
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "obs_update" on public.observaciones_diarias;
+create policy "obs_update" on public.observaciones_diarias
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "obs_delete" on public.observaciones_diarias;
+create policy "obs_delete" on public.observaciones_diarias
+  for delete using (
+    public.my_rol() = 'admin_eleam'
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+-- ── 11. documentos_acreditacion: INSERT/UPDATE/DELETE solo staff
+drop policy if exists "docs_insert" on public.documentos_acreditacion;
+create policy "docs_insert" on public.documentos_acreditacion
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "docs_update" on public.documentos_acreditacion;
+create policy "docs_update" on public.documentos_acreditacion
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "docs_delete" on public.documentos_acreditacion;
+create policy "docs_delete" on public.documentos_acreditacion
+  for delete using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- ── 12. pagos: solo admin_eleam puede ver el historial financiero
+-- (los funcionarios y familiares no deben ver datos de cobro).
+drop policy if exists "eleam_select_pagos" on public.pagos;
+create policy "eleam_select_pagos" on public.pagos
+  for select using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
