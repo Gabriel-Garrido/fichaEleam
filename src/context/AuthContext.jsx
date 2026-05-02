@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
     try {
       let { data, error } = await supabase
         .from("profiles")
-        .select("*, eleams(*)")
+        .select("*, eleams(*, planes(*))")
         .eq("id", userId)
         .maybeSingle();
 
@@ -46,6 +46,7 @@ export function AuthProvider({ children }) {
             nombre: `ELEAM de ${displayName}`,
             email_admin: email,
             pago_activo: false,
+            subscription_status: "inactivo",
           })
           .select()
           .maybeSingle();
@@ -77,16 +78,19 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      // Si el usuario no tiene ELEAM asociado, crear uno automáticamente
-      if (!data.eleam_id && data.rol !== "superadmin") {
+      // Si el admin no tiene ELEAM asociado, crear uno automáticamente.
+      // Los funcionarios SIEMPRE deben tener eleam_id (lo asigna el trigger
+      // al consumir un invite_token); si no lo tienen → es un error.
+      if (!data.eleam_id && data.rol === "admin_eleam") {
         const { data: newEleam, error: eleamError } = await supabase
           .from("eleams")
           .insert({
             nombre: `ELEAM de ${data.nombre}`,
             email_admin: data.email,
             pago_activo: false,
+            subscription_status: "inactivo",
           })
-          .select()
+          .select("*, planes(*)")
           .maybeSingle();
 
         if (!eleamError && newEleam) {
@@ -100,6 +104,8 @@ export function AuthProvider({ children }) {
         } else {
           setAuthNotice("Tu sesión está activa, pero aún no se pudo crear el ELEAM asociado.");
         }
+      } else if (!data.eleam_id && data.rol === "funcionario") {
+        setAuthNotice("Tu cuenta está marcada como funcionario pero no tiene un ELEAM asociado. Contacta al administrador.");
       }
 
       setProfile(data);
@@ -146,17 +152,30 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, [fetchProfileAndEleam]);
 
-  // El pago se considera activo si el ELEAM tiene pago_activo=true
-  // o si el usuario tiene rol 'superadmin' (usuario de prueba)
+  // El pago se considera activo si el ELEAM tiene subscription_status
+  // 'activo' o 'en_gracia', o si el usuario es superadmin.
+  // pago_activo se sincroniza vía trigger en la BD; lo usamos como fallback.
   const pagoActivo =
     profile?.rol === "superadmin" ||
+    ["activo", "en_gracia"].includes(eleam?.subscription_status) ||
     eleam?.pago_activo === true;
+
+  const plan = eleam?.planes ?? null;
+  const subscriptionStatus = eleam?.subscription_status ?? "inactivo";
+  const isAdminEleam = profile?.rol === "admin_eleam";
+  const isFuncionario = profile?.rol === "funcionario";
+  const isSuperadmin = profile?.rol === "superadmin";
 
   const value = {
     user,
     profile,
     eleam,
+    plan,
+    subscriptionStatus,
     pagoActivo,
+    isAdminEleam,
+    isFuncionario,
+    isSuperadmin,
     profileLoading,
     authLoading,
     authNotice,

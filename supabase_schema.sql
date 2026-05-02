@@ -1129,3 +1129,499 @@ create index if not exists idx_pagos_fecha_pago on public.pagos(fecha_pago desc)
 -- Después de que el usuario se registre, ejecutar en SQL Editor:
 -- update public.profiles set rol = 'superadmin' where email = 'tu@email.com';
 -- El superadmin NO necesita eleam_id y tiene acceso a todos los datos.
+
+
+-- ════════════════════════════════════════════════════════════════
+-- v5: Integración MercadoPago — Suscripciones por ELEAM
+--
+-- Modelo:
+--   • Cada ELEAM tiene un PLAN (precio, max_residentes, max_funcionarios).
+--   • El admin del ELEAM (rol = 'admin_eleam') paga la suscripción.
+--   • Los funcionarios del mismo ELEAM NO pagan; heredan el acceso.
+--   • Las cuotas mensuales se procesan con MP (preapproval) y se
+--     reflejan en eleams.subscription_status / proximo_cobro_en.
+--   • Los webhooks llegan a la Edge Function `mp-webhook` que valida
+--     la firma HMAC SHA-256 y refresca el estado del ELEAM.
+--   • Triggers de límite (residentes/funcionarios) y de prevención
+--     de escalamiento de roles operan en SECURITY DEFINER.
+-- ════════════════════════════════════════════════════════════════
+
+-- ── 1. Tabla planes ─────────────────────────────────────────────
+create table if not exists public.planes (
+  id                uuid        primary key default gen_random_uuid(),
+  codigo            text        unique not null,
+  nombre            text        not null,
+  descripcion       text,
+  precio_clp        integer     not null check (precio_clp > 0),
+  max_residentes    integer     check (max_residentes is null or max_residentes > 0),
+  max_funcionarios  integer     check (max_funcionarios is null or max_funcionarios > 0),
+  frequency         integer     not null default 1 check (frequency > 0),
+  frequency_type    text        not null default 'months'
+                      check (frequency_type in ('days','months')),
+  activo            boolean     not null default true,
+  orden             integer     not null default 0,
+  destacado         boolean     not null default false,
+  creado_en         timestamptz not null default now()
+);
+
+alter table public.planes enable row level security;
+
+drop policy if exists "planes_select_public" on public.planes;
+create policy "planes_select_public" on public.planes
+  for select using (activo = true or public.is_superadmin());
+
+drop policy if exists "planes_superadmin_write" on public.planes;
+create policy "planes_superadmin_write" on public.planes
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+-- Seed de planes (idempotente)
+insert into public.planes
+  (codigo, nombre, descripcion, precio_clp, max_residentes, max_funcionarios, orden, destacado)
+values
+  ('plan-14',  'Hasta 14 residentes', 'Ideal para residencias pequeñas',  50000,  14,  10, 1, false),
+  ('plan-24',  'Hasta 24 residentes', 'El plan más elegido',              80000,  24,  20, 2, true),
+  ('plan-34',  'Hasta 34 residentes', 'Para residencias grandes',         120000, 34,  30, 3, false)
+on conflict (codigo) do update set
+  nombre           = excluded.nombre,
+  descripcion      = excluded.descripcion,
+  precio_clp       = excluded.precio_clp,
+  max_residentes   = excluded.max_residentes,
+  max_funcionarios = excluded.max_funcionarios,
+  orden            = excluded.orden,
+  destacado        = excluded.destacado;
+
+-- ── 2. Columnas nuevas en eleams ────────────────────────────────
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='plan_id'
+  ) then alter table public.eleams add column plan_id uuid references public.planes(id);
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='mp_preapproval_id'
+  ) then alter table public.eleams add column mp_preapproval_id text unique;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='mp_payer_email'
+  ) then alter table public.eleams add column mp_payer_email text;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='subscription_status'
+  ) then alter table public.eleams
+    add column subscription_status text not null default 'inactivo'
+      check (subscription_status in
+        ('inactivo','pendiente','activo','en_gracia','pausado','cancelado','vencido'));
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='proximo_cobro_en'
+  ) then alter table public.eleams add column proximo_cobro_en timestamptz;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='cancelado_en'
+  ) then alter table public.eleams add column cancelado_en timestamptz;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='max_funcionarios'
+  ) then alter table public.eleams add column max_funcionarios integer;
+  end if;
+end $$;
+
+create index if not exists idx_eleams_subscription_status
+  on public.eleams(subscription_status);
+create index if not exists idx_eleams_mp_preapproval_id
+  on public.eleams(mp_preapproval_id);
+
+-- ── 3. Columnas MP en pagos ─────────────────────────────────────
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='pagos' and column_name='mp_payment_id'
+  ) then alter table public.pagos add column mp_payment_id text unique;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='pagos' and column_name='mp_preapproval_id'
+  ) then alter table public.pagos add column mp_preapproval_id text;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='pagos' and column_name='mp_authorized_payment_id'
+  ) then alter table public.pagos add column mp_authorized_payment_id text unique;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='pagos' and column_name='raw'
+  ) then alter table public.pagos add column raw jsonb;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='pagos' and column_name='plan_id'
+  ) then alter table public.pagos add column plan_id uuid references public.planes(id);
+  end if;
+end $$;
+
+create index if not exists idx_pagos_mp_preapproval on public.pagos(mp_preapproval_id);
+
+-- ── 4. Tabla mp_webhook_events (idempotencia + auditoría) ──────
+create table if not exists public.mp_webhook_events (
+  id              uuid        primary key default gen_random_uuid(),
+  mp_request_id   text        unique,
+  topic           text,
+  data_id         text,
+  action          text,
+  payload         jsonb,
+  signature_ok    boolean     not null default false,
+  processed_ok    boolean     not null default false,
+  error           text,
+  recibido_en     timestamptz not null default now(),
+  procesado_en    timestamptz
+);
+
+alter table public.mp_webhook_events enable row level security;
+
+drop policy if exists "mp_events_superadmin_select" on public.mp_webhook_events;
+create policy "mp_events_superadmin_select" on public.mp_webhook_events
+  for select using (public.is_superadmin());
+
+create index if not exists idx_mp_events_data_id    on public.mp_webhook_events(data_id);
+create index if not exists idx_mp_events_recibido   on public.mp_webhook_events(recibido_en desc);
+
+-- ── 5. Tabla funcionario_invitaciones ───────────────────────────
+create table if not exists public.funcionario_invitaciones (
+  id            uuid        primary key default gen_random_uuid(),
+  eleam_id      uuid        not null references public.eleams(id) on delete cascade,
+  email         text        not null,
+  token         text        unique not null,
+  expira_en     timestamptz not null default (now() + interval '7 days'),
+  usado         boolean     not null default false,
+  usado_en      timestamptz,
+  creado_por    uuid        references auth.users(id) on delete set null,
+  creado_en     timestamptz not null default now()
+);
+
+alter table public.funcionario_invitaciones enable row level security;
+
+-- Admin del ELEAM puede ver y crear invitaciones de su ELEAM
+drop policy if exists "inv_admin_select" on public.funcionario_invitaciones;
+create policy "inv_admin_select" on public.funcionario_invitaciones
+  for select using (
+    eleam_id = (select eleam_id from public.profiles
+                 where id = (select auth.uid()) and rol = 'admin_eleam')
+    or public.is_superadmin()
+  );
+
+drop policy if exists "inv_admin_insert" on public.funcionario_invitaciones;
+create policy "inv_admin_insert" on public.funcionario_invitaciones
+  for insert with check (
+    eleam_id = (select eleam_id from public.profiles
+                 where id = (select auth.uid()) and rol = 'admin_eleam')
+  );
+
+drop policy if exists "inv_admin_delete" on public.funcionario_invitaciones;
+create policy "inv_admin_delete" on public.funcionario_invitaciones
+  for delete using (
+    eleam_id = (select eleam_id from public.profiles
+                 where id = (select auth.uid()) and rol = 'admin_eleam')
+    or public.is_superadmin()
+  );
+
+create index if not exists idx_inv_eleam on public.funcionario_invitaciones(eleam_id);
+create index if not exists idx_inv_email on public.funcionario_invitaciones(lower(email));
+
+-- ── 6. Helpers SECURITY DEFINER (sin recursión RLS) ─────────────
+create or replace function public.my_eleam_id()
+  returns uuid
+  language sql stable security definer
+  set search_path = public
+as $$ select eleam_id from public.profiles where id = (select auth.uid()) $$;
+
+create or replace function public.my_rol()
+  returns text
+  language sql stable security definer
+  set search_path = public
+as $$ select rol from public.profiles where id = (select auth.uid()) $$;
+
+-- ── 7. Política: admin_eleam puede ver perfiles de su ELEAM ─────
+drop policy if exists "profiles_admin_eleam_select" on public.profiles;
+create policy "profiles_admin_eleam_select" on public.profiles
+  for select using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id is not null
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- ── 8. Trigger: límite de residentes por plan ───────────────────
+create or replace function public.check_residentes_limit()
+  returns trigger
+  language plpgsql security definer
+  set search_path = public
+as $$
+declare
+  v_max     integer;
+  v_count   integer;
+  v_status  text;
+begin
+  if new.estado <> 'activo' then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.estado = 'activo' and new.estado = 'activo' then
+    return new;
+  end if;
+
+  select coalesce(p.max_residentes, e.max_residentes), e.subscription_status
+    into v_max, v_status
+  from public.eleams e
+  left join public.planes p on p.id = e.plan_id
+  where e.id = new.eleam_id;
+
+  if v_status not in ('activo','en_gracia','pendiente') then
+    raise exception 'La suscripción del ELEAM no está activa (%). Activa el plan antes de agregar residentes.', v_status
+      using errcode = 'P0001';
+  end if;
+
+  if v_max is not null then
+    select count(*) into v_count
+      from public.residentes
+      where eleam_id = new.eleam_id
+        and estado = 'activo'
+        and id <> new.id;
+    if v_count >= v_max then
+      raise exception 'El plan permite máximo % residentes activos', v_max
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_residentes_limit on public.residentes;
+create trigger trg_residentes_limit
+  before insert or update of estado, eleam_id on public.residentes
+  for each row execute function public.check_residentes_limit();
+
+-- ── 9. Trigger: límite de funcionarios por plan ─────────────────
+create or replace function public.check_funcionarios_limit()
+  returns trigger
+  language plpgsql security definer
+  set search_path = public
+as $$
+declare
+  v_max    integer;
+  v_count  integer;
+begin
+  if new.eleam_id is null or new.rol <> 'funcionario' then
+    return new;
+  end if;
+  if tg_op = 'UPDATE'
+     and old.eleam_id is not distinct from new.eleam_id
+     and old.rol      is not distinct from new.rol then
+    return new;
+  end if;
+
+  select coalesce(p.max_funcionarios, e.max_funcionarios)
+    into v_max
+  from public.eleams e
+  left join public.planes p on p.id = e.plan_id
+  where e.id = new.eleam_id;
+
+  if v_max is not null then
+    select count(*) into v_count
+      from public.profiles
+      where eleam_id = new.eleam_id
+        and rol = 'funcionario'
+        and id <> new.id;
+    if v_count >= v_max then
+      raise exception 'El plan permite máximo % funcionarios', v_max
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_funcionarios_limit on public.profiles;
+create trigger trg_funcionarios_limit
+  before insert or update of eleam_id, rol on public.profiles
+  for each row execute function public.check_funcionarios_limit();
+
+-- ── 10. Trigger: prevenir escalamiento de rol/eleam_id ──────────
+-- Un usuario común NO puede cambiar su propio rol ni su eleam_id.
+-- Solo superadmin (mediante service_role o por la fn is_superadmin).
+create or replace function public.prevent_role_eleam_escalation()
+  returns trigger
+  language plpgsql security definer
+  set search_path = public
+as $$
+declare
+  v_caller_rol text;
+begin
+  -- Las inserciones por trigger handle_new_user (security definer)
+  -- no tienen auth.uid(); las dejamos pasar.
+  if (select auth.uid()) is null then
+    return new;
+  end if;
+
+  select rol into v_caller_rol from public.profiles where id = (select auth.uid());
+  if v_caller_rol = 'superadmin' then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if new.rol is distinct from old.rol then
+      raise exception 'No autorizado a modificar el rol' using errcode = '42501';
+    end if;
+    if new.eleam_id is distinct from old.eleam_id then
+      raise exception 'No autorizado a modificar el ELEAM' using errcode = '42501';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_prevent_role_eleam_escalation on public.profiles;
+create trigger trg_prevent_role_eleam_escalation
+  before update on public.profiles
+  for each row execute function public.prevent_role_eleam_escalation();
+
+-- ── 11. handle_new_user — soporta token de invitación ───────────
+-- Si el signup incluye user_metadata.invite_token, se valida contra
+-- funcionario_invitaciones (token + email + no usado + no expirado).
+-- Si la invitación es válida → rol='funcionario' + eleam_id de la invitación.
+-- En caso contrario → rol='admin_eleam' sin eleam (UI lo creará).
+create or replace function public.handle_new_user()
+  returns trigger
+  language plpgsql security definer
+  set search_path = public
+as $$
+declare
+  v_rol         text  := 'admin_eleam';
+  v_eleam_id    uuid  := null;
+  v_token       text;
+  v_invitacion  record;
+begin
+  -- Cuenta demo (siempre superadmin con ELEAM demo activo)
+  if new.email = 'demo@fichaeleam.cl' then
+    insert into public.profiles (id, nombre, email, rol, eleam_id)
+    values (new.id,
+            coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)),
+            new.email,
+            'superadmin',
+            'a0000000-0000-0000-0000-000000000001'::uuid)
+    on conflict (id) do nothing;
+    return new;
+  end if;
+
+  v_token := new.raw_user_meta_data->>'invite_token';
+
+  if v_token is not null and v_token <> '' then
+    select i.* into v_invitacion
+    from public.funcionario_invitaciones i
+    where i.token = v_token
+      and lower(i.email) = lower(new.email)
+      and i.usado = false
+      and i.expira_en > now()
+    limit 1;
+
+    if found then
+      v_eleam_id := v_invitacion.eleam_id;
+      v_rol      := 'funcionario';
+      update public.funcionario_invitaciones
+        set usado = true, usado_en = now()
+        where id = v_invitacion.id;
+    end if;
+  end if;
+
+  insert into public.profiles (id, nombre, email, rol, eleam_id)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)),
+    new.email,
+    v_rol,
+    v_eleam_id
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- ── 12. Sincronizar pago_activo con subscription_status ─────────
+-- Si subscription_status pasa a 'activo' o 'en_gracia' → pago_activo=true.
+-- Si pasa a 'cancelado'/'vencido'/'inactivo'/'pausado' → pago_activo=false.
+create or replace function public.sync_pago_activo()
+  returns trigger
+  language plpgsql
+as $$
+begin
+  if new.subscription_status in ('activo','en_gracia') then
+    new.pago_activo := true;
+  elsif new.subscription_status in ('inactivo','cancelado','vencido','pausado','pendiente') then
+    new.pago_activo := false;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sync_pago_activo on public.eleams;
+create trigger trg_sync_pago_activo
+  before update of subscription_status on public.eleams
+  for each row execute function public.sync_pago_activo();
+
+-- ── 13. Backfill: ELEAMs existentes — subscription_status según pago_activo
+update public.eleams
+  set subscription_status = 'activo'
+  where pago_activo = true and subscription_status <> 'activo';
+
+update public.eleams
+  set subscription_status = 'inactivo'
+  where pago_activo = false and subscription_status = 'activo';
+
+-- ELEAM demo siempre debe permanecer activo
+update public.eleams
+  set subscription_status = 'activo',
+      pago_activo         = true
+  where id = 'a0000000-0000-0000-0000-000000000001'::uuid;
+
+-- ── 14. RLS profiles UPDATE más estricta ────────────────────────
+-- Reemplaza la policy original; el trigger prevent_role_eleam_escalation
+-- es la barrera definitiva contra escalada de privilegios.
+drop policy if exists "profiles_own_update" on public.profiles;
+create policy "profiles_own_update" on public.profiles
+  for update
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
+
+-- ── 15. Vista helper: eleam_subscription_summary ────────────────
+create or replace view public.eleam_subscription_summary as
+  select
+    e.id,
+    e.nombre,
+    e.subscription_status,
+    e.pago_activo,
+    e.proximo_cobro_en,
+    e.fecha_vencimiento_suscripcion,
+    e.plan_id,
+    p.codigo            as plan_codigo,
+    p.nombre            as plan_nombre,
+    p.precio_clp        as plan_precio_clp,
+    p.max_residentes    as plan_max_residentes,
+    p.max_funcionarios  as plan_max_funcionarios,
+    e.max_residentes    as override_max_residentes,
+    e.max_funcionarios  as override_max_funcionarios
+  from public.eleams e
+  left join public.planes p on p.id = e.plan_id;
+
+-- Las vistas heredan la RLS de las tablas subyacentes (eleams).

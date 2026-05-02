@@ -30,6 +30,9 @@ function Navbar() {
         { label: "Signos Vitales", path: "/vital-signs" },
         { label: "Observaciones", path: "/observations" },
         { label: "Acreditación", path: "/accreditation" },
+        ...(profile?.rol === "admin_eleam"
+          ? [{ label: "Equipo", path: "/equipo" }, { label: "Suscripción", path: "/pago" }]
+          : []),
         ...(profile?.rol === "superadmin"
           ? [{ label: "Superadmin", path: "/superadmin" }]
           : []),

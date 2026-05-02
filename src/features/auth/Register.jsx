@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
 import { useLoading, useAuth } from "../../context/AuthContext";
@@ -8,9 +8,13 @@ import { register } from "./authService";
 import { validateEmail } from "../../utils/validators";
 
 function Register() {
+  const [params] = useSearchParams();
+  const inviteToken = params.get("invite") || "";
+  const invitedEmail = params.get("email") || "";
+
   const [userData, setUserData] = useState({
     nombre: "",
-    email: "",
+    email: invitedEmail,
     password: "",
     confirmPassword: "",
   });
@@ -18,6 +22,12 @@ function Register() {
   const { loading, setLoading } = useLoading();
   const { authLoading } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (invitedEmail) {
+      setUserData((prev) => ({ ...prev, email: invitedEmail }));
+    }
+  }, [invitedEmail]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -51,6 +61,7 @@ function Register() {
         nombre: userData.nombre,
         email: userData.email,
         password: userData.password,
+        inviteToken: inviteToken || undefined,
       });
       navigate("/dashboard");
     } catch (err) {
@@ -66,6 +77,14 @@ function Register() {
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--color-background)]">
       <div className="p-8 sm:p-12 bg-white rounded-3xl shadow-lg max-w-full sm:max-w-md w-full text-center">
         <h1 className="text-4xl font-bold text-[var(--color-primary)] mb-6">Registro</h1>
+        {inviteToken && (
+          <div className="mb-5 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-800 text-left">
+            Has sido invitado/a como funcionario.
+            {invitedEmail && (
+              <> Usa el correo <span className="font-semibold">{invitedEmail}</span>.</>
+            )}
+          </div>
+        )}
         <form className="space-y-6" onSubmit={handleRegister}>
           <Input
             type="text"
@@ -81,6 +100,7 @@ function Register() {
             placeholder="Correo electrónico"
             value={userData.email}
             onChange={handleChange}
+            readOnly={Boolean(invitedEmail)}
             required
           />
           <Input

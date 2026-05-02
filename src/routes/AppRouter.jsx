@@ -2,11 +2,13 @@ import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-import Login        from "../features/auth/Login";
-import Register     from "../features/auth/Register";
-import LandingPage  from "../features/landing/LandingPage";
-import DemoPage     from "../features/demo/DemoPage";
-import PaymentPage  from "../features/payment/PaymentPage";
+import Login         from "../features/auth/Login";
+import Register      from "../features/auth/Register";
+import LandingPage   from "../features/landing/LandingPage";
+import DemoPage      from "../features/demo/DemoPage";
+import PaymentPage   from "../features/payment/PaymentPage";
+import PaymentReturn from "../features/payment/PaymentReturn";
+import TeamManagement from "../features/team/TeamManagement";
 
 import ResidentList    from "../features/residents/ResidentList";
 import ResidentForm    from "../features/residents/ResidentForm";
@@ -30,7 +32,7 @@ import ProtectedRoute  from "../components/ProtectedRoute";
 import SuperAdminRoute from "../components/SuperAdminRoute";
 import Loading         from "../components/Loading";
 
-const NO_NAVBAR_PATHS = ["/", "/login", "/register", "/demo", "/pago"];
+const NO_NAVBAR_PATHS = ["/", "/login", "/register", "/demo", "/pago", "/pago/return"];
 
 function AppRouter() {
   const { user, pagoActivo, profileLoading } = useAuth();
@@ -52,10 +54,17 @@ function AppRouter() {
         <Route path="/login"    element={user ? signedInRedirect : <Login />} />
         <Route path="/register" element={user ? signedInRedirect : <Register />} />
         <Route path="/demo"     element={<DemoPage />} />
-        <Route path="/pago"     element={<PaymentPage />} />
+        <Route path="/pago"        element={<PaymentPage />} />
+        <Route path="/pago/return" element={<PaymentReturn />} />
 
         {/* ── Protegidas (requieren sesión + pago activo) ──── */}
         <Route path="/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+
+        <Route path="/equipo" element={
+          <ProtectedRoute allowedRoles={["admin_eleam","superadmin"]}>
+            <TeamManagement />
+          </ProtectedRoute>
+        } />
 
         <Route path="/residents"          element={<ProtectedRoute><ResidentList /></ProtectedRoute>} />
         <Route path="/residents/new"      element={<ProtectedRoute><ResidentForm /></ProtectedRoute>} />

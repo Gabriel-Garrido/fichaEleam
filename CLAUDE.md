@@ -537,11 +537,79 @@ Helpers locales: `initials(nombre, apellido)` y `calcAge(fechaNacimiento)`. El c
 
 ## Posibles Mejoras Futuras
 
-- Integración con pasarela de pago (Transbank / Stripe) para activación automática de suscripciones
-- Envío de email de bienvenida y recordatorio de vencimiento al admin del ELEAM
+- Cron `pg_cron` para recordatorios de vencimiento al admin del ELEAM
+- Job de marcado de `vencido` tras N días en `en_gracia`
+- Cambio de plan in-place (PUT preapproval con nuevo `transaction_amount`)
 - Dashboard de analytics: gráficos de crecimiento de ELEAMs, MRR histórico, churn
 - Exportación PDF de fichas clínicas y listas de signos vitales
 - Módulo de medicamentos con kardex digital
 - Notificaciones push de documentos próximos a vencer
 - Módulo de agenda / citas médicas
 - Confirmación de email al registrarse
+
+---
+
+## MercadoPago — Suscripciones (v5)
+
+El cobro real usa el endpoint **Preapproval** de MercadoPago (soporta CLP en
+Chile). El admin del ELEAM paga; los funcionarios del mismo ELEAM heredan
+el acceso sin pagar.
+
+### Tablas / columnas relevantes
+
+- `planes` — catálogo (precio, max_residentes, max_funcionarios).
+- `eleams.subscription_status` — `inactivo / pendiente / activo / en_gracia / pausado / cancelado / vencido`.
+- `eleams.mp_preapproval_id` — id del preapproval en MP.
+- `eleams.proximo_cobro_en` — próxima fecha de cobro (lo setea el webhook).
+- `mp_webhook_events` — auditoría e idempotencia (`mp_request_id` único).
+- `funcionario_invitaciones` — token + email + expiración (7 días).
+- `pagos.mp_*` — vínculo con MP (`mp_payment_id`, `mp_authorized_payment_id`).
+
+### Edge Functions (Deno) en `supabase/functions/`
+
+- `mp-create-subscription` — crea preapproval, devuelve `init_point`. Solo admin_eleam.
+- `mp-webhook` — público; valida HMAC SHA-256 (`x-signature`); refresca el ELEAM.
+- `mp-cancel-subscription` — `PUT /preapproval/{id}` con status=cancelled.
+- `invite-funcionario` — crea row en `funcionario_invitaciones` y devuelve URL.
+- `_shared/cors.ts`, `_shared/mercadopago.ts`, `_shared/supabase.ts` — helpers.
+
+### Triggers / funciones de seguridad
+
+- `prevent_role_eleam_escalation` — bloquea cambios de `rol` o `eleam_id` por usuarios no-superadmin.
+- `check_residentes_limit` — exige suscripción activa + cupo del plan al insertar/activar residentes.
+- `check_funcionarios_limit` — cupo del plan al insertar profile con rol=funcionario.
+- `sync_pago_activo` — mantiene `eleams.pago_activo` derivado de `subscription_status`.
+- `handle_new_user` — consume `invite_token` desde `user_metadata` si está presente y valida contra `funcionario_invitaciones`.
+- `is_superadmin()`, `my_eleam_id()`, `my_rol()` — helpers `security definer` para RLS sin recursión.
+
+### Variables de entorno (server-side, Edge Function secrets)
+
+- `MP_ACCESS_TOKEN` (Bearer)
+- `MP_WEBHOOK_SECRET` (HMAC SHA-256)
+- `PUBLIC_APP_URL` (back_url + invite links)
+- `ALLOWED_ORIGINS` (CSV para CORS de las Edge Functions)
+
+NUNCA exponer estos como `VITE_*`. La Public Key de MP NO es necesaria
+porque usamos el flujo de redirect (no Bricks/card tokenization).
+
+### Frontend
+
+- `src/features/payment/PaymentPage.jsx` — lista planes desde `planes`,
+  llama a `startSubscription()` y redirige a `init_point`.
+- `src/features/payment/PaymentReturn.jsx` — landing post-checkout con polling.
+- `src/features/payment/paymentService.js` — invoca Edge Functions vía
+  `supabase.functions.invoke()` (incluye automáticamente el JWT).
+- `src/features/team/TeamManagement.jsx` — admin invita funcionarios,
+  ve listado y cancela invitaciones pendientes.
+- `src/features/team/teamService.js` — invoca `invite-funcionario` y CRUD.
+
+### Flujo de invitación
+
+1. Admin entra `/equipo` → escribe email → llamada a `invite-funcionario`.
+2. Edge function crea row en `funcionario_invitaciones` con token aleatorio.
+3. Admin copia el link `/register?invite=<token>&email=...` y lo envía.
+4. Funcionario abre el link, registra cuenta. `signUp` envía
+   `user_metadata.invite_token`.
+5. Trigger `handle_new_user` valida (token + email + no usado + no expirado),
+   asigna `rol='funcionario'` + `eleam_id` correcto y marca la invitación
+   como usada.

@@ -59,6 +59,27 @@ Esto crea todas las tablas, políticas RLS, Storage buckets, las 10 categorías 
 3. En Google Cloud Console, agregar `http://localhost:5173` como origen autorizado.
 4. En Supabase, confirmar que **Site URL** apunte a `http://localhost:5173` en desarrollo y que las redirect URLs incluyan `http://localhost:5173/**`.
 
+### 5. Configurar MercadoPago
+
+Ver la sección **[Integración con MercadoPago](#integración-con-mercadopago-suscripciones-recurrentes)** más abajo. Resumen rápido:
+
+1. Crear aplicación en [MercadoPago Developers](https://www.mercadopago.cl/developers/panel) y habilitar **Suscripciones (Preapproval)**.
+2. Configurar webhook → URL: `https://<TU_PROYECTO>.functions.supabase.co/mp-webhook`. Eventos: `preapproval` y `subscription_authorized_payment`. Guardar el **Secret**.
+3. Setear secrets en Supabase:
+   ```bash
+   supabase secrets set MP_ACCESS_TOKEN=APP_USR-...
+   supabase secrets set MP_WEBHOOK_SECRET=<secret-del-webhook>
+   supabase secrets set PUBLIC_APP_URL=https://app.fichaeleam.cl
+   supabase secrets set ALLOWED_ORIGINS="https://app.fichaeleam.cl,http://localhost:5173"
+   ```
+4. Desplegar Edge Functions:
+   ```bash
+   supabase functions deploy mp-create-subscription
+   supabase functions deploy mp-cancel-subscription
+   supabase functions deploy invite-funcionario
+   supabase functions deploy mp-webhook --no-verify-jwt
+   ```
+
 ---
 
 ## Comandos
@@ -283,17 +304,202 @@ En `AuthContext`, la variable `pagoActivo` es `true` si `profile.rol === 'supera
 
 ---
 
-## Qué debe reemplazarse al integrar el pago real
+## Integración con MercadoPago (suscripciones recurrentes)
 
-1. **`PaymentPage.jsx`**: reemplazar el CTA de email por integración con pasarela de pago (Transbank, Stripe, Mercado Pago, etc.).
+FichaEleam cobra **una suscripción mensual por ELEAM**. El admin del ELEAM
+paga; los funcionarios del mismo ELEAM acceden gratis mientras la
+suscripción del admin esté activa. Cada plan define el máximo de
+residentes activos y de funcionarios; los triggers de la BD bloquean los
+inserts si el plan se llena.
 
-2. **Webhook de pago**: crear un endpoint (Supabase Edge Function o backend externo) que actualice `eleams.pago_activo = true` y `eleams.fecha_pago` al recibir confirmación de pago.
+### Modelo
 
-3. **Usuario de prueba**: eliminar la lógica especial para `demo@fichaeleam.cl` del trigger `handle_new_user` y del check `rol === 'superadmin'` en `AuthContext`.
+- Tabla `planes` — catálogo de planes (`plan-14`, `plan-24`, `plan-34`).
+- Columnas nuevas en `eleams`: `plan_id`, `mp_preapproval_id`,
+  `mp_payer_email`, `subscription_status`, `proximo_cobro_en`,
+  `cancelado_en`, `max_funcionarios`.
+- Tabla `mp_webhook_events` — auditoría e idempotencia de webhooks.
+- Tabla `funcionario_invitaciones` — admin invita funcionarios con
+  un token de un solo uso (validado por trigger en signup).
+- Edge Functions:
+  - `mp-create-subscription` — crea preapproval, devuelve `init_point`.
+  - `mp-webhook` — público (sin JWT), valida firma HMAC, refresca DB.
+  - `mp-cancel-subscription` — admin cancela preapproval.
+  - `invite-funcionario` — admin invita funcionario al ELEAM.
 
-4. **ELEAM de prueba**: eliminar el insert del ELEAM con id `a0000000-...` del schema.
+### Estados de la suscripción
 
-5. **Lógica de vencimiento**: agregar verificación de `eleams.fecha_pago` para desactivar automáticamente cuentas con más de 30 días sin pago.
+| `subscription_status` | Significado | Acceso (`pago_activo`) |
+|-----------------------|-------------|------------------------|
+| `inactivo`            | No ha contratado nunca | ❌ |
+| `pendiente`           | Preapproval creado, esperando autorización en MP | ❌ |
+| `activo`              | Pago vigente | ✅ |
+| `en_gracia`           | MP está reintentando un cobro fallido | ✅ |
+| `pausado`             | Pausa manual desde MP | ❌ |
+| `cancelado`           | Admin canceló | ❌ |
+| `vencido`             | Sin pago tras período de gracia | ❌ |
+
+`pago_activo` se sincroniza automáticamente via trigger
+`sync_pago_activo` en cada cambio de `subscription_status`.
+
+### Variables de entorno (server-side)
+
+Se setean como **secrets de Supabase** (no van en `.env` del frontend):
+
+```bash
+# Token de acceso de MP (PROD: APP_USR-... · TEST: TEST-...)
+supabase secrets set MP_ACCESS_TOKEN=APP_USR-xxxxxxxxxxxxxxxx
+
+# Secreto del webhook (Dashboard MP → Webhooks → "Secret")
+supabase secrets set MP_WEBHOOK_SECRET=xxxxxxxxxxxxxxxxxxxx
+
+# URL pública de tu app (para back_url y links de invitación)
+supabase secrets set PUBLIC_APP_URL=https://app.fichaeleam.cl
+
+# Orígenes permitidos en CORS (CSV)
+supabase secrets set ALLOWED_ORIGINS="https://app.fichaeleam.cl,http://localhost:5173"
+```
+
+### Pasos en la cuenta de MercadoPago
+
+> Hazlo dos veces: una con credenciales **sandbox** para testing y otra con
+> credenciales **producción** cuando vayas a operar.
+
+1. **Crear cuenta de empresa en MercadoPago Chile** ([www.mercadopago.cl](https://www.mercadopago.cl)).
+   - Verifica la cuenta (RUT, datos bancarios, email).
+
+2. **Crear una "Aplicación"** en
+   [Dashboard → Tus integraciones → Crear aplicación](https://www.mercadopago.cl/developers/panel).
+   - Modelo: **Pagos online**.
+   - Producto: **Suscripciones (Preapproval)**.
+   - Marca como **Producción** cuando termines QA.
+
+3. **Copiar credenciales** desde la aplicación recién creada:
+   - **Production Access Token** → `MP_ACCESS_TOKEN` (en producción).
+   - **Test Access Token** → `MP_ACCESS_TOKEN` (en sandbox).
+   - *(La Public Key NO es necesaria con el flujo de redirect que usamos.)*
+
+4. **Configurar el Webhook** en
+   *Dashboard → Tu aplicación → Webhooks*:
+   - **URL de notificación**:
+     `https://<TU_PROYECTO_SUPABASE>.functions.supabase.co/mp-webhook`
+   - **Eventos a escuchar**:
+     - ✅ `Suscripciones (preapproval)`
+     - ✅ `Pagos autorizados (subscription_authorized_payment)`
+     - *(Opcional: `Pagos`)*
+   - Copia el **Secret** generado y guárdalo en `MP_WEBHOOK_SECRET`.
+
+5. **Activar el dominio** del frontend en
+   *Dashboard → Aplicación → Configuración → URLs permitidas*
+   (origin en `back_url`, ej. `https://app.fichaeleam.cl`).
+
+6. **Verificar los planes en la BD** — el seed inserta tres planes en CLP.
+   Si quieres cambiar precios, edita la tabla `planes` o pídele al
+   superadmin que lo haga vía panel.
+
+### Desplegar las Edge Functions
+
+```bash
+# Instalar la CLI si aún no la tienes
+npm install -g supabase
+
+# Login y vincula tu proyecto
+supabase login
+supabase link --project-ref <TU_PROJECT_REF>
+
+# Desplegar las cuatro funciones
+supabase functions deploy mp-create-subscription
+supabase functions deploy mp-cancel-subscription
+supabase functions deploy invite-funcionario
+
+# El webhook NO requiere JWT (lo declara supabase/config.toml)
+supabase functions deploy mp-webhook --no-verify-jwt
+```
+
+> Las primeras tres funciones validan el JWT del usuario autenticado
+> (`verify_jwt = true`). El webhook usa firma HMAC en su lugar.
+
+### Probar la integración
+
+1. Crear un comprador y vendedor de prueba en
+   [Dashboard MP → Cuentas de prueba](https://www.mercadopago.cl/developers/panel/test-users).
+2. Inicia sesión en FichaEleam con el admin del ELEAM.
+3. En `/pago`, elige un plan → te redirige al `init_point` de MP.
+4. Paga con la tarjeta de prueba `5031 7557 3453 0604` (Mastercard sandbox)
+   — código de seguridad `123` y RUT `12.345.678-5`.
+5. Después del pago, MP te trae a `/pago/return`. El backend recibe el
+   webhook `preapproval` con `status=authorized` y marca el ELEAM como
+   activo. El frontend hace polling al perfil hasta verlo activo.
+6. Comprueba que `eleams.subscription_status = 'activo'` y que se creó
+   un row en `mp_webhook_events` con `signature_ok = true`.
+
+### Seguridad implementada
+
+- **Tokens server-side**: `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` viven
+  solo como Edge Function secrets. El frontend nunca los ve.
+- **Firma HMAC**: cada webhook se valida contra el manifest oficial
+  `id:<dataId>;request-id:<requestId>;ts:<ts>;` con HMAC-SHA-256 y
+  comparación constant-time. Tolerancia de 600 s sobre el `ts` para
+  mitigar replays.
+- **Idempotencia**: `mp_webhook_events.mp_request_id` es UNIQUE; un
+  retry de MP se descarta sin reprocesar.
+- **`X-Idempotency-Key`** se envía en cada `POST /preapproval`.
+- **`external_reference` validado**: el handler busca el ELEAM por
+  `external_reference` y rechaza si no existe.
+- **RLS multi-tenant**: las tablas `pagos`, `funcionario_invitaciones`,
+  `eleams` solo se ven con `eleam_id` del usuario o vía `is_superadmin()`.
+- **Triggers anti-escalada**: `prevent_role_eleam_escalation` impide
+  que un funcionario se cambie su `rol` o su `eleam_id`.
+- **Triggers de límite**: `check_residentes_limit` y
+  `check_funcionarios_limit` aplican el cupo del plan en la BD.
+- **Trigger de invitaciones**: `handle_new_user` valida el
+  `invite_token` contra `funcionario_invitaciones` (token + email +
+  no usado + no expirado) y lo marca consumido.
+
+### Reglas de negocio enforzadas
+
+| Regla | Cómo se aplica |
+|-------|---------------|
+| Admin paga, funcionarios no | Edge `mp-create-subscription` rechaza si `rol ≠ admin_eleam`. |
+| Funcionarios acceden con suscripción del admin | `pago_activo` se calcula sobre `subscription_status` del ELEAM, no por usuario. |
+| Cupo de residentes | Trigger `check_residentes_limit` en `residentes`. |
+| Cupo de funcionarios | Trigger `check_funcionarios_limit` en `profiles` + check proactivo en `invite-funcionario`. |
+| Solo admin invita funcionarios | RLS en `funcionario_invitaciones` + Edge function. |
+| Funcionario no puede cambiar de ELEAM | Trigger `prevent_role_eleam_escalation`. |
+| Suscripción ya activa no se duplica | `mp-create-subscription` rechaza si `subscription_status in ('activo','en_gracia')`. |
+| Invitaciones expiran | Token con TTL de 7 días + `usado` único uso. |
+
+### Cancelación
+
+El admin pulsa "Cancelar suscripción" en `/pago`:
+1. Frontend llama a `mp-cancel-subscription`.
+2. Edge function hace `PUT /preapproval/{id}` con `{status: "cancelled"}`.
+3. Marca el ELEAM como `cancelado` en la BD.
+4. MercadoPago no vuelve a cobrar; el acceso se mantiene hasta
+   `proximo_cobro_en` (manejado por el webhook al cierre del ciclo).
+
+### Qué queda pendiente (futuro)
+
+- **Recordatorios de vencimiento**: cron / `pg_cron` que avisa por email
+  cuando `proximo_cobro_en < now() + 3d`.
+- **Job de marcado vencido**: si pasan N días en `en_gracia` sin
+  reintento exitoso, marcar `vencido` y suspender acceso.
+- **Cambio de plan**: hoy hay que cancelar y volver a contratar.
+  Implementar `PUT /preapproval/{id}` actualizando `transaction_amount`.
+- **Reportes financieros**: vista Superadmin con MRR, churn, conversion.
+
+---
+
+## Qué tener listo para producción
+
+1. Asegurarte de cambiar `MP_ACCESS_TOKEN` de Test a Producción.
+2. Desplegar las Edge Functions en el proyecto Supabase de producción.
+3. Configurar el webhook con la URL de producción y guardar el
+   `MP_WEBHOOK_SECRET` correspondiente.
+4. Eliminar (opcional) la lógica del usuario de prueba
+   `demo@fichaeleam.cl` en el trigger `handle_new_user` y la
+   inserción del ELEAM demo, si no quieres exponer la cuenta demo
+   en producción.
 
 ---
 
