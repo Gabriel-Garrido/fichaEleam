@@ -253,6 +253,72 @@ const pagoActivo = profile?.rol === "superadmin"
 
 ---
 
+## Flujo end-to-end por rol
+
+### 🟣 Superadmin (dueño de la plataforma)
+
+1. Te creas una cuenta normal por `/register`.
+2. En **Supabase SQL Editor** ejecutas
+   `update public.profiles set rol = 'superadmin' where email = 'tu@email.cl';`
+3. Cierras sesión y vuelves a entrar.
+4. `homePath = /superadmin`. El Navbar solo muestra **Superadmin**, **Demo** y **Cerrar sesión**.
+5. Desde `/superadmin` ves todos los ELEAMs, métricas, pagos.
+6. RLS te permite leer todo (`is_superadmin()`); las escrituras solo
+   sobre `eleams`, `pagos`, `planes`. Las tablas clínicas no son
+   modificables por ti — eso queda dentro de cada ELEAM.
+
+### 🟢 Admin del ELEAM (paga la suscripción)
+
+1. `/register` sin token de invitación.
+2. El trigger `handle_new_user` crea **un ELEAM nuevo** (`subscription_status='inactivo'`)
+   y un profile `rol='admin_eleam'` vinculado.
+3. Login → `homePath = /pago?sinAcceso=1`.
+4. En `/pago` elige plan → Edge Function `mp-create-subscription` →
+   redirección a MercadoPago → checkout → webhook `preapproval` →
+   `subscription_status='activo'` → `pago_activo=true`.
+5. Ya con pago: `homePath = /dashboard`. Navbar incluye **Equipo** y **Suscripción**.
+6. En `/equipo` invita funcionarios y familiares. La invitación
+   genera un link `/register?invite=<token>&email=<correo>` para
+   compartir. Los funcionarios ocupan cupo del plan; los familiares no.
+7. En `/pago` puede cancelar. Tras cancelar, mantiene acceso hasta
+   `fecha_vencimiento_suscripcion` (período de gracia).
+
+### 🟦 Funcionario (creado por admin)
+
+1. El admin escribe su email en `/equipo` → tab Funcionarios → genera link.
+2. El admin envía el link al funcionario.
+3. El funcionario abre `/register?invite=...&email=...`. El email
+   queda **read-only**.
+4. signUp envía `user_metadata.invite_token`. El trigger
+   `handle_new_user` valida el token (email + no usado + no expirado),
+   asigna `rol='funcionario'` + `eleam_id` y marca la invitación como usada.
+5. Login → `homePath = /dashboard`.
+6. Navbar: Dashboard, Residentes, Signos Vitales, Observaciones, Acreditación.
+   **NO** ve Equipo ni Suscripción ni Superadmin.
+7. Puede crear y editar residentes, signos y observaciones. **NO**
+   puede borrarlos (botón ausente + RLS lo bloquea). **NO** puede
+   gestionar acreditación ni ver historial de pagos.
+
+### 🟡 Familiar (creado por admin, ligado a un residente)
+
+1. El admin abre `/equipo` → tab **Familiares** → escoge el residente
+   del ELEAM y escribe el email del familiar.
+2. La Edge Function valida que el residente pertenezca al ELEAM y
+   crea la invitación (`rol='familiar'`, `residente_id=...`).
+3. El familiar abre el link y se registra. El trigger crea profile
+   `rol='familiar'` + `eleam_id` + **fila en `familiar_residentes`**
+   con el `residente_id` de la invitación.
+4. Login → `homePath = /familiar`.
+5. Navbar: **Mi residente**, **Visitas**, **Cerrar sesión**.
+6. `/familiar`: ve datos del residente, últimos signos vitales con
+   código de color, observaciones recientes, sus visitas.
+7. `/familiar/visitas`: registra visitas (fecha + duración + notas).
+8. **No** ve otros residentes, **no** ve documentos de acreditación,
+   **no** ve pagos. RLS lo enforza con
+   `familiar_can_view_residente()` y `my_familiar_residente_ids()`.
+
+---
+
 ## Panel Superadmin (`/superadmin`)
 
 Ruta exclusiva para usuarios con `rol = 'superadmin'`. Protegida por `SuperAdminRoute` que redirige a `/dashboard` si el rol no coincide.

@@ -137,12 +137,14 @@ function AccreditationCategory() {
               <p className="text-gray-500 text-sm">{category.descripcion}</p>
             )}
           </div>
-          <Button
-            onClick={() => navigate(`/accreditation/upload?categoriaId=${id}`)}
-            className="shrink-0 bg-[var(--color-primary)] text-white px-5 py-2 rounded-lg hover:bg-[var(--color-button-hover)] text-sm"
-          >
-            + Subir Documento
-          </Button>
+          {canManageDocuments && (
+            <Button
+              onClick={() => navigate(`/accreditation/upload?categoriaId=${id}`)}
+              className="shrink-0 bg-[var(--color-primary)] text-white px-5 py-2 rounded-lg hover:bg-[var(--color-button-hover)] text-sm"
+            >
+              + Subir Documento
+            </Button>
+          )}
         </div>
       </div>
 
@@ -193,13 +195,19 @@ function AccreditationCategory() {
         <div className="text-center py-16 text-gray-500 bg-white rounded-xl border border-gray-100">
           <div className="text-5xl mb-3">📁</div>
           <p className="mb-1 font-medium">No hay documentos en esta categoría.</p>
-          <p className="text-sm mb-4">Sube el primer documento para comenzar.</p>
-          <Button
-            onClick={() => navigate(`/accreditation/upload?categoriaId=${id}`)}
-            className="bg-[var(--color-primary)] text-white px-5 py-2 rounded-lg text-sm hover:bg-[var(--color-button-hover)]"
-          >
-            + Subir primer documento
-          </Button>
+          {canManageDocuments ? (
+            <>
+              <p className="text-sm mb-4">Sube el primer documento para comenzar.</p>
+              <Button
+                onClick={() => navigate(`/accreditation/upload?categoriaId=${id}`)}
+                className="bg-[var(--color-primary)] text-white px-5 py-2 rounded-lg text-sm hover:bg-[var(--color-button-hover)]"
+              >
+                + Subir primer documento
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm">Pídele al administrador del ELEAM que cargue los documentos.</p>
+          )}
         </div>
       ) : (
         <div className="grid gap-3">

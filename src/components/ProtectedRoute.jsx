@@ -50,25 +50,17 @@ function ProtectedRoute({
     return <Navigate to="/pago?sinAcceso=1" replace />;
   }
 
-  if (allowedRoles?.length && !allowedRoles.includes(profile.rol)) {
-    // Si el rol no coincide, mandamos al home propio del rol.
+  // El superadmin tiene acceso universal — la RLS sigue filtrando los
+  // datos que ve. Esto también permite que el usuario demo (superadmin
+  // con eleam_id) navegue todas las vistas operativas.
+  if (allowedRoles?.length && !allowedRoles.includes(profile.rol) && !isSuperadmin) {
     return <Navigate to={homePath} replace />;
   }
 
-  // El familiar nunca debería entrar a rutas operativas del staff.
-  // Si llegó aquí por azar, lo mandamos al portal familiar.
-  if (isFamiliar && !location.pathname.startsWith("/familiar")) {
-    if (!allowedRoles?.includes("familiar")) {
-      return <Navigate to="/familiar" replace />;
-    }
-  }
-
-  // Superadmin tiene su panel; no se le obliga a entrar al dashboard
-  // de ELEAM (no tiene ELEAM). Si entra a una ruta de staff, redirigir.
-  if (isSuperadmin && !["/superadmin"].some((p) => location.pathname.startsWith(p))) {
-    if (!allowedRoles?.includes("superadmin")) {
-      return <Navigate to="/superadmin" replace />;
-    }
+  // El familiar nunca debe entrar a rutas operativas del staff: si la
+  // ruta no lo declara explícitamente, lo devolvemos a su portal.
+  if (isFamiliar && !allowedRoles?.includes("familiar")) {
+    return <Navigate to="/familiar" replace />;
   }
 
   return children;

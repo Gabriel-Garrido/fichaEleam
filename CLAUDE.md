@@ -666,3 +666,70 @@ Cuatro roles con jerarquía clara:
   (constantes `STAFF`, `ADMIN`, `["familiar"]`, etc.).
 - `src/features/team/TeamManagement.jsx` — tabs Funcionarios / Familiares
   con selector de residente para invitaciones de familiares.
+
+---
+
+## v7 — Auditoría de flujos y fixes de consistencia
+
+### Decisiones clave
+
+- **Creación atómica de ELEAM en signup**: el trigger `handle_new_user`
+  crea el ELEAM y el profile en una sola sentencia (SECURITY DEFINER).
+  El cliente nunca toca `eleam_id` después de creado — `prevent_role_eleam_escalation`
+  bloquearía la UPDATE.
+- **`eleams.insert` desde cliente**: solo `superadmin`. El trigger
+  no se ve afectado porque corre en SECURITY DEFINER.
+- **Acreditación**: INSERT/UPDATE/DELETE solo `admin_eleam` en BD y UI.
+- **Período de gracia post-cancelación**: `sync_pago_activo` mantiene
+  `pago_activo=true` cuando `subscription_status='cancelado'` y
+  `fecha_vencimiento_suscripcion > now()`. El cómputo en
+  `AuthContext.pagoActivo` reproduce la misma lógica.
+- **Demo user (superadmin con `eleam_id`)**: `homePath = /dashboard`
+  para mostrar la app completa; `Navbar` incluye items operativos +
+  "Superadmin". Real superadmin (sin ELEAM) → `homePath=/superadmin`.
+- **`ProtectedRoute`** permite siempre al `superadmin` (RLS sigue
+  filtrando datos), bloquea al `familiar` fuera de `/familiar/*`,
+  redirige al rol al `homePath` si no calza con `allowedRoles`.
+
+### Tabla de flujos por rol (E2E)
+
+| Rol | Onboarding | `homePath` | Navbar | Rutas permitidas |
+|-----|-----------|------------|--------|------------------|
+| `superadmin` (real)   | SQL: `update profiles set rol='superadmin' where email=...` | `/superadmin` | Superadmin · Demo · Cerrar sesión | Todas (RLS filtra) |
+| `superadmin` (demo)   | Signup `demo@fichaeleam.cl` (trigger asigna ELEAM demo) | `/dashboard` | Operativo + Superadmin | Todas (RLS filtra) |
+| `admin_eleam`         | `/register` sin invite → trigger crea ELEAM | `/pago?sinAcceso=1` hasta pagar; luego `/dashboard` | Sin pago: Activar · Demo · Cerrar / Con pago: operativo + Equipo + Suscripción | Operativas + `/equipo` + `/pago` |
+| `funcionario`         | Admin invita → `/register?invite=...` | `/dashboard` | Operativo (sin Equipo, sin Suscripción) | Operativas (sin `/equipo`) |
+| `familiar`            | Admin invita con residente → `/register?invite=...` | `/familiar` | Mi residente · Visitas · Cerrar sesión | `/familiar`, `/familiar/visitas` |
+
+### Quién puede crear/borrar qué (BD + UI consistente)
+
+| Acción                           | superadmin | admin_eleam | funcionario | familiar |
+|----------------------------------|:----------:|:-----------:|:-----------:|:--------:|
+| Crear residente                  |     RLS    |     ✅      |     ✅      |          |
+| Editar residente                 |     RLS    |     ✅      |     ✅      |          |
+| Eliminar residente               |     RLS    |     ✅      |             |          |
+| Crear / editar signo vital       |     RLS    |     ✅      |     ✅      |          |
+| Eliminar signo vital             |     RLS    |     ✅      |             |          |
+| Crear / editar observación       |     RLS    |     ✅      |     ✅      |          |
+| Eliminar observación             |     RLS    |     ✅      |             |          |
+| Subir / editar / eliminar acreditación | RLS  |     ✅      |             |          |
+| Ver historial de pagos del ELEAM |     RLS    |     ✅      |             |          |
+| Invitar funcionarios             |            |     ✅      |             |          |
+| Invitar familiares (con residente)|           |     ✅      |             |          |
+| Cancelar suscripción             |            |     ✅      |             |          |
+| Registrar visitas familiares     |            |     ✅*     |     ✅*     |    ✅    |
+
+*Staff puede registrar visitas en nombre del familiar (registro físico
+de visita). El familiar solo registra las suyas (RLS exige
+`profile_id = auth.uid()` en INSERT).
+
+### Servicios server-side comprobados
+
+- `mp-create-subscription` rechaza si `rol ≠ admin_eleam` o si ya hay
+  suscripción `activo`/`en_gracia`. Solo `admin_eleam` paga.
+- `mp-cancel-subscription` rechaza si `rol ≠ admin_eleam`.
+- `invite-funcionario` rechaza si `rol ≠ admin_eleam`, si la
+  suscripción no está activa, si `rol='familiar'` y el `residente_id`
+  no pertenece al ELEAM, o si supera `max_funcionarios` del plan.
+- `mp-webhook` valida HMAC, deduplica con `mp_request_id` y nunca
+  confía en el body — re-fetch del recurso vía API MP.

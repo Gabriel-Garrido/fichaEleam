@@ -2014,3 +2014,154 @@ create policy "eleam_select_pagos" on public.pagos
     public.my_rol() = 'admin_eleam'
     and eleam_id = public.my_eleam_id()
   );
+
+
+-- ════════════════════════════════════════════════════════════════
+-- v7: Fixes de consistencia detectados en auditoría
+--
+-- 1) handle_new_user crea el ELEAM para admin_eleam server-side.
+--    Antes el frontend (AuthContext/authService) hacía esto, pero
+--    el trigger prevent_role_eleam_escalation lo bloquea (no permite
+--    cambiar eleam_id desde el cliente). Resolvemos haciendo la
+--    creación atómica en el trigger SECURITY DEFINER.
+-- 2) eleams_insert solo superadmin (el trigger sigue funcionando
+--    porque es SECURITY DEFINER). Esto evita que un usuario común
+--    cree ELEAMs arbitrarios desde el cliente.
+-- 3) acreditación INSERT/UPDATE pasa a ser admin-only para coincidir
+--    con la UI (canManageDocuments) y porque es un proceso sensible
+--    de cara a la SEREMI.
+-- 4) sync_pago_activo respeta período de gracia: si subscription_status
+--    pasa a 'cancelado' pero fecha_vencimiento_suscripcion es futura,
+--    pago_activo se mantiene en true hasta esa fecha.
+-- ════════════════════════════════════════════════════════════════
+
+-- ── 1. handle_new_user definitivo: crea ELEAM si admin_eleam ────
+create or replace function public.handle_new_user()
+  returns trigger
+  language plpgsql
+  security definer
+  set search_path = public
+as $$
+declare
+  v_rol         text  := 'admin_eleam';
+  v_eleam_id    uuid  := null;
+  v_token       text;
+  v_invitacion  record;
+  v_nombre      text;
+begin
+  v_nombre := coalesce(new.raw_user_meta_data->>'nombre',
+                        split_part(new.email, '@', 1));
+
+  -- Cuenta demo: superadmin con ELEAM demo activo
+  if new.email = 'demo@fichaeleam.cl' then
+    insert into public.profiles (id, nombre, email, rol, eleam_id)
+    values (new.id, v_nombre, new.email, 'superadmin',
+            'a0000000-0000-0000-0000-000000000001'::uuid)
+    on conflict (id) do nothing;
+    return new;
+  end if;
+
+  -- Procesar invitación si está presente
+  v_token := new.raw_user_meta_data->>'invite_token';
+  if v_token is not null and v_token <> '' then
+    select i.* into v_invitacion
+    from public.funcionario_invitaciones i
+    where i.token = v_token
+      and lower(i.email) = lower(new.email)
+      and i.usado = false
+      and i.expira_en > now()
+    limit 1;
+
+    if found then
+      v_eleam_id := v_invitacion.eleam_id;
+      v_rol      := coalesce(v_invitacion.rol, 'funcionario');
+      update public.funcionario_invitaciones
+        set usado = true, usado_en = now()
+        where id = v_invitacion.id;
+    end if;
+  end if;
+
+  -- Si seguimos siendo admin_eleam (no había invitación), crear ELEAM
+  if v_rol = 'admin_eleam' and v_eleam_id is null then
+    insert into public.eleams
+      (nombre, email_admin, pago_activo, subscription_status)
+    values
+      ('ELEAM de ' || v_nombre, new.email, false, 'inactivo')
+    returning id into v_eleam_id;
+  end if;
+
+  -- Crear el profile con el rol y eleam_id correctos en una sola sentencia.
+  -- (Evita la UPDATE posterior bloqueada por prevent_role_eleam_escalation.)
+  insert into public.profiles (id, nombre, email, rol, eleam_id)
+  values (new.id, v_nombre, new.email, v_rol, v_eleam_id)
+  on conflict (id) do nothing;
+
+  -- Si la invitación es de familiar y trae residente_id → vincular
+  if v_rol = 'familiar' and v_invitacion.residente_id is not null then
+    insert into public.familiar_residentes
+      (profile_id, residente_id, creado_por)
+    values
+      (new.id, v_invitacion.residente_id, v_invitacion.creado_por)
+    on conflict do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- ── 2. eleams_insert: solo superadmin desde el cliente ──────────
+-- El trigger SECURITY DEFINER sigue creando ELEAMs en el signup.
+drop policy if exists "eleams_insert_auth"        on public.eleams;
+drop policy if exists "eleams_insert_superadmin"  on public.eleams;
+create policy "eleams_insert_superadmin" on public.eleams
+  for insert with check (public.is_superadmin());
+
+-- ── 3. acreditación: INSERT/UPDATE/DELETE solo admin_eleam ──────
+-- (Ya está; aquí lo reafirmamos para que quede consistente con
+-- la UI canManageDocuments=admin_eleam.)
+drop policy if exists "docs_insert" on public.documentos_acreditacion;
+create policy "docs_insert" on public.documentos_acreditacion
+  for insert with check (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "docs_update" on public.documentos_acreditacion;
+create policy "docs_update" on public.documentos_acreditacion
+  for update using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- ── 4. sync_pago_activo respeta período de gracia ──────────────
+create or replace function public.sync_pago_activo()
+  returns trigger
+  language plpgsql
+as $$
+begin
+  if new.subscription_status in ('activo','en_gracia') then
+    new.pago_activo := true;
+  elsif new.subscription_status = 'cancelado' then
+    -- Conservar el acceso hasta el fin del período pagado.
+    if new.fecha_vencimiento_suscripcion is not null
+       and new.fecha_vencimiento_suscripcion > now() then
+      new.pago_activo := true;
+    else
+      new.pago_activo := false;
+    end if;
+  elsif new.subscription_status in ('inactivo','vencido','pausado','pendiente') then
+    new.pago_activo := false;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sync_pago_activo on public.eleams;
+create trigger trg_sync_pago_activo
+  before update of subscription_status on public.eleams
+  for each row execute function public.sync_pago_activo();

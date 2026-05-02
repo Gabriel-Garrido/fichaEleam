@@ -17,20 +17,15 @@ export function AuthProvider({ children }) {
   const fetchProfileAndEleam = useCallback(async (authUser) => {
     if (!supabase) return;
     const userId = typeof authUser === "string" ? authUser : authUser?.id;
-    const email = typeof authUser === "string" ? null : authUser?.email;
-    const metadata = typeof authUser === "string" ? {} : (authUser?.user_metadata ?? {});
-    const displayName =
-      metadata.nombre ||
-      metadata.full_name ||
-      metadata.name ||
-      email?.split("@")[0] ||
-      "Usuario";
-
     if (!userId) return;
 
     setProfileLoading(true);
     setAuthNotice(null);
     try {
+      // El profile y el ELEAM (si corresponde) los crea el trigger
+      // handle_new_user en SIGNUP — no los creamos desde el cliente.
+      // Si el profile no aparece todavía es por replicación de la
+      // sesión recién creada; reintentamos una vez tras 600ms.
       let { data, error } = await supabase
         .from("profiles")
         .select("*, eleams(*, planes(*))")
@@ -39,71 +34,26 @@ export function AuthProvider({ children }) {
 
       if (error) throw error;
 
-      if (!data && email) {
-        const { data: newEleam, error: eleamError } = await supabase
-          .from("eleams")
-          .insert({
-            nombre: `ELEAM de ${displayName}`,
-            email_admin: email,
-            pago_activo: false,
-            subscription_status: "inactivo",
-          })
-          .select()
-          .maybeSingle();
-
-        const profilePayload = {
-          id: userId,
-          nombre: displayName,
-          email,
-          rol: "admin_eleam",
-          eleam_id: eleamError ? null : newEleam?.id ?? null,
-        };
-
-        const { data: createdProfile, error: profileError } = await supabase
+      if (!data) {
+        await new Promise((r) => setTimeout(r, 600));
+        const retry = await supabase
           .from("profiles")
-          .upsert(profilePayload)
-          .select("*, eleams(*)")
+          .select("*, eleams(*, planes(*))")
+          .eq("id", userId)
           .maybeSingle();
-
-        if (profileError) throw profileError;
-        data = createdProfile;
-
-        if (eleamError) {
-          setAuthNotice("Tu cuenta se creó, pero aún falta asociarla a un ELEAM. Puedes continuar desde el panel de pago.");
-        }
+        data = retry.data;
+        if (retry.error) throw retry.error;
       }
 
       if (!data) {
-        setAuthNotice("No pudimos cargar tu perfil todavía. Intenta nuevamente en unos segundos.");
+        setAuthNotice("No pudimos cargar tu perfil todavía. Recarga la página en unos segundos.");
         return;
       }
 
-      // Si el admin no tiene ELEAM asociado, crear uno automáticamente.
-      // Los funcionarios SIEMPRE deben tener eleam_id (lo asigna el trigger
-      // al consumir un invite_token); si no lo tienen → es un error.
+      // Diagnóstico de inconsistencias (no auto-corregidas — las
+      // resuelve el superadmin desde su panel).
       if (!data.eleam_id && data.rol === "admin_eleam") {
-        const { data: newEleam, error: eleamError } = await supabase
-          .from("eleams")
-          .insert({
-            nombre: `ELEAM de ${data.nombre}`,
-            email_admin: data.email,
-            pago_activo: false,
-            subscription_status: "inactivo",
-          })
-          .select("*, planes(*)")
-          .maybeSingle();
-
-        if (!eleamError && newEleam) {
-          const { error: updateError } = await supabase
-            .from("profiles")
-            .update({ eleam_id: newEleam.id })
-            .eq("id", userId);
-          if (updateError) throw updateError;
-          data.eleam_id = newEleam.id;
-          data.eleams   = newEleam;
-        } else {
-          setAuthNotice("Tu sesión está activa, pero aún no se pudo crear el ELEAM asociado.");
-        }
+        setAuthNotice("Tu cuenta de admin no tiene un ELEAM asociado. Contacta a soporte.");
       } else if (!data.eleam_id && (data.rol === "funcionario" || data.rol === "familiar")) {
         setAuthNotice("Tu cuenta no tiene un ELEAM asociado. Contacta al administrador del establecimiento.");
       }
@@ -152,12 +102,25 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, [fetchProfileAndEleam]);
 
-  // El pago se considera activo si el ELEAM tiene subscription_status
-  // 'activo' o 'en_gracia', o si el usuario es superadmin.
-  // pago_activo se sincroniza vía trigger en la BD; lo usamos como fallback.
+  // El pago se considera activo si:
+  //  - el usuario es superadmin, o
+  //  - el ELEAM está en estado 'activo' o 'en_gracia', o
+  //  - el ELEAM está 'cancelado' pero todavía dentro del período pagado
+  //    (fecha_vencimiento_suscripcion futura).
+  // Esto coincide con el trigger sync_pago_activo del backend.
+  const eleamGraceUntil = eleam?.fecha_vencimiento_suscripcion
+    ? new Date(eleam.fecha_vencimiento_suscripcion)
+    : null;
+  const inGrace =
+    eleam?.subscription_status === "cancelado" &&
+    eleamGraceUntil instanceof Date &&
+    !Number.isNaN(eleamGraceUntil.valueOf()) &&
+    eleamGraceUntil > new Date();
+
   const pagoActivo =
     profile?.rol === "superadmin" ||
     ["activo", "en_gracia"].includes(eleam?.subscription_status) ||
+    inGrace ||
     eleam?.pago_activo === true;
 
   const plan = eleam?.planes ?? null;
@@ -170,10 +133,14 @@ export function AuthProvider({ children }) {
   const isStaff       = isAdminEleam || isFuncionario;
 
   // Ruta inicial según rol/estado de suscripción.
-  // Se usa en el Navbar y en redirecciones del Router.
+  // - superadmin sin ELEAM → /superadmin (operador de la plataforma).
+  // - superadmin con ELEAM (cuenta demo) → /dashboard para mostrar la app.
+  // - familiar → /familiar.
+  // - staff con pago activo → /dashboard.
+  // - staff sin pago → /pago.
   let homePath = "/";
   if (user) {
-    if (isSuperadmin)            homePath = "/superadmin";
+    if (isSuperadmin)            homePath = profile?.eleam_id ? "/dashboard" : "/superadmin";
     else if (isFamiliar)         homePath = "/familiar";
     else if (pagoActivo)         homePath = "/dashboard";
     else                         homePath = "/pago?sinAcceso=1";

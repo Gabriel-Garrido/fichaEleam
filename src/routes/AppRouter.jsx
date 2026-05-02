@@ -96,6 +96,7 @@ function AppRouter() {
           <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><ObservationForm /></ProtectedRoute>
         } />
 
+        {/* Acreditación: lectura para todo el staff, gestión solo admin. */}
         <Route path="/accreditation" element={
           <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationDashboard /></ProtectedRoute>
         } />
@@ -103,7 +104,7 @@ function AppRouter() {
           <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationCategory /></ProtectedRoute>
         } />
         <Route path="/accreditation/upload" element={
-          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationUpload /></ProtectedRoute>
+          <ProtectedRoute allowedRoles={ADMIN}><AccreditationUpload /></ProtectedRoute>
         } />
 
         {/* ── Solo admin del ELEAM ──────────────────────────────── */}

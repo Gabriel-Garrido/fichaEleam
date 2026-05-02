@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAccreditationProgress } from "./accreditationService";
+import { useAuth } from "../../context/AuthContext";
 import Loading from "../../components/Loading";
 import Button from "../../components/Button";
 
@@ -14,6 +15,7 @@ const ESTADO_COLOR = {
 
 function AccreditationDashboard() {
   const navigate = useNavigate();
+  const { isAdminEleam } = useAuth();
   const [progress, setProgress] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -38,12 +40,14 @@ function AccreditationDashboard() {
           <h1 className="text-3xl font-bold text-[var(--color-primary)]">Acreditación ELEAM</h1>
           <p className="text-gray-500 text-sm mt-1">Sistema de documentación según DS 14/2017 — Fiscalización SEREMI</p>
         </div>
-        <Button
-          onClick={() => navigate("/accreditation/upload")}
-          className="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
-        >
-          + Subir Documento
-        </Button>
+        {isAdminEleam && (
+          <Button
+            onClick={() => navigate("/accreditation/upload")}
+            className="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
+          >
+            + Subir Documento
+          </Button>
+        )}
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">{error}</div>}

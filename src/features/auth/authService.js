@@ -37,9 +37,14 @@ export const register = async ({ nombre, email, password, inviteToken }) => {
   const client = requireSupabase();
   const cleanEmail = email.trim();
 
-  // user_metadata se usa para que el trigger handle_new_user lea
-  // el invite_token y asigne rol=funcionario + eleam_id correspondiente.
-  // El trigger valida el token (email match, no usado, no expirado) en la BD.
+  // El trigger handle_new_user (server-side, SECURITY DEFINER) crea
+  // automáticamente el profile y, si corresponde, el ELEAM:
+  //   • Sin invite_token → rol=admin_eleam + ELEAM nuevo (inactivo).
+  //   • Con invite_token válido → rol=funcionario|familiar + eleam_id
+  //     de la invitación; si es familiar, crea el vínculo en
+  //     familiar_residentes con el residente_id de la invitación.
+  // No tocamos eleam_id desde el cliente — está bloqueado por el
+  // trigger prevent_role_eleam_escalation.
   const { data, error } = await client.auth.signUp({
     email: cleanEmail,
     password,
@@ -51,44 +56,6 @@ export const register = async ({ nombre, email, password, inviteToken }) => {
     },
   });
   if (error) throw error;
-
-  // Solo admins generan ELEAM al registrarse. Si hay invitación,
-  // el trigger ya asignó eleam_id+rol=funcionario; no creamos ELEAM extra.
-  if (data.user && !inviteToken) {
-    // El trigger handle_new_user creó el profile con rol=admin_eleam
-    // sin eleam_id. AuthContext lo detectará y creará el ELEAM.
-    // Mantenemos este insert como respaldo idempotente para entornos
-    // donde el trigger pueda fallar.
-    try {
-      const { data: existingProfile } = await client
-        .from("profiles")
-        .select("id, eleam_id, rol")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      if (!existingProfile?.eleam_id && existingProfile?.rol === "admin_eleam") {
-        const { data: eleamData } = await client
-          .from("eleams")
-          .insert({
-            nombre: `ELEAM de ${nombre}`,
-            email_admin: cleanEmail,
-            pago_activo: false,
-            subscription_status: "inactivo",
-          })
-          .select()
-          .single();
-        if (eleamData?.id) {
-          await client
-            .from("profiles")
-            .update({ eleam_id: eleamData.id })
-            .eq("id", data.user.id);
-        }
-      }
-    } catch (e) {
-      // Best-effort. AuthContext hará la recuperación al cargar el perfil.
-      console.warn("auth: fallback ELEAM/profile setup", e);
-    }
-  }
   return data.user;
 };
 

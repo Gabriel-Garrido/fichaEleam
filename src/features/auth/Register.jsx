@@ -79,9 +79,10 @@ function Register() {
         <h1 className="text-4xl font-bold text-[var(--color-primary)] mb-6">Registro</h1>
         {inviteToken && (
           <div className="mb-5 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-800 text-left">
-            Has sido invitado/a como funcionario.
+            Has recibido una invitación para unirte a un ELEAM.
             {invitedEmail && (
-              <> Usa el correo <span className="font-semibold">{invitedEmail}</span>.</>
+              <> Regístrate con el correo <span className="font-semibold">{invitedEmail}</span> para
+              activarla automáticamente.</>
             )}
           </div>
         )}

@@ -4,19 +4,12 @@ import { logout } from "../features/auth/authService";
 import { useAuth } from "../context/AuthContext";
 import "../colors.css";
 
-// Menú dinámico por rol. Cada rol ve solo lo que le corresponde y
-// se evita mostrar links a vistas que terminarán redirigiéndolo.
-function buildMenu({ rol, pagoActivo, isStaff, handleLogout }) {
+// Menú dinámico por rol. Cada rol ve solo lo que le corresponde
+// para evitar links a vistas que lo terminarían redirigiendo.
+function buildMenu({ rol, eleamId, pagoActivo, handleLogout }) {
   const close = { label: "Cerrar sesión", action: handleLogout };
 
-  if (rol === "superadmin") {
-    return [
-      { label: "Superadmin", path: "/superadmin" },
-      { label: "Demo",        path: "/demo" },
-      close,
-    ];
-  }
-
+  // Familiar: solo su portal y sus visitas.
   if (rol === "familiar") {
     return [
       { label: "Mi residente", path: "/familiar" },
@@ -25,8 +18,17 @@ function buildMenu({ rol, pagoActivo, isStaff, handleLogout }) {
     ];
   }
 
-  // Si el ELEAM no tiene pago activo: solo activación y logout.
-  if (!pagoActivo) {
+  // Superadmin sin ELEAM: solo su panel + demo.
+  if (rol === "superadmin" && !eleamId) {
+    return [
+      { label: "Superadmin", path: "/superadmin" },
+      { label: "Demo",        path: "/demo" },
+      close,
+    ];
+  }
+
+  // Admin sin pago activo: solo activación.
+  if (rol === "admin_eleam" && !pagoActivo) {
     return [
       { label: "Activar ELEAM", path: "/pago?sinAcceso=1" },
       { label: "Demo",          path: "/demo" },
@@ -34,7 +36,16 @@ function buildMenu({ rol, pagoActivo, isStaff, handleLogout }) {
     ];
   }
 
-  // Staff con suscripción activa
+  // Funcionario sin pago activo: la suscripción del admin venció;
+  // limitamos el menú para no llevarlo a vistas vacías.
+  if (rol === "funcionario" && !pagoActivo) {
+    return [
+      { label: "Suscripción inactiva — contactar admin", action: () => {} },
+      close,
+    ];
+  }
+
+  // Staff o superadmin-con-ELEAM (caso demo) → menú operativo completo.
   const items = [
     { label: "Dashboard",     path: "/dashboard" },
     { label: "Residentes",    path: "/residents" },
@@ -46,9 +57,9 @@ function buildMenu({ rol, pagoActivo, isStaff, handleLogout }) {
     items.push({ label: "Equipo",      path: "/equipo" });
     items.push({ label: "Suscripción", path: "/pago" });
   }
-  // funcionario no ve Equipo ni Suscripción
-  // Marcamos isStaff por si en el futuro queremos algo diferenciado
-  void isStaff;
+  if (rol === "superadmin") {
+    items.push({ label: "Superadmin", path: "/superadmin" });
+  }
   items.push(close);
   return items;
 }
@@ -59,7 +70,7 @@ function Navbar() {
   const location = useLocation();
   const {
     user, profile, eleam, pagoActivo, profileLoading,
-    rol, isStaff, homePath,
+    rol, homePath,
   } = useAuth();
 
   const handleLogout = async () => {
@@ -75,7 +86,7 @@ function Navbar() {
   const navHome = user ? homePath : "/";
 
   const menuItems = user
-    ? buildMenu({ rol, pagoActivo, isStaff, handleLogout })
+    ? buildMenu({ rol, eleamId: profile?.eleam_id ?? null, pagoActivo, handleLogout })
     : [
         { label: "Inicio",        path: "/" },
         { label: "Iniciar sesión", path: "/login" },
