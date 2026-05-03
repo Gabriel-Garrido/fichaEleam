@@ -44,7 +44,7 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 2. Hacer clic en **New query**.
 3. Pegar el contenido completo de `supabase_schema.sql` y hacer clic en **Run**.
 
-Esto crea todas las tablas, políticas RLS, Storage buckets, las 10 categorías de acreditación y la tabla `eleams` para gestión de suscripciones.
+Esto crea todas las tablas, políticas RLS, Storage buckets, los **14 ámbitos** y los **~70 requisitos** de la Carpeta SEREMI, y la tabla `eleams` para gestión de suscripciones.
 
 ### 3. Obtener las credenciales
 
@@ -427,6 +427,104 @@ En `AuthContext`, la variable `pagoActivo` es `true` si `profile.rol === 'supera
 | `/accreditation/*` | Sí | Muestra pantalla de error controlada |
 
 *El login detecta si Supabase está disponible y adapta la UI.
+
+---
+
+## Carpeta SEREMI / Acreditación (v9)
+
+La sección de acreditación está pensada como una **herramienta de
+preparación para autorización sanitaria y fiscalización SEREMI** —
+no como una simple lista de archivos.
+
+### Modelo de datos
+
+| Tabla | Rol |
+|-------|-----|
+| `acred_ambitos` | 14 ámbitos fijos (Antecedentes legales, Autorización sanitaria, Infraestructura, Seguridad, Dirección técnica, Personal, Protocolos, Residentes, Contratos y derechos, Medicamentos, Alimentación, Aseo y residuos, Reclamos, Fiscalizaciones). |
+| `acred_requisitos` | Catálogo maestro de ~70 requisitos con nombre, descripción, **medio verificador**, vigencia sugerida y `permite_no_aplica`. |
+| `acred_requisitos_eleam` | **Estado por ELEAM por requisito**: `pendiente`, `cumple`, `no_cumple`, `no_aplica`, `vencido`, `observado`. Guarda responsable, fecha de vencimiento y motivo de "no aplica". |
+| `acred_documentos` | **Evidencias versionadas**. Subir un nuevo documento marca el anterior como `vigente=false` con `reemplazado_por_id` — nunca se pierde el historial. |
+| `acred_observaciones` | Observaciones internas o de fiscalización con acciones de subsanación, fecha de compromiso y cierre. |
+| `acred_audit` | Registro inmutable de quién hizo qué (`create`, `update`, `replace`, `archive`, `close`). |
+
+Cuando se crea un ELEAM, el trigger `acred_on_eleam_created` provisiona
+automáticamente una fila `acred_requisitos_eleam` por cada requisito
+del catálogo (idempotente vía `ON CONFLICT DO NOTHING`).
+
+### Estados y semáforo
+
+| Estado | Significado | UI |
+|--------|------------|----|
+| `cumple` | Requisito al día. | Verde |
+| `pendiente` | Falta evidencia o gestión. | Ámbar |
+| `observado` | Tiene una observación abierta. | Naranjo |
+| `vencido` | Fecha de vencimiento ya pasada (lo marca `acred_marcar_vencidos`). | Rojo |
+| `no_cumple` | Declarado no cumple por el ELEAM. | Rojo |
+| `no_aplica` | No corresponde al ELEAM (requiere motivo). | Gris |
+
+El cumplimiento global se calcula como `cumple / (total - no_aplica)`
+para no penalizar requisitos genuinamente no aplicables.
+
+### Vistas
+
+| Ruta | Componente | Para qué |
+|------|-----------|----------|
+| `/accreditation` | `AccreditationDashboard` | Panel principal: % global, KPIs, alertas (vencidos, por vencer, observaciones abiertas), grilla de ámbitos con cumplimiento por color y leyenda. |
+| `/accreditation/ambito/:codigo` | `AccreditationAmbito` | Lista filtrable de los requisitos del ámbito (todos, pendientes, cumple, observados, vencidos, no aplica). |
+| `/accreditation/requisito/:id` | `AccreditationRequisito` | Detalle del requisito con cambio de estado, asignar responsable, marcar "no aplica", subir/reemplazar evidencia, observaciones y trazabilidad (audit). |
+| `/accreditation/observaciones` | `AccreditationObservaciones` | Listado global de observaciones internas y de fiscalización con filtros por estado/origen y cierre. |
+| `/accreditation/carpeta` | `AccreditationCarpeta` | **Carpeta SEREMI imprimible**: portada, resumen, cumplimiento por ámbito, observaciones abiertas y detalle completo de requisitos (con código, estado, vencimiento). Optimizada para PDF (`Ctrl+P → Guardar como PDF`). |
+
+### Acciones disponibles
+
+- **Cambiar estado** del requisito (cumple / pendiente / no cumple).
+- **Marcar "no aplica"** con motivo escrito (solo admin).
+- **Asignar responsable** (admin o el propio funcionario).
+- **Subir evidencia** (PDF, DOC/DOCX, XLS/XLSX, JPG, PNG, WEBP — máx 10 MB).
+- **Reemplazar evidencia** manteniendo el historial accesible.
+- **Archivar** (admin) — el documento queda en `vigente=false`.
+- **Registrar observación** (interna por funcionarios; fiscalización solo admin).
+- **Cerrar observación** con nota (solo admin).
+- **Generar Carpeta SEREMI** imprimible.
+
+### Storage
+
+Reutiliza el bucket `documentos-acreditacion` con el path:
+
+```
+acreditacion/{eleamId}/req/{requisitoEleamId}/{timestamp}_v{version}_{nombre}
+```
+
+La RLS de storage usa `split_part(name, '/', 2) = my_eleam_id`, por lo
+que el aislamiento por ELEAM se mantiene. Los enlaces se entregan como
+**URLs firmadas de 1 hora**.
+
+### Permisos por acción
+
+| Acción                                  | admin_eleam | funcionario | familiar |
+|-----------------------------------------|:-----------:|:-----------:|:--------:|
+| Ver Carpeta SEREMI                      |     ✅      |     ✅      |          |
+| Subir / reemplazar evidencia            |     ✅      |     ✅      |          |
+| Archivar evidencia (DELETE)             |     ✅      |             |          |
+| Cambiar estado (cumple/pendiente)       |     ✅      |     ✅      |          |
+| Marcar "no aplica" / asignar plan      |     ✅      |             |          |
+| Crear observación interna               |     ✅      |     ✅      |          |
+| Crear observación de fiscalización      |     ✅      |             |          |
+| Cerrar observación                      |     ✅      |             |          |
+| Generar Carpeta SEREMI                  |     ✅      |     ✅      |          |
+| Ver historial / audit                   |     ✅      |     ✅      |          |
+
+Todos los chequeos están enforzados tanto por **RLS** en BD como por
+**gating en la UI** (estados de botones).
+
+### Integración con el dashboard
+
+El `AdminDashboard` muestra una `AccreditationCard` con:
+- % de cumplimiento global y barra de progreso.
+- Mini-grilla de los primeros 6 ámbitos con su % y color.
+- Atajo a la Carpeta y a Observaciones.
+- KPI "Cumplimiento SEREMI" en el strip superior con vencidos resaltados.
+- Banda lateral "Documentos por vencer ≤ 30d" enlazada al detalle del requisito.
 
 ---
 

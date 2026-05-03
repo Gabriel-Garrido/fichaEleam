@@ -1,5 +1,30 @@
 import { supabase } from "../../services/supabaseConfig";
-import { getAccreditationProgress } from "../accreditation/accreditationService";
+import {
+  getRequisitosEleam,
+  getObservaciones,
+  buildResumen,
+} from "../accreditation/accreditationService";
+
+// Resumen para el dashboard del ELEAM: porcentaje global, por ámbito,
+// totales clave y un puñado de alertas.
+async function getAccreditationSummary() {
+  const [requisitos, obs] = await Promise.all([
+    getRequisitosEleam(),
+    getObservaciones({ soloAbiertas: true }),
+  ]);
+  const resumen = buildResumen(requisitos);
+  return {
+    porcentaje:     resumen.porcentaje,
+    ambitos:        resumen.ambitos,
+    total:          resumen.total,
+    pendientes:     resumen.pendientes,
+    vencidos:       resumen.vencidos,
+    porVencer:      resumen.porVencer,
+    cumple:         resumen.cumple,
+    noAplica:       resumen.noAplica,
+    observaciones:  obs ?? [],
+  };
+}
 
 function startOfToday() {
   const d = new Date();
@@ -176,15 +201,22 @@ async function getRecentIncidents() {
   return data ?? [];
 }
 
+// Requisitos de acreditación próximos a vencer (30 días) — modelo v9.
+// Se lee desde acred_requisitos_eleam joined con el catálogo.
 export async function getExpiringDocuments(daysAhead = 30) {
   const today    = new Date().toISOString().slice(0, 10);
   const deadline = new Date(Date.now() + daysAhead * 86400000).toISOString().slice(0, 10);
   const { data, error } = await supabase
-    .from("documentos_acreditacion")
-    .select("id, nombre, fecha_vencimiento, estado, categoria_id, categorias_acreditacion(nombre, codigo)")
+    .from("acred_requisitos_eleam")
+    .select(`
+      id, fecha_vencimiento, estado,
+      requisito:acred_requisitos!inner(
+        codigo, nombre,
+        ambito:acred_ambitos!inner(codigo, nombre)
+      )
+    `)
     .gte("fecha_vencimiento", today)
     .lte("fecha_vencimiento", deadline)
-    .not("estado", "in", "(rechazado,vencido)")
     .order("fecha_vencimiento", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -210,7 +242,7 @@ export async function loadDashboard() {
     getPendingFollowUps(),
     getRecentIncidents(),
     getExpiringDocuments(30),
-    getAccreditationProgress(),
+    getAccreditationSummary(),
   ]);
 
   const ok = (r) => r.status === "fulfilled";
@@ -224,7 +256,7 @@ export async function loadDashboard() {
     pendingFollowUps:     ok(followUpsResult)        ? followUpsResult.value        : [],
     recentIncidents:      ok(incidentsResult)        ? incidentsResult.value        : [],
     expiringDocuments:    ok(expiringResult)         ? expiringResult.value         : [],
-    acreditacionProgress: ok(acreditacionResult)     ? acreditacionResult.value     : [],
+    acreditacionSummary:  ok(acreditacionResult)     ? acreditacionResult.value     : null,
     errors: {
       residentStats:    !ok(residentStatsResult),
       actividad:        !ok(signosHoyResult) || !ok(observacionesHoyResult),

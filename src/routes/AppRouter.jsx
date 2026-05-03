@@ -22,9 +22,11 @@ import VitalSignsForm from "../features/vitalSigns/VitalSignsForm";
 import ObservationList from "../features/observations/ObservationList";
 import ObservationForm from "../features/observations/ObservationForm";
 
-import AccreditationDashboard from "../features/accreditation/AccreditationDashboard";
-import AccreditationCategory  from "../features/accreditation/AccreditationCategory";
-import AccreditationUpload    from "../features/accreditation/AccreditationUpload";
+import AccreditationDashboard      from "../features/accreditation/AccreditationDashboard";
+import AccreditationAmbito         from "../features/accreditation/AccreditationAmbito";
+import AccreditationRequisito      from "../features/accreditation/AccreditationRequisito";
+import AccreditationObservaciones  from "../features/accreditation/AccreditationObservaciones";
+import AccreditationCarpeta        from "../features/accreditation/AccreditationCarpeta";
 
 import AdminDashboard      from "../features/dashboard/AdminDashboard";
 import SuperAdminDashboard from "../features/superadmin/SuperAdminDashboard";
@@ -105,15 +107,22 @@ function AppRouter() {
           <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><ObservationForm /></ProtectedRoute>
         } />
 
-        {/* Acreditación: lectura para todo el staff, gestión solo admin. */}
+        {/* Acreditación / Carpeta SEREMI: lectura para staff,
+            gestión depende de cada acción (RLS + UI gating). */}
         <Route path="/accreditation" element={
           <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationDashboard /></ProtectedRoute>
         } />
-        <Route path="/accreditation/category/:id" element={
-          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationCategory /></ProtectedRoute>
+        <Route path="/accreditation/ambito/:codigo" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationAmbito /></ProtectedRoute>
         } />
-        <Route path="/accreditation/upload" element={
-          <ProtectedRoute allowedRoles={ADMIN}><AccreditationUpload /></ProtectedRoute>
+        <Route path="/accreditation/requisito/:id" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationRequisito /></ProtectedRoute>
+        } />
+        <Route path="/accreditation/observaciones" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationObservaciones /></ProtectedRoute>
+        } />
+        <Route path="/accreditation/carpeta" element={
+          <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationCarpeta /></ProtectedRoute>
         } />
 
         {/* ── Solo admin del ELEAM ──────────────────────────────── */}

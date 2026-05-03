@@ -177,39 +177,48 @@ Notas de turno, incidentes, procedimientos.
 | acciones_tomadas | Texto libre |
 | requiere_seguimiento | Boolean |
 
-#### `categorias_acreditacion`
-10 categorías fijas según DS 14/2017. Se insertan vía SQL seed con `ON CONFLICT DO UPDATE`.
+#### `categorias_acreditacion` / `documentos_acreditacion` (legacy)
+Tablas heredadas del primer modelo. **Ya no se usan** desde la app
+(se reemplazan por el modelo v9 detallado abajo). Se conservan en el
+schema por compatibilidad y para referencias históricas.
 
-#### `documentos_acreditacion`
-Documentos subidos para cada categoría de acreditación.
-| Columna | Descripción |
-|---------|-------------|
-| categoria_id | FK → categorias_acreditacion |
-| nombre | Nombre descriptivo del documento |
-| storage_path | Ruta relativa en Supabase Storage (NO URL pública) |
-| estado | pendiente/subido/aprobado/rechazado/vencido |
-| fecha_vencimiento | Para certificados con vencimiento |
+#### Modelo v9 — Carpeta SEREMI
 
-> **Nota**: se guarda `storage_path` (ej. `acreditacion/uuid/timestamp_archivo.pdf`), no una URL. La URL firmada se genera en el cliente con `getSignedUrl()` cuando el usuario quiere ver el archivo.
+| Tabla | Rol |
+|-------|-----|
+| `acred_ambitos` | 14 ámbitos fijos. |
+| `acred_requisitos` | Catálogo maestro (~70 requisitos con medio verificador y vigencia sugerida). |
+| `acred_requisitos_eleam` | Estado por ELEAM por requisito (`pendiente / cumple / no_cumple / no_aplica / vencido / observado`). |
+| `acred_documentos` | Evidencias **versionadas** (vigente / histórico, `reemplazado_por_id`). |
+| `acred_observaciones` | Observaciones internas o de fiscalización con cierre. |
+| `acred_audit` | Trazabilidad inmutable (create/update/replace/archive/close). |
+
+`acred_provision_requisitos(eleam_id)` y trigger
+`acred_on_eleam_created` siembran las filas por ELEAM.
+`acred_marcar_vencidos(eleam_id)` se llama desde el cliente (RPC).
 
 ---
 
-## Categorías de Acreditación SEREMI (DS 14/2017)
+## Carpeta SEREMI — 14 ámbitos (v9)
 
-| Código | Categoría |
-|--------|-----------|
-| CAT-01 | Autorización de Funcionamiento |
-| CAT-02 | Planta Física e Infraestructura |
-| CAT-03 | Recursos Humanos |
-| CAT-04 | Fichas Clínicas y Registros Médicos |
-| CAT-05 | Medicamentos y Farmacia |
-| CAT-06 | Alimentación y Nutrición |
-| CAT-07 | Prevención y Control de Infecciones (PCI) |
-| CAT-08 | Seguridad y Plan de Emergencias |
-| CAT-09 | Registros de Atención Diaria |
-| CAT-10 | Actividades y Rehabilitación |
+| Código | Ámbito |
+|--------|--------|
+| A01 | Antecedentes legales del ELEAM |
+| A02 | Autorización sanitaria |
+| A03 | Infraestructura y condiciones sanitarias |
+| A04 | Seguridad, incendios y evacuación |
+| A05 | Dirección técnica |
+| A06 | Personal, dotación y turnos |
+| A07 | Protocolos obligatorios |
+| A08 | Residentes y carpetas personales |
+| A09 | Contratos, consentimientos y derechos |
+| A10 | Medicamentos y registros |
+| A11 | Alimentación y manipulación |
+| A12 | Aseo, lavandería, residuos y plagas |
+| A13 | Reclamos, sugerencias y comunicación |
+| A14 | Fiscalizaciones y subsanaciones |
 
-Cada categoría tiene `documentos_requeridos` (array JSON) que se muestra como checklist en `AccreditationCategory.jsx`.
+Cada ámbito agrupa entre 4 y 8 requisitos seedados con `ON CONFLICT DO UPDATE`.
 
 ---
 
@@ -778,3 +787,93 @@ ocultar acciones admin. El `DemoBanner` muestra el nombre del perfil
   operador muestre la app a clientes.
 - Las landing/marketing CTAs apuntan a `/demo` (selector); ya no
   llevan directo a la vista admin.
+
+---
+
+## v9 — Acreditación / Carpeta SEREMI completa
+
+### Decisión
+
+La sección de acreditación deja de ser una "lista de archivos por
+categoría" y pasa a ser una **herramienta operativa de preparación
+para fiscalización SEREMI**.
+
+### Modelo
+
+- 14 **ámbitos** (`acred_ambitos`) con icono y orden.
+- Catálogo maestro de **requisitos** (`acred_requisitos`) con medio
+  verificador y vigencia sugerida.
+- Por cada ELEAM se provisionan **filas de estado** (`acred_requisitos_eleam`)
+  vía trigger al crear el ELEAM. Estados: `pendiente / cumple /
+  no_cumple / no_aplica / vencido / observado`.
+- **Evidencias versionadas** (`acred_documentos`): subir o reemplazar
+  guarda `version+1` y marca el anterior `vigente=false` con
+  `reemplazado_por_id` y `reemplazado_en`. Nunca se borra historial.
+- **Observaciones** (`acred_observaciones`) internas o de fiscalización,
+  con `acciones_subsanacion`, `fecha_compromiso`, `responsable_id` y
+  ciclo `abierta → en_proceso → cerrada` con autor de cierre.
+- **Audit log** (`acred_audit`) inmutable; cada acción del servicio
+  registra una fila (`create / update / replace / archive / close`).
+
+### Frontend
+
+- `accreditationService.js` reescrito: catálogo, estado, evidencias
+  con versionado, observaciones, cierre, auditoría, helper
+  `buildResumen()` que agrupa por ámbito y calcula `% = cumple /
+  (total - no_aplica)`.
+- `AccreditationDashboard.jsx`: panel principal con KPI globales,
+  alertas (vencidos, por vencer 30d, observaciones abiertas), grilla
+  de 14 ámbitos con barra y semáforo, leyenda.
+- `AccreditationAmbito.jsx`: lista filtrable por estado.
+- `AccreditationRequisito.jsx`: detalle con tabs (Evidencias /
+  Observaciones / Historial), cambio de estado, marcar "no aplica" con
+  motivo, subir/reemplazar evidencia, registrar y cerrar
+  observaciones, audit timeline.
+- `AccreditationObservaciones.jsx`: vista global de observaciones con
+  filtros (abiertas/cerradas + interna/fiscalización).
+- `AccreditationCarpeta.jsx`: **export imprimible** (Ctrl+P → PDF) con
+  portada, resumen, cumplimiento por ámbito, observaciones abiertas y
+  detalle completo de requisitos.
+
+### Integración con dashboard del ELEAM
+
+`AdminDashboard.jsx` consume `acreditacionSummary` desde
+`dashboardService` y muestra:
+- KPI "Cumplimiento SEREMI" con vencidos.
+- `AccreditationCard` con barra global y mini-grilla de los primeros
+  6 ámbitos (cada uno linkea al detalle).
+- `ExpiringDocsCard` con los próximos 30 días linkeando al requisito.
+- Atajo "Carpeta SEREMI" en quick actions.
+
+### Permisos
+
+| Acción                                  | admin_eleam | funcionario |
+|-----------------------------------------|:-----------:|:-----------:|
+| Ver toda la carpeta                     |     ✅      |     ✅      |
+| Subir / reemplazar evidencia            |     ✅      |     ✅      |
+| Archivar (DELETE)                       |     ✅      |             |
+| Cambiar estado cumple/pendiente         |     ✅      |     ✅      |
+| Marcar "no aplica"                      |     ✅      |             |
+| Registrar observación interna           |     ✅      |     ✅      |
+| Registrar observación de fiscalización  |     ✅      |             |
+| Cerrar observación                      |     ✅      |             |
+| Generar Carpeta SEREMI                  |     ✅      |     ✅      |
+
+Familiar y superadmin sin ELEAM no tienen acceso (RLS lo bloquea).
+
+### Storage
+
+Bucket existente `documentos-acreditacion`, path:
+
+```
+acreditacion/{eleamId}/req/{requisitoEleamId}/{ts}_v{n}_{filename}
+```
+
+La RLS por `split_part(name, '/', 2) = my_eleam_id` se mantiene válida.
+Las URLs son firmadas con TTL de 1 hora.
+
+### Migración desde v8
+
+Las tablas legacy (`categorias_acreditacion`, `documentos_acreditacion`)
+**no son leídas ni escritas** por la app. Se mantienen en el schema
+para evitar romper bases existentes; se pueden dropear más adelante.

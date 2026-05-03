@@ -2165,3 +2165,486 @@ drop trigger if exists trg_sync_pago_activo on public.eleams;
 create trigger trg_sync_pago_activo
   before update of subscription_status on public.eleams
   for each row execute function public.sync_pago_activo();
+
+
+-- ════════════════════════════════════════════════════════════════
+-- v9: Acreditación / Carpeta SEREMI — modelo completo
+--
+-- Reemplaza el modelo provisorio (categorias_acreditacion +
+-- documentos_acreditacion) por uno orientado a "requisito" que
+-- soporta:
+--   • 14 ámbitos.
+--   • Catálogo maestro de requisitos con medio verificador.
+--   • Estado por ELEAM por requisito (cumple, pendiente, vencido,
+--     no_aplica, observado, no_cumple).
+--   • Documentos versionados (reemplazos sin perder historial).
+--   • Observaciones internas o de fiscalización con cierre.
+--   • Audit log de cambios (quién, cuándo, qué).
+--
+-- Las tablas legacy (categorias_acreditacion, documentos_acreditacion)
+-- permanecen pero la app ya no las usa.
+-- ════════════════════════════════════════════════════════════════
+
+create table if not exists public.acred_ambitos (
+  id           uuid        primary key default gen_random_uuid(),
+  codigo       text        unique not null,
+  nombre       text        not null,
+  descripcion  text,
+  icono        text,
+  orden        integer     not null default 0
+);
+
+alter table public.acred_ambitos enable row level security;
+
+drop policy if exists "acred_ambitos_select" on public.acred_ambitos;
+create policy "acred_ambitos_select" on public.acred_ambitos
+  for select using ((select auth.uid()) is not null);
+
+create table if not exists public.acred_requisitos (
+  id                       uuid        primary key default gen_random_uuid(),
+  ambito_id                uuid        not null references public.acred_ambitos(id) on delete cascade,
+  codigo                   text        unique not null,
+  nombre                   text        not null,
+  descripcion              text,
+  medio_verificador        text,
+  obligatorio              boolean     not null default true,
+  permite_no_aplica        boolean     not null default true,
+  requiere_vencimiento     boolean     not null default false,
+  vigencia_dias_sugerida   integer,
+  orden                    integer     not null default 0
+);
+
+alter table public.acred_requisitos enable row level security;
+
+drop policy if exists "acred_requisitos_select" on public.acred_requisitos;
+create policy "acred_requisitos_select" on public.acred_requisitos
+  for select using ((select auth.uid()) is not null);
+
+create index if not exists idx_acred_requisitos_ambito
+  on public.acred_requisitos(ambito_id, orden);
+
+create table if not exists public.acred_requisitos_eleam (
+  id                  uuid        primary key default gen_random_uuid(),
+  eleam_id            uuid        not null references public.eleams(id) on delete cascade,
+  requisito_id        uuid        not null references public.acred_requisitos(id) on delete cascade,
+  estado              text        not null default 'pendiente'
+                        check (estado in ('pendiente','cumple','no_cumple','no_aplica','vencido','observado')),
+  fecha_vencimiento   date,
+  no_aplica_motivo    text,
+  responsable_id      uuid        references public.profiles(id) on delete set null,
+  notas               text,
+  ultima_revision_en  timestamptz,
+  ultima_revision_por uuid        references public.profiles(id) on delete set null,
+  creado_en           timestamptz not null default now(),
+  actualizado_en      timestamptz not null default now(),
+  unique (eleam_id, requisito_id)
+);
+
+alter table public.acred_requisitos_eleam enable row level security;
+
+create index if not exists idx_acred_re_eleam      on public.acred_requisitos_eleam(eleam_id);
+create index if not exists idx_acred_re_estado     on public.acred_requisitos_eleam(eleam_id, estado);
+create index if not exists idx_acred_re_vencim     on public.acred_requisitos_eleam(eleam_id, fecha_vencimiento)
+  where fecha_vencimiento is not null;
+
+drop trigger if exists trg_acred_re_updated_at on public.acred_requisitos_eleam;
+create trigger trg_acred_re_updated_at
+  before update on public.acred_requisitos_eleam
+  for each row execute function public.set_updated_at();
+
+drop policy if exists "acred_re_select" on public.acred_requisitos_eleam;
+create policy "acred_re_select" on public.acred_requisitos_eleam
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "acred_re_insert" on public.acred_requisitos_eleam;
+create policy "acred_re_insert" on public.acred_requisitos_eleam
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "acred_re_update" on public.acred_requisitos_eleam;
+create policy "acred_re_update" on public.acred_requisitos_eleam
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+create table if not exists public.acred_documentos (
+  id                  uuid        primary key default gen_random_uuid(),
+  eleam_id            uuid        not null references public.eleams(id) on delete cascade,
+  requisito_eleam_id  uuid        not null references public.acred_requisitos_eleam(id) on delete cascade,
+  version             integer     not null default 1,
+  vigente             boolean     not null default true,
+  storage_path        text        not null,
+  archivo_nombre      text        not null,
+  archivo_tipo        text,
+  archivo_tamanio     bigint      check (archivo_tamanio is null or archivo_tamanio >= 0),
+  fecha_emision       date,
+  fecha_vencimiento   date,
+  notas               text,
+  reemplazado_por_id  uuid        references public.acred_documentos(id) on delete set null,
+  reemplazado_en      timestamptz,
+  subido_por          uuid        references public.profiles(id) on delete set null,
+  creado_en           timestamptz not null default now()
+);
+
+alter table public.acred_documentos enable row level security;
+
+create index if not exists idx_acred_docs_re      on public.acred_documentos(requisito_eleam_id, vigente);
+create index if not exists idx_acred_docs_eleam   on public.acred_documentos(eleam_id);
+create index if not exists idx_acred_docs_vencim  on public.acred_documentos(eleam_id, fecha_vencimiento)
+  where fecha_vencimiento is not null and vigente = true;
+
+drop policy if exists "acred_docs_select" on public.acred_documentos;
+create policy "acred_docs_select" on public.acred_documentos
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "acred_docs_insert" on public.acred_documentos;
+create policy "acred_docs_insert" on public.acred_documentos
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "acred_docs_update" on public.acred_documentos;
+create policy "acred_docs_update" on public.acred_documentos
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "acred_docs_delete" on public.acred_documentos;
+create policy "acred_docs_delete" on public.acred_documentos
+  for delete using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+create table if not exists public.acred_observaciones (
+  id                   uuid        primary key default gen_random_uuid(),
+  eleam_id             uuid        not null references public.eleams(id) on delete cascade,
+  requisito_eleam_id   uuid        references public.acred_requisitos_eleam(id) on delete set null,
+  origen               text        not null check (origen in ('interna','fiscalizacion')),
+  descripcion          text        not null,
+  acciones_subsanacion text,
+  responsable_id       uuid        references public.profiles(id) on delete set null,
+  fecha                date        not null default current_date,
+  fecha_compromiso     date,
+  estado               text        not null default 'abierta'
+                         check (estado in ('abierta','en_proceso','cerrada')),
+  cerrada_en           timestamptz,
+  cerrada_por          uuid        references public.profiles(id) on delete set null,
+  cerrada_nota         text,
+  creado_por           uuid        references public.profiles(id) on delete set null,
+  creado_en            timestamptz not null default now(),
+  actualizado_en       timestamptz not null default now()
+);
+
+alter table public.acred_observaciones enable row level security;
+
+create index if not exists idx_acred_obs_eleam_estado
+  on public.acred_observaciones(eleam_id, estado);
+create index if not exists idx_acred_obs_re
+  on public.acred_observaciones(requisito_eleam_id);
+
+drop trigger if exists trg_acred_obs_updated_at on public.acred_observaciones;
+create trigger trg_acred_obs_updated_at
+  before update on public.acred_observaciones
+  for each row execute function public.set_updated_at();
+
+drop policy if exists "acred_obs_select" on public.acred_observaciones;
+create policy "acred_obs_select" on public.acred_observaciones
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "acred_obs_insert_admin" on public.acred_observaciones;
+create policy "acred_obs_insert_admin" on public.acred_observaciones
+  for insert with check (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "acred_obs_insert_func_interna" on public.acred_observaciones;
+create policy "acred_obs_insert_func_interna" on public.acred_observaciones
+  for insert with check (
+    public.my_rol() = 'funcionario'
+    and eleam_id = public.my_eleam_id()
+    and origen = 'interna'
+  );
+
+drop policy if exists "acred_obs_update_admin" on public.acred_observaciones;
+create policy "acred_obs_update_admin" on public.acred_observaciones
+  for update using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "acred_obs_update_func" on public.acred_observaciones;
+create policy "acred_obs_update_func" on public.acred_observaciones
+  for update using (
+    public.my_rol() = 'funcionario'
+    and eleam_id = public.my_eleam_id()
+    and origen = 'interna'
+    and creado_por = (select auth.uid())
+  );
+
+drop policy if exists "acred_obs_delete" on public.acred_observaciones;
+create policy "acred_obs_delete" on public.acred_observaciones
+  for delete using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+create table if not exists public.acred_audit (
+  id              uuid        primary key default gen_random_uuid(),
+  eleam_id        uuid,
+  entidad         text not null,
+  entidad_id      uuid,
+  accion          text not null,
+  detalle         jsonb,
+  realizado_por   uuid references public.profiles(id) on delete set null,
+  realizado_en    timestamptz not null default now()
+);
+
+alter table public.acred_audit enable row level security;
+
+create index if not exists idx_acred_audit_eleam on public.acred_audit(eleam_id, realizado_en desc);
+
+drop policy if exists "acred_audit_select" on public.acred_audit;
+create policy "acred_audit_select" on public.acred_audit
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario')
+        and eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "acred_audit_insert" on public.acred_audit;
+create policy "acred_audit_insert" on public.acred_audit
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+create or replace function public.acred_provision_requisitos(p_eleam_id uuid)
+  returns integer
+  language plpgsql
+  security definer
+  set search_path = public
+as $$
+declare
+  v_count integer := 0;
+begin
+  insert into public.acred_requisitos_eleam (eleam_id, requisito_id, estado)
+  select p_eleam_id, r.id, 'pendiente'
+  from public.acred_requisitos r
+  on conflict (eleam_id, requisito_id) do nothing;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+create or replace function public.acred_on_eleam_created()
+  returns trigger
+  language plpgsql
+  security definer
+  set search_path = public
+as $$
+begin
+  perform public.acred_provision_requisitos(new.id);
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_acred_provision_on_eleam on public.eleams;
+create trigger trg_acred_provision_on_eleam
+  after insert on public.eleams
+  for each row execute function public.acred_on_eleam_created();
+
+create or replace function public.acred_marcar_vencidos(p_eleam_id uuid)
+  returns integer
+  language plpgsql
+  security definer
+  set search_path = public
+as $$
+declare
+  v_count integer := 0;
+begin
+  update public.acred_requisitos_eleam
+    set estado = 'vencido'
+    where eleam_id = p_eleam_id
+      and estado = 'cumple'
+      and fecha_vencimiento is not null
+      and fecha_vencimiento < current_date;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+-- ── Seed: 14 ámbitos ───────────────────────────────────────────
+insert into public.acred_ambitos (codigo, nombre, descripcion, icono, orden) values
+  ('A01','Antecedentes legales del ELEAM',                'Documentos que acreditan la existencia legal y vigencia de la entidad sostenedora.','📄',1),
+  ('A02','Autorización sanitaria',                        'Resolución sanitaria, autorización de funcionamiento y permisos municipales.','✅',2),
+  ('A03','Infraestructura y condiciones sanitarias',      'Estado del inmueble, instalaciones eléctricas, gas, agua, ascensores, calderas.','🏗️',3),
+  ('A04','Seguridad, incendios y evacuación',             'Plan de emergencia, extintores, simulacros, señalética y luces de emergencia.','🚨',4),
+  ('A05','Dirección técnica',                             'Profesional responsable, contrato y carta de aceptación SEREMI.','👨‍⚕️',5),
+  ('A06','Personal, dotación y turnos',                   'Nómina, contratos, títulos, salud y capacitaciones del personal.','👥',6),
+  ('A07','Protocolos obligatorios',                       'Protocolos clínicos y operativos (PCI, lavado de manos, medicamentos, etc.).','📋',7),
+  ('A08','Residentes y carpetas personales',              'Fichas clínicas, evaluaciones funcionales y planes de cuidado individual.','📁',8),
+  ('A09','Contratos, consentimientos y derechos',         'Contrato de residencia, consentimientos y carta de derechos de los residentes.','✍️',9),
+  ('A10','Medicamentos y registros',                      'Botiquín, kardex, prescripciones, control de psicotrópicos y QF asesor.','💊',10),
+  ('A11','Alimentación y manipulación',                   'Minutas, manipuladores, control HACCP y dietas especiales.','🍽️',11),
+  ('A12','Aseo, lavandería, residuos y plagas',           'Programas y registros de aseo, lavandería, residuos y control de plagas.','🧼',12),
+  ('A13','Reclamos, sugerencias y comunicación',          'Libro de reclamos, sugerencias y comunicación con familias.','📣',13),
+  ('A14','Fiscalizaciones y subsanaciones',               'Actas, observaciones de fiscalización y planes de subsanación.','🔍',14)
+on conflict (codigo) do update set
+  nombre      = excluded.nombre,
+  descripcion = excluded.descripcion,
+  icono       = excluded.icono,
+  orden       = excluded.orden;
+
+-- ── Seed: requisitos ───────────────────────────────────────────
+-- Patrón: por cada ámbito insertamos un set acotado pero útil de
+-- requisitos típicos. (codigo, nombre, descripcion, medio_verificador,
+-- requiere_vencimiento, vigencia_dias_sugerida, orden)
+with vals(codigo, nombre, descripcion, medio_verificador, req_venc, vigencia, orden) as (values
+  -- A01 Antecedentes legales
+  ('A01-R01','Escritura de constitución de la sociedad/entidad','Documento legal que constituye la persona jurídica que opera el ELEAM.','Copia escritura inscrita en el Registro de Comercio',false,null,1),
+  ('A01-R02','Certificado de vigencia de la persona jurídica','Acredita que la sociedad sigue vigente. Caduca con el tiempo y debe renovarse.','Certificado emitido por el Registro de Comercio',true,180,2),
+  ('A01-R03','RUT y rol único tributario de la entidad','Identificación tributaria de la entidad sostenedora.','Cédula RUT o e-RUT del SII',false,null,3),
+  ('A01-R04','Iniciación de actividades en el SII','Declaración de inicio de actividades comerciales ante el Servicio de Impuestos Internos.','Formulario 4415 o e-RUT con giro',false,null,4),
+  ('A01-R05','Identificación del representante legal','Documento que acredita quién representa legalmente al ELEAM.','Cédula identidad + escritura de poder vigente',false,null,5),
+
+  -- A02 Autorización sanitaria
+  ('A02-R01','Resolución sanitaria de funcionamiento vigente','Resolución de la SEREMI de Salud que autoriza operar como ELEAM.','Resolución firmada por la SEREMI',true,365,1),
+  ('A02-R02','Solicitud y antecedentes de autorización','Carpeta presentada a la SEREMI con planos, dotación y documentos de apoyo.','Copia del expediente presentado',false,null,2),
+  ('A02-R03','Certificado de Informaciones Previas (CIP) municipal','Certificado de la municipalidad que confirma uso de suelo permitido.','CIP emitido por la Dirección de Obras',true,365,3),
+  ('A02-R04','Permiso de edificación municipal','Permiso que acredita que el inmueble fue construido con autorización.','Permiso DOM',false,null,4),
+  ('A02-R05','Recepción final de obra municipal','Documento que acredita que la obra fue recibida conforme.','Certificado DOM',false,null,5),
+
+  -- A03 Infraestructura
+  ('A03-R01','Planos del establecimiento actualizados','Planos arquitectónicos vigentes con la distribución actual del ELEAM.','Planos firmados por arquitecto/a',false,null,1),
+  ('A03-R02','Certificado de instalación eléctrica (SEC)','Documento TE-1 emitido por instalador autorizado.','Formulario TE-1 SEC vigente',true,1095,2),
+  ('A03-R03','Certificado de instalación de gas (SEC)','Documento TC-6/TC-7 si el establecimiento usa gas.','Certificado SEC vigente',true,730,3),
+  ('A03-R04','Informe de potabilidad del agua','Análisis físico-químico del agua de consumo.','Informe laboratorio acreditado',true,365,4),
+  ('A03-R05','Certificado de fumigación y desratización','Tratamiento de control de plagas vigente.','Certificado de empresa autorizada',true,180,5),
+  ('A03-R06','Certificado de ascensor (si aplica)','Mantención y certificación periódica del o los ascensores.','Certificado empresa de mantención',true,365,6),
+  ('A03-R07','Certificado de calderas (si aplica)','Documento de mantención de calderas/calefones.','Certificado SEC vigente',true,365,7),
+
+  -- A04 Seguridad
+  ('A04-R01','Plan de emergencia y evacuación aprobado','Documento que define cómo evacuar ante un siniestro.','Plan firmado por responsable y SEREMI',false,null,1),
+  ('A04-R02','Certificado de extintores vigente','Mantención y recarga anual de los extintores.','Certificado empresa autorizada',true,365,2),
+  ('A04-R03','Señalética de emergencia instalada','Vías de evacuación, salidas y zonas seguras debidamente señalizadas.','Foto inventario + check de inspección',false,null,3),
+  ('A04-R04','Registro de simulacros (mínimo 2/año)','Bitácora de simulacros de evacuación realizados.','Acta de simulacro firmada',true,180,4),
+  ('A04-R05','Luces de emergencia operativas','Luces que funcionan ante corte eléctrico.','Bitácora de inspección mensual',true,90,5),
+  ('A04-R06','Protocolo de búsqueda y rescate','Procedimiento para ubicar residentes en una emergencia.','Protocolo escrito',false,null,6),
+
+  -- A05 Dirección técnica
+  ('A05-R01','Credencial vigente del director técnico','Identifica al profesional responsable del ELEAM.','Credencial emitida por SEREMI',true,365,1),
+  ('A05-R02','Título profesional del director técnico','Acredita su formación profesional.','Copia legalizada del título',false,null,2),
+  ('A05-R03','Contrato de prestación del director técnico','Contrato laboral o de servicios.','Contrato firmado',false,null,3),
+  ('A05-R04','Carta de aceptación SEREMI','SEREMI acepta a la persona como dirección técnica del ELEAM.','Resolución/aceptación SEREMI',false,null,4),
+
+  -- A06 Personal
+  ('A06-R01','Nómina actualizada del personal','Listado del personal vigente con cargos y horarios.','Excel/PDF con nómina vigente',true,180,1),
+  ('A06-R02','Contratos de trabajo del personal','Contratos firmados de cada trabajador.','Copias de los contratos',false,null,2),
+  ('A06-R03','Títulos y certificados profesionales','Acredita la formación de TENS, enfermeras, médicos, etc.','Copias de títulos por funcionario',false,null,3),
+  ('A06-R04','Certificados de salud del personal','Aptos médicamente para trabajar con adultos mayores.','Certificado de salud vigente',true,365,4),
+  ('A06-R05','Registro de capacitaciones del personal','Bitácora con cursos y capacitaciones realizadas.','Bitácora + certificados',false,null,5),
+  ('A06-R06','Convenios con prestadores de salud','Acuerdos con clínicas, ambulancias o servicios externos.','Convenios firmados vigentes',false,null,6),
+  ('A06-R07','Protocolo de turnos y guardia nocturna','Define la dotación mínima por turno y la guardia nocturna.','Protocolo escrito',false,null,7),
+
+  -- A07 Protocolos
+  ('A07-R01','Programa PCI (Prevención y Control de Infecciones)','Documento maestro de control de infecciones intrahospitalarias.','Programa PCI escrito',false,null,1),
+  ('A07-R02','Protocolo de lavado de manos','Procedimiento estandarizado de higiene de manos.','Protocolo escrito + difusión',false,null,2),
+  ('A07-R03','Protocolo de aislamiento de contacto y gotitas','Acciones ante un residente con sospecha o cuadro infeccioso.','Protocolo escrito',false,null,3),
+  ('A07-R04','Protocolo de manejo de residuos hospitalarios','Manejo seguro de residuos generados (REAS).','Protocolo + bitácora retiro',false,null,4),
+  ('A07-R05','Protocolo de manejo de medicamentos','Almacenamiento, administración y registro de medicamentos.','Protocolo escrito',false,null,5),
+  ('A07-R06','Protocolo de alimentación y deglución','Manejo de pacientes con disfagia y dietas especiales.','Protocolo escrito',false,null,6),
+  ('A07-R07','Protocolo de emergencias clínicas','Acción inmediata ante caída, paro, ahogo, hipoglicemia, etc.','Protocolo escrito',false,null,7),
+
+  -- A08 Residentes y carpetas
+  ('A08-R01','Ficha clínica completa por residente','Información personal, clínica, social y de contacto al día.','Sistema FichaEleam (módulo Residentes)',false,null,1),
+  ('A08-R02','Evaluación funcional (Índice de Barthel)','Evaluación periódica de la independencia para AVD.','Registro en ficha del residente',true,180,2),
+  ('A08-R03','Evaluación cognitiva (MMSE / Test del reloj)','Estado cognitivo del residente registrado periódicamente.','Registro en ficha del residente',true,180,3),
+  ('A08-R04','Evaluación nutricional individual','Evaluación inicial y de seguimiento por nutricionista.','Registro firmado por nutricionista',true,180,4),
+  ('A08-R05','Plan de cuidados individualizado (PAI)','Plan de cuidados con objetivos, intervenciones y responsable.','PAI firmado',true,180,5),
+  ('A08-R06','Consentimiento informado firmado','Autorización del residente o representante para los cuidados.','Consentimiento escrito',false,null,6),
+  ('A08-R07','Evaluación de riesgo de caídas (Morse)','Identifica residentes con alto riesgo de caer.','Registro en ficha',true,180,7),
+
+  -- A09 Contratos, consentimientos y derechos
+  ('A09-R01','Contrato de residencia firmado','Acuerdo formal entre residente/familia y ELEAM.','Contrato firmado por las partes',false,null,1),
+  ('A09-R02','Carta de derechos del residente entregada','Documento entregado al ingreso con los derechos del residente.','Acta de entrega firmada',false,null,2),
+  ('A09-R03','Reglamento interno del ELEAM','Reglas de convivencia y operación del establecimiento.','Reglamento publicado',false,null,3),
+  ('A09-R04','Carta de tarifas vigente','Tarifa actual de cuidados y servicios adicionales.','Carta firmada',true,365,4),
+
+  -- A10 Medicamentos
+  ('A10-R01','Inventario de botiquín','Listado actualizado de medicamentos disponibles.','Inventario escrito + ubicación',true,90,1),
+  ('A10-R02','Kardex de administración por residente','Registro de cada administración de medicamento.','Sistema FichaEleam (módulo Observaciones)',false,null,2),
+  ('A10-R03','Prescripciones médicas vigentes','Indicaciones médicas firmadas por residente.','Receta médica vigente',true,180,3),
+  ('A10-R04','Control de psicotrópicos y estupefacientes','Libro foliado con ingreso, salida y stock.','Libro foliado SEREMI',false,null,4),
+  ('A10-R05','Convenio con químico farmacéutico asesor','Profesional asesor para el manejo de medicamentos.','Convenio firmado',false,null,5),
+
+  -- A11 Alimentación
+  ('A11-R01','Minuta alimentaria mensual','Plan de alimentación visado por nutricionista.','Minuta firmada',true,30,1),
+  ('A11-R02','Certificados de manipulación de alimentos','Acredita la formación del personal de cocina.','Certificados vigentes',true,1095,2),
+  ('A11-R03','Control de temperaturas (HACCP)','Bitácora diaria de temperaturas de equipos y alimentos.','Bitácora HACCP',true,30,3),
+  ('A11-R04','Protocolo de dietas especiales y deglución','Procedimiento para residentes con disfagia o diabetes.','Protocolo escrito',false,null,4),
+  ('A11-R05','Encuesta de satisfacción alimentaria','Recoge opinión de residentes sobre la comida.','Encuesta aplicada',true,180,5),
+
+  -- A12 Aseo, lavandería, residuos
+  ('A12-R01','Programa de aseo y desinfección','Cronograma y procedimientos de aseo por área.','Programa escrito',false,null,1),
+  ('A12-R02','Bitácora de aseo','Registro diario de aseo realizado.','Bitácora firmada',true,30,2),
+  ('A12-R03','Manejo de lavandería y ropa de cama','Procedimiento para evitar contaminación cruzada.','Protocolo escrito',false,null,3),
+  ('A12-R04','Manejo de residuos peligrosos (REAS)','Convenio con empresa autorizada de retiro.','Convenio + bitácora de retiros',true,365,4),
+  ('A12-R05','Certificado de control de plagas','Igual que A03-R05; se replica si se gestiona aparte.','Certificado vigente',true,180,5),
+
+  -- A13 Reclamos
+  ('A13-R01','Libro de reclamos disponible','Libro físico foliado o sistema digital equivalente.','Libro foliado',false,null,1),
+  ('A13-R02','Procedimiento de respuesta a reclamos','Define plazos y responsables para responder.','Procedimiento escrito',false,null,2),
+  ('A13-R03','Buzón de sugerencias','Mecanismo de retroalimentación para residentes y familias.','Foto + bitácora de revisión',false,null,3),
+  ('A13-R04','Registro de comunicaciones con familias','Cuaderno o sistema con avisos enviados/recibidos.','Bitácora de comunicaciones',false,null,4),
+  ('A13-R05','Reuniones periódicas con familias','Acta de reuniones con familias.','Actas firmadas',true,180,5),
+
+  -- A14 Fiscalizaciones y subsanaciones
+  ('A14-R01','Acta de la última fiscalización','Documento entregado por la SEREMI/Municipalidad.','Acta firmada',false,null,1),
+  ('A14-R02','Plan de subsanación de observaciones','Compromisos de mejora firmados con plazo y responsable.','Plan escrito',false,null,2),
+  ('A14-R03','Bitácora de seguimiento de subsanaciones','Avance en cada compromiso adquirido.','Bitácora interna',true,90,3),
+  ('A14-R04','Comunicaciones con SEREMI','Cartas, oficios e informes enviados a la autoridad.','Archivo de oficios',false,null,4)
+)
+insert into public.acred_requisitos (
+  ambito_id, codigo, nombre, descripcion, medio_verificador,
+  obligatorio, permite_no_aplica, requiere_vencimiento, vigencia_dias_sugerida, orden
+)
+select a.id, v.codigo, v.nombre, v.descripcion, v.medio_verificador,
+       true, true, v.req_venc, v.vigencia, v.orden
+from vals v
+join public.acred_ambitos a on a.codigo = split_part(v.codigo, '-', 1)
+on conflict (codigo) do update set
+  nombre                  = excluded.nombre,
+  descripcion             = excluded.descripcion,
+  medio_verificador       = excluded.medio_verificador,
+  requiere_vencimiento    = excluded.requiere_vencimiento,
+  vigencia_dias_sugerida  = excluded.vigencia_dias_sugerida,
+  orden                   = excluded.orden;
+
+-- Provisionar requisitos para los ELEAMs ya existentes (si hay).
+do $$
+declare
+  e record;
+begin
+  for e in select id from public.eleams loop
+    perform public.acred_provision_requisitos(e.id);
+  end loop;
+end $$;

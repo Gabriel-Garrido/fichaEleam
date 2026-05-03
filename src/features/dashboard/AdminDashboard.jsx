@@ -95,12 +95,21 @@ export default function AdminDashboard() {
   const turno   = currentShift();
 
   const acreditacion = useMemo(() => {
-    const prog = data?.acreditacionProgress ?? [];
-    if (!prog.length) return { porcentaje: 0, completas: 0, total: 0 };
-    const completas    = prog.filter((c) => c.porcentaje === 100).length;
-    const conDocumentos = prog.filter((c) => c.subidos > 0).length;
-    const porcentaje   = Math.round((conDocumentos / prog.length) * 100);
-    return { porcentaje, completas, total: prog.length };
+    const s = data?.acreditacionSummary;
+    if (!s) return {
+      porcentaje: 0, total: 0, cumple: 0, pendientes: 0,
+      vencidos: 0, observacionesAbiertas: 0, ambitos: [],
+    };
+    return {
+      porcentaje:            s.porcentaje ?? 0,
+      total:                 s.total ?? 0,
+      cumple:                s.cumple ?? 0,
+      pendientes:            s.pendientes ?? 0,
+      vencidos:              (s.vencidos ?? []).length,
+      porVencer:             (s.porVencer ?? []).length,
+      observacionesAbiertas: (s.observaciones ?? []).length,
+      ambitos:               s.ambitos ?? [],
+    };
   }, [data]);
 
   // Estado clínico agregado de los residentes activos basado en su último signo vital
@@ -260,7 +269,9 @@ export default function AdminDashboard() {
           <KpiCard
             title="Cumplimiento SEREMI"
             value={loading ? "…" : `${acreditacion.porcentaje}%`}
-            sub={`${acreditacion.completas} de ${acreditacion.total} categorías completas`}
+            sub={`${acreditacion.cumple} de ${acreditacion.total} requisitos al día${
+              acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""
+            }`}
             icon="🏥"
             tone={
               acreditacion.porcentaje >= 80
@@ -341,7 +352,7 @@ export default function AdminDashboard() {
           <QuickAction icon="👴" label="Agregar residente"        onClick={() => navigate("/residents/new")} />
           <QuickAction icon="📊" label="Registrar signos vitales" onClick={() => navigate("/vital-signs/new")} />
           <QuickAction icon="📋" label="Nueva observación"        onClick={() => navigate("/observations/new")} />
-          <QuickAction icon="📁" label="Subir documento SEREMI"   onClick={() => navigate("/accreditation/upload")} />
+          <QuickAction icon="📁" label="Carpeta SEREMI"           onClick={() => navigate("/accreditation/carpeta")} />
           <QuickAction icon="👥" label="Ver residentes"           onClick={() => navigate("/residents")} />
           <QuickAction icon="💓" label="Historial signos"         onClick={() => navigate("/vital-signs")} />
           <QuickAction icon="📝" label="Ver observaciones"        onClick={() => navigate("/observations")} />
@@ -1088,23 +1099,24 @@ function ExpiringDocsCard({ items, navigate }) {
         <p className="text-sm text-gray-400 py-2">Sin vencimientos próximos.</p>
       ) : (
         <ul className="space-y-2">
-          {items.slice(0, 4).map((doc) => {
+          {items.slice(0, 4).map((re) => {
             const daysLeft = Math.ceil(
-              (new Date(doc.fecha_vencimiento) - new Date()) / 86400000
+              (new Date(re.fecha_vencimiento) - new Date()) / 86400000
             );
             const urgent = daysLeft <= 7;
+            const r = re.requisito;
             return (
               <li
-                key={doc.id}
-                onClick={() => navigate("/accreditation")}
+                key={re.id}
+                onClick={() => navigate(`/accreditation/requisito/${re.id}`)}
                 className="bg-white rounded-lg border border-gray-100 px-3 py-2 cursor-pointer hover:bg-amber-50/50 transition-colors flex justify-between items-center gap-3"
               >
                 <div className="flex-1 min-w-0">
                   <span className="font-medium text-gray-800 text-sm truncate block">
-                    {doc.nombre}
+                    {r?.nombre ?? "—"}
                   </span>
                   <span className="text-[11px] text-gray-400 truncate block">
-                    {doc.categorias_acreditacion?.nombre ?? "—"}
+                    {r?.codigo} · {r?.ambito?.nombre ?? "—"}
                   </span>
                 </div>
                 <span
@@ -1124,18 +1136,19 @@ function ExpiringDocsCard({ items, navigate }) {
 }
 
 function AccreditationCard({ acreditacion, navigate, loading }) {
+  const ambitos = (acreditacion.ambitos ?? []).slice(0, 6);
   return (
-    <div
-      onClick={() => navigate("/accreditation")}
-      className="lg:col-span-2 bg-gradient-to-br from-white to-teal-50/40 rounded-2xl shadow-sm border border-gray-100 p-5 cursor-pointer hover:shadow-md transition-shadow"
-    >
+    <div className="lg:col-span-2 bg-gradient-to-br from-white to-teal-50/40 rounded-2xl shadow-sm border border-gray-100 p-5">
       <div className="flex items-start justify-between mb-2">
         <div>
           <p className="text-xs uppercase tracking-wide text-gray-400 font-medium">
-            Documentación SEREMI
+            Carpeta SEREMI
           </p>
           <p className="text-sm text-gray-600">
-            {acreditacion.completas} de {acreditacion.total} categorías completadas
+            {acreditacion.cumple} de {acreditacion.total} requisitos al día
+            {acreditacion.observacionesAbiertas
+              ? ` · ${acreditacion.observacionesAbiertas} observación${acreditacion.observacionesAbiertas === 1 ? "" : "es"} abierta${acreditacion.observacionesAbiertas === 1 ? "" : "s"}`
+              : ""}
           </p>
         </div>
         <span className="text-3xl font-bold text-[var(--color-primary)] tabular-nums">
@@ -1148,9 +1161,45 @@ function AccreditationCard({ acreditacion, navigate, loading }) {
           style={{ width: `${acreditacion.porcentaje}%` }}
         />
       </div>
-      <p className="text-[11px] text-gray-400 mt-2">
-        Mantén tus 10 categorías al día para fiscalizaciones DS 14/2017.
-      </p>
+
+      {/* Mini-grid de ámbitos (atajos) */}
+      {ambitos.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
+          {ambitos.map((a) => {
+            const tone = a.porcentaje >= 80 ? "border-emerald-200 bg-emerald-50" :
+                         a.porcentaje >= 50 ? "border-amber-200 bg-amber-50" :
+                                              "border-rose-200 bg-rose-50";
+            return (
+              <button
+                key={a.codigo}
+                onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
+                className={`text-left rounded-lg border p-2 hover:shadow-sm transition-all ${tone}`}
+              >
+                <p className="text-[10px] font-mono text-gray-500">{a.codigo}</p>
+                <p className="text-xs font-semibold text-gray-800 leading-tight line-clamp-1">
+                  {a.nombre}
+                </p>
+                <p className="text-xs font-bold tabular-nums mt-0.5">{a.porcentaje}%</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mt-4">
+        <button
+          onClick={() => navigate("/accreditation")}
+          className="text-xs font-semibold text-[var(--color-primary)] hover:underline"
+        >
+          Abrir Carpeta SEREMI →
+        </button>
+        <button
+          onClick={() => navigate("/accreditation/observaciones")}
+          className="text-xs text-gray-500 hover:underline"
+        >
+          Observaciones
+        </button>
+      </div>
     </div>
   );
 }
