@@ -23,6 +23,10 @@ export function getWebhookSecret(): string {
   return secret;
 }
 
+// Timeout duro para llamadas a MercadoPago (15s). Si MP se cuelga,
+// el Edge Function no debe quedar bloqueado hasta el límite de ejecución.
+const MP_TIMEOUT_MS = 15_000;
+
 async function mpFetch(
   method: string,
   path: string,
@@ -35,11 +39,18 @@ async function mpFetch(
   };
   if (idempotencyKey) headers["X-Idempotency-Key"] = idempotencyKey;
 
-  return fetch(`${MP_API}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MP_TIMEOUT_MS);
+  try {
+    return await fetch(`${MP_API}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export interface PreapprovalCreateInput {

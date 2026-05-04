@@ -2768,3 +2768,8 @@ create policy "profiles_own_update" on public.profiles
   for update
   using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
+
+-- ════════════════════════════════════════════════════════════════
+-- v11: Limpieza — drop de vista no usada
+-- ════════════════════════════════════════════════════════════════
+drop view if exists public.eleam_subscription_summary;
