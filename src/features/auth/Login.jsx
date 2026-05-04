@@ -47,7 +47,7 @@ function SinSupabase() {
 
 export default function Login() {
   const navigate   = useNavigate();
-  const { authLoading, user, supabaseError, authNotice } = useAuth();
+  const { authLoading, profileLoading, user, supabaseError, authNotice, homePath } = useAuth();
   const { loading, setLoading } = useLoading();
 
   const [email,    setEmail]    = useState("");
@@ -56,7 +56,8 @@ export default function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   if (authLoading || loading) return <Loading message="Verificando autenticación..." />;
-  if (user) return <Navigate to="/dashboard" replace />;
+  // Redirigir al home propio del rol (no siempre a /dashboard).
+  if (user && !profileLoading) return <Navigate to={homePath} replace />;
   if (!isSupabaseConfigured) return <SinSupabase />;
 
   const handleLogin = async (e) => {
@@ -69,7 +70,9 @@ export default function Login() {
     setLoading(true);
     try {
       await login({ email, password });
-      navigate("/dashboard");
+      // No navegamos manualmente: el componente re-renderiza al
+      // actualizarse `user` y el guard al inicio redirige al homePath
+      // del rol (admin → /dashboard, familiar → /familiar, etc.).
     } catch (err) {
       console.warn("Error de login:", err);
       setError("No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente.");

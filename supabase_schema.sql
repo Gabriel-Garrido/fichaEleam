@@ -2648,3 +2648,123 @@ begin
     perform public.acred_provision_requisitos(e.id);
   end loop;
 end $$;
+
+
+-- ════════════════════════════════════════════════════════════════
+-- v10: Hardening de RLS UPDATE — agregar WITH CHECK a las policies
+-- de UPDATE que solo declaran USING. Sin WITH CHECK, un usuario que
+-- puede leer/actualizar una fila propia podría modificar columnas
+-- sensibles (ej. eleam_id) y mover datos a otro tenant.
+-- ════════════════════════════════════════════════════════════════
+
+-- residentes
+drop policy if exists "residentes_update" on public.residentes;
+create policy "residentes_update" on public.residentes
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  )
+  with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- signos_vitales
+drop policy if exists "sv_update" on public.signos_vitales;
+create policy "sv_update" on public.signos_vitales
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  )
+  with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+-- observaciones_diarias
+drop policy if exists "obs_update" on public.observaciones_diarias;
+create policy "obs_update" on public.observaciones_diarias
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  )
+  with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes
+                          where eleam_id = public.my_eleam_id())
+  );
+
+-- documentos_acreditacion (legacy, todavía existe)
+drop policy if exists "docs_update" on public.documentos_acreditacion;
+create policy "docs_update" on public.documentos_acreditacion
+  for update using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  )
+  with check (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- acred_requisitos_eleam
+drop policy if exists "acred_re_update" on public.acred_requisitos_eleam;
+create policy "acred_re_update" on public.acred_requisitos_eleam
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  )
+  with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- acred_documentos
+drop policy if exists "acred_docs_update" on public.acred_documentos;
+create policy "acred_docs_update" on public.acred_documentos
+  for update using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  )
+  with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- acred_observaciones (admin)
+drop policy if exists "acred_obs_update_admin" on public.acred_observaciones;
+create policy "acred_obs_update_admin" on public.acred_observaciones
+  for update using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  )
+  with check (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+-- acred_observaciones (funcionario solo internas creadas por sí mismo)
+drop policy if exists "acred_obs_update_func" on public.acred_observaciones;
+create policy "acred_obs_update_func" on public.acred_observaciones
+  for update using (
+    public.my_rol() = 'funcionario'
+    and eleam_id = public.my_eleam_id()
+    and origen = 'interna'
+    and creado_por = (select auth.uid())
+  )
+  with check (
+    public.my_rol() = 'funcionario'
+    and eleam_id = public.my_eleam_id()
+    and origen = 'interna'
+    and creado_por = (select auth.uid())
+  );
+
+-- profiles update (no permitir cambiar id; el trigger
+-- prevent_role_eleam_escalation cubre rol/eleam_id)
+drop policy if exists "profiles_own_update" on public.profiles;
+create policy "profiles_own_update" on public.profiles
+  for update
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);

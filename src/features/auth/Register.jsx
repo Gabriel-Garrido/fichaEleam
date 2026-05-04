@@ -63,7 +63,9 @@ function Register() {
         password: userData.password,
         inviteToken: inviteToken || undefined,
       });
-      navigate("/dashboard");
+      // No navegamos manualmente: AppRouter detecta la sesión y manda
+      // al homePath del rol asignado por el trigger handle_new_user
+      // (admin → /pago, funcionario → /dashboard, familiar → /familiar).
     } catch (err) {
       setError(err.message || "No se pudo completar el registro. Por favor, inténtalo de nuevo.");
     } finally {

@@ -60,10 +60,12 @@ Deno.serve(async (req) => {
         500,
       );
     }
+    // back_url es controlado: solo aceptamos paths internos que empiecen
+    // con "/" pero NO con "//" (evita redirección a otro origen
+    // tipo //evil.com). Si no calza, usamos el default seguro.
     const requestedReturn = String(body.back_url ?? "/pago/return");
-    const safeReturn = requestedReturn.startsWith("/")
-      ? requestedReturn
-      : "/pago/return";
+    const isSafePath = /^\/[^/]/.test(requestedReturn);
+    const safeReturn = isSafePath ? requestedReturn : "/pago/return";
     const back_url = `${backOrigin}${safeReturn}`;
 
     const admin = adminClient();

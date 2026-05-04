@@ -555,7 +555,11 @@ export default function AccreditationRequisito() {
   const [showHistorial, setShowHistorial] = useState(false);
 
   const loadAll = useCallback(async () => {
-    if (!isValidUUID(id)) return;
+    if (!isValidUUID(id)) {
+      setLoading(false);
+      setRe(null);
+      return;
+    }
     setLoading(true);
     try {
       const [r, d, h, o, a] = await Promise.all([

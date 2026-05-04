@@ -26,9 +26,22 @@ export function AuthProvider({ children }) {
       // handle_new_user en SIGNUP — no los creamos desde el cliente.
       // Si el profile no aparece todavía es por replicación de la
       // sesión recién creada; reintentamos una vez tras 600ms.
+      // Selección explícita de columnas: NO traemos notas_admin (notas
+      // internas del operador) ni rut_empresa al cliente del propio
+      // ELEAM, aunque RLS permita leerlas. Solo lo que la app usa.
+      const PROFILE_SELECT = `
+        id, nombre, email, rol, eleam_id, creado_en,
+        eleams (
+          id, nombre, email_admin, telefono, plan, plan_id,
+          subscription_status, pago_activo, mp_preapproval_id, mp_payer_email,
+          proximo_cobro_en, cancelado_en, fecha_vencimiento_suscripcion,
+          max_residentes, max_funcionarios, fecha_pago, creado_en,
+          planes ( * )
+        )
+      `;
       let { data, error } = await supabase
         .from("profiles")
-        .select("*, eleams(*, planes(*))")
+        .select(PROFILE_SELECT)
         .eq("id", userId)
         .maybeSingle();
 
@@ -38,7 +51,7 @@ export function AuthProvider({ children }) {
         await new Promise((r) => setTimeout(r, 600));
         const retry = await supabase
           .from("profiles")
-          .select("*, eleams(*, planes(*))")
+          .select(PROFILE_SELECT)
           .eq("id", userId)
           .maybeSingle();
         data = retry.data;

@@ -152,12 +152,18 @@ function ObservacionItem({ obs }) {
 export default function AccreditationDashboard() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { eleam, isAdminEleam } = useAuth();
+  const { eleam, isAdminEleam, profile } = useAuth();
   const [requisitos, setRequisitos] = useState([]);
   const [observaciones, setObservaciones] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // La carpeta es por ELEAM. Si el usuario no tiene uno (típico del
+  // superadmin sin ELEAM), no tiene sentido cargar datos: mostramos un
+  // mensaje claro en lugar de un dashboard vacío.
+  const sinEleam = !profile?.eleam_id;
+
   useEffect(() => {
+    if (sinEleam) { setLoading(false); return; }
     let active = true;
     setLoading(true);
     Promise.all([
@@ -172,11 +178,23 @@ export default function AccreditationDashboard() {
       .catch((e) => active && toast(e.message || "Error", "error"))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [toast]);
+  }, [toast, sinEleam]);
 
   const resumen = useMemo(() => buildResumen(requisitos), [requisitos]);
 
   if (loading) return <Loading message="Cargando carpeta SEREMI..." />;
+
+  if (sinEleam) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">Carpeta SEREMI</h1>
+        <p className="text-gray-500">
+          Esta vista funciona dentro del contexto de un ELEAM. Tu cuenta no
+          tiene uno asociado.
+        </p>
+      </div>
+    );
+  }
 
   const cumplimientoTone = resumen.porcentaje >= 80 ? "emerald" : resumen.porcentaje >= 50 ? "amber" : "rose";
 

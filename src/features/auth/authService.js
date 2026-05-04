@@ -19,10 +19,13 @@ export const login = async ({ email, password }) => {
 
 export const loginWithGoogle = async () => {
   const client = requireSupabase();
+  // Volvemos a /login: AuthContext detectará la sesión y el componente
+  // Login redirigirá al homePath del rol. Esto evita que un familiar
+  // o superadmin caiga en /dashboard, donde no le corresponde.
   const { data, error } = await client.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${window.location.origin}/dashboard`,
+      redirectTo: `${window.location.origin}/login`,
       queryParams: {
         access_type: "offline",
         prompt: "select_account",

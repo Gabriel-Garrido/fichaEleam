@@ -46,11 +46,6 @@ export async function inviteMember({ email, rol = "funcionario", residenteId = n
   return data;
 }
 
-// Mantengo la firma anterior por compatibilidad con código viejo.
-export async function inviteFuncionario(email) {
-  return inviteMember({ email, rol: "funcionario" });
-}
-
 // Lista los residentes activos del ELEAM, para asociar familiares.
 export async function getEleamResidentes(eleamId) {
   if (!eleamId) return [];
