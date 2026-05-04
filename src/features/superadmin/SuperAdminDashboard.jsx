@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Loading from "../../components/Loading";
 import { useSuperAdminData } from "./hooks/useSuperAdminData";
 
@@ -18,6 +19,7 @@ import { daysUntil } from "./utils/superadminFormatters";
 // y los componentes reutilizables. Aquí solo coordinamos estado UI
 // (filtros, modales abiertos).
 export default function SuperAdminDashboard() {
+  const navigate = useNavigate();
   const data = useSuperAdminData();
   const {
     metrics, eleams, payments, tasks,
@@ -81,7 +83,13 @@ export default function SuperAdminDashboard() {
             Gestiona clientes ELEAM, pipeline comercial, pagos y tareas de seguimiento.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => navigate("/superadmin/blog")}
+            className="border border-white/40 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/10"
+          >
+            Blog
+          </button>
           <button
             onClick={() => { setPayFor(""); setShowPay(true); }}
             className="bg-white text-slate-800 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-100"

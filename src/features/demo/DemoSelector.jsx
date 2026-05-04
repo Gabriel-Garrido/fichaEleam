@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { useSEO, faqJsonLd } from "../../utils/seo";
 
 const PROFILES = [
   {
@@ -34,6 +35,24 @@ const PROFILES = [
 export default function DemoSelector() {
   const navigate = useNavigate();
 
+  useSEO({
+    title: "Demo gratis · prueba FichaEleam por perfil de usuario",
+    description:
+      "Prueba FichaEleam con datos de ejemplo: como administrador del ELEAM, como personal de turno o como familiar de un residente. Sin registro, sin instalación.",
+    path: "/demo",
+    keywords: ["demo ELEAM", "prueba software ELEAM", "FichaEleam demo"],
+    jsonLd: faqJsonLd([
+      {
+        q: "¿Necesito registrarme para probar el demo?",
+        a: "No. El demo de FichaEleam funciona offline en tu navegador con datos de ejemplo. No hay registro ni tarjeta requerida.",
+      },
+      {
+        q: "¿Qué perfiles puedo probar?",
+        a: "Tres perfiles: dueño/director del ELEAM (vista completa), personal del ELEAM (vista de turno) y familiar (vista limitada al residente).",
+      },
+    ]),
+  });
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Top bar */}
@@ -65,16 +84,39 @@ export default function DemoSelector() {
       <div className="max-w-5xl mx-auto px-4 py-12 sm:py-16">
         <div className="text-center mb-10">
           <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
-            Demo gratuito
+            Demo gratuito · sin registro
           </span>
           <h1 className="text-3xl sm:text-4xl font-black text-gray-800 mt-4 mb-3">
-            ¿Cómo se ve FichaEleam para ti?
+            En 3 minutos vas a entender por qué un ELEAM digital cambia el día a día
           </h1>
           <p className="text-gray-500 max-w-2xl mx-auto">
-            Elige el perfil que más se parece al tuyo y explora la app con datos
-            de ejemplo. Puedes volver y probar otros perfiles cuando quieras.
-            Los datos del demo se guardan solo en tu navegador.
+            Elige el perfil más parecido al tuyo y explora la app con datos de
+            ejemplo. Sin registro, sin instalación. Verás cómo se gestiona la
+            ficha clínica, los signos vitales, las observaciones de turno y la
+            <strong> Carpeta SEREMI lista para fiscalización</strong>.
           </p>
+        </div>
+
+        {/* Antes/Después rápido */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-10 text-sm">
+          <div className="bg-rose-50 border border-rose-100 rounded-xl p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-rose-600 mb-2">Sin FichaEleam</p>
+            <ul className="space-y-1.5 text-rose-800">
+              <li>· Cuadernos por turno que se pierden o se mojan.</li>
+              <li>· Buscar certificados a medianoche antes de la SEREMI.</li>
+              <li>· Familias llamando porque no saben cómo está su mamá.</li>
+              <li>· Observaciones que nadie sabe quién registró.</li>
+            </ul>
+          </div>
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-2">Con FichaEleam</p>
+            <ul className="space-y-1.5 text-emerald-900">
+              <li>✓ Registro digital firmado por funcionario y turno.</li>
+              <li>✓ Carpeta SEREMI con 14 ámbitos y alertas de vencimiento.</li>
+              <li>✓ Portal del familiar con datos del residente al día.</li>
+              <li>✓ Trazabilidad: quién hizo qué, cuándo y para qué residente.</li>
+            </ul>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">

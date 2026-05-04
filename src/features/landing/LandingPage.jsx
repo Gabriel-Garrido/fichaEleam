@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { useSEO, faqJsonLd } from "../../utils/seo";
 
 /* ── Íconos SVG inline (sin dependencias) ─────────────── */
 function Icon({ d, className = "w-6 h-6" }) {
@@ -85,6 +86,40 @@ const TESTIMONIALS = [
 export default function LandingPage() {
   const navigate = useNavigate();
 
+  useSEO({
+    title: "FichaEleam · Software para ELEAM en Chile (DS 14/2017)",
+    description:
+      "Plataforma chilena para Establecimientos de Larga Estadía para Adultos Mayores: ficha clínica digital, signos vitales, observaciones de turno, Carpeta SEREMI con los 14 ámbitos del DS 14/2017 y portal para familias. Activa tu ELEAM hoy.",
+    path: "/",
+    keywords: [
+      "software ELEAM Chile", "DS 14/2017", "fiscalización SEREMI",
+      "ficha clínica adulto mayor", "residencia adulto mayor",
+      "acreditación ELEAM", "Carpeta SEREMI",
+    ],
+    jsonLd: faqJsonLd([
+      {
+        q: "¿Qué es FichaEleam?",
+        a: "FichaEleam es una plataforma chilena de gestión clínica y administrativa para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM), conforme al DS 14/2017. Incluye ficha clínica digital, signos vitales, observaciones por turno, Carpeta SEREMI lista para fiscalización y portal para familias.",
+      },
+      {
+        q: "¿Cuánto cuesta usar FichaEleam?",
+        a: "FichaEleam cobra una suscripción mensual por ELEAM (no por usuario). Los planes parten en $50.000 CLP/mes para residencias de hasta 14 residentes y suben según tamaño. Funcionarios y familias acceden incluidos.",
+      },
+      {
+        q: "¿FichaEleam cumple con el DS 14/2017?",
+        a: "Sí. La sección Carpeta SEREMI implementa los 14 ámbitos exigidos por la SEREMI con ~70 requisitos pre-cargados, evidencias versionadas y observaciones de fiscalización con cierre.",
+      },
+      {
+        q: "¿Cómo activo mi ELEAM?",
+        a: "Crea tu cuenta gratis, agrega tu establecimiento y activa la suscripción con MercadoPago. La plataforma queda lista en minutos y puedes invitar a tu personal y a las familias.",
+      },
+      {
+        q: "¿Tienen demo gratuito?",
+        a: "Sí. /demo entrega 3 perfiles de prueba: dueño/director del ELEAM, personal del ELEAM y familiar. Funciona offline con datos de ejemplo, sin registro.",
+      },
+    ]),
+  });
+
   return (
     <div className="bg-white text-gray-800 overflow-x-hidden">
 
@@ -95,6 +130,12 @@ export default function LandingPage() {
             FichaEleam
           </span>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/blog")}
+              className="hidden sm:inline-flex text-sm text-gray-600 hover:text-[var(--color-primary)] transition-colors px-3 py-1.5"
+            >
+              Blog
+            </button>
             <button
               onClick={() => navigate("/demo")}
               className="hidden sm:inline-flex text-sm text-gray-600 hover:text-[var(--color-primary)] transition-colors px-3 py-1.5"
@@ -108,10 +149,10 @@ export default function LandingPage() {
               Iniciar sesión
             </button>
             <button
-              onClick={() => navigate("/pago")}
+              onClick={() => navigate("/register")}
               className="hidden sm:inline-flex text-sm bg-[var(--color-primary)] text-white px-4 py-1.5 rounded-lg hover:bg-[var(--color-button-hover)] transition-all font-medium"
             >
-              Comenzar
+              Crear cuenta gratis
             </button>
           </div>
         </div>
@@ -125,31 +166,60 @@ export default function LandingPage() {
             Plataforma para ELEAM — Chile
           </span>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-black leading-tight mb-6">
-            El desorden administrativo<br className="hidden sm:block" />
-            <span className="text-[var(--color-secondary)]"> ya no es excusa</span>
-            <br className="hidden sm:block" /> en una fiscalización.
+            Tu ELEAM,<br className="hidden sm:block" />
+            <span className="text-[var(--color-secondary)]">listo para fiscalización</span>
+            <br className="hidden sm:block" /> en menos de un día.
           </h1>
-          <p className="text-lg sm:text-xl text-teal-100 max-w-2xl mx-auto mb-10 leading-relaxed">
-            FichaEleam digitaliza fichas clínicas, registros de turno y documentación
-            SEREMI. Tu ELEAM siempre listo para una inspección.
+          <p className="text-lg sm:text-xl text-teal-100 max-w-2xl mx-auto mb-8 leading-relaxed">
+            Software chileno hecho para Establecimientos de Larga Estadía para Adultos Mayores.
+            Ficha clínica digital, signos vitales con alertas, observaciones por turno y la
+            <strong> Carpeta SEREMI con los 14 ámbitos del DS 14/2017</strong> pre-cargados.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={() => navigate("/pago")}
+              onClick={() => navigate("/register")}
               className="bg-white text-[var(--color-primary)] font-bold py-3.5 px-8 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all text-base"
             >
-              Activar mi ELEAM →
+              Crear cuenta gratis →
             </button>
             <button
               onClick={() => navigate("/demo")}
               className="border-2 border-white/60 text-white font-semibold py-3.5 px-8 rounded-xl hover:bg-white/10 transition-all text-base"
             >
-              Explorar sin registrarme
+              Ver demo (sin registro)
             </button>
           </div>
           <p className="mt-5 text-sm text-teal-200">
-            Sin tarjeta de crédito para el demo · Cancela cuando quieras
+            Sin tarjeta de crédito · Plan demo gratuito · Cancela cuando quieras
           </p>
+
+          {/* Trust bar */}
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs sm:text-sm text-teal-100/90">
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              DS 14/2017 (14 ámbitos · 70+ requisitos)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              Pago en CLP con MercadoPago
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              Funcionarios y familias incluidos
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              Datos protegidos por RLS
+            </span>
+          </div>
         </div>
       </section>
 

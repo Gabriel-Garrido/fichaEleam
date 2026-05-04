@@ -30,20 +30,27 @@ import AccreditationCarpeta        from "../features/accreditation/Accreditation
 
 import AdminDashboard      from "../features/dashboard/AdminDashboard";
 import SuperAdminDashboard from "../features/superadmin/SuperAdminDashboard";
+import BlogManagement      from "../features/superadmin/blog/BlogManagement";
+import BlogEditor          from "../features/superadmin/blog/BlogEditor";
 
 import FamiliarPortal  from "../features/familiar/FamiliarPortal";
 import FamiliarVisitas from "../features/familiar/FamiliarVisitas";
+
+import PublicBlogList from "../features/blog/PublicBlogList";
+import PublicBlogPost from "../features/blog/PublicBlogPost";
 
 import Navbar          from "../components/Navbar";
 import ProtectedRoute  from "../components/ProtectedRoute";
 import SuperAdminRoute from "../components/SuperAdminRoute";
 import Loading         from "../components/Loading";
 
-const NO_NAVBAR_PATHS = [
+const NO_NAVBAR_PATHS_EXACT = new Set([
   "/", "/login", "/register",
   "/demo", "/demo/admin", "/demo/funcionario", "/demo/familiar",
   "/pago", "/pago/return",
-];
+  "/blog",
+]);
+const NO_NAVBAR_PREFIXES = ["/blog/"];
 
 // Roles abreviados para legibilidad de las rutas
 const STAFF = ["admin_eleam", "funcionario"];
@@ -53,7 +60,8 @@ const ADMIN_OR_STAFF = STAFF;
 function AppRouter() {
   const { user, profileLoading, homePath } = useAuth();
   const { pathname }  = useLocation();
-  const showNavbar    = !NO_NAVBAR_PATHS.includes(pathname);
+  const showNavbar    = !NO_NAVBAR_PATHS_EXACT.has(pathname)
+    && !NO_NAVBAR_PREFIXES.some((p) => pathname.startsWith(p));
 
   const signedInRedirect = profileLoading
     ? <Loading message="Verificando acceso..." />
@@ -74,6 +82,8 @@ function AppRouter() {
         <Route path="/demo/familiar"    element={<FamiliarDemoPage />} />
         <Route path="/pago"             element={<PaymentPage />} />
         <Route path="/pago/return" element={<PaymentReturn />} />
+        <Route path="/blog"        element={<PublicBlogList />} />
+        <Route path="/blog/:slug"  element={<PublicBlogPost />} />
 
         {/* ── Staff (admin_eleam + funcionario): operación clínica ─ */}
         <Route path="/dashboard" element={
@@ -143,7 +153,10 @@ function AppRouter() {
         } />
 
         {/* ── Superadmin ─────────────────────────────────────────── */}
-        <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
+        <Route path="/superadmin"          element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
+        <Route path="/superadmin/blog"     element={<SuperAdminRoute><BlogManagement /></SuperAdminRoute>} />
+        <Route path="/superadmin/blog/new" element={<SuperAdminRoute><BlogEditor /></SuperAdminRoute>} />
+        <Route path="/superadmin/blog/:id/edit" element={<SuperAdminRoute><BlogEditor /></SuperAdminRoute>} />
 
         {/* ── Fallback ───────────────────────────────────────────── */}
         <Route path="*" element={<Navigate to={fallbackPath} replace />} />

@@ -1,13 +1,89 @@
 <!doctype html>
-<html lang="en">
+<html lang="es-CL">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0E7C6E" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- Primary SEO -->
+    <title>FichaEleam · Software de gestión clínica y SEREMI para ELEAM en Chile</title>
+    <meta
+      name="description"
+      content="Plataforma chilena para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM): fichas clínicas digitales, signos vitales, observaciones de turno, carpeta SEREMI DS 14/2017 y portal para familias."
+    />
+    <meta name="keywords" content="ELEAM, ficha clínica ELEAM, fiscalización SEREMI, DS 14/2017, residencias adulto mayor Chile, software ELEAM, acreditación SEREMI" />
+    <meta name="author" content="FichaEleam" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="googlebot" content="index, follow" />
+    <link rel="canonical" href="https://app.fichaeleam.cl/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://app.fichaeleam.cl/" />
+    <meta property="og:title" content="FichaEleam · Software de gestión clínica y SEREMI para ELEAM" />
+    <meta property="og:description" content="Digitaliza tu ELEAM: fichas clínicas, signos vitales, observaciones por turno, carpeta SEREMI lista para fiscalización y portal de familias." />
+    <meta property="og:locale" content="es_CL" />
+    <meta property="og:site_name" content="FichaEleam" />
+    <meta property="og:image" content="https://app.fichaeleam.cl/og-image.png" />
+    <meta property="og:image:alt" content="FichaEleam · gestión digital para ELEAM en Chile" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="FichaEleam · Gestión clínica y SEREMI para ELEAM" />
+    <meta name="twitter:description" content="Plataforma chilena para ELEAM: fichas, turnos, signos vitales y carpeta SEREMI lista." />
+    <meta name="twitter:image" content="https://app.fichaeleam.cl/og-image.png" />
+
+    <!-- LLM/Rich-results: Organization + SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://app.fichaeleam.cl/#organization",
+          "name": "FichaEleam",
+          "url": "https://app.fichaeleam.cl/",
+          "logo": "https://app.fichaeleam.cl/og-image.png",
+          "description": "Plataforma chilena de gestión clínica y administrativa para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM), conforme al DS 14/2017.",
+          "areaServed": "CL"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://app.fichaeleam.cl/#app",
+          "name": "FichaEleam",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "url": "https://app.fichaeleam.cl/",
+          "inLanguage": "es-CL",
+          "offers": [
+            { "@type": "Offer", "priceCurrency": "CLP", "price": "50000", "name": "Plan hasta 14 residentes" },
+            { "@type": "Offer", "priceCurrency": "CLP", "price": "80000", "name": "Plan hasta 24 residentes" },
+            { "@type": "Offer", "priceCurrency": "CLP", "price": "120000", "name": "Plan hasta 34 residentes" }
+          ],
+          "featureList": [
+            "Ficha clínica digital de residentes",
+            "Registro de signos vitales con rangos clínicos",
+            "Observaciones de turno (12 categorías)",
+            "Carpeta SEREMI DS 14/2017 con 14 ámbitos",
+            "Portal para familiares de residentes",
+            "Suscripciones MercadoPago"
+          ],
+          "publisher": { "@id": "https://app.fichaeleam.cl/#organization" }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      FichaEleam requiere JavaScript para funcionar. Activa JavaScript en tu navegador.
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

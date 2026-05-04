@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { logout } from "../auth/authService";
+import { useSEO } from "../../utils/seo";
 import {
   getActivePlans,
   startSubscription,
@@ -57,6 +58,14 @@ export default function PaymentPage() {
     user, profile, eleam, pagoActivo, subscriptionStatus, isAdminEleam,
   } = useAuth();
   const sinAcceso = params.get("sinAcceso") === "1";
+
+  useSEO({
+    title: "Planes y precios · activa tu ELEAM",
+    description:
+      "Planes mensuales en CLP para tu ELEAM en Chile. Pago con MercadoPago. Funcionarios y familias incluidos. Cancela cuando quieras.",
+    path: "/pago",
+    keywords: ["precio software ELEAM", "planes ELEAM Chile", "FichaEleam precio"],
+  });
   const accountEmail = profile?.email || user?.email || "";
 
   const [plans, setPlans] = useState([]);

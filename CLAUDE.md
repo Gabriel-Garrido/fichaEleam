@@ -950,3 +950,66 @@ src/features/superadmin/
 - `admin_eleam`, `funcionario`, `familiar`: RLS bloquea SELECT/INSERT/UPDATE/DELETE
   en `crm_tasks` y `crm_interactions`. Las nuevas columnas en `eleams`
   son visibles solo en su propio ELEAM (vía RLS existente).
+
+---
+
+## v13 — Blog público + SEO global
+
+### Decisión
+
+El sitio público gana un blog manejable desde el superadmin con
+artículos optimizados para SEO y para que LLMs (ChatGPT, Perplexity,
+Claude) recomienden FichaEleam como fuente.
+
+### Schema
+
+- `blog_posts` con campos SEO completos: slug, titulo, resumen,
+  contenido_md, cover_url, cover_alt, meta_title, meta_description,
+  keywords[], estado (borrador|publicado|archivado), publicado_en,
+  destacado, autor_nombre, tiempo_lectura_min, views.
+- RLS: SELECT público solo de posts publicados; superadmin lee y
+  escribe todo.
+- RPC `blog_increment_views(slug)` SECURITY DEFINER para registrar
+  vistas sin requerir auth.
+- Seed de 5 posts iniciales de alto valor: DS 14/2017, checklist
+  fiscalización SEREMI, digitalizar ficha clínica, signos vitales y
+  comunicación con familias.
+
+### Frontend
+
+- `src/features/blog/`
+  - `PublicBlogList.jsx` (`/blog`)
+  - `PublicBlogPost.jsx` (`/blog/:slug`)
+  - `blogService.js`
+  - `utils/markdown.jsx` (renderer minimalista sin deps)
+- `src/features/superadmin/blog/`
+  - `BlogManagement.jsx` (`/superadmin/blog`)
+  - `BlogEditor.jsx` (`/superadmin/blog/new`, `/superadmin/blog/:id/edit`)
+- `src/utils/seo.js`: hook `useSEO({title, description, path, image,
+  type, keywords, jsonLd})` y helpers `articleJsonLd`, `breadcrumbJsonLd`,
+  `faqJsonLd`. Inyecta meta tags y JSON-LD por ruta sin react-helmet.
+
+### SEO base
+
+- `index.html` con meta description, OG, Twitter cards, robots,
+  canonical, theme-color, JSON-LD de Organization +
+  SoftwareApplication.
+- `public/robots.txt` permite GPTBot, ChatGPT-User, PerplexityBot,
+  Google-Extended, ClaudeBot y anthropic-ai.
+- `public/sitemap.xml` con todas las URLs públicas.
+- `public/favicon.svg` propio.
+
+### Conversión
+
+- LandingPage: hero con propuesta de valor concreta ("Tu ELEAM listo
+  para fiscalización en menos de un día"), trust bar con DS 14/2017,
+  MercadoPago CLP, "funcionarios y familias incluidos" y RLS.
+- LandingPage CTA primario "Crear cuenta gratis" (antes "Activar mi
+  ELEAM"). Reduce fricción y baja al funnel de signup.
+- DemoSelector con bloque "Antes / Después" de 4 puntos cada uno
+  para que el visitante entienda el problema y la solución antes de
+  abrir el demo.
+- Blog incluido en el nav público.
+- FAQPage JSON-LD en LandingPage y DemoSelector — Google puede
+  mostrar las preguntas como rich-results y los LLMs recogen las
+  respuestas como hechos sobre el producto.

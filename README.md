@@ -827,6 +827,49 @@ src/
 
 ---
 
+## Blog público y SEO
+
+### Blog (`/blog`)
+
+- Sitio público con listado y detalle de artículos en Markdown.
+- Cada post lleva: portada, autor, fecha, tiempo de lectura, keywords,
+  TOC automática, JSON-LD `Article` + `BreadcrumbList`, CTA al final
+  hacia `/register` y `/demo`.
+- Renderer markdown propio (sin dependencias) que soporta encabezados,
+  listas, tablas, blockquotes, código, links y `![alt](url)`.
+
+### Gestión desde el superadmin
+
+- `/superadmin/blog` — listado con búsqueda, filtros por estado y
+  acciones rápidas (publicar, despublicar, ver, borrar).
+- `/superadmin/blog/new` y `/superadmin/blog/:id/edit` — editor con
+  preview, SEO avanzado (meta_title, meta_description, keywords,
+  destacado), portada, autor, slug auto desde título.
+- RLS estricto: solo `superadmin` puede crear, editar o publicar.
+  El público lee únicamente posts en estado `publicado`.
+
+### SEO global
+
+- `index.html` con metas, Open Graph, Twitter cards, robots,
+  canonical y JSON-LD de `Organization` + `SoftwareApplication`.
+- `public/robots.txt` permite explícitamente `GPTBot`, `ChatGPT-User`,
+  `PerplexityBot`, `Google-Extended`, `ClaudeBot` y `anthropic-ai`.
+- `public/sitemap.xml` con todas las URLs públicas.
+- `useSEO()` (en `src/utils/seo.js`) inyecta meta tags + JSON-LD por
+  ruta sin dependencias (sin react-helmet). Helpers
+  `articleJsonLd`, `breadcrumbJsonLd` y `faqJsonLd`.
+- Landing y DemoSelector traen `FAQPage` JSON-LD para rich-results.
+
+### 5 posts iniciales (seed SQL)
+
+1. *DS 14/2017 explicado: qué exige la SEREMI a un ELEAM* — guía 2026.
+2. *Checklist completo de fiscalización SEREMI* — 14 ámbitos con casillas.
+3. *Cómo digitalizar la ficha clínica de un ELEAM en 30 días*.
+4. *Signos vitales en adultos mayores: rangos normales y críticos*.
+5. *Comunicación con familias en ELEAM: protocolo y herramientas*.
+
+---
+
 ## Despliegue en producción
 
 1. Configurar variables de entorno en la plataforma de hosting.
