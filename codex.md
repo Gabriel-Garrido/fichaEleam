@@ -877,3 +877,76 @@ Las URLs son firmadas con TTL de 1 hora.
 Las tablas legacy (`categorias_acreditacion`, `documentos_acreditacion`)
 **no son leídas ni escritas** por la app. Se mantienen en el schema
 para evitar romper bases existentes; se pueden dropear más adelante.
+
+---
+
+## v12 — Superadmin como CRM SaaS interno
+
+### Decisión
+
+El módulo `/superadmin` deja de ser un panel de "registrar pagos
+manuales" y pasa a ser el **CRM interno** del SaaS, con pipeline,
+tareas, interacciones, salud del cliente y registro transaccional
+de pagos. La app clínica (residentes, signos, observaciones,
+acreditación) **no cambió**.
+
+### Schema (additivo, idempotente)
+
+- `eleams` añade: `crm_estado` (9 estados), `origen_lead`,
+  `ultimo_contacto`, `proxima_accion_fecha`, `responsable_comercial`
+  (FK → profiles), `riesgo_churn` (bajo/medio/alto/desconocido).
+- Tabla `crm_tasks` (titulo, descripcion, tipo, estado, prioridad,
+  fecha_vencimiento, creado_por, completado_por).
+- Tabla `crm_interactions` (tipo, canal, resumen, resultado,
+  proxima_accion, creado_por).
+- RLS: ambas tablas solo `is_superadmin()`. **No** se exponen a
+  admin_eleam, funcionario o familiar.
+- RPC `registrar_pago_y_activar_eleam(...)` SECURITY DEFINER:
+  inserta pago + activa ELEAM + deja interacción "sistema" en una
+  sola transacción. `revoke from public; grant to authenticated`,
+  pero el body chequea `is_superadmin()` y bota `42501` si no.
+
+### Arquitectura del módulo
+
+```
+src/features/superadmin/
+├── SuperAdminDashboard.jsx        ← Container liviano (sin I/O)
+├── superadminService.js
+├── components/
+│   ├── SuperAdminMetrics.jsx
+│   ├── EleamFilters.jsx
+│   ├── EleamTable.jsx
+│   ├── EleamEditModal.jsx
+│   ├── PaymentModal.jsx
+│   ├── RecentPaymentsTable.jsx
+│   ├── CrmPipeline.jsx
+│   ├── EleamCustomerDrawer.jsx    ← Ficha 360
+│   ├── CrmTasksPanel.jsx
+│   ├── InteractionTimeline.jsx
+│   └── CustomerHealthBadge.jsx
+├── hooks/
+│   └── useSuperAdminData.js       ← Carga, refresh, mutaciones
+└── utils/
+    ├── superadminFormatters.js
+    └── customerHealth.js
+```
+
+### Reglas
+
+- El container no contiene formularios ni cálculos; solo orquesta
+  los componentes y mantiene estado de UI (filtros, modales abiertos).
+- `useSuperAdminData` mantiene cache por ELEAM (`byEleam[eleamId]`)
+  para evitar re-fetch al abrir/cerrar el drawer.
+- Salud del cliente (`utils/customerHealth.js`): combina pago,
+  vencimiento, último contacto, riesgo churn, tareas vencidas y
+  estado CRM → `healthy / warning / risk / unknown` con razones legibles.
+- `registerPayment` del service usa la RPC transaccional —
+  no hace múltiples INSERT/UPDATE separados desde el cliente.
+- Las tablas clínicas (residentes, signos, observaciones, acreditación)
+  no se modifican desde el superadmin.
+
+### Roles que no ven CRM
+
+- `admin_eleam`, `funcionario`, `familiar`: RLS bloquea SELECT/INSERT/UPDATE/DELETE
+  en `crm_tasks` y `crm_interactions`. Las nuevas columnas en `eleams`
+  son visibles solo en su propio ELEAM (vía RLS existente).

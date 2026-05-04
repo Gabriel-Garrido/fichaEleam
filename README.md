@@ -330,19 +330,60 @@ const pagoActivo = profile?.rol === "superadmin"
 
 ---
 
-## Panel Superadmin (`/superadmin`)
+## Panel Superadmin (`/superadmin`) — CRM SaaS interno
 
-Ruta exclusiva para usuarios con `rol = 'superadmin'`. Protegida por `SuperAdminRoute` que redirige a `/dashboard` si el rol no coincide.
+Ruta exclusiva para usuarios con `rol = 'superadmin'`. Protegida por `SuperAdminRoute`. **Es el CRM interno del SaaS** — no se debe confundir con el panel operativo de cada ELEAM.
 
 ### Funcionalidades
 
 | Sección | Descripción |
 |---------|-------------|
-| Métricas | ELEAMs totales, suscripciones activas, demos, nuevos registros del mes, residentes totales, ingresos del mes (suma de pagos CLP) |
-| Tabla de ELEAMs | Lista completa con búsqueda, plan, estado (activo/inactivo), fecha de vencimiento, fecha de registro |
-| Editar ELEAM | Activar/desactivar suscripción, cambiar plan, ajustar máx. de residentes, establecer fecha de vencimiento, notas internas |
-| Registrar Pago | Asignar pago a ELEAM (monto CLP, plan, método, notas) — activa automáticamente la suscripción |
-| Últimos Pagos | Historial de los 20 pagos más recientes con ELEAM, monto, plan y estado |
+| Métricas (KPIs) | ELEAMs totales, activos, demos/pruebas, leads, en riesgo, ingresos del mes y residentes. Las cards "Leads" y "En riesgo" filtran la tabla con un click. |
+| Pipeline CRM   | Vista por estados (`lead`, `contactado`, `demo_agendada`, `demo_realizada`, `prueba`, `pendiente_pago`, `cliente_activo`, `cliente_riesgo`, `perdido`) con conteo y filtro por click. |
+| Filtros        | Búsqueda por nombre/email del admin, estado CRM, plan, pago activo/inactivo y riesgo churn. |
+| Tabla de ELEAMs | ELEAM, email admin, estado CRM, plan, pago, riesgo, **salud del cliente** (combina señales), vencimiento, último contacto y próxima acción. |
+| Drawer Ficha 360 | Datos generales, suscripción, pagos del ELEAM, tareas CRM y timeline de interacciones. Acceso rápido a editar y registrar pago. |
+| Tareas CRM     | Crear/listar/completar tareas con tipo, prioridad y vencimiento. Indicador de vencidas. |
+| Interacciones  | Historial de contactos (llamada, correo, reunión, demo…) con resumen, resultado y próxima acción. Sincroniza `ultimo_contacto`. |
+| Registrar pago | Inserta pago, **activa la suscripción** y deja interacción CRM automática vía RPC transaccional. |
+| Últimos pagos  | Historial reciente con link a la ficha del ELEAM. |
+| Renovaciones próximas | Hint inferior con ELEAMs activos cuyo vencimiento está ≤ 14 días. |
+
+### Estructura del módulo
+
+```
+src/features/superadmin/
+├── SuperAdminDashboard.jsx           # Container liviano (sin lógica de I/O)
+├── superadminService.js              # Capa Supabase (CRUD + RPC)
+├── components/
+│   ├── SuperAdminMetrics.jsx
+│   ├── EleamFilters.jsx
+│   ├── EleamTable.jsx
+│   ├── EleamEditModal.jsx
+│   ├── PaymentModal.jsx
+│   ├── RecentPaymentsTable.jsx
+│   ├── CrmPipeline.jsx
+│   ├── EleamCustomerDrawer.jsx       # Ficha 360
+│   ├── CrmTasksPanel.jsx
+│   ├── InteractionTimeline.jsx
+│   └── CustomerHealthBadge.jsx
+├── hooks/
+│   └── useSuperAdminData.js          # Carga, refresh y mutaciones
+└── utils/
+    ├── superadminFormatters.js       # CLP, fechas, mapeos CRM/riesgo/plan
+    └── customerHealth.js             # healthy / warning / risk / unknown
+```
+
+### Cómo se calcula la salud del cliente
+
+`utils/customerHealth.js` combina señales del ELEAM y devuelve un estado y razones legibles:
+
+- **risk**: riesgo_churn alto, `cliente_riesgo`, suscripción `vencido`, vencimiento ya pasó, ≥2 tareas vencidas, o `perdido`.
+- **warning**: riesgo_churn medio, vencimiento ≤14d, sin contacto > 60d, 1 tarea vencida o sin pago vigente.
+- **healthy**: pago vigente y churn no alto.
+- **unknown**: no hay datos suficientes.
+
+El badge muestra las razones en `title` (tooltip nativo) y permite expandirlas en la ficha 360.
 
 ### Cómo crear el primer superadmin
 
@@ -358,11 +399,34 @@ WHERE email = 'tu@email.com';
 3. Cerrar sesión y volver a iniciar sesión.
 4. Navegar a `/superadmin` — la ruta aparece automáticamente en el Navbar.
 
-> El superadmin **no necesita** un ELEAM asociado. Las políticas RLS (`is_superadmin()`) le dan acceso de lectura global y acceso de escritura a `eleams` y `pagos`.
+> El superadmin **no necesita** un ELEAM asociado. Las RLS (`is_superadmin()`) le dan acceso global a `eleams`, `pagos`, `crm_tasks`, `crm_interactions`. Las tablas clínicas siguen aisladas por tenant para el resto de roles.
+
+### Tablas CRM (v12)
+
+| Tabla | Rol |
+|-------|-----|
+| `eleams.crm_estado` | Estado en el pipeline. |
+| `eleams.origen_lead` | Origen del lead (web, referido, evento…). |
+| `eleams.ultimo_contacto` | Se actualiza al crear una interacción no-sistema. |
+| `eleams.proxima_accion_fecha` | Próxima fecha de acción comercial. |
+| `eleams.responsable_comercial` | FK → `profiles` (quién lleva el cliente). |
+| `eleams.riesgo_churn` | `bajo / medio / alto / desconocido`. |
+| `crm_tasks` | Tareas (`titulo`, `descripcion`, `tipo`, `estado`, `prioridad`, `fecha_vencimiento`). |
+| `crm_interactions` | Historial (`tipo`, `canal`, `resumen`, `resultado`, `proxima_accion`). |
+
+Ambas con RLS estricto: **solo `superadmin`** puede ver/escribir.
+
+### RPC transaccional
+
+`registrar_pago_y_activar_eleam(eleam_id, monto, plan, fecha_inicio, fecha_fin, metodo_pago, notas)` hace en una sola transacción:
+
+1. Inserta el pago en `pagos` con `estado=completado`.
+2. Activa la suscripción del ELEAM (`pago_activo`, `subscription_status='activo'`, `fecha_pago`, `fecha_vencimiento_suscripcion`, `proximo_cobro_en`, `crm_estado='cliente_activo'`).
+3. Inserta una interacción CRM automática (`tipo='sistema'`).
+
+Solo ejecutable por `superadmin` (chequea `is_superadmin()` y `42501` en caso contrario).
 
 ### Tabla `pagos`
-
-Registra cada pago recibido de un ELEAM. No es una integración con pasarela de pago (eso es futuro), sino un registro manual hecho por el superadmin.
 
 | Columna | Descripción |
 |---------|-------------|

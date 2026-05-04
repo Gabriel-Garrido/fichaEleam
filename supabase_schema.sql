@@ -2773,3 +2773,213 @@ create policy "profiles_own_update" on public.profiles
 -- v11: Limpieza — drop de vista no usada
 -- ════════════════════════════════════════════════════════════════
 drop view if exists public.eleam_subscription_summary;
+
+
+-- ════════════════════════════════════════════════════════════════
+-- v12: Superadmin como CRM interno del SaaS
+--
+-- Campos CRM en eleams + tablas crm_tasks y crm_interactions.
+-- Solo accesibles al rol superadmin (RLS estricto).
+-- Función RPC transaccional registrar_pago_y_activar_eleam que
+-- inserta el pago, activa la suscripción, ajusta vencimiento y deja
+-- una interacción CRM automática.
+-- ════════════════════════════════════════════════════════════════
+
+-- ── 1. Columnas CRM en eleams ──────────────────────────────────
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='crm_estado'
+  ) then alter table public.eleams
+    add column crm_estado text not null default 'lead'
+      check (crm_estado in (
+        'lead','contactado','demo_agendada','demo_realizada','prueba',
+        'pendiente_pago','cliente_activo','cliente_riesgo','perdido'
+      ));
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='origen_lead'
+  ) then alter table public.eleams add column origen_lead text;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='ultimo_contacto'
+  ) then alter table public.eleams add column ultimo_contacto timestamptz;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='proxima_accion_fecha'
+  ) then alter table public.eleams add column proxima_accion_fecha date;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='responsable_comercial'
+  ) then alter table public.eleams
+    add column responsable_comercial uuid references public.profiles(id) on delete set null;
+  end if;
+
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='eleams' and column_name='riesgo_churn'
+  ) then alter table public.eleams
+    add column riesgo_churn text not null default 'desconocido'
+      check (riesgo_churn in ('bajo','medio','alto','desconocido'));
+  end if;
+end $$;
+
+create index if not exists idx_eleams_crm_estado on public.eleams(crm_estado);
+create index if not exists idx_eleams_riesgo_churn on public.eleams(riesgo_churn);
+
+-- Backfill: ELEAMs existentes con suscripción activa → cliente_activo
+update public.eleams set crm_estado = 'cliente_activo'
+  where crm_estado = 'lead'
+    and (pago_activo = true or subscription_status in ('activo','en_gracia'));
+
+-- ── 2. Tabla crm_tasks ─────────────────────────────────────────
+create table if not exists public.crm_tasks (
+  id                  uuid        primary key default gen_random_uuid(),
+  eleam_id            uuid        references public.eleams(id) on delete cascade,
+  titulo              text        not null,
+  descripcion         text,
+  tipo                text        not null default 'general'
+                        check (tipo in ('general','llamada','correo','reunion','demo','seguimiento','onboarding','renovacion','otro')),
+  estado              text        not null default 'pendiente'
+                        check (estado in ('pendiente','en_curso','completada','cancelada')),
+  prioridad           text        not null default 'media'
+                        check (prioridad in ('baja','media','alta','urgente')),
+  fecha_vencimiento   date,
+  creado_por          uuid        references public.profiles(id) on delete set null,
+  completado_por      uuid        references public.profiles(id) on delete set null,
+  creado_en           timestamptz not null default now(),
+  completado_en       timestamptz,
+  actualizado_en      timestamptz not null default now()
+);
+
+alter table public.crm_tasks enable row level security;
+
+create index if not exists idx_crm_tasks_eleam   on public.crm_tasks(eleam_id, estado);
+create index if not exists idx_crm_tasks_venc    on public.crm_tasks(fecha_vencimiento)
+  where estado in ('pendiente','en_curso');
+create index if not exists idx_crm_tasks_estado  on public.crm_tasks(estado);
+
+drop trigger if exists trg_crm_tasks_updated_at on public.crm_tasks;
+create trigger trg_crm_tasks_updated_at
+  before update on public.crm_tasks
+  for each row execute function public.set_updated_at();
+
+drop policy if exists "crm_tasks_superadmin_all" on public.crm_tasks;
+create policy "crm_tasks_superadmin_all" on public.crm_tasks
+  for all
+  using    (public.is_superadmin())
+  with check (public.is_superadmin());
+
+-- ── 3. Tabla crm_interactions ──────────────────────────────────
+create table if not exists public.crm_interactions (
+  id                uuid        primary key default gen_random_uuid(),
+  eleam_id          uuid        not null references public.eleams(id) on delete cascade,
+  tipo              text        not null default 'nota'
+                      check (tipo in ('nota','llamada','correo','reunion','demo','soporte','sistema','otro')),
+  canal             text        check (canal in ('telefono','email','whatsapp','presencial','videollamada','sistema','otro') or canal is null),
+  resumen           text        not null,
+  resultado         text        check (resultado in ('positivo','neutro','negativo','sin_respuesta','sistema') or resultado is null),
+  proxima_accion    text,
+  creado_por        uuid        references public.profiles(id) on delete set null,
+  creado_en         timestamptz not null default now()
+);
+
+alter table public.crm_interactions enable row level security;
+
+create index if not exists idx_crm_int_eleam_fecha
+  on public.crm_interactions(eleam_id, creado_en desc);
+
+drop policy if exists "crm_interactions_superadmin_all" on public.crm_interactions;
+create policy "crm_interactions_superadmin_all" on public.crm_interactions
+  for all
+  using    (public.is_superadmin())
+  with check (public.is_superadmin());
+
+-- ── 4. RPC transaccional: registrar pago + activar ELEAM ───────
+-- Solo superadmin puede ejecutarla. Hace todo en una transacción:
+--   • inserta pago
+--   • activa la suscripción del ELEAM (pago_activo + subscription_status)
+--   • setea fecha_pago, fecha_vencimiento_suscripcion y plan
+--   • cambia crm_estado a 'cliente_activo'
+--   • registra interacción automática (canal=sistema)
+create or replace function public.registrar_pago_y_activar_eleam(
+  p_eleam_id    uuid,
+  p_monto       integer,
+  p_plan        text,
+  p_fecha_inicio date,
+  p_fecha_fin   date,
+  p_metodo_pago text default null,
+  p_notas       text default null
+) returns jsonb
+  language plpgsql
+  security definer
+  set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_pago_id uuid;
+  v_eleam   record;
+begin
+  -- Solo superadmin
+  if not public.is_superadmin() then
+    raise exception 'Solo superadmin puede registrar pagos' using errcode = '42501';
+  end if;
+
+  if p_monto is null or p_monto <= 0 then
+    raise exception 'Monto inválido' using errcode = 'P0001';
+  end if;
+
+  -- Verificar que el ELEAM existe
+  select * into v_eleam from public.eleams where id = p_eleam_id;
+  if not found then
+    raise exception 'ELEAM no encontrado' using errcode = 'P0001';
+  end if;
+
+  -- 1) Inserta el pago (estado = completado)
+  insert into public.pagos (
+    eleam_id, monto, plan, fecha_inicio, fecha_fin,
+    metodo_pago, notas, estado, registrado_por
+  ) values (
+    p_eleam_id, p_monto, p_plan, p_fecha_inicio, p_fecha_fin,
+    p_metodo_pago, p_notas, 'completado', v_user
+  ) returning id into v_pago_id;
+
+  -- 2) Activa la suscripción del ELEAM
+  update public.eleams set
+    pago_activo                   = true,
+    plan                          = p_plan,
+    subscription_status           = 'activo',
+    fecha_pago                    = now(),
+    fecha_vencimiento_suscripcion = (p_fecha_fin::timestamptz),
+    proximo_cobro_en              = (p_fecha_fin::timestamptz),
+    crm_estado                    = 'cliente_activo',
+    riesgo_churn                  = case when riesgo_churn = 'alto' then 'medio' else riesgo_churn end,
+    ultimo_contacto               = now()
+  where id = p_eleam_id;
+
+  -- 3) Interacción automática
+  insert into public.crm_interactions (
+    eleam_id, tipo, canal, resumen, resultado, creado_por
+  ) values (
+    p_eleam_id, 'sistema', 'sistema',
+    'Pago registrado por ' || coalesce(p_metodo_pago, 'método no especificado') || ' · ' ||
+      to_char(p_monto, 'FM999G999G999') || ' CLP · plan ' || p_plan,
+    'positivo', v_user
+  );
+
+  return jsonb_build_object(
+    'pago_id', v_pago_id,
+    'eleam_id', p_eleam_id,
+    'fecha_fin', p_fecha_fin
+  );
+end;
+$$;
+
+revoke all on function public.registrar_pago_y_activar_eleam(
+  uuid, integer, text, date, date, text, text
+) from public;
+grant execute on function public.registrar_pago_y_activar_eleam(
+  uuid, integer, text, date, date, text, text
+) to authenticated;
