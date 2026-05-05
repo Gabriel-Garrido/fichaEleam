@@ -579,9 +579,10 @@ begin
   from public.funcionario_permisos
   where profile_id = (select auth.uid());
 
-  -- Sin fila: fallback permisivo (sin deletes ni archivo)
+  -- Sin fila: denegar — el trigger trg_seed_funcionario_permisos garantiza
+  -- que siempre exista la fila al asignar rol = 'funcionario'.
   if v_result is null then
-    return perm not like 'eliminar_%' and perm <> 'archivar_acreditacion';
+    return false;
   end if;
 
   return v_result;
@@ -830,6 +831,17 @@ begin
   if new.raw_user_meta_data->>'eleam_id_direct' is not null then
     v_eleam_id := (new.raw_user_meta_data->>'eleam_id_direct')::uuid;
     v_rol      := coalesce(nullif(trim(new.raw_user_meta_data->>'rol_direct'), ''), 'funcionario');
+
+    -- Validar que el ELEAM existe (evita referencias huérfanas)
+    if not exists (select 1 from public.eleams where id = v_eleam_id) then
+      raise exception 'eleam_id_direct inválido: ELEAM no encontrado (id=%)', v_eleam_id;
+    end if;
+
+    -- Validar que el rol es uno de los permitidos para este flujo
+    if v_rol not in ('funcionario', 'familiar') then
+      raise exception 'rol_direct inválido: debe ser funcionario o familiar, recibido %', v_rol;
+    end if;
+
     v_residente_id := case
       when new.raw_user_meta_data->>'residente_id_direct' is not null
       then (new.raw_user_meta_data->>'residente_id_direct')::uuid

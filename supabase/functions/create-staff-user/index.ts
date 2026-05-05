@@ -84,11 +84,14 @@ Deno.serve(async (req) => {
     if (rol === "familiar") {
       const { data: res } = await sb
         .from("residentes")
-        .select("id, eleam_id")
+        .select("id, eleam_id, estado")
         .eq("id", residenteId!)
         .maybeSingle();
       if (!res || res.eleam_id !== eleam.id) {
         return jsonResponse(req, { error: "El residente no pertenece a tu ELEAM" }, 400);
+      }
+      if (res.estado !== "activo") {
+        return jsonResponse(req, { error: "Solo puedes vincular familiares a residentes activos" }, 400);
       }
     }
 
@@ -106,7 +109,15 @@ Deno.serve(async (req) => {
           .eq("eleam_id", eleam.id)
           .eq("rol", "funcionario");
 
-        const total = actuales ?? 0;
+        // Sumar invitaciones pendientes para evitar superar el límite del plan
+        const { count: pendingInvites } = await sb
+          .from("funcionario_invitaciones")
+          .select("id", { head: true, count: "exact" })
+          .eq("eleam_id", eleam.id)
+          .eq("usado", false)
+          .gt("expira_en", new Date().toISOString());
+
+        const total = (actuales ?? 0) + (pendingInvites ?? 0);
         if (total >= maxFunc) {
           return jsonResponse(req, {
             error: `El plan permite máximo ${maxFunc} funcionarios. Actualiza el plan para agregar más.`,

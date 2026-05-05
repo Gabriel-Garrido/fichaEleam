@@ -543,7 +543,7 @@ export default function AccreditationRequisito() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const { profile, isAdminEleam } = useAuth();
+  const { isAdminEleam, can } = useAuth();
 
   const [re, setRe] = useState(null);
   const [docs, setDocs] = useState([]);
@@ -749,12 +749,14 @@ export default function AccreditationRequisito() {
       {/* Evidencias */}
       {tab === "evidencia" && (
         <section className="space-y-3">
-          <UploadForm
-            reId={id}
-            requiereVenc={r.requiere_vencimiento}
-            hasVigente={Boolean(vigente)}
-            onUploaded={loadAll}
-          />
+          {can("subir_acreditacion") && (
+            <UploadForm
+              reId={id}
+              requiereVenc={r.requiere_vencimiento}
+              hasVigente={Boolean(vigente)}
+              onUploaded={loadAll}
+            />
+          )}
 
           {docs.length === 0 ? (
             <div className="bg-white border border-gray-100 rounded-xl p-6 text-center text-gray-500">
@@ -768,7 +770,7 @@ export default function AccreditationRequisito() {
                   doc={d}
                   onView={handleViewDoc}
                   onArchive={handleArchive}
-                  isAdmin={isAdminEleam}
+                  isAdmin={can("archivar_acreditacion")}
                   isVigente
                 />
               ))}

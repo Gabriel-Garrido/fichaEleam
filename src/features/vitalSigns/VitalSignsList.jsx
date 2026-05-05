@@ -27,8 +27,9 @@ const TURNO_ICON = { mañana: "🌅", tarde: "🌇", noche: "🌙" };
 export default function VitalSignsList() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { profile } = useAuth();
-  const canDelete = profile?.rol === "admin_eleam" || profile?.rol === "superadmin";
+  const { can } = useAuth();
+  const canDelete = can("eliminar_signos_vitales");
+  const canCreate = can("crear_signos_vitales");
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get("residenteId");
 
@@ -112,18 +113,20 @@ export default function VitalSignsList() {
             {stats.total} registro{stats.total !== 1 ? "s" : ""} en el período seleccionado
           </p>
         </div>
-        <Button
-          onClick={() =>
-            navigate(
-              preselectedId
-                ? `/vital-signs/new?residenteId=${preselectedId}`
-                : "/vital-signs/new"
-            )
-          }
-          className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] font-medium shadow-sm"
-        >
-          + Nuevo Registro
-        </Button>
+        {canCreate && (
+          <Button
+            onClick={() =>
+              navigate(
+                preselectedId
+                  ? `/vital-signs/new?residenteId=${preselectedId}`
+                  : "/vital-signs/new"
+              )
+            }
+            className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] font-medium shadow-sm"
+          >
+            + Nuevo Registro
+          </Button>
+        )}
       </div>
 
       {error && (

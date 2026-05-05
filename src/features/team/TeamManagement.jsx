@@ -9,7 +9,6 @@ import Loading from "../../components/Loading";
 import {
   getTeamMembers,
   getPendingInvitations,
-  inviteMember,
   revokeInvitation,
   getEleamResidentes,
   getEleamFamiliares,
@@ -116,10 +115,9 @@ export default function TeamManagement() {
   const [createModal,    setCreateModal]    = useState(false);
   const [permModal,      setPermModal]      = useState(null);   // profileId
   const [deleteConfirm,  setDeleteConfirm]  = useState(null);   // { id, nombre }
-  const [linkModal,      setLinkModal]      = useState(null);   // { profileId, nombre } para agregar residente a familiar
 
   // Formulario creación
-  const [createForm, setCreateForm] = useState({ nombre: "", email: "", rol: "funcionario", residenteId: "", parentesco: "" });
+  const [createForm, setCreateForm] = useState({ nombre: "", email: "", rol: "funcionario", residenteId: "" });
   const [createdUser, setCreatedUser] = useState(null);
   const [creating, setCreating] = useState(false);
 
@@ -214,7 +212,7 @@ export default function TeamManagement() {
   const closeCreateModal = () => {
     setCreateModal(false);
     setCreatedUser(null);
-    setCreateForm({ nombre: "", email: "", rol: "funcionario", residenteId: "", parentesco: "" });
+    setCreateForm({ nombre: "", email: "", rol: "funcionario", residenteId: "" });
   };
 
   const copyText = (text) => {

@@ -38,8 +38,9 @@ function calcAge(fechaNacimiento) {
 export default function ResidentList() {
   const navigate = useNavigate();
   const toast    = useToast();
-  const { profile } = useAuth();
-  const canDelete = profile?.rol === "admin_eleam" || profile?.rol === "superadmin";
+  const { can } = useAuth();
+  const canDelete = can("eliminar_residentes");
+  const canCreate = can("crear_residentes");
 
   const [residents,    setResidents]    = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -104,12 +105,14 @@ export default function ResidentList() {
             {filtroEstado && ` · filtrando por ${ESTADO_CONFIG[filtroEstado]?.label.toLowerCase() ?? filtroEstado}`}
           </p>
         </div>
-        <Button
-          onClick={() => navigate("/residents/new")}
-          className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] transition-all font-medium shadow-sm"
-        >
-          + Agregar Residente
-        </Button>
+        {canCreate && (
+          <Button
+            onClick={() => navigate("/residents/new")}
+            className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] transition-all font-medium shadow-sm"
+          >
+            + Agregar Residente
+          </Button>
+        )}
       </div>
 
       {error && (
