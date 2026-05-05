@@ -10,7 +10,8 @@ import DemoPage         from "../features/demo/DemoPage";
 import FamiliarDemoPage from "../features/demo/FamiliarDemoPage";
 import PaymentPage      from "../features/payment/PaymentPage";
 import PaymentReturn    from "../features/payment/PaymentReturn";
-import TeamManagement   from "../features/team/TeamManagement";
+import TeamManagement      from "../features/team/TeamManagement";
+import ChangePasswordPage  from "../features/team/ChangePasswordPage";
 
 import ResidentList    from "../features/residents/ResidentList";
 import ResidentForm    from "../features/residents/ResidentForm";
@@ -49,6 +50,7 @@ const NO_NAVBAR_PATHS_EXACT = new Set([
   "/demo", "/demo/admin", "/demo/funcionario", "/demo/familiar",
   "/pago", "/pago/return",
   "/blog",
+  "/cambiar-clave",
 ]);
 const NO_NAVBAR_PREFIXES = ["/blog/"];
 
@@ -133,6 +135,13 @@ function AppRouter() {
         } />
         <Route path="/accreditation/carpeta" element={
           <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><AccreditationCarpeta /></ProtectedRoute>
+        } />
+
+        {/* ── Cambio de contraseña obligatorio (primer acceso) ───── */}
+        <Route path="/cambiar-clave" element={
+          <ProtectedRoute requireActive={false}>
+            <ChangePasswordPage />
+          </ProtectedRoute>
         } />
 
         {/* ── Solo admin del ELEAM ──────────────────────────────── */}

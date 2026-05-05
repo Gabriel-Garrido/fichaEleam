@@ -76,6 +76,9 @@ create table if not exists public.eleams (
 alter table public.profiles
   add column if not exists eleam_id uuid references public.eleams(id) on delete set null;
 
+alter table public.profiles
+  add column if not exists must_reset_password boolean not null default false;
+
 create index if not exists idx_profiles_eleam_id on public.profiles(eleam_id);
 create index if not exists idx_profiles_email_lower on public.profiles(lower(email));
 create index if not exists idx_eleams_subscription_status on public.eleams(subscription_status);
@@ -205,6 +208,26 @@ create table if not exists public.familiar_residentes (
 
 create index if not exists idx_familiar_residentes_profile on public.familiar_residentes(profile_id);
 create index if not exists idx_familiar_residentes_residente on public.familiar_residentes(residente_id);
+
+create table if not exists public.funcionario_permisos (
+  profile_id              uuid primary key references public.profiles(id) on delete cascade,
+  crear_residentes        boolean not null default true,
+  editar_residentes       boolean not null default true,
+  eliminar_residentes     boolean not null default false,
+  crear_signos_vitales    boolean not null default true,
+  editar_signos_vitales   boolean not null default true,
+  eliminar_signos_vitales boolean not null default false,
+  crear_observaciones     boolean not null default true,
+  editar_observaciones    boolean not null default true,
+  eliminar_observaciones  boolean not null default false,
+  subir_acreditacion      boolean not null default true,
+  editar_acreditacion     boolean not null default true,
+  archivar_acreditacion   boolean not null default false,
+  registrar_visitas       boolean not null default true,
+  actualizado_en          timestamptz not null default now()
+);
+
+create index if not exists idx_func_permisos_profile on public.funcionario_permisos(profile_id);
 
 create table if not exists public.visitas_familiar (
   id              uuid primary key default gen_random_uuid(),
@@ -522,6 +545,68 @@ as $$
   where profile_id = (select auth.uid());
 $$;
 
+create or replace function public.funcionario_can(perm text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_rol    text := public.my_rol();
+  v_result boolean;
+begin
+  if v_rol in ('admin_eleam', 'superadmin') then return true; end if;
+  if v_rol <> 'funcionario' then return false; end if;
+
+  select case perm
+    when 'crear_residentes'        then crear_residentes
+    when 'editar_residentes'       then editar_residentes
+    when 'eliminar_residentes'     then eliminar_residentes
+    when 'crear_signos_vitales'    then crear_signos_vitales
+    when 'editar_signos_vitales'   then editar_signos_vitales
+    when 'eliminar_signos_vitales' then eliminar_signos_vitales
+    when 'crear_observaciones'     then crear_observaciones
+    when 'editar_observaciones'    then editar_observaciones
+    when 'eliminar_observaciones'  then eliminar_observaciones
+    when 'subir_acreditacion'      then subir_acreditacion
+    when 'editar_acreditacion'     then editar_acreditacion
+    when 'archivar_acreditacion'   then archivar_acreditacion
+    when 'registrar_visitas'       then registrar_visitas
+    else false
+  end
+  into v_result
+  from public.funcionario_permisos
+  where profile_id = (select auth.uid());
+
+  -- Sin fila: fallback permisivo (sin deletes ni archivo)
+  if v_result is null then
+    return perm not like 'eliminar_%' and perm <> 'archivar_acreditacion';
+  end if;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.funcionario_can(text) from public;
+grant execute on function public.funcionario_can(text) to authenticated;
+
+create or replace function public.seed_funcionario_permisos()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.rol = 'funcionario' then
+    insert into public.funcionario_permisos (profile_id)
+    values (new.id)
+    on conflict (profile_id) do nothing;
+  end if;
+  return new;
+end;
+$$;
+
 create or replace function public.sync_pago_activo()
 returns trigger
 language plpgsql
@@ -741,6 +826,37 @@ begin
     return new;
   end if;
 
+  -- Creación directa por Edge Function (solo el service role puede poner eleam_id_direct)
+  if new.raw_user_meta_data->>'eleam_id_direct' is not null then
+    v_eleam_id := (new.raw_user_meta_data->>'eleam_id_direct')::uuid;
+    v_rol      := coalesce(nullif(trim(new.raw_user_meta_data->>'rol_direct'), ''), 'funcionario');
+    v_residente_id := case
+      when new.raw_user_meta_data->>'residente_id_direct' is not null
+      then (new.raw_user_meta_data->>'residente_id_direct')::uuid
+      else null
+    end;
+
+    insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
+    values (
+      new.id, v_nombre, new.email, v_rol, v_eleam_id,
+      coalesce((new.raw_user_meta_data->>'must_reset_password')::boolean, true)
+    )
+    on conflict (id) do update set
+      nombre              = excluded.nombre,
+      email               = excluded.email,
+      rol                 = excluded.rol,
+      eleam_id            = excluded.eleam_id,
+      must_reset_password = excluded.must_reset_password;
+
+    if v_rol = 'familiar' and v_residente_id is not null then
+      insert into public.familiar_residentes (profile_id, residente_id, creado_por)
+      values (new.id, v_residente_id, null)
+      on conflict do nothing;
+    end if;
+
+    return new;
+  end if;
+
   v_token := new.raw_user_meta_data->>'invite_token';
   if v_token is not null and v_token <> '' then
     select i.* into v_invitacion
@@ -769,13 +885,14 @@ begin
     returning id into v_eleam_id;
   end if;
 
-  insert into public.profiles (id, nombre, email, rol, eleam_id)
-  values (new.id, v_nombre, new.email, v_rol, v_eleam_id)
+  insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
+  values (new.id, v_nombre, new.email, v_rol, v_eleam_id, false)
   on conflict (id) do update set
-    nombre = excluded.nombre,
-    email = excluded.email,
-    rol = excluded.rol,
+    nombre   = excluded.nombre,
+    email    = excluded.email,
+    rol      = excluded.rol,
     eleam_id = excluded.eleam_id;
+    -- must_reset_password no se toca aquí para preservar el estado si ya existía
 
   if v_rol = 'familiar' and v_residente_id is not null then
     insert into public.familiar_residentes (profile_id, residente_id, creado_por)
@@ -989,6 +1106,11 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+drop trigger if exists trg_seed_funcionario_permisos on public.profiles;
+create trigger trg_seed_funcionario_permisos
+  after insert or update of rol on public.profiles
+  for each row execute function public.seed_funcionario_permisos();
+
 drop trigger if exists trg_residentes_updated_at on public.residentes;
 create trigger trg_residentes_updated_at
   before update on public.residentes
@@ -1138,24 +1260,24 @@ create policy "residentes_select" on public.residentes
 
 create policy "residentes_insert" on public.residentes
   for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
+    public.funcionario_can('crear_residentes')
     and eleam_id = public.my_eleam_id()
   );
 
 create policy "residentes_update" on public.residentes
   for update using (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (public.funcionario_can('editar_residentes') and eleam_id = public.my_eleam_id())
   )
   with check (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (public.funcionario_can('editar_residentes') and eleam_id = public.my_eleam_id())
   );
 
 create policy "residentes_delete" on public.residentes
   for delete using (
     public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+    or (public.funcionario_can('eliminar_residentes') and eleam_id = public.my_eleam_id())
   );
 
 -- Signos vitales
@@ -1179,7 +1301,7 @@ create policy "sv_select" on public.signos_vitales
 
 create policy "sv_insert" on public.signos_vitales
   for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
+    public.funcionario_can('crear_signos_vitales')
     and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
   );
 
@@ -1187,14 +1309,14 @@ create policy "sv_update" on public.signos_vitales
   for update using (
     public.is_superadmin()
     or (
-      public.my_rol() in ('admin_eleam','funcionario')
+      public.funcionario_can('editar_signos_vitales')
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   )
   with check (
     public.is_superadmin()
     or (
-      public.my_rol() in ('admin_eleam','funcionario')
+      public.funcionario_can('editar_signos_vitales')
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   );
@@ -1203,7 +1325,7 @@ create policy "sv_delete" on public.signos_vitales
   for delete using (
     public.is_superadmin()
     or (
-      public.my_rol() = 'admin_eleam'
+      public.funcionario_can('eliminar_signos_vitales')
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   );
@@ -1229,7 +1351,7 @@ create policy "obs_select" on public.observaciones_diarias
 
 create policy "obs_insert" on public.observaciones_diarias
   for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
+    public.funcionario_can('crear_observaciones')
     and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
   );
 
@@ -1237,14 +1359,14 @@ create policy "obs_update" on public.observaciones_diarias
   for update using (
     public.is_superadmin()
     or (
-      public.my_rol() in ('admin_eleam','funcionario')
+      public.funcionario_can('editar_observaciones')
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   )
   with check (
     public.is_superadmin()
     or (
-      public.my_rol() in ('admin_eleam','funcionario')
+      public.funcionario_can('editar_observaciones')
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   );
@@ -1253,7 +1375,7 @@ create policy "obs_delete" on public.observaciones_diarias
   for delete using (
     public.is_superadmin()
     or (
-      public.my_rol() = 'admin_eleam'
+      public.funcionario_can('eliminar_observaciones')
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   );
@@ -1309,6 +1431,37 @@ create policy "fr_delete_admin" on public.familiar_residentes
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   );
+
+-- Permisos granulares de funcionarios
+alter table public.funcionario_permisos enable row level security;
+
+drop policy if exists "fp_admin_all" on public.funcionario_permisos;
+drop policy if exists "fp_self_select" on public.funcionario_permisos;
+
+create policy "fp_admin_all" on public.funcionario_permisos
+  for all using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and profile_id in (
+        select id from public.profiles
+        where eleam_id = public.my_eleam_id() and rol = 'funcionario'
+      )
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and profile_id in (
+        select id from public.profiles
+        where eleam_id = public.my_eleam_id() and rol = 'funcionario'
+      )
+    )
+  );
+
+create policy "fp_self_select" on public.funcionario_permisos
+  for select using (profile_id = (select auth.uid()));
 
 drop policy if exists "vf_select" on public.visitas_familiar;
 drop policy if exists "vf_insert" on public.visitas_familiar;
@@ -1418,23 +1571,23 @@ create policy "acred_docs_select" on public.acred_documentos
 create policy "acred_docs_insert" on public.acred_documentos
   for insert with check (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (public.funcionario_can('subir_acreditacion') and eleam_id = public.my_eleam_id())
   );
 
 create policy "acred_docs_update" on public.acred_documentos
   for update using (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (public.funcionario_can('editar_acreditacion') and eleam_id = public.my_eleam_id())
   )
   with check (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (public.funcionario_can('editar_acreditacion') and eleam_id = public.my_eleam_id())
   );
 
 create policy "acred_docs_delete" on public.acred_documentos
   for delete using (
     public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+    or (public.funcionario_can('archivar_acreditacion') and eleam_id = public.my_eleam_id())
   );
 
 drop policy if exists "acred_obs_select" on public.acred_observaciones;

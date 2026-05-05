@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useCallback } from "react";
+import React, { createContext, useState, useEffect, useContext, useCallback, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../services/supabaseConfig";
 import Loading from "../components/Loading";
 
@@ -14,6 +14,7 @@ export function AuthProvider({ children }) {
   const [user, setUser]               = useState(null);
   const [profile, setProfile]         = useState(null);
   const [eleam, setEleam]             = useState(null);
+  const [permisos, setPermisos]       = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [supabaseError, setSupabaseError]   = useState(false);
@@ -36,7 +37,7 @@ export function AuthProvider({ children }) {
       // internas del operador) ni rut_empresa al cliente del propio
       // ELEAM, aunque RLS permita leerlas. Solo lo que la app usa.
       const PROFILE_SELECT = `
-        id, nombre, email, rol, eleam_id, creado_en,
+        id, nombre, email, rol, eleam_id, creado_en, must_reset_password,
         eleams!profiles_eleam_id_fkey (
           id, nombre, email_admin, telefono, plan, plan_id,
           subscription_status, pago_activo, mp_preapproval_id, mp_payer_email,
@@ -96,6 +97,18 @@ export function AuthProvider({ children }) {
 
       setProfile(data);
       setEleam(data.eleams ?? null);
+
+      // Cargar permisos granulares solo para funcionarios
+      if (data.rol === "funcionario") {
+        const { data: perms } = await supabase
+          .from("funcionario_permisos")
+          .select("*")
+          .eq("profile_id", data.id)
+          .maybeSingle();
+        setPermisos(perms ?? null);
+      } else {
+        setPermisos(null);
+      }
     } catch (error) {
       console.warn("No se pudo cargar el perfil:", error);
       setAuthNotice("Iniciaste sesión, pero no pudimos cargar todos los datos de tu cuenta.");
@@ -130,6 +143,7 @@ export function AuthProvider({ children }) {
         } else {
           setProfile(null);
           setEleam(null);
+          setPermisos(null);
           setAuthNotice(null);
         }
       }
@@ -168,6 +182,20 @@ export function AuthProvider({ children }) {
   const isSuperadmin  = rol === "superadmin";
   const isStaff       = isAdminEleam || isFuncionario;
 
+  const mustResetPassword = profile?.must_reset_password === true;
+
+  // Verificar si el usuario actual tiene el permiso indicado.
+  // admin_eleam y superadmin siempre retornan true.
+  // funcionario: consulta la tabla funcionario_permisos cargada en contexto.
+  const can = useCallback((perm) => {
+    if (isSuperadmin || isAdminEleam) return true;
+    if (!isFuncionario) return false;
+    if (!permisos) {
+      return !perm.startsWith("eliminar_") && perm !== "archivar_acreditacion";
+    }
+    return permisos[perm] === true;
+  }, [isSuperadmin, isAdminEleam, isFuncionario, permisos]);
+
   // Ruta inicial según rol/estado de suscripción.
   // - superadmin sin ELEAM → /superadmin (operador de la plataforma).
   // - superadmin con ELEAM (cuenta demo) → /dashboard para mostrar la app.
@@ -196,6 +224,9 @@ export function AuthProvider({ children }) {
     isSuperadmin,
     isStaff,
     homePath,
+    permisos,
+    can,
+    mustResetPassword,
     profileLoading,
     authLoading,
     authNotice,
