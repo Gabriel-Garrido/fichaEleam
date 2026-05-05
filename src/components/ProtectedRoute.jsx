@@ -23,7 +23,7 @@ function ProtectedRoute({
   const location = useLocation();
   const {
     user, profile, authLoading, profileLoading, pagoActivo,
-    supabaseError, homePath, isSuperadmin, isFamiliar,
+    supabaseError, homePath, isSuperadmin, isFamiliar, mustResetPassword,
   } = useAuth();
 
   if (authLoading || profileLoading) return <Loading message="Verificando sesión..." />;
@@ -41,6 +41,12 @@ function ProtectedRoute({
 
   if (!profile) {
     return <Navigate to="/pago?sinAcceso=1" replace />;
+  }
+
+  // Forzar cambio de contraseña en el primer acceso (usuarios creados directamente por el admin).
+  // Permitir /cambiar-clave para evitar loop infinito.
+  if (mustResetPassword && location.pathname !== "/cambiar-clave") {
+    return <Navigate to="/cambiar-clave" replace />;
   }
 
   // El familiar y el superadmin no se rigen por pagoActivo del ELEAM
