@@ -4,11 +4,74 @@ import { logout } from "../features/auth/authService";
 import { useAuth } from "../context/AuthContext";
 import "../colors.css";
 
+// Menú dinámico por rol. Cada rol ve solo lo que le corresponde
+// para evitar links a vistas que lo terminarían redirigiendo.
+function buildMenu({ rol, eleamId, pagoActivo, handleLogout }) {
+  const close = { label: "Cerrar sesión", action: handleLogout };
+
+  // Familiar: solo su portal y sus visitas.
+  if (rol === "familiar") {
+    return [
+      { label: "Mi residente", path: "/familiar" },
+      { label: "Visitas",      path: "/familiar/visitas" },
+      close,
+    ];
+  }
+
+  // Superadmin sin ELEAM: solo su panel + demo.
+  if (rol === "superadmin" && !eleamId) {
+    return [
+      { label: "Superadmin", path: "/superadmin" },
+      { label: "Demo",        path: "/demo" },
+      close,
+    ];
+  }
+
+  // Admin sin pago activo: solo activación.
+  if (rol === "admin_eleam" && !pagoActivo) {
+    return [
+      { label: "Activar ELEAM", path: "/pago?sinAcceso=1" },
+      { label: "Demo",          path: "/demo" },
+      close,
+    ];
+  }
+
+  // Funcionario sin pago activo: la suscripción del admin venció;
+  // limitamos el menú para no llevarlo a vistas vacías.
+  if (rol === "funcionario" && !pagoActivo) {
+    return [
+      { label: "Suscripción inactiva — contactar admin", action: () => {} },
+      close,
+    ];
+  }
+
+  // Staff o superadmin-con-ELEAM (caso demo) → menú operativo completo.
+  const items = [
+    { label: "Dashboard",     path: "/dashboard" },
+    { label: "Residentes",    path: "/residents" },
+    { label: "Signos Vitales",path: "/vital-signs" },
+    { label: "Observaciones", path: "/observations" },
+    { label: "Acreditación",  path: "/accreditation" },
+  ];
+  if (rol === "admin_eleam") {
+    items.push({ label: "Equipo",      path: "/equipo" });
+    items.push({ label: "Suscripción", path: "/pago" });
+  }
+  if (rol === "superadmin") {
+    items.push({ label: "Superadmin", path: "/superadmin" });
+  }
+  items.push(close);
+  return items;
+}
+
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile, eleam, pagoActivo, profileLoading } = useAuth();
+  const {
+    user, profile, eleam, pagoActivo, profileLoading,
+    rol, homePath,
+  } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -19,42 +82,29 @@ function Navbar() {
     }
   };
 
-  const isActive = (path) => location.pathname.startsWith(path);
-  const homePath = user
-    ? pagoActivo ? "/dashboard" : "/pago?sinAcceso=1"
-    : "/";
-
-  const activeItems = [
-        { label: "Dashboard", path: "/dashboard" },
-        { label: "Residentes", path: "/residents" },
-        { label: "Signos Vitales", path: "/vital-signs" },
-        { label: "Observaciones", path: "/observations" },
-        { label: "Acreditación", path: "/accreditation" },
-        ...(profile?.rol === "superadmin"
-          ? [{ label: "Superadmin", path: "/superadmin" }]
-          : []),
-        { label: "Cerrar sesión", action: handleLogout },
-      ];
-
-  const inactiveItems = [
-    { label: "Activar ELEAM", path: "/pago?sinAcceso=1" },
-    { label: "Demo", path: "/demo" },
-    { label: "Cerrar sesión", action: handleLogout },
-  ];
+  const isActive = (path) => location.pathname.startsWith(path.split("?")[0]);
+  const navHome = user ? homePath : "/";
 
   const menuItems = user
-    ? pagoActivo ? activeItems : inactiveItems
+    ? buildMenu({ rol, eleamId: profile?.eleam_id ?? null, pagoActivo, handleLogout })
     : [
-        { label: "Inicio", path: "/" },
+        { label: "Inicio",        path: "/" },
         { label: "Iniciar sesión", path: "/login" },
       ];
+
+  // Pequeña etiqueta para indicar el rol del usuario en el navbar.
+  const roleBadge = !rol ? null :
+    rol === "admin_eleam"  ? "Admin" :
+    rol === "funcionario"  ? "Funcionario" :
+    rol === "familiar"     ? "Familiar" :
+    rol === "superadmin"   ? "Superadmin" : null;
 
   return (
     <nav className="bg-[var(--color-primary)] text-white shadow-md w-full sticky top-0 z-50">
       <div className="container mx-auto px-4 flex justify-between items-center h-14">
         <div
           className="text-lg font-bold cursor-pointer tracking-tight shrink-0"
-          onClick={() => navigate(homePath)}
+          onClick={() => navigate(navHome)}
         >
           FichaEleam
         </div>
@@ -62,16 +112,21 @@ function Navbar() {
         {/* Desktop: user info + nav */}
         <div className="hidden sm:flex items-center gap-1">
           {user && profile && (
-            <div className="mr-3 text-right max-w-[160px]">
-              <div className="text-xs font-medium text-white/90 leading-tight truncate">
-                {profile.nombre ?? ""}
+            <div className="mr-3 text-right max-w-[200px]">
+              <div className="text-xs font-medium text-white/90 leading-tight truncate flex items-center gap-1.5 justify-end">
+                <span className="truncate">{profile.nombre ?? ""}</span>
+                {roleBadge && (
+                  <span className="bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide">
+                    {roleBadge}
+                  </span>
+                )}
               </div>
               {eleam?.nombre && (
                 <div className="text-xs text-white/60 leading-tight truncate">
                   {eleam.nombre}
                 </div>
               )}
-              {user && !profileLoading && !pagoActivo && (
+              {user && !profileLoading && !pagoActivo && rol !== "superadmin" && rol !== "familiar" && (
                 <div className="text-[10px] text-amber-100 leading-tight">
                   Activación pendiente
                 </div>
@@ -122,13 +177,18 @@ function Navbar() {
         <div className="sm:hidden bg-[var(--color-accent)] border-t border-white/20">
           {user && profile && (
             <div className="px-6 py-3 border-b border-white/10">
-              <div className="text-sm font-medium text-white/90 truncate">
-                {profile.nombre ?? ""}
+              <div className="text-sm font-medium text-white/90 truncate flex items-center gap-2">
+                <span className="truncate">{profile.nombre ?? ""}</span>
+                {roleBadge && (
+                  <span className="bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide">
+                    {roleBadge}
+                  </span>
+                )}
               </div>
               {eleam?.nombre && (
                 <div className="text-xs text-white/60 truncate">{eleam.nombre}</div>
               )}
-              {!profileLoading && !pagoActivo && (
+              {!profileLoading && !pagoActivo && rol !== "superadmin" && rol !== "familiar" && (
                 <div className="text-[11px] text-amber-100 mt-0.5">
                   Activación pendiente
                 </div>

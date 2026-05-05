@@ -44,7 +44,7 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 2. Hacer clic en **New query**.
 3. Pegar el contenido completo de `supabase_schema.sql` y hacer clic en **Run**.
 
-Esto crea todas las tablas, políticas RLS, Storage buckets, las 10 categorías de acreditación y la tabla `eleams` para gestión de suscripciones.
+Esto crea todas las tablas, políticas RLS, Storage buckets, los **14 ámbitos** y los **~70 requisitos** de la Carpeta SEREMI, y la tabla `eleams` para gestión de suscripciones.
 
 ### 3. Obtener las credenciales
 
@@ -58,6 +58,27 @@ Esto crea todas las tablas, políticas RLS, Storage buckets, las 10 categorías 
 2. Habilitar y agregar las credenciales OAuth de Google Cloud Console.
 3. En Google Cloud Console, agregar `http://localhost:5173` como origen autorizado.
 4. En Supabase, confirmar que **Site URL** apunte a `http://localhost:5173` en desarrollo y que las redirect URLs incluyan `http://localhost:5173/**`.
+
+### 5. Configurar MercadoPago
+
+Ver la sección **[Integración con MercadoPago](#integración-con-mercadopago-suscripciones-recurrentes)** más abajo. Resumen rápido:
+
+1. Crear aplicación en [MercadoPago Developers](https://www.mercadopago.cl/developers/panel) y habilitar **Suscripciones (Preapproval)**.
+2. Configurar webhook → URL: `https://<TU_PROYECTO>.functions.supabase.co/mp-webhook`. Eventos: `preapproval` y `subscription_authorized_payment`. Guardar el **Secret**.
+3. Setear secrets en Supabase:
+   ```bash
+   supabase secrets set MP_ACCESS_TOKEN=APP_USR-...
+   supabase secrets set MP_WEBHOOK_SECRET=<secret-del-webhook>
+   supabase secrets set PUBLIC_APP_URL=https://app.fichaeleam.cl
+   supabase secrets set ALLOWED_ORIGINS="https://app.fichaeleam.cl,http://localhost:5173"
+   ```
+4. Desplegar Edge Functions:
+   ```bash
+   supabase functions deploy mp-create-subscription
+   supabase functions deploy mp-cancel-subscription
+   supabase functions deploy invite-funcionario
+   supabase functions deploy mp-webhook --no-verify-jwt
+   ```
 
 ---
 
@@ -102,18 +123,29 @@ Con Supabase configurado:
 
 **No se conecta a Supabase.** Funciona completamente offline.
 
-Condiciones:
-- Datos de ejemplo precargados (5 residentes, signos vitales, observaciones y acreditación)
-- El usuario puede agregar registros — se guardan solo en `localStorage` del navegador
-- Banner amarillo permanente: "Datos ficticios — solo en este navegador"
-- Mensajes de conversión integrados en cada pestaña
-- CTA a `/pago` en múltiples puntos
-- Botón "Borrar datos" limpia el localStorage del demo
-- Pestañas: Dashboard, Residentes, Signos Vitales, Observaciones y Acreditación
+El demo está pensado para **clientes potenciales** y se divide en tres
+perfiles, todos accesibles desde el selector en `/demo`:
 
-Los datos del demo se almacenan en `localStorage` bajo la clave `fichaeleam_demo_v1`.
+| Ruta | Perfil | Pensado para |
+|------|--------|--------------|
+| `/demo/admin`       | Soy dueño/director del ELEAM | El que firma la suscripción: ve dashboard, residentes, signos, observaciones, acreditación SEREMI, etc. |
+| `/demo/funcionario` | Trabajo en un ELEAM | Personal de turno: registra signos vitales y observaciones; consulta acreditación pero no la modifica. |
+| `/demo/familiar`    | Tengo un familiar en un ELEAM | Familiar autorizado: ve a su residente, sus signos y observaciones recientes y registra visitas. |
 
-El dashboard del demo replica los indicadores operativos principales: índice operativo, prioridades del turno, alertas clínicas, documentos por vencer, matriz de riesgo y acciones sugeridas para administración de ELEAM.
+> El rol `superadmin` **no** tiene demo público — es exclusivo del
+> dueño/operador de la plataforma (tú).
+
+Condiciones del demo:
+- Cada perfil muestra solo lo que ese rol vería en la versión real,
+  con un banner amarillo permanente indicando "Estás explorando como
+  [perfil]".
+- Datos de ejemplo precargados (5 residentes, signos vitales,
+  observaciones, acreditación, visitas familiares).
+- Lo que el usuario ingresa en el demo de admin/funcionario se guarda
+  en `localStorage` (`fichaeleam_demo_v1`); las visitas del demo
+  familiar viven solo en estado de la sesión (no persiste entre recargas).
+- Cada banner ofrece "Cambiar perfil" para volver al selector y
+  "Activar versión real" para ir a `/pago`.
 
 ### Pago (`/pago`)
 
@@ -167,35 +199,191 @@ El Navbar usa el mismo estado de autorización: una cuenta sin activación ve so
 
 ## Roles de usuario
 
-| Rol | Descripción |
-|-----|-------------|
-| `admin_eleam` | Administrador del ELEAM. Crea la cuenta, es responsable del pago, puede gestionar usuarios del propio establecimiento. |
-| `funcionario` | Personal del ELEAM (enfermeras, técnicos, etc.). Accede si el ELEAM tiene pago activo. |
-| `superadmin` | Dueño/operador de la plataforma FichaEleam. Acceso global: ve y gestiona todos los ELEAMs, registra pagos, monitorea métricas del negocio. |
+| Rol | Quién es | Pago | Acceso principal |
+|-----|---------|------|------------------|
+| `superadmin` | Dueño/operador de FichaEleam (tú) | n/a | `/superadmin` — métricas, todos los ELEAMs, pagos. |
+| `admin_eleam` | Dueño/responsable del ELEAM | **Paga** | Operación clínica + `/equipo` + `/pago`. |
+| `funcionario` | Personal clínico del ELEAM (enfermeras, TENS, médicos) | Heredado del admin | Operación clínica de **su ELEAM**. Sin acciones administrativas. |
+| `familiar` | Familiar de un residente | Heredado del admin | Solo `/familiar` (un portal limitado a SU residente). |
 
-En la UI, las acciones destructivas o administrativas se limitan a `admin_eleam` y `superadmin`. El personal funcionario puede consultar y registrar información operativa sin ver controles de eliminación o cambio de estado administrativo.
+### Matriz de permisos
+
+| Acción / Vista                                  | superadmin | admin_eleam | funcionario | familiar |
+|-------------------------------------------------|:----------:|:-----------:|:-----------:|:--------:|
+| `/superadmin` (métricas + ELEAMs + pagos)       |     ✅     |             |             |          |
+| `/dashboard` (panel del ELEAM)                  |            |     ✅      |     ✅      |          |
+| `/residents` listar / crear residentes          |            |     ✅      |     ✅      |          |
+| Editar residente                                |            |     ✅      |     ✅      |          |
+| Eliminar residente                              |            |     ✅      |             |          |
+| Registrar signos vitales / observaciones        |            |     ✅      |     ✅      |          |
+| Eliminar signos vitales / observaciones         |            |     ✅      |             |          |
+| Subir / consultar acreditación                  |            |     ✅      |     ✅      |          |
+| Eliminar documentos de acreditación             |            |     ✅      |             |          |
+| `/equipo` invitar funcionarios y familiares     |            |     ✅      |             |          |
+| `/pago` contratar / cancelar suscripción        |            |     ✅      |             |          |
+| Ver historial de pagos del ELEAM                |     ✅     |     ✅      |             |          |
+| `/familiar` portal de su residente              |            |             |             |    ✅    |
+| `/familiar/visitas` registrar visitas familiares|            |             |             |    ✅    |
+
+### Cómo se crean
+
+- **`superadmin`** se crea manualmente con SQL (ver más abajo).
+- **`admin_eleam`** se crea solo: cualquier persona que se registra desde
+  `/register` sin token de invitación queda como admin de un nuevo ELEAM.
+- **`funcionario`** SOLO se crea por invitación desde `/equipo` (admin
+  pulsa "Invitar funcionario", se genera un link de un solo uso que el
+  funcionario abre y completa el registro).
+- **`familiar`** igual que el funcionario, pero el admin elige
+  obligatoriamente un **residente** del ELEAM al que se vinculará el
+  familiar. El familiar solo verá ese residente.
+
+### Cómo se garantiza esto en la BD
+
+- RLS de `profiles_admin_eleam_select` permite al admin ver miembros de su ELEAM.
+- Trigger `prevent_role_eleam_escalation` impide que un usuario
+  cambie su `rol` o `eleam_id` por sí mismo.
+- Trigger `handle_new_user` solo asigna `rol` distinto de `admin_eleam`
+  si el signup trae un `invite_token` válido (token + email + no usado +
+  no expirado), validado contra `funcionario_invitaciones`.
+- `familiar_can_view_residente()` (security definer) restringe RLS de
+  `residentes`, `signos_vitales`, `observaciones_diarias` y
+  `visitas_familiar` para que el familiar solo vea SU residente.
+- `documentos_acreditacion` y `pagos` no son visibles para `familiar`.
 
 El pago activo se verifica así:
 
 ```js
-const pagoActivo = profile?.rol === "superadmin" || eleam?.pago_activo === true;
+const pagoActivo = profile?.rol === "superadmin"
+  || ["activo", "en_gracia"].includes(eleam?.subscription_status)
+  || eleam?.pago_activo === true;
 ```
+
+> Tanto el `funcionario` como el `familiar` heredan el acceso del
+> `admin_eleam`: si el admin deja de pagar, todos los del mismo ELEAM
+> pierden acceso.
 
 ---
 
-## Panel Superadmin (`/superadmin`)
+## Flujo end-to-end por rol
 
-Ruta exclusiva para usuarios con `rol = 'superadmin'`. Protegida por `SuperAdminRoute` que redirige a `/dashboard` si el rol no coincide.
+### 🟣 Superadmin (dueño de la plataforma)
+
+1. Te creas una cuenta normal por `/register`.
+2. En **Supabase SQL Editor** ejecutas
+   `update public.profiles set rol = 'superadmin' where email = 'tu@email.cl';`
+3. Cierras sesión y vuelves a entrar.
+4. `homePath = /superadmin`. El Navbar solo muestra **Superadmin**, **Demo** y **Cerrar sesión**.
+5. Desde `/superadmin` ves todos los ELEAMs, métricas, pagos.
+6. RLS te permite leer todo (`is_superadmin()`); las escrituras solo
+   sobre `eleams`, `pagos`, `planes`. Las tablas clínicas no son
+   modificables por ti — eso queda dentro de cada ELEAM.
+
+### 🟢 Admin del ELEAM (paga la suscripción)
+
+1. `/register` sin token de invitación.
+2. El trigger `handle_new_user` crea **un ELEAM nuevo** (`subscription_status='inactivo'`)
+   y un profile `rol='admin_eleam'` vinculado.
+3. Login → `homePath = /pago?sinAcceso=1`.
+4. En `/pago` elige plan → Edge Function `mp-create-subscription` →
+   redirección a MercadoPago → checkout → webhook `preapproval` →
+   `subscription_status='activo'` → `pago_activo=true`.
+5. Ya con pago: `homePath = /dashboard`. Navbar incluye **Equipo** y **Suscripción**.
+6. En `/equipo` invita funcionarios y familiares. La invitación
+   genera un link `/register?invite=<token>&email=<correo>` para
+   compartir. Los funcionarios ocupan cupo del plan; los familiares no.
+7. En `/pago` puede cancelar. Tras cancelar, mantiene acceso hasta
+   `fecha_vencimiento_suscripcion` (período de gracia).
+
+### 🟦 Funcionario (creado por admin)
+
+1. El admin escribe su email en `/equipo` → tab Funcionarios → genera link.
+2. El admin envía el link al funcionario.
+3. El funcionario abre `/register?invite=...&email=...`. El email
+   queda **read-only**.
+4. signUp envía `user_metadata.invite_token`. El trigger
+   `handle_new_user` valida el token (email + no usado + no expirado),
+   asigna `rol='funcionario'` + `eleam_id` y marca la invitación como usada.
+5. Login → `homePath = /dashboard`.
+6. Navbar: Dashboard, Residentes, Signos Vitales, Observaciones, Acreditación.
+   **NO** ve Equipo ni Suscripción ni Superadmin.
+7. Puede crear y editar residentes, signos y observaciones. **NO**
+   puede borrarlos (botón ausente + RLS lo bloquea). **NO** puede
+   gestionar acreditación ni ver historial de pagos.
+
+### 🟡 Familiar (creado por admin, ligado a un residente)
+
+1. El admin abre `/equipo` → tab **Familiares** → escoge el residente
+   del ELEAM y escribe el email del familiar.
+2. La Edge Function valida que el residente pertenezca al ELEAM y
+   crea la invitación (`rol='familiar'`, `residente_id=...`).
+3. El familiar abre el link y se registra. El trigger crea profile
+   `rol='familiar'` + `eleam_id` + **fila en `familiar_residentes`**
+   con el `residente_id` de la invitación.
+4. Login → `homePath = /familiar`.
+5. Navbar: **Mi residente**, **Visitas**, **Cerrar sesión**.
+6. `/familiar`: ve datos del residente, últimos signos vitales con
+   código de color, observaciones recientes, sus visitas.
+7. `/familiar/visitas`: registra visitas (fecha + duración + notas).
+8. **No** ve otros residentes, **no** ve documentos de acreditación,
+   **no** ve pagos. RLS lo enforza con
+   `familiar_can_view_residente()` y `my_familiar_residente_ids()`.
+
+---
+
+## Panel Superadmin (`/superadmin`) — CRM SaaS interno
+
+Ruta exclusiva para usuarios con `rol = 'superadmin'`. Protegida por `SuperAdminRoute`. **Es el CRM interno del SaaS** — no se debe confundir con el panel operativo de cada ELEAM.
 
 ### Funcionalidades
 
 | Sección | Descripción |
 |---------|-------------|
-| Métricas | ELEAMs totales, suscripciones activas, demos, nuevos registros del mes, residentes totales, ingresos del mes (suma de pagos CLP) |
-| Tabla de ELEAMs | Lista completa con búsqueda, plan, estado (activo/inactivo), fecha de vencimiento, fecha de registro |
-| Editar ELEAM | Activar/desactivar suscripción, cambiar plan, ajustar máx. de residentes, establecer fecha de vencimiento, notas internas |
-| Registrar Pago | Asignar pago a ELEAM (monto CLP, plan, método, notas) — activa automáticamente la suscripción |
-| Últimos Pagos | Historial de los 20 pagos más recientes con ELEAM, monto, plan y estado |
+| Métricas (KPIs) | ELEAMs totales, activos, demos/pruebas, leads, en riesgo, ingresos del mes y residentes. Las cards "Leads" y "En riesgo" filtran la tabla con un click. |
+| Pipeline CRM   | Vista por estados (`lead`, `contactado`, `demo_agendada`, `demo_realizada`, `prueba`, `pendiente_pago`, `cliente_activo`, `cliente_riesgo`, `perdido`) con conteo y filtro por click. |
+| Filtros        | Búsqueda por nombre/email del admin, estado CRM, plan, pago activo/inactivo y riesgo churn. |
+| Tabla de ELEAMs | ELEAM, email admin, estado CRM, plan, pago, riesgo, **salud del cliente** (combina señales), vencimiento, último contacto y próxima acción. |
+| Drawer Ficha 360 | Datos generales, suscripción, pagos del ELEAM, tareas CRM y timeline de interacciones. Acceso rápido a editar y registrar pago. |
+| Tareas CRM     | Crear/listar/completar tareas con tipo, prioridad y vencimiento. Indicador de vencidas. |
+| Interacciones  | Historial de contactos (llamada, correo, reunión, demo…) con resumen, resultado y próxima acción. Sincroniza `ultimo_contacto`. |
+| Registrar pago | Inserta pago, **activa la suscripción** y deja interacción CRM automática vía RPC transaccional. |
+| Últimos pagos  | Historial reciente con link a la ficha del ELEAM. |
+| Renovaciones próximas | Hint inferior con ELEAMs activos cuyo vencimiento está ≤ 14 días. |
+
+### Estructura del módulo
+
+```
+src/features/superadmin/
+├── SuperAdminDashboard.jsx           # Container liviano (sin lógica de I/O)
+├── superadminService.js              # Capa Supabase (CRUD + RPC)
+├── components/
+│   ├── SuperAdminMetrics.jsx
+│   ├── EleamFilters.jsx
+│   ├── EleamTable.jsx
+│   ├── EleamEditModal.jsx
+│   ├── PaymentModal.jsx
+│   ├── RecentPaymentsTable.jsx
+│   ├── CrmPipeline.jsx
+│   ├── EleamCustomerDrawer.jsx       # Ficha 360
+│   ├── CrmTasksPanel.jsx
+│   ├── InteractionTimeline.jsx
+│   └── CustomerHealthBadge.jsx
+├── hooks/
+│   └── useSuperAdminData.js          # Carga, refresh y mutaciones
+└── utils/
+    ├── superadminFormatters.js       # CLP, fechas, mapeos CRM/riesgo/plan
+    └── customerHealth.js             # healthy / warning / risk / unknown
+```
+
+### Cómo se calcula la salud del cliente
+
+`utils/customerHealth.js` combina señales del ELEAM y devuelve un estado y razones legibles:
+
+- **risk**: riesgo_churn alto, `cliente_riesgo`, suscripción `vencido`, vencimiento ya pasó, ≥2 tareas vencidas, o `perdido`.
+- **warning**: riesgo_churn medio, vencimiento ≤14d, sin contacto > 60d, 1 tarea vencida o sin pago vigente.
+- **healthy**: pago vigente y churn no alto.
+- **unknown**: no hay datos suficientes.
+
+El badge muestra las razones en `title` (tooltip nativo) y permite expandirlas en la ficha 360.
 
 ### Cómo crear el primer superadmin
 
@@ -211,11 +399,34 @@ WHERE email = 'tu@email.com';
 3. Cerrar sesión y volver a iniciar sesión.
 4. Navegar a `/superadmin` — la ruta aparece automáticamente en el Navbar.
 
-> El superadmin **no necesita** un ELEAM asociado. Las políticas RLS (`is_superadmin()`) le dan acceso de lectura global y acceso de escritura a `eleams` y `pagos`.
+> El superadmin **no necesita** un ELEAM asociado. Las RLS (`is_superadmin()`) le dan acceso global a `eleams`, `pagos`, `crm_tasks`, `crm_interactions`. Las tablas clínicas siguen aisladas por tenant para el resto de roles.
+
+### Tablas CRM (v12)
+
+| Tabla | Rol |
+|-------|-----|
+| `eleams.crm_estado` | Estado en el pipeline. |
+| `eleams.origen_lead` | Origen del lead (web, referido, evento…). |
+| `eleams.ultimo_contacto` | Se actualiza al crear una interacción no-sistema. |
+| `eleams.proxima_accion_fecha` | Próxima fecha de acción comercial. |
+| `eleams.responsable_comercial` | FK → `profiles` (quién lleva el cliente). |
+| `eleams.riesgo_churn` | `bajo / medio / alto / desconocido`. |
+| `crm_tasks` | Tareas (`titulo`, `descripcion`, `tipo`, `estado`, `prioridad`, `fecha_vencimiento`). |
+| `crm_interactions` | Historial (`tipo`, `canal`, `resumen`, `resultado`, `proxima_accion`). |
+
+Ambas con RLS estricto: **solo `superadmin`** puede ver/escribir.
+
+### RPC transaccional
+
+`registrar_pago_y_activar_eleam(eleam_id, monto, plan, fecha_inicio, fecha_fin, metodo_pago, notas)` hace en una sola transacción:
+
+1. Inserta el pago en `pagos` con `estado=completado`.
+2. Activa la suscripción del ELEAM (`pago_activo`, `subscription_status='activo'`, `fecha_pago`, `fecha_vencimiento_suscripcion`, `proximo_cobro_en`, `crm_estado='cliente_activo'`).
+3. Inserta una interacción CRM automática (`tipo='sistema'`).
+
+Solo ejecutable por `superadmin` (chequea `is_superadmin()` y `42501` en caso contrario).
 
 ### Tabla `pagos`
-
-Registra cada pago recibido de un ELEAM. No es una integración con pasarela de pago (eso es futuro), sino un registro manual hecho por el superadmin.
 
 | Columna | Descripción |
 |---------|-------------|
@@ -271,7 +482,7 @@ En `AuthContext`, la variable `pagoActivo` es `true` si `profile.rol === 'supera
 |------|--------------------|-----------------------------|
 | `/` | No | Funciona normalmente |
 | `/login` | No* | Muestra pantalla informativa + botón al demo |
-| `/demo` | No | Funciona completamente con mock data |
+| `/demo`, `/demo/admin`, `/demo/funcionario`, `/demo/familiar` | No | Selector + 3 demos por perfil, mock data |
 | `/pago` | No | Funciona normalmente |
 | `/dashboard` | Sí | Muestra pantalla de error controlada |
 | `/residents/*` | Sí | Muestra pantalla de error controlada |
@@ -283,17 +494,300 @@ En `AuthContext`, la variable `pagoActivo` es `true` si `profile.rol === 'supera
 
 ---
 
-## Qué debe reemplazarse al integrar el pago real
+## Carpeta SEREMI / Acreditación (v9)
 
-1. **`PaymentPage.jsx`**: reemplazar el CTA de email por integración con pasarela de pago (Transbank, Stripe, Mercado Pago, etc.).
+La sección de acreditación está pensada como una **herramienta de
+preparación para autorización sanitaria y fiscalización SEREMI** —
+no como una simple lista de archivos.
 
-2. **Webhook de pago**: crear un endpoint (Supabase Edge Function o backend externo) que actualice `eleams.pago_activo = true` y `eleams.fecha_pago` al recibir confirmación de pago.
+### Modelo de datos
 
-3. **Usuario de prueba**: eliminar la lógica especial para `demo@fichaeleam.cl` del trigger `handle_new_user` y del check `rol === 'superadmin'` en `AuthContext`.
+| Tabla | Rol |
+|-------|-----|
+| `acred_ambitos` | 14 ámbitos fijos (Antecedentes legales, Autorización sanitaria, Infraestructura, Seguridad, Dirección técnica, Personal, Protocolos, Residentes, Contratos y derechos, Medicamentos, Alimentación, Aseo y residuos, Reclamos, Fiscalizaciones). |
+| `acred_requisitos` | Catálogo maestro de ~70 requisitos con nombre, descripción, **medio verificador**, vigencia sugerida y `permite_no_aplica`. |
+| `acred_requisitos_eleam` | **Estado por ELEAM por requisito**: `pendiente`, `cumple`, `no_cumple`, `no_aplica`, `vencido`, `observado`. Guarda responsable, fecha de vencimiento y motivo de "no aplica". |
+| `acred_documentos` | **Evidencias versionadas**. Subir un nuevo documento marca el anterior como `vigente=false` con `reemplazado_por_id` — nunca se pierde el historial. |
+| `acred_observaciones` | Observaciones internas o de fiscalización con acciones de subsanación, fecha de compromiso y cierre. |
+| `acred_audit` | Registro inmutable de quién hizo qué (`create`, `update`, `replace`, `archive`, `close`). |
 
-4. **ELEAM de prueba**: eliminar el insert del ELEAM con id `a0000000-...` del schema.
+Cuando se crea un ELEAM, el trigger `acred_on_eleam_created` provisiona
+automáticamente una fila `acred_requisitos_eleam` por cada requisito
+del catálogo (idempotente vía `ON CONFLICT DO NOTHING`).
 
-5. **Lógica de vencimiento**: agregar verificación de `eleams.fecha_pago` para desactivar automáticamente cuentas con más de 30 días sin pago.
+### Estados y semáforo
+
+| Estado | Significado | UI |
+|--------|------------|----|
+| `cumple` | Requisito al día. | Verde |
+| `pendiente` | Falta evidencia o gestión. | Ámbar |
+| `observado` | Tiene una observación abierta. | Naranjo |
+| `vencido` | Fecha de vencimiento ya pasada (lo marca `acred_marcar_vencidos`). | Rojo |
+| `no_cumple` | Declarado no cumple por el ELEAM. | Rojo |
+| `no_aplica` | No corresponde al ELEAM (requiere motivo). | Gris |
+
+El cumplimiento global se calcula como `cumple / (total - no_aplica)`
+para no penalizar requisitos genuinamente no aplicables.
+
+### Vistas
+
+| Ruta | Componente | Para qué |
+|------|-----------|----------|
+| `/accreditation` | `AccreditationDashboard` | Panel principal: % global, KPIs, alertas (vencidos, por vencer, observaciones abiertas), grilla de ámbitos con cumplimiento por color y leyenda. |
+| `/accreditation/ambito/:codigo` | `AccreditationAmbito` | Lista filtrable de los requisitos del ámbito (todos, pendientes, cumple, observados, vencidos, no aplica). |
+| `/accreditation/requisito/:id` | `AccreditationRequisito` | Detalle del requisito con cambio de estado, asignar responsable, marcar "no aplica", subir/reemplazar evidencia, observaciones y trazabilidad (audit). |
+| `/accreditation/observaciones` | `AccreditationObservaciones` | Listado global de observaciones internas y de fiscalización con filtros por estado/origen y cierre. |
+| `/accreditation/carpeta` | `AccreditationCarpeta` | **Carpeta SEREMI imprimible**: portada, resumen, cumplimiento por ámbito, observaciones abiertas y detalle completo de requisitos (con código, estado, vencimiento). Optimizada para PDF (`Ctrl+P → Guardar como PDF`). |
+
+### Acciones disponibles
+
+- **Cambiar estado** del requisito (cumple / pendiente / no cumple).
+- **Marcar "no aplica"** con motivo escrito (solo admin).
+- **Asignar responsable** (admin o el propio funcionario).
+- **Subir evidencia** (PDF, DOC/DOCX, XLS/XLSX, JPG, PNG, WEBP — máx 10 MB).
+- **Reemplazar evidencia** manteniendo el historial accesible.
+- **Archivar** (admin) — el documento queda en `vigente=false`.
+- **Registrar observación** (interna por funcionarios; fiscalización solo admin).
+- **Cerrar observación** con nota (solo admin).
+- **Generar Carpeta SEREMI** imprimible.
+
+### Storage
+
+Reutiliza el bucket `documentos-acreditacion` con el path:
+
+```
+acreditacion/{eleamId}/req/{requisitoEleamId}/{timestamp}_v{version}_{nombre}
+```
+
+La RLS de storage usa `split_part(name, '/', 2) = my_eleam_id`, por lo
+que el aislamiento por ELEAM se mantiene. Los enlaces se entregan como
+**URLs firmadas de 1 hora**.
+
+### Permisos por acción
+
+| Acción                                  | admin_eleam | funcionario | familiar |
+|-----------------------------------------|:-----------:|:-----------:|:--------:|
+| Ver Carpeta SEREMI                      |     ✅      |     ✅      |          |
+| Subir / reemplazar evidencia            |     ✅      |     ✅      |          |
+| Archivar evidencia (DELETE)             |     ✅      |             |          |
+| Cambiar estado (cumple/pendiente)       |     ✅      |     ✅      |          |
+| Marcar "no aplica" / asignar plan      |     ✅      |             |          |
+| Crear observación interna               |     ✅      |     ✅      |          |
+| Crear observación de fiscalización      |     ✅      |             |          |
+| Cerrar observación                      |     ✅      |             |          |
+| Generar Carpeta SEREMI                  |     ✅      |     ✅      |          |
+| Ver historial / audit                   |     ✅      |     ✅      |          |
+
+Todos los chequeos están enforzados tanto por **RLS** en BD como por
+**gating en la UI** (estados de botones).
+
+### Integración con el dashboard
+
+El `AdminDashboard` muestra una `AccreditationCard` con:
+- % de cumplimiento global y barra de progreso.
+- Mini-grilla de los primeros 6 ámbitos con su % y color.
+- Atajo a la Carpeta y a Observaciones.
+- KPI "Cumplimiento SEREMI" en el strip superior con vencidos resaltados.
+- Banda lateral "Documentos por vencer ≤ 30d" enlazada al detalle del requisito.
+
+---
+
+## Integración con MercadoPago (suscripciones recurrentes)
+
+FichaEleam cobra **una suscripción mensual por ELEAM**. El admin del ELEAM
+paga; los funcionarios del mismo ELEAM acceden gratis mientras la
+suscripción del admin esté activa. Cada plan define el máximo de
+residentes activos y de funcionarios; los triggers de la BD bloquean los
+inserts si el plan se llena.
+
+### Modelo
+
+- Tabla `planes` — catálogo de planes (`plan-14`, `plan-24`, `plan-34`).
+- Columnas nuevas en `eleams`: `plan_id`, `mp_preapproval_id`,
+  `mp_payer_email`, `subscription_status`, `proximo_cobro_en`,
+  `cancelado_en`, `max_funcionarios`.
+- Tabla `mp_webhook_events` — auditoría e idempotencia de webhooks.
+- Tabla `funcionario_invitaciones` — admin invita funcionarios con
+  un token de un solo uso (validado por trigger en signup).
+- Edge Functions:
+  - `mp-create-subscription` — crea preapproval, devuelve `init_point`.
+  - `mp-webhook` — público (sin JWT), valida firma HMAC, refresca DB.
+  - `mp-cancel-subscription` — admin cancela preapproval.
+  - `invite-funcionario` — admin invita funcionario al ELEAM.
+
+### Estados de la suscripción
+
+| `subscription_status` | Significado | Acceso (`pago_activo`) |
+|-----------------------|-------------|------------------------|
+| `inactivo`            | No ha contratado nunca | ❌ |
+| `pendiente`           | Preapproval creado, esperando autorización en MP | ❌ |
+| `activo`              | Pago vigente | ✅ |
+| `en_gracia`           | MP está reintentando un cobro fallido | ✅ |
+| `pausado`             | Pausa manual desde MP | ❌ |
+| `cancelado`           | Admin canceló | ❌ |
+| `vencido`             | Sin pago tras período de gracia | ❌ |
+
+`pago_activo` se sincroniza automáticamente via trigger
+`sync_pago_activo` en cada cambio de `subscription_status`.
+
+### Variables de entorno (server-side)
+
+Se setean como **secrets de Supabase** (no van en `.env` del frontend):
+
+```bash
+# Token de acceso de MP (PROD: APP_USR-... · TEST: TEST-...)
+supabase secrets set MP_ACCESS_TOKEN=APP_USR-xxxxxxxxxxxxxxxx
+
+# Secreto del webhook (Dashboard MP → Webhooks → "Secret")
+supabase secrets set MP_WEBHOOK_SECRET=xxxxxxxxxxxxxxxxxxxx
+
+# URL pública de tu app (para back_url y links de invitación)
+supabase secrets set PUBLIC_APP_URL=https://app.fichaeleam.cl
+
+# Orígenes permitidos en CORS (CSV)
+supabase secrets set ALLOWED_ORIGINS="https://app.fichaeleam.cl,http://localhost:5173"
+```
+
+### Pasos en la cuenta de MercadoPago
+
+> Hazlo dos veces: una con credenciales **sandbox** para testing y otra con
+> credenciales **producción** cuando vayas a operar.
+
+1. **Crear cuenta de empresa en MercadoPago Chile** ([www.mercadopago.cl](https://www.mercadopago.cl)).
+   - Verifica la cuenta (RUT, datos bancarios, email).
+
+2. **Crear una "Aplicación"** en
+   [Dashboard → Tus integraciones → Crear aplicación](https://www.mercadopago.cl/developers/panel).
+   - Modelo: **Pagos online**.
+   - Producto: **Suscripciones (Preapproval)**.
+   - Marca como **Producción** cuando termines QA.
+
+3. **Copiar credenciales** desde la aplicación recién creada:
+   - **Production Access Token** → `MP_ACCESS_TOKEN` (en producción).
+   - **Test Access Token** → `MP_ACCESS_TOKEN` (en sandbox).
+   - *(La Public Key NO es necesaria con el flujo de redirect que usamos.)*
+
+4. **Configurar el Webhook** en
+   *Dashboard → Tu aplicación → Webhooks*:
+   - **URL de notificación**:
+     `https://<TU_PROYECTO_SUPABASE>.functions.supabase.co/mp-webhook`
+   - **Eventos a escuchar**:
+     - ✅ `Suscripciones (preapproval)`
+     - ✅ `Pagos autorizados (subscription_authorized_payment)`
+     - *(Opcional: `Pagos`)*
+   - Copia el **Secret** generado y guárdalo en `MP_WEBHOOK_SECRET`.
+
+5. **Activar el dominio** del frontend en
+   *Dashboard → Aplicación → Configuración → URLs permitidas*
+   (origin en `back_url`, ej. `https://app.fichaeleam.cl`).
+
+6. **Verificar los planes en la BD** — el seed inserta tres planes en CLP.
+   Si quieres cambiar precios, edita la tabla `planes` o pídele al
+   superadmin que lo haga vía panel.
+
+### Desplegar las Edge Functions
+
+```bash
+# Instalar la CLI si aún no la tienes
+npm install -g supabase
+
+# Login y vincula tu proyecto
+supabase login
+supabase link --project-ref <TU_PROJECT_REF>
+
+# Desplegar las cuatro funciones
+supabase functions deploy mp-create-subscription
+supabase functions deploy mp-cancel-subscription
+supabase functions deploy invite-funcionario
+
+# El webhook NO requiere JWT (lo declara supabase/config.toml)
+supabase functions deploy mp-webhook --no-verify-jwt
+```
+
+> Las primeras tres funciones validan el JWT del usuario autenticado
+> (`verify_jwt = true`). El webhook usa firma HMAC en su lugar.
+
+### Probar la integración
+
+1. Crear un comprador y vendedor de prueba en
+   [Dashboard MP → Cuentas de prueba](https://www.mercadopago.cl/developers/panel/test-users).
+2. Inicia sesión en FichaEleam con el admin del ELEAM.
+3. En `/pago`, elige un plan → te redirige al `init_point` de MP.
+4. Paga con la tarjeta de prueba `5031 7557 3453 0604` (Mastercard sandbox)
+   — código de seguridad `123` y RUT `12.345.678-5`.
+5. Después del pago, MP te trae a `/pago/return`. El backend recibe el
+   webhook `preapproval` con `status=authorized` y marca el ELEAM como
+   activo. El frontend hace polling al perfil hasta verlo activo.
+6. Comprueba que `eleams.subscription_status = 'activo'` y que se creó
+   un row en `mp_webhook_events` con `signature_ok = true`.
+
+### Seguridad implementada
+
+- **Tokens server-side**: `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` viven
+  solo como Edge Function secrets. El frontend nunca los ve.
+- **Firma HMAC**: cada webhook se valida contra el manifest oficial
+  `id:<dataId>;request-id:<requestId>;ts:<ts>;` con HMAC-SHA-256 y
+  comparación constant-time. Tolerancia de 600 s sobre el `ts` para
+  mitigar replays.
+- **Idempotencia**: `mp_webhook_events.mp_request_id` es UNIQUE; un
+  retry de MP se descarta sin reprocesar.
+- **`X-Idempotency-Key`** se envía en cada `POST /preapproval`.
+- **`external_reference` validado**: el handler busca el ELEAM por
+  `external_reference` y rechaza si no existe.
+- **RLS multi-tenant**: las tablas `pagos`, `funcionario_invitaciones`,
+  `eleams` solo se ven con `eleam_id` del usuario o vía `is_superadmin()`.
+- **Triggers anti-escalada**: `prevent_role_eleam_escalation` impide
+  que un funcionario se cambie su `rol` o su `eleam_id`.
+- **Triggers de límite**: `check_residentes_limit` y
+  `check_funcionarios_limit` aplican el cupo del plan en la BD.
+- **Trigger de invitaciones**: `handle_new_user` valida el
+  `invite_token` contra `funcionario_invitaciones` (token + email +
+  no usado + no expirado) y lo marca consumido.
+
+### Reglas de negocio enforzadas
+
+| Regla | Cómo se aplica |
+|-------|---------------|
+| Admin paga, funcionarios no | Edge `mp-create-subscription` rechaza si `rol ≠ admin_eleam`. |
+| Funcionarios acceden con suscripción del admin | `pago_activo` se calcula sobre `subscription_status` del ELEAM, no por usuario. |
+| Cupo de residentes | Trigger `check_residentes_limit` en `residentes`. |
+| Cupo de funcionarios | Trigger `check_funcionarios_limit` en `profiles` + check proactivo en `invite-funcionario`. |
+| Solo admin invita funcionarios | RLS en `funcionario_invitaciones` + Edge function. |
+| Funcionario no puede cambiar de ELEAM | Trigger `prevent_role_eleam_escalation`. |
+| Suscripción ya activa no se duplica | `mp-create-subscription` rechaza si `subscription_status in ('activo','en_gracia')`. |
+| Invitaciones expiran | Token con TTL de 7 días + `usado` único uso. |
+
+### Cancelación
+
+El admin pulsa "Cancelar suscripción" en `/pago`:
+1. Frontend llama a `mp-cancel-subscription`.
+2. Edge function hace `PUT /preapproval/{id}` con `{status: "cancelled"}`.
+3. Marca el ELEAM como `cancelado` en la BD.
+4. MercadoPago no vuelve a cobrar; el acceso se mantiene hasta
+   `proximo_cobro_en` (manejado por el webhook al cierre del ciclo).
+
+### Qué queda pendiente (futuro)
+
+- **Recordatorios de vencimiento**: cron / `pg_cron` que avisa por email
+  cuando `proximo_cobro_en < now() + 3d`.
+- **Job de marcado vencido**: si pasan N días en `en_gracia` sin
+  reintento exitoso, marcar `vencido` y suspender acceso.
+- **Cambio de plan**: hoy hay que cancelar y volver a contratar.
+  Implementar `PUT /preapproval/{id}` actualizando `transaction_amount`.
+- **Reportes financieros**: vista Superadmin con MRR, churn, conversion.
+
+---
+
+## Qué tener listo para producción
+
+1. Asegurarte de cambiar `MP_ACCESS_TOKEN` de Test a Producción.
+2. Desplegar las Edge Functions en el proyecto Supabase de producción.
+3. Configurar el webhook con la URL de producción y guardar el
+   `MP_WEBHOOK_SECRET` correspondiente.
+4. Eliminar (opcional) la lógica del usuario de prueba
+   `demo@fichaeleam.cl` en el trigger `handle_new_user` y la
+   inserción del ELEAM demo, si no quieres exponer la cuenta demo
+   en producción.
 
 ---
 
@@ -316,7 +810,7 @@ src/
 │   ├── accreditation/     # Documentación SEREMI DS 14/2017
 │   ├── auth/              # Login (email/password), Register, authService
 │   ├── dashboard/         # AdminDashboard + dashboardService (loadDashboard)
-│   ├── demo/              # DemoPage, mockData, demoService (localStorage)
+│   ├── demo/              # DemoSelector + DemoPage(role) + FamiliarDemoPage, mockData, demoService
 │   ├── landing/           # LandingPage de alta conversión
 │   ├── observations/      # Observaciones diarias (filtros fecha + tipo)
 │   ├── payment/           # PaymentPage (placeholder integración pago)
@@ -330,6 +824,49 @@ src/
 └── utils/
     └── validators.js      # validateEmail, validateRut (mod-11), isValidUUID, validatePhone
 ```
+
+---
+
+## Blog público y SEO
+
+### Blog (`/blog`)
+
+- Sitio público con listado y detalle de artículos en Markdown.
+- Cada post lleva: portada, autor, fecha, tiempo de lectura, keywords,
+  TOC automática, JSON-LD `Article` + `BreadcrumbList`, CTA al final
+  hacia `/register` y `/demo`.
+- Renderer markdown propio (sin dependencias) que soporta encabezados,
+  listas, tablas, blockquotes, código, links y `![alt](url)`.
+
+### Gestión desde el superadmin
+
+- `/superadmin/blog` — listado con búsqueda, filtros por estado y
+  acciones rápidas (publicar, despublicar, ver, borrar).
+- `/superadmin/blog/new` y `/superadmin/blog/:id/edit` — editor con
+  preview, SEO avanzado (meta_title, meta_description, keywords,
+  destacado), portada, autor, slug auto desde título.
+- RLS estricto: solo `superadmin` puede crear, editar o publicar.
+  El público lee únicamente posts en estado `publicado`.
+
+### SEO global
+
+- `index.html` con metas, Open Graph, Twitter cards, robots,
+  canonical y JSON-LD de `Organization` + `SoftwareApplication`.
+- `public/robots.txt` permite explícitamente `GPTBot`, `ChatGPT-User`,
+  `PerplexityBot`, `Google-Extended`, `ClaudeBot` y `anthropic-ai`.
+- `public/sitemap.xml` con todas las URLs públicas.
+- `useSEO()` (en `src/utils/seo.js`) inyecta meta tags + JSON-LD por
+  ruta sin dependencias (sin react-helmet). Helpers
+  `articleJsonLd`, `breadcrumbJsonLd` y `faqJsonLd`.
+- Landing y DemoSelector traen `FAQPage` JSON-LD para rich-results.
+
+### 5 posts iniciales (seed SQL)
+
+1. *DS 14/2017 explicado: qué exige la SEREMI a un ELEAM* — guía 2026.
+2. *Checklist completo de fiscalización SEREMI* — 14 ámbitos con casillas.
+3. *Cómo digitalizar la ficha clínica de un ELEAM en 30 días*.
+4. *Signos vitales en adultos mayores: rangos normales y críticos*.
+5. *Comunicación con familias en ELEAM: protocolo y herramientas*.
 
 ---
 

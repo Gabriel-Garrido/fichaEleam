@@ -19,10 +19,13 @@ export const login = async ({ email, password }) => {
 
 export const loginWithGoogle = async () => {
   const client = requireSupabase();
+  // Volvemos a /login: AuthContext detectará la sesión y el componente
+  // Login redirigirá al homePath del rol. Esto evita que un familiar
+  // o superadmin caiga en /dashboard, donde no le corresponde.
   const { data, error } = await client.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${window.location.origin}/dashboard`,
+      redirectTo: `${window.location.origin}/login`,
       queryParams: {
         access_type: "offline",
         prompt: "select_account",
@@ -33,32 +36,29 @@ export const loginWithGoogle = async () => {
   return data;
 };
 
-export const register = async ({ nombre, email, password }) => {
+export const register = async ({ nombre, email, password, inviteToken }) => {
   const client = requireSupabase();
   const cleanEmail = email.trim();
+
+  // El trigger handle_new_user (server-side, SECURITY DEFINER) crea
+  // automáticamente el profile y, si corresponde, el ELEAM:
+  //   • Sin invite_token → rol=admin_eleam + ELEAM nuevo (inactivo).
+  //   • Con invite_token válido → rol=funcionario|familiar + eleam_id
+  //     de la invitación; si es familiar, crea el vínculo en
+  //     familiar_residentes con el residente_id de la invitación.
+  // No tocamos eleam_id desde el cliente — está bloqueado por el
+  // trigger prevent_role_eleam_escalation.
   const { data, error } = await client.auth.signUp({
     email: cleanEmail,
     password,
-    options: { data: { nombre } },
+    options: {
+      data: {
+        nombre,
+        ...(inviteToken ? { invite_token: inviteToken } : {}),
+      },
+    },
   });
   if (error) throw error;
-
-  if (data.user) {
-    // Crear ELEAM con pago inactivo — el admin deberá activarlo en /pago
-    const { data: eleamData } = await client
-      .from("eleams")
-      .insert({ nombre: `ELEAM de ${nombre}`, email_admin: cleanEmail, pago_activo: false })
-      .select()
-      .single();
-
-    await client.from("profiles").upsert({
-      id:       data.user.id,
-      nombre,
-      email:    cleanEmail,
-      rol:      "admin_eleam",
-      eleam_id: eleamData?.id ?? null,
-    });
-  }
   return data.user;
 };
 

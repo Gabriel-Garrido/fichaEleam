@@ -4,24 +4,31 @@ import { useAuth } from "../context/AuthContext";
 import Loading from "./Loading";
 import SupabaseError from "./SupabaseError";
 
+/**
+ * ProtectedRoute
+ *
+ *   <ProtectedRoute>...</ProtectedRoute>                  → solo sesión + cuenta activa
+ *   <ProtectedRoute requireActive={false}>                → permite cuenta sin pago
+ *   <ProtectedRoute allowedRoles={["admin_eleam"]}>       → restringe por rol
+ *
+ * Si el usuario no cumple las condiciones, redirige a la home apropiada
+ * para su rol (homePath de AuthContext) — nunca a una ruta que no le
+ * corresponde, evitando loops y mostrando algo coherente.
+ */
 function ProtectedRoute({
   children,
   requireActive = true,
   allowedRoles = null,
-  inactiveRedirect = "/pago?sinAcceso=1",
 }) {
   const location = useLocation();
   const {
-    user,
-    profile,
-    authLoading,
-    profileLoading,
-    pagoActivo,
-    supabaseError,
+    user, profile, authLoading, profileLoading, pagoActivo,
+    supabaseError, homePath, isSuperadmin, isFamiliar,
   } = useAuth();
 
   if (authLoading || profileLoading) return <Loading message="Verificando sesión..." />;
-  if (supabaseError)  return <SupabaseError />;
+  if (supabaseError) return <SupabaseError />;
+
   if (!user) {
     return (
       <Navigate
@@ -33,16 +40,27 @@ function ProtectedRoute({
   }
 
   if (!profile) {
-    return <Navigate to={inactiveRedirect} replace />;
+    return <Navigate to="/pago?sinAcceso=1" replace />;
   }
 
-  if (requireActive && !pagoActivo) {
-    return <Navigate to={inactiveRedirect} replace />;
+  // El familiar y el superadmin no se rigen por pagoActivo del ELEAM
+  // del mismo modo: superadmin siempre activo; familiar depende del
+  // ELEAM al que pertenece (mismo flag pagoActivo).
+  if (requireActive && !pagoActivo && !isFamiliar) {
+    return <Navigate to="/pago?sinAcceso=1" replace />;
   }
 
-  if (allowedRoles?.length && !allowedRoles.includes(profile.rol)) {
-    const fallback = pagoActivo ? "/dashboard" : inactiveRedirect;
-    return <Navigate to={fallback} replace />;
+  // El superadmin tiene acceso universal — la RLS sigue filtrando los
+  // datos que ve. Esto también permite que el usuario demo (superadmin
+  // con eleam_id) navegue todas las vistas operativas.
+  if (allowedRoles?.length && !allowedRoles.includes(profile.rol) && !isSuperadmin) {
+    return <Navigate to={homePath} replace />;
+  }
+
+  // El familiar nunca debe entrar a rutas operativas del staff: si la
+  // ruta no lo declara explícitamente, lo devolvemos a su portal.
+  if (isFamiliar && !allowedRoles?.includes("familiar")) {
+    return <Navigate to="/familiar" replace />;
   }
 
   return children;
