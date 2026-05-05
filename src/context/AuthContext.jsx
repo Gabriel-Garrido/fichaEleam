@@ -4,6 +4,11 @@ import Loading from "../components/Loading";
 
 const AuthContext = createContext();
 const LoadingContext = createContext();
+const PLATFORM_SUPERADMIN_EMAILS = new Set(["gabrielgarrido89@gmail.com"]);
+
+function isPlatformSuperadminEmail(email) {
+  return PLATFORM_SUPERADMIN_EMAILS.has((email || "").trim().toLowerCase());
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser]               = useState(null);
@@ -17,6 +22,7 @@ export function AuthProvider({ children }) {
   const fetchProfileAndEleam = useCallback(async (authUser) => {
     if (!supabase) return;
     const userId = typeof authUser === "string" ? authUser : authUser?.id;
+    const userEmail = typeof authUser === "string" ? "" : authUser?.email;
     if (!userId) return;
 
     setProfileLoading(true);
@@ -31,7 +37,7 @@ export function AuthProvider({ children }) {
       // ELEAM, aunque RLS permita leerlas. Solo lo que la app usa.
       const PROFILE_SELECT = `
         id, nombre, email, rol, eleam_id, creado_en,
-        eleams (
+        eleams!profiles_eleam_id_fkey (
           id, nombre, email_admin, telefono, plan, plan_id,
           subscription_status, pago_activo, mp_preapproval_id, mp_payer_email,
           proximo_cobro_en, cancelado_en, fecha_vencimiento_suscripcion,
@@ -56,6 +62,23 @@ export function AuthProvider({ children }) {
           .maybeSingle();
         data = retry.data;
         if (retry.error) throw retry.error;
+      }
+
+      if (isPlatformSuperadminEmail(userEmail) && data?.rol !== "superadmin") {
+        const { error: promoteError } = await supabase.rpc("ensure_platform_superadmin");
+
+        if (promoteError) {
+          console.warn("No se pudo reparar el perfil superadmin:", promoteError);
+        } else {
+          const promoted = await supabase
+            .from("profiles")
+            .select(PROFILE_SELECT)
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (promoted.error) throw promoted.error;
+          data = promoted.data;
+        }
       }
 
       if (!data) {

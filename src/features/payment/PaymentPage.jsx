@@ -138,6 +138,9 @@ export default function PaymentPage() {
 
   const statusInfo = SUBSCRIPTION_LABEL[subscriptionStatus] ?? SUBSCRIPTION_LABEL.inactivo;
   const proximo = eleam?.proximo_cobro_en ?? eleam?.fecha_vencimiento_suscripcion ?? null;
+  const expectedSuperadminPending =
+    accountEmail.toLowerCase() === "gabrielgarrido89@gmail.com" &&
+    profile?.rol !== "superadmin";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -185,7 +188,28 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {user && !isAdminEleam && (
+        {expectedSuperadminPending && (
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
+            <div className="shrink-0 mt-0.5 w-6 h-6 bg-rose-200 rounded-full flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-rose-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v3.75m0 3.75h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-rose-800 text-sm mb-1">
+                Tu cuenta aún no está marcada como superadmin en Supabase
+              </h3>
+              <p className="text-sm text-rose-700">
+                Re-ejecuta <code className="bg-white/70 px-1 py-0.5 rounded">supabase_schema.sql</code> en SQL Editor,
+                o ejecuta el bloque de promoción de superadmin que está dentro del schema. Luego
+                cierra sesión y vuelve a entrar. La vista Superadmin aparecerá después de que
+                <code className="bg-white/70 px-1 py-0.5 rounded ml-1">profiles.rol</code> sea <code className="bg-white/70 px-1 py-0.5 rounded">superadmin</code>.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {user && !isAdminEleam && !expectedSuperadminPending && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
             <div className="shrink-0 mt-0.5 w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center">
               <svg className="w-3.5 h-3.5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">

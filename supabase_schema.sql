@@ -1,1655 +1,201 @@
 -- ============================================================
--- SCHEMA SUPABASE — FichaEleam v2
--- ELEAM: Establecimiento de Larga Estadía para Adultos Mayores
--- DS 14/2017 — Fiscalización SEREMI de Salud
+-- SUPABASE SCHEMA - FichaEleam
+-- Configuracion actual para la app React + Edge Functions.
 --
--- INSTRUCCIONES:
---   1. Abrir Supabase Dashboard → SQL Editor
---   2. Pegar este script completo y ejecutar (Run All)
---   3. Crear los Storage buckets en Dashboard → Storage si el
---      script da error de permisos en esa sección (ver nota al final)
+-- Ejecutar en Supabase SQL Editor. Si la seccion Storage falla por
+-- permisos, crea el bucket privado `documentos-acreditacion` desde
+-- Dashboard > Storage y vuelve a ejecutar desde la seccion Storage.
 -- ============================================================
 
--- Extensión para UUIDs (gen_random_uuid() viene nativo en PG 13+)
 create extension if not exists "pgcrypto";
 
 -- ============================================================
--- TABLA: profiles
--- Extiende auth.users de Supabase Auth.
--- Se crea automáticamente vía trigger on_auth_user_created.
+-- 1. Tablas base: perfiles, planes y ELEAMs
 -- ============================================================
+
 create table if not exists public.profiles (
-  id          uuid primary key references auth.users(id) on delete cascade,
-  nombre      text not null,
-  email       text not null,
-  rol         text not null default 'usuario'
-                check (rol in ('admin', 'usuario', 'enfermera', 'medico')),
-  creado_en   timestamptz not null default now()
+  id         uuid primary key references auth.users(id) on delete cascade,
+  nombre     text not null,
+  email      text not null,
+  rol        text not null default 'admin_eleam'
+             check (rol in ('admin_eleam','funcionario','familiar','superadmin')),
+  creado_en  timestamptz not null default now()
 );
 
-alter table public.profiles enable row level security;
+create table if not exists public.planes (
+  id                uuid primary key default gen_random_uuid(),
+  codigo            text unique not null,
+  nombre            text not null,
+  descripcion       text,
+  precio_clp        integer not null check (precio_clp > 0),
+  max_residentes    integer check (max_residentes is null or max_residentes > 0),
+  max_funcionarios  integer check (max_funcionarios is null or max_funcionarios > 0),
+  frequency         integer not null default 1 check (frequency > 0),
+  frequency_type    text not null default 'months' check (frequency_type in ('days','months')),
+  activo            boolean not null default true,
+  orden             integer not null default 0,
+  destacado         boolean not null default false,
+  creado_en         timestamptz not null default now()
+);
 
--- Política: cada usuario ve y edita solo su propio perfil
-drop policy if exists "profiles_own_select" on public.profiles;
-create policy "profiles_own_select"
-  on public.profiles for select
-  using ((select auth.uid()) = id);
+create table if not exists public.eleams (
+  id                              uuid primary key default gen_random_uuid(),
+  nombre                          text not null,
+  rut_empresa                     text unique,
+  email_admin                     text not null,
+  telefono                        text,
+  pago_activo                     boolean not null default false,
+  plan                            text default 'mensual'
+                                  check (plan in ('demo','mensual','anual','inactivo') or plan is null),
+  plan_id                         uuid references public.planes(id),
+  fecha_pago                      timestamptz,
+  fecha_vencimiento_suscripcion   timestamptz,
+  proximo_cobro_en                timestamptz,
+  cancelado_en                    timestamptz,
+  mp_preapproval_id               text unique,
+  mp_payer_email                  text,
+  max_residentes                  integer check (max_residentes is null or max_residentes > 0),
+  max_funcionarios                integer check (max_funcionarios is null or max_funcionarios > 0),
+  notas_admin                     text,
+  subscription_status             text not null default 'inactivo'
+                                  check (subscription_status in ('inactivo','pendiente','activo','en_gracia','pausado','cancelado','vencido')),
+  crm_estado                      text not null default 'lead'
+                                  check (crm_estado in (
+                                    'lead','contactado','demo_agendada','demo_realizada','prueba',
+                                    'pendiente_pago','cliente_activo','cliente_riesgo','perdido'
+                                  )),
+  origen_lead                     text,
+  ultimo_contacto                 timestamptz,
+  proxima_accion_fecha            date,
+  responsable_comercial           uuid references public.profiles(id) on delete set null,
+  riesgo_churn                    text not null default 'desconocido'
+                                  check (riesgo_churn in ('bajo','medio','alto','desconocido')),
+  creado_en                       timestamptz not null default now()
+);
 
-drop policy if exists "profiles_own_update" on public.profiles;
-create policy "profiles_own_update"
-  on public.profiles for update
-  using ((select auth.uid()) = id)
-  with check ((select auth.uid()) = id);
+alter table public.profiles
+  add column if not exists eleam_id uuid references public.eleams(id) on delete set null;
 
--- Trigger: crea el perfil automáticamente al registrar un usuario
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.profiles (id, nombre, email, rol)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'nombre', 'Usuario'),
-    new.email,
-    'usuario'
-  )
-  on conflict (id) do nothing;
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
+create index if not exists idx_profiles_eleam_id on public.profiles(eleam_id);
+create index if not exists idx_profiles_email_lower on public.profiles(lower(email));
+create index if not exists idx_eleams_subscription_status on public.eleams(subscription_status);
+create index if not exists idx_eleams_mp_preapproval_id on public.eleams(mp_preapproval_id);
+create index if not exists idx_eleams_crm_estado on public.eleams(crm_estado);
+create index if not exists idx_eleams_riesgo_churn on public.eleams(riesgo_churn);
 
 -- ============================================================
--- TABLA: residentes
--- Ficha maestra de cada residente del ELEAM.
+-- 2. Modelo clinico operacional
 -- ============================================================
+
 create table if not exists public.residentes (
-  id                      uuid primary key default gen_random_uuid(),
-  -- Identificación
-  nombre                  text not null,
-  apellido                text not null,
-  rut                     text unique,
-  fecha_nacimiento        date,
-  sexo                    text check (sexo in ('masculino', 'femenino', 'otro')),
-  nacionalidad            text default 'Chilena',
-  estado_civil            text check (estado_civil in ('soltero', 'casado', 'viudo', 'divorciado', 'otro')),
-  -- Contacto de emergencia
-  direccion_anterior      text,
-  nombre_contacto         text,
-  telefono_contacto       text,
-  parentesco_contacto     text,
-  -- Información clínica base
-  prevision               text,
-  diagnostico_principal   text,
+  id                       uuid primary key default gen_random_uuid(),
+  eleam_id                 uuid references public.eleams(id) on delete restrict,
+  nombre                   text not null,
+  apellido                 text not null,
+  rut                      text,
+  fecha_nacimiento         date,
+  sexo                     text check (sexo in ('masculino','femenino','otro')),
+  nacionalidad             text default 'Chilena',
+  estado_civil             text check (estado_civil in ('soltero','casado','viudo','divorciado','otro')),
+  direccion_anterior       text,
+  nombre_contacto          text,
+  telefono_contacto        text,
+  parentesco_contacto      text,
+  prevision                text,
+  diagnostico_principal    text,
   diagnosticos_secundarios text[],
-  alergias                text[],
-  grupo_sanguineo         text,
-  -- Estadía en el establecimiento
-  fecha_ingreso           date not null default current_date,
-  fecha_egreso            date,
-  motivo_egreso           text,
-  habitacion              text,
-  cama                    text,
-  estado                  text not null default 'activo'
-                            check (estado in ('activo', 'hospitalizado', 'egresado', 'fallecido')),
-  -- Evaluaciones funcionales
-  indice_barthel          integer check (indice_barthel between 0 and 100),
-  escala_katz             text,
-  nivel_dependencia       text check (nivel_dependencia in ('leve', 'moderado', 'severo', 'total')),
-  -- Metadatos
-  creado_por              uuid references auth.users(id) on delete set null,
-  creado_en               timestamptz not null default now(),
-  actualizado_en          timestamptz not null default now()
+  alergias                 text[],
+  grupo_sanguineo          text,
+  fecha_ingreso            date not null default current_date,
+  fecha_egreso             date,
+  motivo_egreso            text,
+  habitacion               text,
+  cama                     text,
+  estado                   text not null default 'activo'
+                           check (estado in ('activo','hospitalizado','egresado','fallecido')),
+  indice_barthel           integer check (indice_barthel between 0 and 100),
+  escala_katz              text,
+  nivel_dependencia        text check (nivel_dependencia in ('leve','moderado','severo','total')),
+  creado_por               uuid references auth.users(id) on delete set null,
+  creado_en                timestamptz not null default now(),
+  actualizado_en           timestamptz not null default now()
 );
 
-alter table public.residentes enable row level security;
+create unique index if not exists residentes_rut_eleam_unique
+  on public.residentes(rut, eleam_id)
+  where rut is not null;
+create index if not exists idx_residentes_eleam_estado on public.residentes(eleam_id, estado);
+create index if not exists idx_residentes_nombre on public.residentes(apellido, nombre);
 
-drop policy if exists "residentes_select" on public.residentes;
-create policy "residentes_select"
-  on public.residentes for select
-  using ((select auth.uid()) is not null);
-
-drop policy if exists "residentes_insert" on public.residentes;
-create policy "residentes_insert"
-  on public.residentes for insert
-  with check ((select auth.uid()) is not null);
-
-drop policy if exists "residentes_update" on public.residentes;
-create policy "residentes_update"
-  on public.residentes for update
-  using ((select auth.uid()) is not null)
-  with check ((select auth.uid()) is not null);
-
-drop policy if exists "residentes_delete" on public.residentes;
-create policy "residentes_delete"
-  on public.residentes for delete
-  using ((select auth.uid()) is not null);
-
--- ============================================================
--- TABLA: signos_vitales
--- Registro de signos vitales por turno.
--- ============================================================
 create table if not exists public.signos_vitales (
-  id                    uuid primary key default gen_random_uuid(),
-  residente_id          uuid not null references public.residentes(id) on delete cascade,
-  fecha_hora            timestamptz not null default now(),
-  turno                 text check (turno in ('mañana', 'tarde', 'noche')),
-  -- Mediciones
-  presion_sistolica     integer check (presion_sistolica between 50 and 300),
-  presion_diastolica    integer check (presion_diastolica between 30 and 200),
-  frecuencia_cardiaca   integer check (frecuencia_cardiaca between 20 and 300),
-  frecuencia_respiratoria integer check (frecuencia_respiratoria between 5 and 60),
-  temperatura           numeric(4,1) check (temperatura between 30.0 and 45.0),
-  saturacion_oxigeno    integer check (saturacion_oxigeno between 0 and 100),
-  glucosa               integer check (glucosa between 20 and 800),
-  peso                  numeric(5,2) check (peso between 10.0 and 300.0),
-  -- Evaluación
-  dolor_escala          integer check (dolor_escala between 0 and 10),
-  estado_conciencia     text check (estado_conciencia in ('alerta', 'somnoliento', 'estuporoso', 'coma')),
-  observaciones         text,
-  -- Metadatos
-  registrado_por        uuid references auth.users(id) on delete set null
+  id                       uuid primary key default gen_random_uuid(),
+  residente_id             uuid not null references public.residentes(id) on delete cascade,
+  fecha_hora               timestamptz not null default now(),
+  turno                    text check (turno in ('mañana','tarde','noche')),
+  presion_sistolica        integer check (presion_sistolica between 50 and 300),
+  presion_diastolica       integer check (presion_diastolica between 30 and 200),
+  frecuencia_cardiaca      integer check (frecuencia_cardiaca between 20 and 300),
+  frecuencia_respiratoria  integer check (frecuencia_respiratoria between 5 and 60),
+  temperatura              numeric(4,1) check (temperatura between 30.0 and 45.0),
+  saturacion_oxigeno       integer check (saturacion_oxigeno between 0 and 100),
+  glucosa                  integer check (glucosa between 20 and 800),
+  peso                     numeric(5,2) check (peso between 10.0 and 300.0),
+  dolor_escala             integer check (dolor_escala between 0 and 10),
+  estado_conciencia        text check (estado_conciencia in ('alerta','somnoliento','estuporoso','coma')),
+  observaciones            text,
+  registrado_por           uuid references auth.users(id) on delete set null,
+  creado_en                timestamptz not null default now()
 );
 
-alter table public.signos_vitales enable row level security;
+create index if not exists idx_signos_residente_fecha on public.signos_vitales(residente_id, fecha_hora desc);
 
-drop policy if exists "signos_select" on public.signos_vitales;
-create policy "signos_select"
-  on public.signos_vitales for select
-  using ((select auth.uid()) is not null);
-
-drop policy if exists "signos_insert" on public.signos_vitales;
-create policy "signos_insert"
-  on public.signos_vitales for insert
-  with check ((select auth.uid()) is not null);
-
-drop policy if exists "signos_update" on public.signos_vitales;
-create policy "signos_update"
-  on public.signos_vitales for update
-  using ((select auth.uid()) is not null)
-  with check ((select auth.uid()) is not null);
-
-drop policy if exists "signos_delete" on public.signos_vitales;
-create policy "signos_delete"
-  on public.signos_vitales for delete
-  using ((select auth.uid()) is not null);
-
--- ============================================================
--- TABLA: observaciones_diarias
--- Notas de turno, incidentes, procedimientos.
--- ============================================================
 create table if not exists public.observaciones_diarias (
   id                    uuid primary key default gen_random_uuid(),
   residente_id          uuid not null references public.residentes(id) on delete cascade,
   fecha_hora            timestamptz not null default now(),
-  turno                 text check (turno in ('mañana', 'tarde', 'noche')),
+  turno                 text check (turno in ('mañana','tarde','noche')),
   tipo                  text not null check (tipo in (
-                          'observacion_general', 'caida', 'incidente', 'curacion',
-                          'visita_medica', 'administracion_medicamento', 'cambio_posicion',
-                          'higiene', 'alimentacion', 'eliminacion', 'actividad', 'otro'
+                          'observacion_general','caida','incidente','curacion',
+                          'visita_medica','administracion_medicamento','cambio_posicion',
+                          'higiene','alimentacion','eliminacion','actividad','otro'
                         )),
   descripcion           text not null,
   acciones_tomadas      text,
   requiere_seguimiento  boolean not null default false,
-  -- Metadatos
   registrado_por        uuid references auth.users(id) on delete set null,
-  creado_en             timestamptz not null default now()
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
 );
 
-alter table public.observaciones_diarias enable row level security;
-
-drop policy if exists "observaciones_select" on public.observaciones_diarias;
-create policy "observaciones_select"
-  on public.observaciones_diarias for select
-  using ((select auth.uid()) is not null);
-
-drop policy if exists "observaciones_insert" on public.observaciones_diarias;
-create policy "observaciones_insert"
-  on public.observaciones_diarias for insert
-  with check ((select auth.uid()) is not null);
-
-drop policy if exists "observaciones_update" on public.observaciones_diarias;
-create policy "observaciones_update"
-  on public.observaciones_diarias for update
-  using ((select auth.uid()) is not null)
-  with check ((select auth.uid()) is not null);
-
-drop policy if exists "observaciones_delete" on public.observaciones_diarias;
-create policy "observaciones_delete"
-  on public.observaciones_diarias for delete
-  using ((select auth.uid()) is not null);
-
--- ============================================================
--- TABLA: categorias_acreditacion
--- 10 categorías fijas del DS 14/2017 (seed al final).
--- ============================================================
-create table if not exists public.categorias_acreditacion (
-  id                    uuid primary key default gen_random_uuid(),
-  codigo                text unique not null,
-  nombre                text not null,
-  descripcion           text,
-  orden                 integer not null,
-  documentos_requeridos jsonb
-);
-
--- Sin RLS (solo lectura, datos de referencia no sensibles)
-alter table public.categorias_acreditacion enable row level security;
-
-drop policy if exists "categorias_select_all" on public.categorias_acreditacion;
-create policy "categorias_select_all"
-  on public.categorias_acreditacion for select
-  using (true);
-
--- ============================================================
--- TABLA: documentos_acreditacion
--- Documentos subidos por categoría. Los archivos se guardan
--- en Supabase Storage; aquí se almacena el path relativo.
--- ============================================================
-create table if not exists public.documentos_acreditacion (
-  id               uuid primary key default gen_random_uuid(),
-  categoria_id     uuid not null references public.categorias_acreditacion(id) on delete restrict,
-  nombre           text not null,
-  descripcion      text,
-  -- Referencia al archivo en Storage (path relativo dentro del bucket)
-  storage_path     text,
-  archivo_nombre   text,
-  archivo_tipo     text,
-  archivo_tamaño   bigint check (archivo_tamaño >= 0),
-  -- Estado y vencimiento
-  estado           text not null default 'pendiente'
-                     check (estado in ('pendiente', 'subido', 'aprobado', 'rechazado', 'vencido')),
-  fecha_vencimiento date,
-  observaciones    text,
-  -- Metadatos
-  subido_por       uuid references auth.users(id) on delete set null,
-  creado_en        timestamptz not null default now(),
-  actualizado_en   timestamptz not null default now()
-);
-
-alter table public.documentos_acreditacion enable row level security;
-
-drop policy if exists "documentos_select" on public.documentos_acreditacion;
-create policy "documentos_select"
-  on public.documentos_acreditacion for select
-  using ((select auth.uid()) is not null);
-
-drop policy if exists "documentos_insert" on public.documentos_acreditacion;
-create policy "documentos_insert"
-  on public.documentos_acreditacion for insert
-  with check ((select auth.uid()) is not null);
-
-drop policy if exists "documentos_update" on public.documentos_acreditacion;
-create policy "documentos_update"
-  on public.documentos_acreditacion for update
-  using ((select auth.uid()) is not null)
-  with check ((select auth.uid()) is not null);
-
-drop policy if exists "documentos_delete" on public.documentos_acreditacion;
-create policy "documentos_delete"
-  on public.documentos_acreditacion for delete
-  using ((select auth.uid()) is not null);
-
--- ============================================================
--- STORAGE BUCKETS
--- NOTA: Si este bloque falla con error de permisos, crear los
--- buckets manualmente en Dashboard → Storage → New bucket.
--- Marcar como "Private" (no público).
--- ============================================================
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'documentos-acreditacion',
-  'documentos-acreditacion',
-  false,
-  10485760,  -- 10 MB en bytes
-  array[
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'image/jpeg',
-    'image/png'
-  ]
-)
-on conflict (id) do update set
-  file_size_limit    = excluded.file_size_limit,
-  allowed_mime_types = excluded.allowed_mime_types;
-
-insert into storage.buckets (id, name, public)
-values ('residentes-archivos', 'residentes-archivos', false)
-on conflict (id) do nothing;
-
--- Políticas de Storage: acotadas a usuarios autenticados y por bucket
-drop policy if exists "storage_acreditacion_select" on storage.objects;
-create policy "storage_acreditacion_select"
-  on storage.objects for select
-  using (
-    bucket_id = 'documentos-acreditacion'
-    and (select auth.uid()) is not null
-  );
-
-drop policy if exists "storage_acreditacion_insert" on storage.objects;
-create policy "storage_acreditacion_insert"
-  on storage.objects for insert
-  with check (
-    bucket_id = 'documentos-acreditacion'
-    and (select auth.uid()) is not null
-  );
-
-drop policy if exists "storage_acreditacion_delete" on storage.objects;
-create policy "storage_acreditacion_delete"
-  on storage.objects for delete
-  using (
-    bucket_id = 'documentos-acreditacion'
-    and (select auth.uid()) is not null
-  );
-
-drop policy if exists "storage_residentes_select" on storage.objects;
-create policy "storage_residentes_select"
-  on storage.objects for select
-  using (
-    bucket_id = 'residentes-archivos'
-    and (select auth.uid()) is not null
-  );
-
-drop policy if exists "storage_residentes_insert" on storage.objects;
-create policy "storage_residentes_insert"
-  on storage.objects for insert
-  with check (
-    bucket_id = 'residentes-archivos'
-    and (select auth.uid()) is not null
-  );
-
--- ============================================================
--- ÍNDICES para performance
--- ============================================================
-create index if not exists idx_residentes_estado
-  on public.residentes(estado);
-create index if not exists idx_residentes_nombre
-  on public.residentes(apellido, nombre);
-create index if not exists idx_signos_residente_fecha
-  on public.signos_vitales(residente_id, fecha_hora desc);
-create index if not exists idx_observaciones_residente_fecha
-  on public.observaciones_diarias(residente_id, fecha_hora desc);
-create index if not exists idx_observaciones_tipo
-  on public.observaciones_diarias(tipo);
-create index if not exists idx_documentos_categoria
-  on public.documentos_acreditacion(categoria_id);
-create index if not exists idx_documentos_estado
-  on public.documentos_acreditacion(estado);
-create index if not exists idx_documentos_vencimiento
-  on public.documentos_acreditacion(fecha_vencimiento)
-  where fecha_vencimiento is not null;
-
--- ============================================================
--- SEED: Categorías de acreditación DS 14/2017
--- ============================================================
-insert into public.categorias_acreditacion
-  (codigo, nombre, descripcion, orden, documentos_requeridos)
-values
-(
-  'CAT-01', 'Autorización de Funcionamiento',
-  'Documentación legal y sanitaria que acredita el funcionamiento autorizado del ELEAM.',
-  1,
-  '["Resolución de autorización sanitaria vigente",
-    "Escritura de constitución de la entidad sostenedora",
-    "Certificado de vigencia de la persona jurídica",
-    "Contrato de arriendo o escritura del inmueble",
-    "Certificado de Informes Previos (CIP) Municipal",
-    "Permiso de edificación municipal",
-    "Recepción final de obra"]'::jsonb
-),
-(
-  'CAT-02', 'Planta Física e Infraestructura',
-  'Planos, certificaciones e informes sobre las instalaciones físicas del establecimiento.',
-  2,
-  '["Planos del establecimiento actualizados y aprobados",
-    "Certificado de instalaciones eléctricas (SEC)",
-    "Certificado de instalaciones de gas (SEC)",
-    "Certificado de calderas y calefacción (si aplica)",
-    "Informe de potabilidad del agua",
-    "Certificado de fumigación y desratización vigente",
-    "Certificado de ascensor (si aplica)"]'::jsonb
-),
-(
-  'CAT-03', 'Recursos Humanos',
-  'Dotación, calificación y gestión del personal según normativa vigente.',
-  3,
-  '["Nómina de trabajadores actualizada",
-    "Contratos de trabajo del personal",
-    "Títulos y certificados del personal profesional",
-    "Credencial del director técnico",
-    "Certificados de salud del personal",
-    "Registro de capacitaciones del personal",
-    "Convenios con prestadores de salud externos",
-    "Protocolo de turnos y guardia nocturna"]'::jsonb
-),
-(
-  'CAT-04', 'Fichas Clínicas y Registros Médicos',
-  'Fichas clínicas individuales, evaluaciones funcionales y planes de cuidado por residente.',
-  4,
-  '["Ficha clínica completa por cada residente",
-    "Evaluación funcional (Índice de Barthel)",
-    "Evaluación cognitiva (MMSE / Test del reloj)",
-    "Evaluación nutricional por residente",
-    "Plan de cuidados individualizado (PAI)",
-    "Consentimiento informado firmado",
-    "Historia clínica completa",
-    "Registro de visitas médicas",
-    "Evaluación de riesgo de caídas (Escala de Morse)"]'::jsonb
-),
-(
-  'CAT-05', 'Medicamentos y Farmacia',
-  'Gestión, control y almacenamiento de medicamentos, psicotrópicos y botiquín.',
-  5,
-  '["Inventario de botiquín actualizado",
-    "Kardex de administración de medicamentos por residente",
-    "Prescripciones médicas vigentes por residente",
-    "Control de psicotrópicos y estupefacientes (libro foliado)",
-    "Protocolo de manejo y almacenamiento de medicamentos",
-    "Registro de medicamentos vencidos y destruidos",
-    "Convenio con farmacia o químico farmacéutico asesor"]'::jsonb
-),
-(
-  'CAT-06', 'Alimentación y Nutrición',
-  'Minutas, evaluaciones nutricionales y certificaciones del personal de cocina.',
-  6,
-  '["Minuta alimentaria mensual aprobada por nutricionista",
-    "Evaluación nutricional individual de cada residente",
-    "Certificados de manipulación de alimentos del personal de cocina",
-    "Registro de control de temperaturas (HACCP)",
-    "Informe de instalaciones de cocina",
-    "Protocolo de dietas especiales y deglución",
-    "Registro de encuestas de satisfacción alimentaria"]'::jsonb
-),
-(
-  'CAT-07', 'Prevención y Control de Infecciones (PCI)',
-  'Protocolos y registros del programa de prevención y control de infecciones intrahospitalarias.',
-  7,
-  '["Programa de PCI del establecimiento",
-    "Protocolo de lavado de manos",
-    "Protocolo de aislamiento de contacto y gotitas",
-    "Registro de vigilancia epidemiológica (IIH)",
-    "Protocolo de manejo de residuos hospitalarios",
-    "Registro de uso de antibióticos",
-    "Protocolo de higiene y antisepsia",
-    "Registro de esterilización y desinfección de material"]'::jsonb
-),
-(
-  'CAT-08', 'Seguridad y Plan de Emergencias',
-  'Plan de emergencia, certificaciones de seguridad contra incendios y registros de simulacros.',
-  8,
-  '["Plan de emergencia y evacuación aprobado",
-    "Certificado de extintores vigente",
-    "Señalética de emergencia instalada",
-    "Registro de simulacros de evacuación (mínimo 2 por año)",
-    "Luces de emergencia certificadas",
-    "Protocolo de búsqueda y rescate de residentes",
-    "Plan de continuidad operacional"]'::jsonb
-),
-(
-  'CAT-09', 'Registros de Atención Diaria',
-  'Registros diarios de signos vitales, actividades, incidentes y procedimientos de enfermería.',
-  9,
-  '["Registro diario de signos vitales por turno",
-    "Registro de actividades diarias por residente",
-    "Registro de caídas e incidentes (libro de novedades)",
-    "Registro de curaciones y procedimientos de enfermería",
-    "Registro de cambios posturales",
-    "Registro de higiene y cuidados básicos diarios",
-    "Hoja de balance hídrico (si aplica)"]'::jsonb
-),
-(
-  'CAT-10', 'Actividades y Rehabilitación',
-  'Programa de actividades terapéuticas y recreativas, y plan de rehabilitación kinésica.',
-  10,
-  '["Programa mensual de actividades recreativas y terapéuticas",
-    "Registro de asistencia a actividades por residente",
-    "Plan de rehabilitación individualizado (kinesiología)",
-    "Convenio o contrato con kinesiólogo",
-    "Registro de sesiones de rehabilitación",
-    "Evaluación de funcionalidad motora",
-    "Programa de estimulación cognitiva"]'::jsonb
-)
-on conflict (codigo) do update set
-  nombre                = excluded.nombre,
-  descripcion           = excluded.descripcion,
-  documentos_requeridos = excluded.documentos_requeridos;
-
--- ============================================================
--- MÓDULO SAAS: ELEAMS + PAGO + ROLES
--- Ejecutar después del schema base para habilitar la lógica
--- de suscripción y multi-ELEAM.
--- ============================================================
-
--- ── Tabla: eleams ────────────────────────────────────────────
--- Representa cada establecimiento cliente.
--- El pago está asociado al ELEAM, no al usuario individual.
-create table if not exists public.eleams (
-  id               uuid primary key default gen_random_uuid(),
-  nombre           text not null,
-  rut_empresa      text unique,
-  email_admin      text not null,
-  pago_activo      boolean not null default false,
-  plan             text default 'mensual',
-  fecha_pago       timestamptz,
-  creado_en        timestamptz not null default now()
-);
-
-alter table public.eleams enable row level security;
-
--- Cada usuario ve solo el ELEAM al que pertenece
-drop policy if exists "eleams_select_own" on public.eleams;
-create policy "eleams_select_own" on public.eleams for select
-  using (
-    id in (
-      select eleam_id from public.profiles
-      where id = (select auth.uid())
-    )
-  );
-
--- Cualquier usuario autenticado puede crear su ELEAM (registro)
-drop policy if exists "eleams_insert_auth" on public.eleams;
-create policy "eleams_insert_auth" on public.eleams for insert
-  with check ((select auth.uid()) is not null);
-
--- Solo el admin del ELEAM puede actualizarlo
-drop policy if exists "eleams_update_admin" on public.eleams;
-create policy "eleams_update_admin" on public.eleams for update
-  using (
-    id in (
-      select eleam_id from public.profiles
-      where id = (select auth.uid()) and rol = 'admin_eleam'
-    )
-  )
-  with check (
-    id in (
-      select eleam_id from public.profiles
-      where id = (select auth.uid()) and rol = 'admin_eleam'
-    )
-  );
-
--- ── Agregar eleam_id a profiles (si no existe) ────────────────
-do $$
-begin
-  if not exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'profiles' and column_name = 'eleam_id'
-  ) then
-    alter table public.profiles
-      add column eleam_id uuid references public.eleams(id) on delete set null;
-  end if;
-end $$;
-
--- ── Actualizar constraint de roles en profiles ─────────────────
--- Se mantienen roles legacy para compatibilidad.
-alter table public.profiles
-  drop constraint if exists profiles_rol_check;
-
-alter table public.profiles
-  add constraint profiles_rol_check
-  check (rol in ('admin_eleam', 'funcionario', 'superadmin', 'admin', 'usuario', 'enfermera', 'medico'));
-
--- ── Policy INSERT en profiles (necesaria para registro manual) ──
-drop policy if exists "profiles_own_insert" on public.profiles;
-create policy "profiles_own_insert" on public.profiles for insert
-  with check ((select auth.uid()) = id);
-
--- ── ELEAM de prueba con pago siempre activo ───────────────────
--- Este registro permite que el usuario de prueba acceda sin pago real.
--- IMPORTANTE: eliminar o deshabilitar al integrar el sistema de pago real.
-insert into public.eleams (id, nombre, email_admin, pago_activo, plan)
-values (
-  'a0000000-0000-0000-0000-000000000001'::uuid,
-  'ELEAM Demo — FichaEleam',
-  'demo@fichaeleam.cl',
-  true,   -- ← pago_activo = true permanente para pruebas
-  'demo'
-)
-on conflict (id) do update set
-  pago_activo = true,
-  nombre      = excluded.nombre;
-
--- ── Trigger actualizado: incluye rol y eleam_id ───────────────
--- Si el usuario se registra con email demo@fichaeleam.cl,
--- se asocia automáticamente al ELEAM de prueba como superadmin.
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_rol      text := 'admin_eleam';
-  v_eleam_id uuid := null;
-begin
-  -- El email de prueba obtiene superadmin con pago activo permanente
-  if new.email = 'demo@fichaeleam.cl' then
-    v_rol      := 'superadmin';
-    v_eleam_id := 'a0000000-0000-0000-0000-000000000001'::uuid;
-  end if;
-
-  insert into public.profiles (id, nombre, email, rol, eleam_id)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email, '@', 1)),
-    new.email,
-    v_rol,
-    v_eleam_id
-  )
-  on conflict (id) do nothing;
-  return new;
-end;
-$$;
-
--- Recrear el trigger
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
-
--- ── Instrucciones para el usuario de prueba ──────────────────
--- 1. Crear el usuario en Supabase Dashboard → Authentication → Users:
---       Email: demo@fichaeleam.cl
---       Password: FichaEleam2025!
--- 2. O usar la API: supabase.auth.signUp({ email, password })
--- 3. El trigger automáticamente lo asocia al ELEAM de prueba
---    con rol='superadmin' y pago_activo=true.
--- 4. Si el usuario ya existe, ejecutar manualmente:
---    UPDATE public.profiles
---    SET rol='superadmin', eleam_id='a0000000-0000-0000-0000-000000000001'
---    WHERE email='demo@fichaeleam.cl';
-
--- ============================================================
--- MULTI-TENANCY: eleam_id en tablas de datos
--- Ejecutar después del bloque SaaS anterior.
--- Garantiza aislamiento completo de datos entre ELEAMs.
--- ============================================================
-
--- ── Columna eleam_id en residentes ───────────────────────────
-do $$ begin
-  if not exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'residentes' and column_name = 'eleam_id'
-  ) then
-    alter table public.residentes
-      add column eleam_id uuid references public.eleams(id) on delete restrict;
-  end if;
-end $$;
-
--- ── RLS residentes: solo el propio ELEAM ─────────────────────
-drop policy if exists "residentes_select" on public.residentes;
-drop policy if exists "residentes_insert" on public.residentes;
-drop policy if exists "residentes_update" on public.residentes;
-drop policy if exists "residentes_delete" on public.residentes;
-
-create policy "residentes_select" on public.residentes for select
-  using (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  );
-
-create policy "residentes_insert" on public.residentes for insert
-  with check (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  );
-
-create policy "residentes_update" on public.residentes for update
-  using (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  )
-  with check (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  );
-
-create policy "residentes_delete" on public.residentes for delete
-  using (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  );
-
--- ── RLS signos_vitales: aislamiento vía residentes.eleam_id ──
-drop policy if exists "signos_select" on public.signos_vitales;
-drop policy if exists "signos_insert" on public.signos_vitales;
-drop policy if exists "signos_update" on public.signos_vitales;
-drop policy if exists "signos_delete" on public.signos_vitales;
-drop policy if exists "sv_select" on public.signos_vitales;
-drop policy if exists "sv_insert" on public.signos_vitales;
-drop policy if exists "sv_update" on public.signos_vitales;
-drop policy if exists "sv_delete" on public.signos_vitales;
-drop policy if exists "signos_vitales_select" on public.signos_vitales;
-drop policy if exists "signos_vitales_insert" on public.signos_vitales;
-drop policy if exists "signos_vitales_update" on public.signos_vitales;
-drop policy if exists "signos_vitales_delete" on public.signos_vitales;
-
-create policy "sv_select" on public.signos_vitales for select
-  using (
-    residente_id in (
-      select id from public.residentes
-      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-    )
-  );
-
-create policy "sv_insert" on public.signos_vitales for insert
-  with check (
-    residente_id in (
-      select id from public.residentes
-      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-    )
-  );
-
-create policy "sv_update" on public.signos_vitales for update
-  using (
-    residente_id in (
-      select id from public.residentes
-      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-    )
-  );
-
-create policy "sv_delete" on public.signos_vitales for delete
-  using (
-    residente_id in (
-      select id from public.residentes
-      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-    )
-  );
-
--- ── RLS observaciones_diarias: aislamiento vía residentes ────
-drop policy if exists "obs_select" on public.observaciones_diarias;
-drop policy if exists "obs_insert" on public.observaciones_diarias;
-drop policy if exists "obs_update" on public.observaciones_diarias;
-drop policy if exists "obs_delete" on public.observaciones_diarias;
-drop policy if exists "observaciones_select" on public.observaciones_diarias;
-drop policy if exists "observaciones_insert" on public.observaciones_diarias;
-drop policy if exists "observaciones_update" on public.observaciones_diarias;
-drop policy if exists "observaciones_delete" on public.observaciones_diarias;
-
-create policy "obs_select" on public.observaciones_diarias for select
-  using (
-    residente_id in (
-      select id from public.residentes
-      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-    )
-  );
-
-create policy "obs_insert" on public.observaciones_diarias for insert
-  with check (
-    residente_id in (
-      select id from public.residentes
-      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-    )
-  );
-
-create policy "obs_update" on public.observaciones_diarias for update
-  using (
-    residente_id in (
-      select id from public.residentes
-      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-    )
-  );
-
-create policy "obs_delete" on public.observaciones_diarias for delete
-  using (
-    residente_id in (
-      select id from public.residentes
-      where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-    )
-  );
-
--- ── eleam_id en documentos_acreditacion ──────────────────────
-do $$ begin
-  if not exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'documentos_acreditacion' and column_name = 'eleam_id'
-  ) then
-    alter table public.documentos_acreditacion
-      add column eleam_id uuid references public.eleams(id) on delete restrict;
-  end if;
-end $$;
-
-drop policy if exists "docs_select" on public.documentos_acreditacion;
-drop policy if exists "docs_insert" on public.documentos_acreditacion;
-drop policy if exists "docs_update" on public.documentos_acreditacion;
-drop policy if exists "docs_delete" on public.documentos_acreditacion;
-drop policy if exists "documentos_select" on public.documentos_acreditacion;
-drop policy if exists "documentos_insert" on public.documentos_acreditacion;
-drop policy if exists "documentos_update" on public.documentos_acreditacion;
-drop policy if exists "documentos_delete" on public.documentos_acreditacion;
-
-create policy "docs_select" on public.documentos_acreditacion for select
-  using (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  );
-
-create policy "docs_insert" on public.documentos_acreditacion for insert
-  with check (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  );
-
-create policy "docs_update" on public.documentos_acreditacion for update
-  using (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  );
-
-create policy "docs_delete" on public.documentos_acreditacion for delete
-  using (
-    eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
-  );
-
--- ============================================================
--- SCHEMA v3 — FichaEleam
--- Mejoras de modelo, performance e integridad.
--- Seguro para re-ejecución: todas las sentencias son idempotentes.
--- ============================================================
-
--- ── 1. Función set_updated_at (reemplaza new Date() en JS) ──
-create or replace function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.actualizado_en = now();
-  return new;
-end;
-$$;
-
--- ── 2. Corregir valores de rol (eliminar legacy) ─────────────
-update public.profiles
-  set rol = 'funcionario'
-  where rol in ('usuario', 'enfermera', 'medico');
-
-update public.profiles
-  set rol = 'admin_eleam'
-  where rol = 'admin';
-
-alter table public.profiles
-  drop constraint if exists profiles_rol_check;
-
-alter table public.profiles
-  add constraint profiles_rol_check
-  check (rol in ('admin_eleam', 'funcionario', 'superadmin'));
-
--- ── 3. rut único por ELEAM (no globalmente) ──────────────────
-alter table public.residentes
-  drop constraint if exists residentes_rut_key;
-
-do $$ begin
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'residentes_rut_eleam_unique'
-  ) then
-    alter table public.residentes
-      add constraint residentes_rut_eleam_unique
-      unique (rut, eleam_id);
-  end if;
-end $$;
-
--- ── 4. Índices de performance ─────────────────────────────────
--- profiles.eleam_id — subquery en cada política RLS de datos
-create index if not exists idx_profiles_eleam_id
-  on public.profiles(eleam_id);
-
--- residentes.eleam_id — subquery en RLS de signos_vitales y observaciones
-create index if not exists idx_residentes_eleam_id
-  on public.residentes(eleam_id);
-
--- documentos_acreditacion.eleam_id — RLS directa
-create index if not exists idx_documentos_eleam_id
-  on public.documentos_acreditacion(eleam_id);
-
--- Partial index para alertas del dashboard (seguimientos pendientes)
+create index if not exists idx_observaciones_residente_fecha on public.observaciones_diarias(residente_id, fecha_hora desc);
+create index if not exists idx_observaciones_tipo on public.observaciones_diarias(tipo);
 create index if not exists idx_observaciones_seguimiento
   on public.observaciones_diarias(residente_id, fecha_hora desc)
   where requiere_seguimiento = true;
 
--- Índice compuesto para documentos por vencer (query del dashboard)
-create index if not exists idx_documentos_eleam_vencimiento
-  on public.documentos_acreditacion(eleam_id, fecha_vencimiento)
-  where fecha_vencimiento is not null;
+-- ============================================================
+-- 3. Invitaciones y portal familiar
+-- ============================================================
 
--- ── 5. Nuevas columnas en eleams ──────────────────────────────
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='telefono'
-  ) then alter table public.eleams add column telefono text; end if;
-end $$;
-
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='fecha_vencimiento_suscripcion'
-  ) then alter table public.eleams add column fecha_vencimiento_suscripcion timestamptz; end if;
-end $$;
-
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='max_residentes'
-  ) then
-    -- NULL = ilimitado (tier demo/free). Integer para planes de pago.
-    alter table public.eleams add column max_residentes integer;
-  end if;
-end $$;
-
--- CHECK en plan (demo seed ya usa 'demo', seguro)
-alter table public.eleams
-  drop constraint if exists eleams_plan_check;
-alter table public.eleams
-  add constraint eleams_plan_check
-  check (plan in ('demo', 'mensual', 'anual', 'inactivo') or plan is null);
-
--- ── 6. observaciones_diarias — columna actualizado_en ────────
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='observaciones_diarias'
-    and column_name='actualizado_en'
-  ) then
-    alter table public.observaciones_diarias
-      add column actualizado_en timestamptz not null default now();
-    update public.observaciones_diarias
-      set actualizado_en = creado_en
-      where actualizado_en is distinct from creado_en;
-  end if;
-end $$;
-
-drop trigger if exists trg_observaciones_updated_at on public.observaciones_diarias;
-create trigger trg_observaciones_updated_at
-  before update on public.observaciones_diarias
-  for each row execute function public.set_updated_at();
-
--- ── 7. signos_vitales — columna creado_en (audit trail) ──────
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='signos_vitales'
-    and column_name='creado_en'
-  ) then
-    alter table public.signos_vitales
-      add column creado_en timestamptz not null default now();
-    update public.signos_vitales
-      set creado_en = fecha_hora
-      where creado_en is distinct from fecha_hora;
-  end if;
-end $$;
-
--- ── 8. Triggers updated_at para residentes y documentos ──────
-drop trigger if exists trg_residentes_updated_at on public.residentes;
-create trigger trg_residentes_updated_at
-  before update on public.residentes
-  for each row execute function public.set_updated_at();
-
-drop trigger if exists trg_documentos_updated_at on public.documentos_acreditacion;
-create trigger trg_documentos_updated_at
-  before update on public.documentos_acreditacion
-  for each row execute function public.set_updated_at();
-
--- ── 9. Storage policies con scope por eleam_id en el path ────
--- Path: acreditacion/{eleamId}/{categoriaId}/{timestamp}_{filename}
--- split_part(name, '/', 2) extrae el eleam_id del path.
-drop policy if exists "storage_acreditacion_select" on storage.objects;
-drop policy if exists "storage_acreditacion_insert" on storage.objects;
-drop policy if exists "storage_acreditacion_delete" on storage.objects;
-drop policy if exists "storage_residentes_select" on storage.objects;
-drop policy if exists "storage_residentes_insert" on storage.objects;
-drop policy if exists "storage_residentes_delete" on storage.objects;
-
-create policy "storage_acreditacion_select"
-  on storage.objects for select
-  using (
-    bucket_id = 'documentos-acreditacion'
-    and split_part(name, '/', 2) = (
-      select eleam_id::text from public.profiles
-      where id = (select auth.uid())
-    )
-  );
-
-create policy "storage_acreditacion_insert"
-  on storage.objects for insert
-  with check (
-    bucket_id = 'documentos-acreditacion'
-    and split_part(name, '/', 2) = (
-      select eleam_id::text from public.profiles
-      where id = (select auth.uid())
-    )
-  );
-
-create policy "storage_acreditacion_delete"
-  on storage.objects for delete
-  using (
-    bucket_id = 'documentos-acreditacion'
-    and split_part(name, '/', 2) = (
-      select eleam_id::text from public.profiles
-      where id = (select auth.uid())
-    )
-  );
-
-
--- ════════════════════════════════════════════════════════════════
--- v4: Superadmin — rol, políticas globales, tabla pagos
--- Ejecutar en Supabase Dashboard → SQL Editor
--- ════════════════════════════════════════════════════════════════
-
--- ── 1. Columna notas_admin en eleams ────────────────────────────
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='notas_admin'
-  ) then
-    alter table public.eleams add column notas_admin text;
-  end if;
-end $$;
-
--- ── 2. Función helper: es superadmin el usuario actual ──────────
-create or replace function public.is_superadmin()
-  returns boolean
-  language sql stable security definer
-  set search_path = public
-as $$
-  select exists (
-    select 1 from public.profiles
-    where id = (select auth.uid())
-      and rol = 'superadmin'
-  );
-$$;
-
--- ── 3. Políticas RLS superadmin en eleams ───────────────────────
--- Superadmin puede ver y editar TODOS los ELEAMs
-drop policy if exists "superadmin_select_eleams"  on public.eleams;
-drop policy if exists "superadmin_update_eleams"  on public.eleams;
-drop policy if exists "superadmin_insert_eleams"  on public.eleams;
-
-create policy "superadmin_select_eleams" on public.eleams
-  for select using (public.is_superadmin());
-
-create policy "superadmin_update_eleams" on public.eleams
-  for update using (public.is_superadmin())
-  with check (public.is_superadmin());
-
-create policy "superadmin_insert_eleams" on public.eleams
-  for insert with check (public.is_superadmin());
-
--- ── 4. Política RLS superadmin en profiles ──────────────────────
--- Superadmin puede ver todos los perfiles
-drop policy if exists "superadmin_select_profiles" on public.profiles;
-
-create policy "superadmin_select_profiles" on public.profiles
-  for select using (public.is_superadmin());
-
--- ── 5. Política RLS superadmin en residentes ────────────────────
--- Superadmin puede ver todos los residentes (para métricas)
-drop policy if exists "superadmin_select_residentes" on public.residentes;
-
-create policy "superadmin_select_residentes" on public.residentes
-  for select using (public.is_superadmin());
-
--- ── 6. Tabla pagos ──────────────────────────────────────────────
-create table if not exists public.pagos (
-  id                  uuid        primary key default gen_random_uuid(),
-  eleam_id            uuid        not null references public.eleams(id) on delete cascade,
-  monto               integer     not null check (monto > 0),
-  moneda              text        not null default 'CLP',
-  plan                text        not null check (plan in ('mensual', 'anual')),
-  fecha_pago          timestamptz not null default now(),
-  fecha_inicio        date        not null,
-  fecha_fin           date,
-  metodo_pago         text,
-  referencia_externa  text,
-  estado              text        not null default 'completado'
-                        check (estado in ('pendiente', 'completado', 'fallido', 'reembolsado')),
-  notas               text,
-  registrado_por      uuid        references auth.users(id),
-  creado_en           timestamptz not null default now()
-);
-
-alter table public.pagos enable row level security;
-
--- Superadmin: acceso total a pagos
-drop policy if exists "superadmin_all_pagos" on public.pagos;
-create policy "superadmin_all_pagos" on public.pagos
-  for all
-  using    (public.is_superadmin())
-  with check (public.is_superadmin());
-
--- Admin del ELEAM puede ver los pagos de su propio ELEAM
-drop policy if exists "eleam_select_pagos" on public.pagos;
-create policy "eleam_select_pagos" on public.pagos
-  for select using (
-    eleam_id = (
-      select eleam_id from public.profiles
-      where id = (select auth.uid())
-    )
-  );
-
--- Índices para pagos
-create index if not exists idx_pagos_eleam_id   on public.pagos(eleam_id);
-create index if not exists idx_pagos_fecha_pago on public.pagos(fecha_pago desc);
-
--- ── 7. Cómo crear un superadmin ─────────────────────────────────
--- Después de que el usuario se registre, ejecutar en SQL Editor:
--- update public.profiles set rol = 'superadmin' where email = 'tu@email.com';
--- El superadmin NO necesita eleam_id y tiene acceso a todos los datos.
-
-
--- ════════════════════════════════════════════════════════════════
--- v5: Integración MercadoPago — Suscripciones por ELEAM
---
--- Modelo:
---   • Cada ELEAM tiene un PLAN (precio, max_residentes, max_funcionarios).
---   • El admin del ELEAM (rol = 'admin_eleam') paga la suscripción.
---   • Los funcionarios del mismo ELEAM NO pagan; heredan el acceso.
---   • Las cuotas mensuales se procesan con MP (preapproval) y se
---     reflejan en eleams.subscription_status / proximo_cobro_en.
---   • Los webhooks llegan a la Edge Function `mp-webhook` que valida
---     la firma HMAC SHA-256 y refresca el estado del ELEAM.
---   • Triggers de límite (residentes/funcionarios) y de prevención
---     de escalamiento de roles operan en SECURITY DEFINER.
--- ════════════════════════════════════════════════════════════════
-
--- ── 1. Tabla planes ─────────────────────────────────────────────
-create table if not exists public.planes (
-  id                uuid        primary key default gen_random_uuid(),
-  codigo            text        unique not null,
-  nombre            text        not null,
-  descripcion       text,
-  precio_clp        integer     not null check (precio_clp > 0),
-  max_residentes    integer     check (max_residentes is null or max_residentes > 0),
-  max_funcionarios  integer     check (max_funcionarios is null or max_funcionarios > 0),
-  frequency         integer     not null default 1 check (frequency > 0),
-  frequency_type    text        not null default 'months'
-                      check (frequency_type in ('days','months')),
-  activo            boolean     not null default true,
-  orden             integer     not null default 0,
-  destacado         boolean     not null default false,
-  creado_en         timestamptz not null default now()
-);
-
-alter table public.planes enable row level security;
-
-drop policy if exists "planes_select_public" on public.planes;
-create policy "planes_select_public" on public.planes
-  for select using (activo = true or public.is_superadmin());
-
-drop policy if exists "planes_superadmin_write" on public.planes;
-create policy "planes_superadmin_write" on public.planes
-  for all using (public.is_superadmin())
-  with check (public.is_superadmin());
-
--- Seed de planes (idempotente)
-insert into public.planes
-  (codigo, nombre, descripcion, precio_clp, max_residentes, max_funcionarios, orden, destacado)
-values
-  ('plan-14',  'Hasta 14 residentes', 'Ideal para residencias pequeñas',  50000,  14,  10, 1, false),
-  ('plan-24',  'Hasta 24 residentes', 'El plan más elegido',              80000,  24,  20, 2, true),
-  ('plan-34',  'Hasta 34 residentes', 'Para residencias grandes',         120000, 34,  30, 3, false)
-on conflict (codigo) do update set
-  nombre           = excluded.nombre,
-  descripcion      = excluded.descripcion,
-  precio_clp       = excluded.precio_clp,
-  max_residentes   = excluded.max_residentes,
-  max_funcionarios = excluded.max_funcionarios,
-  orden            = excluded.orden,
-  destacado        = excluded.destacado;
-
--- ── 2. Columnas nuevas en eleams ────────────────────────────────
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='plan_id'
-  ) then alter table public.eleams add column plan_id uuid references public.planes(id);
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='mp_preapproval_id'
-  ) then alter table public.eleams add column mp_preapproval_id text unique;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='mp_payer_email'
-  ) then alter table public.eleams add column mp_payer_email text;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='subscription_status'
-  ) then alter table public.eleams
-    add column subscription_status text not null default 'inactivo'
-      check (subscription_status in
-        ('inactivo','pendiente','activo','en_gracia','pausado','cancelado','vencido'));
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='proximo_cobro_en'
-  ) then alter table public.eleams add column proximo_cobro_en timestamptz;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='cancelado_en'
-  ) then alter table public.eleams add column cancelado_en timestamptz;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='max_funcionarios'
-  ) then alter table public.eleams add column max_funcionarios integer;
-  end if;
-end $$;
-
-create index if not exists idx_eleams_subscription_status
-  on public.eleams(subscription_status);
-create index if not exists idx_eleams_mp_preapproval_id
-  on public.eleams(mp_preapproval_id);
-
--- ── 3. Columnas MP en pagos ─────────────────────────────────────
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='pagos' and column_name='mp_payment_id'
-  ) then alter table public.pagos add column mp_payment_id text unique;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='pagos' and column_name='mp_preapproval_id'
-  ) then alter table public.pagos add column mp_preapproval_id text;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='pagos' and column_name='mp_authorized_payment_id'
-  ) then alter table public.pagos add column mp_authorized_payment_id text unique;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='pagos' and column_name='raw'
-  ) then alter table public.pagos add column raw jsonb;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='pagos' and column_name='plan_id'
-  ) then alter table public.pagos add column plan_id uuid references public.planes(id);
-  end if;
-end $$;
-
-create index if not exists idx_pagos_mp_preapproval on public.pagos(mp_preapproval_id);
-
--- ── 4. Tabla mp_webhook_events (idempotencia + auditoría) ──────
-create table if not exists public.mp_webhook_events (
-  id              uuid        primary key default gen_random_uuid(),
-  mp_request_id   text        unique,
-  topic           text,
-  data_id         text,
-  action          text,
-  payload         jsonb,
-  signature_ok    boolean     not null default false,
-  processed_ok    boolean     not null default false,
-  error           text,
-  recibido_en     timestamptz not null default now(),
-  procesado_en    timestamptz
-);
-
-alter table public.mp_webhook_events enable row level security;
-
-drop policy if exists "mp_events_superadmin_select" on public.mp_webhook_events;
-create policy "mp_events_superadmin_select" on public.mp_webhook_events
-  for select using (public.is_superadmin());
-
-create index if not exists idx_mp_events_data_id    on public.mp_webhook_events(data_id);
-create index if not exists idx_mp_events_recibido   on public.mp_webhook_events(recibido_en desc);
-
--- ── 5. Tabla funcionario_invitaciones ───────────────────────────
 create table if not exists public.funcionario_invitaciones (
-  id            uuid        primary key default gen_random_uuid(),
-  eleam_id      uuid        not null references public.eleams(id) on delete cascade,
-  email         text        not null,
-  token         text        unique not null,
+  id            uuid primary key default gen_random_uuid(),
+  eleam_id      uuid not null references public.eleams(id) on delete cascade,
+  email         text not null,
+  token         text unique not null,
   expira_en     timestamptz not null default (now() + interval '7 days'),
-  usado         boolean     not null default false,
+  usado         boolean not null default false,
   usado_en      timestamptz,
-  creado_por    uuid        references auth.users(id) on delete set null,
+  rol           text not null default 'funcionario' check (rol in ('funcionario','familiar')),
+  residente_id  uuid references public.residentes(id) on delete cascade,
+  creado_por    uuid references auth.users(id) on delete set null,
   creado_en     timestamptz not null default now()
 );
-
-alter table public.funcionario_invitaciones enable row level security;
-
--- Admin del ELEAM puede ver y crear invitaciones de su ELEAM
-drop policy if exists "inv_admin_select" on public.funcionario_invitaciones;
-create policy "inv_admin_select" on public.funcionario_invitaciones
-  for select using (
-    eleam_id = (select eleam_id from public.profiles
-                 where id = (select auth.uid()) and rol = 'admin_eleam')
-    or public.is_superadmin()
-  );
-
-drop policy if exists "inv_admin_insert" on public.funcionario_invitaciones;
-create policy "inv_admin_insert" on public.funcionario_invitaciones
-  for insert with check (
-    eleam_id = (select eleam_id from public.profiles
-                 where id = (select auth.uid()) and rol = 'admin_eleam')
-  );
-
-drop policy if exists "inv_admin_delete" on public.funcionario_invitaciones;
-create policy "inv_admin_delete" on public.funcionario_invitaciones
-  for delete using (
-    eleam_id = (select eleam_id from public.profiles
-                 where id = (select auth.uid()) and rol = 'admin_eleam')
-    or public.is_superadmin()
-  );
 
 create index if not exists idx_inv_eleam on public.funcionario_invitaciones(eleam_id);
 create index if not exists idx_inv_email on public.funcionario_invitaciones(lower(email));
 
--- ── 6. Helpers SECURITY DEFINER (sin recursión RLS) ─────────────
-create or replace function public.my_eleam_id()
-  returns uuid
-  language sql stable security definer
-  set search_path = public
-as $$ select eleam_id from public.profiles where id = (select auth.uid()) $$;
-
-create or replace function public.my_rol()
-  returns text
-  language sql stable security definer
-  set search_path = public
-as $$ select rol from public.profiles where id = (select auth.uid()) $$;
-
--- ── 7. Política: admin_eleam puede ver perfiles de su ELEAM ─────
-drop policy if exists "profiles_admin_eleam_select" on public.profiles;
-create policy "profiles_admin_eleam_select" on public.profiles
-  for select using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id is not null
-    and eleam_id = public.my_eleam_id()
-  );
-
--- ── 8. Trigger: límite de residentes por plan ───────────────────
-create or replace function public.check_residentes_limit()
-  returns trigger
-  language plpgsql security definer
-  set search_path = public
-as $$
-declare
-  v_max     integer;
-  v_count   integer;
-  v_status  text;
-begin
-  if new.estado <> 'activo' then
-    return new;
-  end if;
-  if tg_op = 'UPDATE' and old.estado = 'activo' and new.estado = 'activo' then
-    return new;
-  end if;
-
-  select coalesce(p.max_residentes, e.max_residentes), e.subscription_status
-    into v_max, v_status
-  from public.eleams e
-  left join public.planes p on p.id = e.plan_id
-  where e.id = new.eleam_id;
-
-  if v_status not in ('activo','en_gracia','pendiente') then
-    raise exception 'La suscripción del ELEAM no está activa (%). Activa el plan antes de agregar residentes.', v_status
-      using errcode = 'P0001';
-  end if;
-
-  if v_max is not null then
-    select count(*) into v_count
-      from public.residentes
-      where eleam_id = new.eleam_id
-        and estado = 'activo'
-        and id <> new.id;
-    if v_count >= v_max then
-      raise exception 'El plan permite máximo % residentes activos', v_max
-        using errcode = 'P0001';
-    end if;
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_residentes_limit on public.residentes;
-create trigger trg_residentes_limit
-  before insert or update of estado, eleam_id on public.residentes
-  for each row execute function public.check_residentes_limit();
-
--- ── 9. Trigger: límite de funcionarios por plan ─────────────────
-create or replace function public.check_funcionarios_limit()
-  returns trigger
-  language plpgsql security definer
-  set search_path = public
-as $$
-declare
-  v_max    integer;
-  v_count  integer;
-begin
-  if new.eleam_id is null or new.rol <> 'funcionario' then
-    return new;
-  end if;
-  if tg_op = 'UPDATE'
-     and old.eleam_id is not distinct from new.eleam_id
-     and old.rol      is not distinct from new.rol then
-    return new;
-  end if;
-
-  select coalesce(p.max_funcionarios, e.max_funcionarios)
-    into v_max
-  from public.eleams e
-  left join public.planes p on p.id = e.plan_id
-  where e.id = new.eleam_id;
-
-  if v_max is not null then
-    select count(*) into v_count
-      from public.profiles
-      where eleam_id = new.eleam_id
-        and rol = 'funcionario'
-        and id <> new.id;
-    if v_count >= v_max then
-      raise exception 'El plan permite máximo % funcionarios', v_max
-        using errcode = 'P0001';
-    end if;
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_funcionarios_limit on public.profiles;
-create trigger trg_funcionarios_limit
-  before insert or update of eleam_id, rol on public.profiles
-  for each row execute function public.check_funcionarios_limit();
-
--- ── 10. Trigger: prevenir escalamiento de rol/eleam_id ──────────
--- Un usuario común NO puede cambiar su propio rol ni su eleam_id.
--- Solo superadmin (mediante service_role o por la fn is_superadmin).
-create or replace function public.prevent_role_eleam_escalation()
-  returns trigger
-  language plpgsql security definer
-  set search_path = public
-as $$
-declare
-  v_caller_rol text;
-begin
-  -- Las inserciones por trigger handle_new_user (security definer)
-  -- no tienen auth.uid(); las dejamos pasar.
-  if (select auth.uid()) is null then
-    return new;
-  end if;
-
-  select rol into v_caller_rol from public.profiles where id = (select auth.uid());
-  if v_caller_rol = 'superadmin' then
-    return new;
-  end if;
-
-  if tg_op = 'UPDATE' then
-    if new.rol is distinct from old.rol then
-      raise exception 'No autorizado a modificar el rol' using errcode = '42501';
-    end if;
-    if new.eleam_id is distinct from old.eleam_id then
-      raise exception 'No autorizado a modificar el ELEAM' using errcode = '42501';
-    end if;
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_prevent_role_eleam_escalation on public.profiles;
-create trigger trg_prevent_role_eleam_escalation
-  before update on public.profiles
-  for each row execute function public.prevent_role_eleam_escalation();
-
--- ── 11. handle_new_user — soporta token de invitación ───────────
--- Si el signup incluye user_metadata.invite_token, se valida contra
--- funcionario_invitaciones (token + email + no usado + no expirado).
--- Si la invitación es válida → rol='funcionario' + eleam_id de la invitación.
--- En caso contrario → rol='admin_eleam' sin eleam (UI lo creará).
-create or replace function public.handle_new_user()
-  returns trigger
-  language plpgsql security definer
-  set search_path = public
-as $$
-declare
-  v_rol         text  := 'admin_eleam';
-  v_eleam_id    uuid  := null;
-  v_token       text;
-  v_invitacion  record;
-begin
-  -- Cuenta demo (siempre superadmin con ELEAM demo activo)
-  if new.email = 'demo@fichaeleam.cl' then
-    insert into public.profiles (id, nombre, email, rol, eleam_id)
-    values (new.id,
-            coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)),
-            new.email,
-            'superadmin',
-            'a0000000-0000-0000-0000-000000000001'::uuid)
-    on conflict (id) do nothing;
-    return new;
-  end if;
-
-  v_token := new.raw_user_meta_data->>'invite_token';
-
-  if v_token is not null and v_token <> '' then
-    select i.* into v_invitacion
-    from public.funcionario_invitaciones i
-    where i.token = v_token
-      and lower(i.email) = lower(new.email)
-      and i.usado = false
-      and i.expira_en > now()
-    limit 1;
-
-    if found then
-      v_eleam_id := v_invitacion.eleam_id;
-      v_rol      := 'funcionario';
-      update public.funcionario_invitaciones
-        set usado = true, usado_en = now()
-        where id = v_invitacion.id;
-    end if;
-  end if;
-
-  insert into public.profiles (id, nombre, email, rol, eleam_id)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)),
-    new.email,
-    v_rol,
-    v_eleam_id
-  )
-  on conflict (id) do nothing;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
-
--- ── 12. Sincronizar pago_activo con subscription_status ─────────
--- Si subscription_status pasa a 'activo' o 'en_gracia' → pago_activo=true.
--- Si pasa a 'cancelado'/'vencido'/'inactivo'/'pausado' → pago_activo=false.
-create or replace function public.sync_pago_activo()
-  returns trigger
-  language plpgsql
-as $$
-begin
-  if new.subscription_status in ('activo','en_gracia') then
-    new.pago_activo := true;
-  elsif new.subscription_status in ('inactivo','cancelado','vencido','pausado','pendiente') then
-    new.pago_activo := false;
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_sync_pago_activo on public.eleams;
-create trigger trg_sync_pago_activo
-  before update of subscription_status on public.eleams
-  for each row execute function public.sync_pago_activo();
-
--- ── 13. Backfill: ELEAMs existentes — subscription_status según pago_activo
-update public.eleams
-  set subscription_status = 'activo'
-  where pago_activo = true and subscription_status <> 'activo';
-
-update public.eleams
-  set subscription_status = 'inactivo'
-  where pago_activo = false and subscription_status = 'activo';
-
--- ELEAM demo siempre debe permanecer activo
-update public.eleams
-  set subscription_status = 'activo',
-      pago_activo         = true
-  where id = 'a0000000-0000-0000-0000-000000000001'::uuid;
-
--- ── 14. RLS profiles UPDATE más estricta ────────────────────────
--- Reemplaza la policy original; el trigger prevent_role_eleam_escalation
--- es la barrera definitiva contra escalada de privilegios.
-drop policy if exists "profiles_own_update" on public.profiles;
-create policy "profiles_own_update" on public.profiles
-  for update
-  using ((select auth.uid()) = id)
-  with check ((select auth.uid()) = id);
-
--- ── 15. Vista helper: eleam_subscription_summary ────────────────
-create or replace view public.eleam_subscription_summary as
-  select
-    e.id,
-    e.nombre,
-    e.subscription_status,
-    e.pago_activo,
-    e.proximo_cobro_en,
-    e.fecha_vencimiento_suscripcion,
-    e.plan_id,
-    p.codigo            as plan_codigo,
-    p.nombre            as plan_nombre,
-    p.precio_clp        as plan_precio_clp,
-    p.max_residentes    as plan_max_residentes,
-    p.max_funcionarios  as plan_max_funcionarios,
-    e.max_residentes    as override_max_residentes,
-    e.max_funcionarios  as override_max_funcionarios
-  from public.eleams e
-  left join public.planes p on p.id = e.plan_id;
-
--- Las vistas heredan la RLS de las tablas subyacentes (eleams).
-
-
--- ════════════════════════════════════════════════════════════════
--- v6: Rol "familiar" — acceso de solo lectura al residente vinculado
---
--- Modelo:
---   • El admin del ELEAM crea un perfil "familiar" mediante invitación
---     (mismo flujo que funcionario, con campo extra residente_id).
---   • El familiar accede a un portal limitado donde ve los registros
---     de atención (signos vitales, observaciones) de SU residente
---     y registra visitas familiares.
---   • RLS estricto: el familiar sólo ve datos del/los residentes
---     vinculados en familiar_residentes — nunca ve otros pacientes.
--- ════════════════════════════════════════════════════════════════
-
--- ── 1. Habilitar 'familiar' en el constraint de roles ───────────
-alter table public.profiles
-  drop constraint if exists profiles_rol_check;
-alter table public.profiles
-  add constraint profiles_rol_check
-  check (rol in ('admin_eleam','funcionario','familiar','superadmin'));
-
--- ── 2. Tabla de vínculo familiar ↔ residente(s) ─────────────────
 create table if not exists public.familiar_residentes (
-  profile_id    uuid not null references public.profiles(id)   on delete cascade,
+  profile_id    uuid not null references public.profiles(id) on delete cascade,
   residente_id  uuid not null references public.residentes(id) on delete cascade,
   parentesco    text,
   creado_por    uuid references auth.users(id) on delete set null,
@@ -1657,503 +203,338 @@ create table if not exists public.familiar_residentes (
   primary key (profile_id, residente_id)
 );
 
-alter table public.familiar_residentes enable row level security;
+create index if not exists idx_familiar_residentes_profile on public.familiar_residentes(profile_id);
+create index if not exists idx_familiar_residentes_residente on public.familiar_residentes(residente_id);
 
-create index if not exists idx_familiar_residentes_profile
-  on public.familiar_residentes(profile_id);
-create index if not exists idx_familiar_residentes_residente
-  on public.familiar_residentes(residente_id);
+create table if not exists public.visitas_familiar (
+  id              uuid primary key default gen_random_uuid(),
+  residente_id    uuid not null references public.residentes(id) on delete cascade,
+  profile_id      uuid references public.profiles(id) on delete set null,
+  fecha_hora      timestamptz not null default now(),
+  duracion_min    integer check (duracion_min is null or duracion_min between 1 and 1440),
+  notas           text,
+  registrado_por  uuid references auth.users(id) on delete set null,
+  creado_en       timestamptz not null default now()
+);
 
--- ── 3. Helpers RLS ──────────────────────────────────────────────
+create index if not exists idx_visitas_residente_fecha on public.visitas_familiar(residente_id, fecha_hora desc);
 
--- ¿El usuario actual es familiar autorizado para ver este residente?
-create or replace function public.familiar_can_view_residente(rid uuid)
-  returns boolean
-  language sql stable security definer
-  set search_path = public
+-- ============================================================
+-- 4. Pagos, MercadoPago y webhooks
+-- ============================================================
+
+create table if not exists public.pagos (
+  id                         uuid primary key default gen_random_uuid(),
+  eleam_id                   uuid not null references public.eleams(id) on delete cascade,
+  plan_id                    uuid references public.planes(id),
+  monto                      integer not null check (monto > 0),
+  moneda                     text not null default 'CLP',
+  plan                       text not null default 'mensual' check (plan in ('mensual','anual')),
+  fecha_pago                 timestamptz not null default now(),
+  fecha_inicio               date not null,
+  fecha_fin                  date,
+  metodo_pago                text,
+  referencia_externa         text,
+  estado                     text not null default 'completado'
+                             check (estado in ('pendiente','completado','fallido','reembolsado')),
+  notas                      text,
+  registrado_por             uuid references auth.users(id),
+  mp_payment_id              text unique,
+  mp_preapproval_id          text,
+  mp_authorized_payment_id   text unique,
+  raw                        jsonb,
+  creado_en                  timestamptz not null default now()
+);
+
+create index if not exists idx_pagos_eleam_id on public.pagos(eleam_id);
+create index if not exists idx_pagos_fecha_pago on public.pagos(fecha_pago desc);
+create index if not exists idx_pagos_mp_preapproval on public.pagos(mp_preapproval_id);
+
+create table if not exists public.mp_webhook_events (
+  id             uuid primary key default gen_random_uuid(),
+  mp_request_id  text unique,
+  topic          text,
+  data_id        text,
+  action         text,
+  payload        jsonb,
+  signature_ok   boolean not null default false,
+  processed_ok   boolean not null default false,
+  error          text,
+  recibido_en    timestamptz not null default now(),
+  procesado_en   timestamptz
+);
+
+create index if not exists idx_mp_events_data_id on public.mp_webhook_events(data_id);
+create index if not exists idx_mp_events_recibido on public.mp_webhook_events(recibido_en desc);
+
+-- ============================================================
+-- 5. Acreditacion / Carpeta SEREMI
+-- ============================================================
+
+create table if not exists public.acred_ambitos (
+  id           uuid primary key default gen_random_uuid(),
+  codigo       text unique not null,
+  nombre       text not null,
+  descripcion  text,
+  icono        text,
+  orden        integer not null default 0
+);
+
+create table if not exists public.acred_requisitos (
+  id                       uuid primary key default gen_random_uuid(),
+  ambito_id                uuid not null references public.acred_ambitos(id) on delete cascade,
+  codigo                   text unique not null,
+  nombre                   text not null,
+  descripcion              text,
+  medio_verificador        text,
+  obligatorio              boolean not null default true,
+  permite_no_aplica        boolean not null default true,
+  requiere_vencimiento     boolean not null default false,
+  vigencia_dias_sugerida   integer,
+  orden                    integer not null default 0
+);
+
+create index if not exists idx_acred_requisitos_ambito on public.acred_requisitos(ambito_id, orden);
+
+create table if not exists public.acred_requisitos_eleam (
+  id                   uuid primary key default gen_random_uuid(),
+  eleam_id             uuid not null references public.eleams(id) on delete cascade,
+  requisito_id         uuid not null references public.acred_requisitos(id) on delete cascade,
+  estado               text not null default 'pendiente'
+                       check (estado in ('pendiente','cumple','no_cumple','no_aplica','vencido','observado')),
+  fecha_vencimiento    date,
+  no_aplica_motivo     text,
+  responsable_id       uuid references public.profiles(id) on delete set null,
+  notas                text,
+  ultima_revision_en   timestamptz,
+  ultima_revision_por  uuid references public.profiles(id) on delete set null,
+  creado_en            timestamptz not null default now(),
+  actualizado_en       timestamptz not null default now(),
+  unique (eleam_id, requisito_id)
+);
+
+create index if not exists idx_acred_re_eleam on public.acred_requisitos_eleam(eleam_id);
+create index if not exists idx_acred_re_estado on public.acred_requisitos_eleam(eleam_id, estado);
+create index if not exists idx_acred_re_vencim on public.acred_requisitos_eleam(eleam_id, fecha_vencimiento)
+  where fecha_vencimiento is not null;
+
+create table if not exists public.acred_documentos (
+  id                   uuid primary key default gen_random_uuid(),
+  eleam_id             uuid not null references public.eleams(id) on delete cascade,
+  requisito_eleam_id   uuid not null references public.acred_requisitos_eleam(id) on delete cascade,
+  version              integer not null default 1,
+  vigente              boolean not null default true,
+  storage_path         text not null,
+  archivo_nombre       text not null,
+  archivo_tipo         text,
+  archivo_tamanio      bigint check (archivo_tamanio is null or archivo_tamanio >= 0),
+  fecha_emision        date,
+  fecha_vencimiento    date,
+  notas                text,
+  reemplazado_por_id   uuid references public.acred_documentos(id) on delete set null,
+  reemplazado_en       timestamptz,
+  subido_por           uuid references public.profiles(id) on delete set null,
+  creado_en            timestamptz not null default now()
+);
+
+create index if not exists idx_acred_docs_re on public.acred_documentos(requisito_eleam_id, vigente);
+create index if not exists idx_acred_docs_eleam on public.acred_documentos(eleam_id);
+create index if not exists idx_acred_docs_vencim on public.acred_documentos(eleam_id, fecha_vencimiento)
+  where fecha_vencimiento is not null and vigente = true;
+
+create table if not exists public.acred_observaciones (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  requisito_eleam_id    uuid references public.acred_requisitos_eleam(id) on delete set null,
+  origen                text not null check (origen in ('interna','fiscalizacion')),
+  descripcion           text not null,
+  acciones_subsanacion  text,
+  responsable_id        uuid references public.profiles(id) on delete set null,
+  fecha                 date not null default current_date,
+  fecha_compromiso      date,
+  estado                text not null default 'abierta' check (estado in ('abierta','en_proceso','cerrada')),
+  cerrada_en            timestamptz,
+  cerrada_por           uuid references public.profiles(id) on delete set null,
+  cerrada_nota          text,
+  creado_por            uuid references public.profiles(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
+);
+
+create index if not exists idx_acred_obs_eleam_estado on public.acred_observaciones(eleam_id, estado);
+create index if not exists idx_acred_obs_re on public.acred_observaciones(requisito_eleam_id);
+
+create table if not exists public.acred_audit (
+  id             uuid primary key default gen_random_uuid(),
+  eleam_id       uuid,
+  entidad        text not null,
+  entidad_id     uuid,
+  accion         text not null,
+  detalle        jsonb,
+  realizado_por  uuid references public.profiles(id) on delete set null,
+  realizado_en   timestamptz not null default now()
+);
+
+create index if not exists idx_acred_audit_eleam on public.acred_audit(eleam_id, realizado_en desc);
+
+-- ============================================================
+-- 6. CRM superadmin y blog publico
+-- ============================================================
+
+create table if not exists public.crm_tasks (
+  id                 uuid primary key default gen_random_uuid(),
+  eleam_id           uuid references public.eleams(id) on delete cascade,
+  titulo             text not null,
+  descripcion        text,
+  tipo               text not null default 'general'
+                     check (tipo in ('general','llamada','correo','reunion','demo','seguimiento','onboarding','renovacion','otro')),
+  estado             text not null default 'pendiente'
+                     check (estado in ('pendiente','en_curso','completada','cancelada')),
+  prioridad          text not null default 'media'
+                     check (prioridad in ('baja','media','alta','urgente')),
+  fecha_vencimiento  date,
+  creado_por         uuid references public.profiles(id) on delete set null,
+  completado_por     uuid references public.profiles(id) on delete set null,
+  creado_en          timestamptz not null default now(),
+  completado_en      timestamptz,
+  actualizado_en     timestamptz not null default now()
+);
+
+create index if not exists idx_crm_tasks_eleam on public.crm_tasks(eleam_id, estado);
+create index if not exists idx_crm_tasks_venc on public.crm_tasks(fecha_vencimiento)
+  where estado in ('pendiente','en_curso');
+create index if not exists idx_crm_tasks_estado on public.crm_tasks(estado);
+
+create table if not exists public.crm_interactions (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  tipo            text not null default 'nota'
+                  check (tipo in ('nota','llamada','correo','reunion','demo','soporte','sistema','otro')),
+  canal           text check (canal in ('telefono','email','whatsapp','presencial','videollamada','sistema','otro') or canal is null),
+  resumen         text not null,
+  resultado       text check (resultado in ('positivo','neutro','negativo','sin_respuesta','sistema') or resultado is null),
+  proxima_accion  text,
+  creado_por      uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now()
+);
+
+create index if not exists idx_crm_int_eleam_fecha on public.crm_interactions(eleam_id, creado_en desc);
+
+create table if not exists public.blog_posts (
+  id                  uuid primary key default gen_random_uuid(),
+  slug                text unique not null,
+  titulo              text not null,
+  resumen             text not null,
+  contenido_md        text not null,
+  cover_url           text,
+  cover_alt           text,
+  meta_title          text,
+  meta_description    text,
+  keywords            text[] default '{}',
+  estado              text not null default 'borrador' check (estado in ('borrador','publicado','archivado')),
+  publicado_en        timestamptz,
+  autor_nombre        text default 'Equipo FichaEleam',
+  autor_id            uuid references public.profiles(id) on delete set null,
+  tiempo_lectura_min  integer,
+  views               integer not null default 0,
+  destacado           boolean not null default false,
+  creado_en           timestamptz not null default now(),
+  actualizado_en      timestamptz not null default now()
+);
+
+create index if not exists idx_blog_posts_estado_pub on public.blog_posts(estado, publicado_en desc);
+create index if not exists idx_blog_posts_slug on public.blog_posts(slug);
+
+-- ============================================================
+-- 7. Funciones y triggers
+-- ============================================================
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.actualizado_en = now();
+  return new;
+end;
+$$;
+
+create or replace function public.is_superadmin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
 as $$
   select exists (
-    select 1 from public.familiar_residentes
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+      and rol = 'superadmin'
+  );
+$$;
+
+create or replace function public.my_eleam_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select eleam_id from public.profiles where id = (select auth.uid());
+$$;
+
+create or replace function public.my_rol()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select rol from public.profiles where id = (select auth.uid());
+$$;
+
+create or replace function public.familiar_can_view_residente(rid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.familiar_residentes
     where profile_id = (select auth.uid())
       and residente_id = rid
   );
 $$;
 
--- Lista de residente_ids del familiar autenticado (para queries)
 create or replace function public.my_familiar_residente_ids()
-  returns setof uuid
-  language sql stable security definer
-  set search_path = public
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = public
 as $$
-  select residente_id from public.familiar_residentes
+  select residente_id
+  from public.familiar_residentes
   where profile_id = (select auth.uid());
 $$;
 
--- ── 4. Políticas RLS para familiar_residentes ───────────────────
-
-drop policy if exists "fr_select_self_or_admin" on public.familiar_residentes;
-create policy "fr_select_self_or_admin" on public.familiar_residentes
-  for select using (
-    profile_id = (select auth.uid())                                         -- el propio familiar ve sus vínculos
-    or public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and residente_id in (select id from public.residentes
-                              where eleam_id = public.my_eleam_id()))
-  );
-
-drop policy if exists "fr_insert_admin" on public.familiar_residentes;
-create policy "fr_insert_admin" on public.familiar_residentes
-  for insert with check (
-    public.my_rol() = 'admin_eleam'
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
-drop policy if exists "fr_delete_admin" on public.familiar_residentes;
-create policy "fr_delete_admin" on public.familiar_residentes
-  for delete using (
-    public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam'
-        and residente_id in (select id from public.residentes
-                              where eleam_id = public.my_eleam_id()))
-  );
-
--- ── 5. Tabla visitas_familiar ───────────────────────────────────
--- Registro de visitas familiares al residente. Útil para que el
--- equipo del ELEAM sepa quién pasó a ver al residente.
-create table if not exists public.visitas_familiar (
-  id            uuid        primary key default gen_random_uuid(),
-  residente_id  uuid        not null references public.residentes(id) on delete cascade,
-  profile_id    uuid        references public.profiles(id) on delete set null,
-  fecha_hora    timestamptz not null default now(),
-  duracion_min  integer     check (duracion_min is null or duracion_min between 1 and 1440),
-  notas         text,
-  registrado_por uuid       references auth.users(id) on delete set null,
-  creado_en     timestamptz not null default now()
-);
-
-alter table public.visitas_familiar enable row level security;
-
-create index if not exists idx_visitas_residente_fecha
-  on public.visitas_familiar(residente_id, fecha_hora desc);
-
--- SELECT: familiar ve visitas de SUS residentes; staff del ELEAM ve todas las del ELEAM.
-drop policy if exists "vf_select" on public.visitas_familiar;
-create policy "vf_select" on public.visitas_familiar
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() = 'familiar'
-        and residente_id in (select public.my_familiar_residente_ids()))
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and residente_id in (select id from public.residentes
-                              where eleam_id = public.my_eleam_id()))
-  );
-
--- INSERT: familiar registra su propia visita; staff registra visitas del ELEAM.
-drop policy if exists "vf_insert" on public.visitas_familiar;
-create policy "vf_insert" on public.visitas_familiar
-  for insert with check (
-    (public.my_rol() = 'familiar'
-       and residente_id in (select public.my_familiar_residente_ids())
-       and profile_id   = (select auth.uid()))
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and residente_id in (select id from public.residentes
-                              where eleam_id = public.my_eleam_id()))
-  );
-
--- DELETE: solo el autor o el admin del ELEAM
-drop policy if exists "vf_delete" on public.visitas_familiar;
-create policy "vf_delete" on public.visitas_familiar
-  for delete using (
-    public.is_superadmin()
-    or profile_id = (select auth.uid())
-    or (public.my_rol() = 'admin_eleam'
-        and residente_id in (select id from public.residentes
-                              where eleam_id = public.my_eleam_id()))
-  );
-
--- ── 6. Ampliar funcionario_invitaciones para soportar familiares ─
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='funcionario_invitaciones' and column_name='rol'
-  ) then
-    alter table public.funcionario_invitaciones
-      add column rol text not null default 'funcionario'
-        check (rol in ('funcionario','familiar'));
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='funcionario_invitaciones' and column_name='residente_id'
-  ) then
-    alter table public.funcionario_invitaciones
-      add column residente_id uuid references public.residentes(id) on delete cascade;
-  end if;
-end $$;
-
--- ── 7. handle_new_user — soporta rol y residente_id de la invitación
-create or replace function public.handle_new_user()
-  returns trigger
-  language plpgsql
-  security definer
-  set search_path = public
-as $$
-declare
-  v_rol         text  := 'admin_eleam';
-  v_eleam_id    uuid  := null;
-  v_token       text;
-  v_invitacion  record;
-begin
-  -- Cuenta demo (siempre superadmin con ELEAM demo activo)
-  if new.email = 'demo@fichaeleam.cl' then
-    insert into public.profiles (id, nombre, email, rol, eleam_id)
-    values (new.id,
-            coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)),
-            new.email,
-            'superadmin',
-            'a0000000-0000-0000-0000-000000000001'::uuid)
-    on conflict (id) do nothing;
-    return new;
-  end if;
-
-  v_token := new.raw_user_meta_data->>'invite_token';
-
-  if v_token is not null and v_token <> '' then
-    select i.* into v_invitacion
-    from public.funcionario_invitaciones i
-    where i.token = v_token
-      and lower(i.email) = lower(new.email)
-      and i.usado = false
-      and i.expira_en > now()
-    limit 1;
-
-    if found then
-      v_eleam_id := v_invitacion.eleam_id;
-      v_rol      := coalesce(v_invitacion.rol, 'funcionario');
-      update public.funcionario_invitaciones
-        set usado = true, usado_en = now()
-        where id = v_invitacion.id;
-    end if;
-  end if;
-
-  insert into public.profiles (id, nombre, email, rol, eleam_id)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)),
-    new.email,
-    v_rol,
-    v_eleam_id
-  )
-  on conflict (id) do nothing;
-
-  -- Si la invitación es de familiar y trae residente_id → vincular
-  if v_rol = 'familiar' and v_invitacion.residente_id is not null then
-    insert into public.familiar_residentes (profile_id, residente_id, creado_por)
-    values (new.id, v_invitacion.residente_id, v_invitacion.creado_por)
-    on conflict do nothing;
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
-
--- ── 8. RLS extendida — familiar puede leer SU residente y registros
--- Reescribimos las políticas SELECT para incorporar el path de familiar.
-
--- residentes
-drop policy if exists "residentes_select" on public.residentes;
-create policy "residentes_select" on public.residentes
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and eleam_id = public.my_eleam_id())
-    or (public.my_rol() = 'familiar'
-        and id in (select public.my_familiar_residente_ids()))
-  );
-
--- signos_vitales
-drop policy if exists "sv_select" on public.signos_vitales;
-create policy "sv_select" on public.signos_vitales
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and residente_id in (select id from public.residentes
-                              where eleam_id = public.my_eleam_id()))
-    or (public.my_rol() = 'familiar'
-        and residente_id in (select public.my_familiar_residente_ids()))
-  );
-
--- observaciones_diarias
-drop policy if exists "obs_select" on public.observaciones_diarias;
-create policy "obs_select" on public.observaciones_diarias
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and residente_id in (select id from public.residentes
-                              where eleam_id = public.my_eleam_id()))
-    or (public.my_rol() = 'familiar'
-        and residente_id in (select public.my_familiar_residente_ids()))
-  );
-
--- documentos_acreditacion: NO acceso para familiar; mantener sólo staff.
-drop policy if exists "docs_select" on public.documentos_acreditacion;
-create policy "docs_select" on public.documentos_acreditacion
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and eleam_id = public.my_eleam_id())
-  );
-
--- ── 9. Reforzar residentes_insert/update/delete: solo admin_eleam puede borrar
-drop policy if exists "residentes_insert" on public.residentes;
-create policy "residentes_insert" on public.residentes
-  for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
-
-drop policy if exists "residentes_update" on public.residentes;
-create policy "residentes_update" on public.residentes
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  )
-  with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
-
-drop policy if exists "residentes_delete" on public.residentes;
-create policy "residentes_delete" on public.residentes
-  for delete using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
--- ── 10. signos_vitales / observaciones — INSERT/UPDATE/DELETE solo staff
--- (familiar NO puede modificar registros clínicos; solo lectura.)
-drop policy if exists "sv_insert" on public.signos_vitales;
-create policy "sv_insert" on public.signos_vitales
-  for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
-drop policy if exists "sv_update" on public.signos_vitales;
-create policy "sv_update" on public.signos_vitales
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
-drop policy if exists "sv_delete" on public.signos_vitales;
-create policy "sv_delete" on public.signos_vitales
-  for delete using (
-    public.my_rol() = 'admin_eleam'
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
-drop policy if exists "obs_insert" on public.observaciones_diarias;
-create policy "obs_insert" on public.observaciones_diarias
-  for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
-drop policy if exists "obs_update" on public.observaciones_diarias;
-create policy "obs_update" on public.observaciones_diarias
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
-drop policy if exists "obs_delete" on public.observaciones_diarias;
-create policy "obs_delete" on public.observaciones_diarias
-  for delete using (
-    public.my_rol() = 'admin_eleam'
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
--- ── 11. documentos_acreditacion: INSERT/UPDATE/DELETE solo staff
-drop policy if exists "docs_insert" on public.documentos_acreditacion;
-create policy "docs_insert" on public.documentos_acreditacion
-  for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
-
-drop policy if exists "docs_update" on public.documentos_acreditacion;
-create policy "docs_update" on public.documentos_acreditacion
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
-
-drop policy if exists "docs_delete" on public.documentos_acreditacion;
-create policy "docs_delete" on public.documentos_acreditacion
-  for delete using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
--- ── 12. pagos: solo admin_eleam puede ver el historial financiero
--- (los funcionarios y familiares no deben ver datos de cobro).
-drop policy if exists "eleam_select_pagos" on public.pagos;
-create policy "eleam_select_pagos" on public.pagos
-  for select using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
-
--- ════════════════════════════════════════════════════════════════
--- v7: Fixes de consistencia detectados en auditoría
---
--- 1) handle_new_user crea el ELEAM para admin_eleam server-side.
---    Antes el frontend (AuthContext/authService) hacía esto, pero
---    el trigger prevent_role_eleam_escalation lo bloquea (no permite
---    cambiar eleam_id desde el cliente). Resolvemos haciendo la
---    creación atómica en el trigger SECURITY DEFINER.
--- 2) eleams_insert solo superadmin (el trigger sigue funcionando
---    porque es SECURITY DEFINER). Esto evita que un usuario común
---    cree ELEAMs arbitrarios desde el cliente.
--- 3) acreditación INSERT/UPDATE pasa a ser admin-only para coincidir
---    con la UI (canManageDocuments) y porque es un proceso sensible
---    de cara a la SEREMI.
--- 4) sync_pago_activo respeta período de gracia: si subscription_status
---    pasa a 'cancelado' pero fecha_vencimiento_suscripcion es futura,
---    pago_activo se mantiene en true hasta esa fecha.
--- ════════════════════════════════════════════════════════════════
-
--- ── 1. handle_new_user definitivo: crea ELEAM si admin_eleam ────
-create or replace function public.handle_new_user()
-  returns trigger
-  language plpgsql
-  security definer
-  set search_path = public
-as $$
-declare
-  v_rol         text  := 'admin_eleam';
-  v_eleam_id    uuid  := null;
-  v_token       text;
-  v_invitacion  record;
-  v_nombre      text;
-begin
-  v_nombre := coalesce(new.raw_user_meta_data->>'nombre',
-                        split_part(new.email, '@', 1));
-
-  -- Cuenta demo: superadmin con ELEAM demo activo
-  if new.email = 'demo@fichaeleam.cl' then
-    insert into public.profiles (id, nombre, email, rol, eleam_id)
-    values (new.id, v_nombre, new.email, 'superadmin',
-            'a0000000-0000-0000-0000-000000000001'::uuid)
-    on conflict (id) do nothing;
-    return new;
-  end if;
-
-  -- Procesar invitación si está presente
-  v_token := new.raw_user_meta_data->>'invite_token';
-  if v_token is not null and v_token <> '' then
-    select i.* into v_invitacion
-    from public.funcionario_invitaciones i
-    where i.token = v_token
-      and lower(i.email) = lower(new.email)
-      and i.usado = false
-      and i.expira_en > now()
-    limit 1;
-
-    if found then
-      v_eleam_id := v_invitacion.eleam_id;
-      v_rol      := coalesce(v_invitacion.rol, 'funcionario');
-      update public.funcionario_invitaciones
-        set usado = true, usado_en = now()
-        where id = v_invitacion.id;
-    end if;
-  end if;
-
-  -- Si seguimos siendo admin_eleam (no había invitación), crear ELEAM
-  if v_rol = 'admin_eleam' and v_eleam_id is null then
-    insert into public.eleams
-      (nombre, email_admin, pago_activo, subscription_status)
-    values
-      ('ELEAM de ' || v_nombre, new.email, false, 'inactivo')
-    returning id into v_eleam_id;
-  end if;
-
-  -- Crear el profile con el rol y eleam_id correctos en una sola sentencia.
-  -- (Evita la UPDATE posterior bloqueada por prevent_role_eleam_escalation.)
-  insert into public.profiles (id, nombre, email, rol, eleam_id)
-  values (new.id, v_nombre, new.email, v_rol, v_eleam_id)
-  on conflict (id) do nothing;
-
-  -- Si la invitación es de familiar y trae residente_id → vincular
-  if v_rol = 'familiar' and v_invitacion.residente_id is not null then
-    insert into public.familiar_residentes
-      (profile_id, residente_id, creado_por)
-    values
-      (new.id, v_invitacion.residente_id, v_invitacion.creado_por)
-    on conflict do nothing;
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
-
--- ── 2. eleams_insert: solo superadmin desde el cliente ──────────
--- El trigger SECURITY DEFINER sigue creando ELEAMs en el signup.
-drop policy if exists "eleams_insert_auth"        on public.eleams;
-drop policy if exists "eleams_insert_superadmin"  on public.eleams;
-create policy "eleams_insert_superadmin" on public.eleams
-  for insert with check (public.is_superadmin());
-
--- ── 3. acreditación: INSERT/UPDATE/DELETE solo admin_eleam ──────
--- (Ya está; aquí lo reafirmamos para que quede consistente con
--- la UI canManageDocuments=admin_eleam.)
-drop policy if exists "docs_insert" on public.documentos_acreditacion;
-create policy "docs_insert" on public.documentos_acreditacion
-  for insert with check (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
-drop policy if exists "docs_update" on public.documentos_acreditacion;
-create policy "docs_update" on public.documentos_acreditacion
-  for update using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
--- ── 4. sync_pago_activo respeta período de gracia ──────────────
 create or replace function public.sync_pago_activo()
-  returns trigger
-  language plpgsql
+returns trigger
+language plpgsql
+set search_path = public
 as $$
 begin
   if new.subscription_status in ('activo','en_gracia') then
     new.pago_activo := true;
   elsif new.subscription_status = 'cancelado' then
-    -- Conservar el acceso hasta el fin del período pagado.
-    if new.fecha_vencimiento_suscripcion is not null
-       and new.fecha_vencimiento_suscripcion > now() then
-      new.pago_activo := true;
-    else
-      new.pago_activo := false;
-    end if;
+    new.pago_activo := (
+      new.fecha_vencimiento_suscripcion is not null
+      and new.fecha_vencimiento_suscripcion > now()
+    );
   elsif new.subscription_status in ('inactivo','vencido','pausado','pendiente') then
     new.pago_activo := false;
   end if;
@@ -2161,287 +542,303 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_sync_pago_activo on public.eleams;
-create trigger trg_sync_pago_activo
-  before update of subscription_status on public.eleams
-  for each row execute function public.sync_pago_activo();
+create or replace function public.check_residentes_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_max integer;
+  v_count integer;
+  v_status text;
+begin
+  if new.estado <> 'activo' then
+    return new;
+  end if;
 
+  if tg_op = 'UPDATE' and old.estado = 'activo' and new.estado = 'activo' then
+    return new;
+  end if;
 
--- ════════════════════════════════════════════════════════════════
--- v9: Acreditación / Carpeta SEREMI — modelo completo
---
--- Reemplaza el modelo provisorio (categorias_acreditacion +
--- documentos_acreditacion) por uno orientado a "requisito" que
--- soporta:
---   • 14 ámbitos.
---   • Catálogo maestro de requisitos con medio verificador.
---   • Estado por ELEAM por requisito (cumple, pendiente, vencido,
---     no_aplica, observado, no_cumple).
---   • Documentos versionados (reemplazos sin perder historial).
---   • Observaciones internas o de fiscalización con cierre.
---   • Audit log de cambios (quién, cuándo, qué).
---
--- Las tablas legacy (categorias_acreditacion, documentos_acreditacion)
--- permanecen pero la app ya no las usa.
--- ════════════════════════════════════════════════════════════════
+  select coalesce(p.max_residentes, e.max_residentes), e.subscription_status
+  into v_max, v_status
+  from public.eleams e
+  left join public.planes p on p.id = e.plan_id
+  where e.id = new.eleam_id;
 
-create table if not exists public.acred_ambitos (
-  id           uuid        primary key default gen_random_uuid(),
-  codigo       text        unique not null,
-  nombre       text        not null,
-  descripcion  text,
-  icono        text,
-  orden        integer     not null default 0
-);
+  if v_status not in ('activo','en_gracia','pendiente') then
+    raise exception 'La suscripcion del ELEAM no esta activa (%). Activa el plan antes de agregar residentes.', coalesce(v_status, 'sin_estado')
+      using errcode = 'P0001';
+  end if;
 
-alter table public.acred_ambitos enable row level security;
+  if v_max is not null then
+    select count(*) into v_count
+    from public.residentes
+    where eleam_id = new.eleam_id
+      and estado = 'activo'
+      and id <> new.id;
 
-drop policy if exists "acred_ambitos_select" on public.acred_ambitos;
-create policy "acred_ambitos_select" on public.acred_ambitos
-  for select using ((select auth.uid()) is not null);
+    if v_count >= v_max then
+      raise exception 'El plan permite maximo % residentes activos', v_max
+        using errcode = 'P0001';
+    end if;
+  end if;
 
-create table if not exists public.acred_requisitos (
-  id                       uuid        primary key default gen_random_uuid(),
-  ambito_id                uuid        not null references public.acred_ambitos(id) on delete cascade,
-  codigo                   text        unique not null,
-  nombre                   text        not null,
-  descripcion              text,
-  medio_verificador        text,
-  obligatorio              boolean     not null default true,
-  permite_no_aplica        boolean     not null default true,
-  requiere_vencimiento     boolean     not null default false,
-  vigencia_dias_sugerida   integer,
-  orden                    integer     not null default 0
-);
+  return new;
+end;
+$$;
 
-alter table public.acred_requisitos enable row level security;
+create or replace function public.check_funcionarios_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_max integer;
+  v_count integer;
+begin
+  if new.eleam_id is null or new.rol <> 'funcionario' then
+    return new;
+  end if;
 
-drop policy if exists "acred_requisitos_select" on public.acred_requisitos;
-create policy "acred_requisitos_select" on public.acred_requisitos
-  for select using ((select auth.uid()) is not null);
+  if tg_op = 'UPDATE'
+     and old.eleam_id is not distinct from new.eleam_id
+     and old.rol is not distinct from new.rol then
+    return new;
+  end if;
 
-create index if not exists idx_acred_requisitos_ambito
-  on public.acred_requisitos(ambito_id, orden);
+  select coalesce(p.max_funcionarios, e.max_funcionarios)
+  into v_max
+  from public.eleams e
+  left join public.planes p on p.id = e.plan_id
+  where e.id = new.eleam_id;
 
-create table if not exists public.acred_requisitos_eleam (
-  id                  uuid        primary key default gen_random_uuid(),
-  eleam_id            uuid        not null references public.eleams(id) on delete cascade,
-  requisito_id        uuid        not null references public.acred_requisitos(id) on delete cascade,
-  estado              text        not null default 'pendiente'
-                        check (estado in ('pendiente','cumple','no_cumple','no_aplica','vencido','observado')),
-  fecha_vencimiento   date,
-  no_aplica_motivo    text,
-  responsable_id      uuid        references public.profiles(id) on delete set null,
-  notas               text,
-  ultima_revision_en  timestamptz,
-  ultima_revision_por uuid        references public.profiles(id) on delete set null,
-  creado_en           timestamptz not null default now(),
-  actualizado_en      timestamptz not null default now(),
-  unique (eleam_id, requisito_id)
-);
+  if v_max is not null then
+    select count(*) into v_count
+    from public.profiles
+    where eleam_id = new.eleam_id
+      and rol = 'funcionario'
+      and id <> new.id;
 
-alter table public.acred_requisitos_eleam enable row level security;
+    if v_count >= v_max then
+      raise exception 'El plan permite maximo % funcionarios', v_max
+        using errcode = 'P0001';
+    end if;
+  end if;
 
-create index if not exists idx_acred_re_eleam      on public.acred_requisitos_eleam(eleam_id);
-create index if not exists idx_acred_re_estado     on public.acred_requisitos_eleam(eleam_id, estado);
-create index if not exists idx_acred_re_vencim     on public.acred_requisitos_eleam(eleam_id, fecha_vencimiento)
-  where fecha_vencimiento is not null;
+  return new;
+end;
+$$;
 
-drop trigger if exists trg_acred_re_updated_at on public.acred_requisitos_eleam;
-create trigger trg_acred_re_updated_at
-  before update on public.acred_requisitos_eleam
-  for each row execute function public.set_updated_at();
+create or replace function public.prevent_role_eleam_escalation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_rol text;
+  v_caller_email text;
+  v_is_repair boolean;
+begin
+  if (select auth.uid()) is null then
+    return new;
+  end if;
 
-drop policy if exists "acred_re_select" on public.acred_requisitos_eleam;
-create policy "acred_re_select" on public.acred_requisitos_eleam
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and eleam_id = public.my_eleam_id())
+  select rol into v_caller_rol
+  from public.profiles
+  where id = (select auth.uid());
+
+  if v_caller_rol = 'superadmin' then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    select lower(email) into v_caller_email
+    from auth.users
+    where id = (select auth.uid());
+
+    v_is_repair :=
+      current_setting('app.allow_platform_superadmin_repair', true) = 'on'
+      and old.id = (select auth.uid())
+      and new.id = old.id
+      and v_caller_email = 'gabrielgarrido89@gmail.com'
+      and lower(new.email) = 'gabrielgarrido89@gmail.com'
+      and new.rol = 'superadmin'
+      and new.eleam_id is null;
+
+    if v_is_repair then
+      return new;
+    end if;
+
+    if new.rol is distinct from old.rol then
+      raise exception 'No autorizado a modificar el rol' using errcode = '42501';
+    end if;
+
+    if new.eleam_id is distinct from old.eleam_id then
+      raise exception 'No autorizado a modificar el ELEAM' using errcode = '42501';
+    end if;
+
+    if lower(new.email) is distinct from v_caller_email then
+      raise exception 'No autorizado a modificar el email del perfil' using errcode = '42501';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := lower(new.email);
+  v_nombre text;
+  v_rol text := 'admin_eleam';
+  v_eleam_id uuid := null;
+  v_token text;
+  v_invitacion record;
+  v_residente_id uuid := null;
+  v_invitado_por uuid := null;
+begin
+  v_nombre := coalesce(
+    new.raw_user_meta_data->>'nombre',
+    new.raw_user_meta_data->>'full_name',
+    new.raw_user_meta_data->>'name',
+    split_part(new.email, '@', 1)
   );
 
-drop policy if exists "acred_re_insert" on public.acred_requisitos_eleam;
-create policy "acred_re_insert" on public.acred_requisitos_eleam
-  for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
+  if v_email = 'gabrielgarrido89@gmail.com' then
+    insert into public.profiles (id, nombre, email, rol, eleam_id)
+    values (new.id, v_nombre, new.email, 'superadmin', null)
+    on conflict (id) do update set
+      nombre = excluded.nombre,
+      email = excluded.email,
+      rol = 'superadmin',
+      eleam_id = null;
+    return new;
+  end if;
 
-drop policy if exists "acred_re_update" on public.acred_requisitos_eleam;
-create policy "acred_re_update" on public.acred_requisitos_eleam
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
+  if v_email = 'demo@fichaeleam.cl' then
+    insert into public.profiles (id, nombre, email, rol, eleam_id)
+    values (
+      new.id,
+      v_nombre,
+      new.email,
+      'superadmin',
+      'a0000000-0000-0000-0000-000000000001'::uuid
+    )
+    on conflict (id) do update set
+      nombre = excluded.nombre,
+      email = excluded.email,
+      rol = 'superadmin',
+      eleam_id = excluded.eleam_id;
+    return new;
+  end if;
 
-create table if not exists public.acred_documentos (
-  id                  uuid        primary key default gen_random_uuid(),
-  eleam_id            uuid        not null references public.eleams(id) on delete cascade,
-  requisito_eleam_id  uuid        not null references public.acred_requisitos_eleam(id) on delete cascade,
-  version             integer     not null default 1,
-  vigente             boolean     not null default true,
-  storage_path        text        not null,
-  archivo_nombre      text        not null,
-  archivo_tipo        text,
-  archivo_tamanio     bigint      check (archivo_tamanio is null or archivo_tamanio >= 0),
-  fecha_emision       date,
-  fecha_vencimiento   date,
-  notas               text,
-  reemplazado_por_id  uuid        references public.acred_documentos(id) on delete set null,
-  reemplazado_en      timestamptz,
-  subido_por          uuid        references public.profiles(id) on delete set null,
-  creado_en           timestamptz not null default now()
-);
+  v_token := new.raw_user_meta_data->>'invite_token';
+  if v_token is not null and v_token <> '' then
+    select i.* into v_invitacion
+    from public.funcionario_invitaciones i
+    where i.token = v_token
+      and lower(i.email) = v_email
+      and i.usado = false
+      and i.expira_en > now()
+    limit 1;
 
-alter table public.acred_documentos enable row level security;
+    if found then
+      v_eleam_id := v_invitacion.eleam_id;
+      v_rol := coalesce(v_invitacion.rol, 'funcionario');
+      v_residente_id := v_invitacion.residente_id;
+      v_invitado_por := v_invitacion.creado_por;
 
-create index if not exists idx_acred_docs_re      on public.acred_documentos(requisito_eleam_id, vigente);
-create index if not exists idx_acred_docs_eleam   on public.acred_documentos(eleam_id);
-create index if not exists idx_acred_docs_vencim  on public.acred_documentos(eleam_id, fecha_vencimiento)
-  where fecha_vencimiento is not null and vigente = true;
+      update public.funcionario_invitaciones
+      set usado = true, usado_en = now()
+      where id = v_invitacion.id;
+    end if;
+  end if;
 
-drop policy if exists "acred_docs_select" on public.acred_documentos;
-create policy "acred_docs_select" on public.acred_documentos
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and eleam_id = public.my_eleam_id())
-  );
+  if v_rol = 'admin_eleam' and v_eleam_id is null then
+    insert into public.eleams (nombre, email_admin, pago_activo, subscription_status)
+    values ('ELEAM de ' || v_nombre, new.email, false, 'inactivo')
+    returning id into v_eleam_id;
+  end if;
 
-drop policy if exists "acred_docs_insert" on public.acred_documentos;
-create policy "acred_docs_insert" on public.acred_documentos
-  for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
+  insert into public.profiles (id, nombre, email, rol, eleam_id)
+  values (new.id, v_nombre, new.email, v_rol, v_eleam_id)
+  on conflict (id) do update set
+    nombre = excluded.nombre,
+    email = excluded.email,
+    rol = excluded.rol,
+    eleam_id = excluded.eleam_id;
 
-drop policy if exists "acred_docs_update" on public.acred_documentos;
-create policy "acred_docs_update" on public.acred_documentos
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
+  if v_rol = 'familiar' and v_residente_id is not null then
+    insert into public.familiar_residentes (profile_id, residente_id, creado_por)
+    values (new.id, v_residente_id, v_invitado_por)
+    on conflict do nothing;
+  end if;
 
-drop policy if exists "acred_docs_delete" on public.acred_documentos;
-create policy "acred_docs_delete" on public.acred_documentos
-  for delete using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
+  return new;
+end;
+$$;
 
-create table if not exists public.acred_observaciones (
-  id                   uuid        primary key default gen_random_uuid(),
-  eleam_id             uuid        not null references public.eleams(id) on delete cascade,
-  requisito_eleam_id   uuid        references public.acred_requisitos_eleam(id) on delete set null,
-  origen               text        not null check (origen in ('interna','fiscalizacion')),
-  descripcion          text        not null,
-  acciones_subsanacion text,
-  responsable_id       uuid        references public.profiles(id) on delete set null,
-  fecha                date        not null default current_date,
-  fecha_compromiso     date,
-  estado               text        not null default 'abierta'
-                         check (estado in ('abierta','en_proceso','cerrada')),
-  cerrada_en           timestamptz,
-  cerrada_por          uuid        references public.profiles(id) on delete set null,
-  cerrada_nota         text,
-  creado_por           uuid        references public.profiles(id) on delete set null,
-  creado_en            timestamptz not null default now(),
-  actualizado_en       timestamptz not null default now()
-);
+create or replace function public.ensure_platform_superadmin()
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_email text;
+  v_nombre text;
+  v_profile public.profiles;
+begin
+  if v_user_id is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
 
-alter table public.acred_observaciones enable row level security;
+  select
+    lower(u.email),
+    coalesce(
+      u.raw_user_meta_data->>'nombre',
+      u.raw_user_meta_data->>'full_name',
+      u.raw_user_meta_data->>'name',
+      split_part(u.email, '@', 1)
+    )
+  into v_email, v_nombre
+  from auth.users u
+  where u.id = v_user_id;
 
-create index if not exists idx_acred_obs_eleam_estado
-  on public.acred_observaciones(eleam_id, estado);
-create index if not exists idx_acred_obs_re
-  on public.acred_observaciones(requisito_eleam_id);
+  if v_email is distinct from 'gabrielgarrido89@gmail.com' then
+    raise exception 'No autorizado' using errcode = '42501';
+  end if;
 
-drop trigger if exists trg_acred_obs_updated_at on public.acred_observaciones;
-create trigger trg_acred_obs_updated_at
-  before update on public.acred_observaciones
-  for each row execute function public.set_updated_at();
+  perform set_config('app.allow_platform_superadmin_repair', 'on', true);
 
-drop policy if exists "acred_obs_select" on public.acred_observaciones;
-create policy "acred_obs_select" on public.acred_observaciones
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and eleam_id = public.my_eleam_id())
-  );
+  insert into public.profiles (id, nombre, email, rol, eleam_id)
+  values (v_user_id, v_nombre, v_email, 'superadmin', null)
+  on conflict (id) do update set
+    nombre = excluded.nombre,
+    email = excluded.email,
+    rol = 'superadmin',
+    eleam_id = null
+  returning * into v_profile;
 
-drop policy if exists "acred_obs_insert_admin" on public.acred_observaciones;
-create policy "acred_obs_insert_admin" on public.acred_observaciones
-  for insert with check (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
-drop policy if exists "acred_obs_insert_func_interna" on public.acred_observaciones;
-create policy "acred_obs_insert_func_interna" on public.acred_observaciones
-  for insert with check (
-    public.my_rol() = 'funcionario'
-    and eleam_id = public.my_eleam_id()
-    and origen = 'interna'
-  );
-
-drop policy if exists "acred_obs_update_admin" on public.acred_observaciones;
-create policy "acred_obs_update_admin" on public.acred_observaciones
-  for update using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
-drop policy if exists "acred_obs_update_func" on public.acred_observaciones;
-create policy "acred_obs_update_func" on public.acred_observaciones
-  for update using (
-    public.my_rol() = 'funcionario'
-    and eleam_id = public.my_eleam_id()
-    and origen = 'interna'
-    and creado_por = (select auth.uid())
-  );
-
-drop policy if exists "acred_obs_delete" on public.acred_observaciones;
-create policy "acred_obs_delete" on public.acred_observaciones
-  for delete using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
-create table if not exists public.acred_audit (
-  id              uuid        primary key default gen_random_uuid(),
-  eleam_id        uuid,
-  entidad         text not null,
-  entidad_id      uuid,
-  accion          text not null,
-  detalle         jsonb,
-  realizado_por   uuid references public.profiles(id) on delete set null,
-  realizado_en    timestamptz not null default now()
-);
-
-alter table public.acred_audit enable row level security;
-
-create index if not exists idx_acred_audit_eleam on public.acred_audit(eleam_id, realizado_en desc);
-
-drop policy if exists "acred_audit_select" on public.acred_audit;
-create policy "acred_audit_select" on public.acred_audit
-  for select using (
-    public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario')
-        and eleam_id = public.my_eleam_id())
-  );
-
-drop policy if exists "acred_audit_insert" on public.acred_audit;
-create policy "acred_audit_insert" on public.acred_audit
-  for insert with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
+  return v_profile;
+end;
+$$;
 
 create or replace function public.acred_provision_requisitos(p_eleam_id uuid)
-  returns integer
-  language plpgsql
-  security definer
-  set search_path = public
+returns integer
+language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   v_count integer := 0;
@@ -2450,16 +847,17 @@ begin
   select p_eleam_id, r.id, 'pendiente'
   from public.acred_requisitos r
   on conflict (eleam_id, requisito_id) do nothing;
+
   get diagnostics v_count = row_count;
   return v_count;
 end;
 $$;
 
 create or replace function public.acred_on_eleam_created()
-  returns trigger
-  language plpgsql
-  security definer
-  set search_path = public
+returns trigger
+language plpgsql
+security definer
+set search_path = public
 as $$
 begin
   perform public.acred_provision_requisitos(new.id);
@@ -2467,161 +865,896 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_acred_provision_on_eleam on public.eleams;
-create trigger trg_acred_provision_on_eleam
-  after insert on public.eleams
-  for each row execute function public.acred_on_eleam_created();
-
 create or replace function public.acred_marcar_vencidos(p_eleam_id uuid)
-  returns integer
-  language plpgsql
-  security definer
-  set search_path = public
+returns integer
+language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   v_count integer := 0;
 begin
   update public.acred_requisitos_eleam
-    set estado = 'vencido'
-    where eleam_id = p_eleam_id
-      and estado = 'cumple'
-      and fecha_vencimiento is not null
-      and fecha_vencimiento < current_date;
+  set estado = 'vencido'
+  where eleam_id = p_eleam_id
+    and estado = 'cumple'
+    and fecha_vencimiento is not null
+    and fecha_vencimiento < current_date;
+
   get diagnostics v_count = row_count;
   return v_count;
 end;
 $$;
 
--- ── Seed: 14 ámbitos ───────────────────────────────────────────
-insert into public.acred_ambitos (codigo, nombre, descripcion, icono, orden) values
-  ('A01','Antecedentes legales del ELEAM',                'Documentos que acreditan la existencia legal y vigencia de la entidad sostenedora.','📄',1),
-  ('A02','Autorización sanitaria',                        'Resolución sanitaria, autorización de funcionamiento y permisos municipales.','✅',2),
-  ('A03','Infraestructura y condiciones sanitarias',      'Estado del inmueble, instalaciones eléctricas, gas, agua, ascensores, calderas.','🏗️',3),
-  ('A04','Seguridad, incendios y evacuación',             'Plan de emergencia, extintores, simulacros, señalética y luces de emergencia.','🚨',4),
-  ('A05','Dirección técnica',                             'Profesional responsable, contrato y carta de aceptación SEREMI.','👨‍⚕️',5),
-  ('A06','Personal, dotación y turnos',                   'Nómina, contratos, títulos, salud y capacitaciones del personal.','👥',6),
-  ('A07','Protocolos obligatorios',                       'Protocolos clínicos y operativos (PCI, lavado de manos, medicamentos, etc.).','📋',7),
-  ('A08','Residentes y carpetas personales',              'Fichas clínicas, evaluaciones funcionales y planes de cuidado individual.','📁',8),
-  ('A09','Contratos, consentimientos y derechos',         'Contrato de residencia, consentimientos y carta de derechos de los residentes.','✍️',9),
-  ('A10','Medicamentos y registros',                      'Botiquín, kardex, prescripciones, control de psicotrópicos y QF asesor.','💊',10),
-  ('A11','Alimentación y manipulación',                   'Minutas, manipuladores, control HACCP y dietas especiales.','🍽️',11),
-  ('A12','Aseo, lavandería, residuos y plagas',           'Programas y registros de aseo, lavandería, residuos y control de plagas.','🧼',12),
-  ('A13','Reclamos, sugerencias y comunicación',          'Libro de reclamos, sugerencias y comunicación con familias.','📣',13),
-  ('A14','Fiscalizaciones y subsanaciones',               'Actas, observaciones de fiscalización y planes de subsanación.','🔍',14)
+create or replace function public.registrar_pago_y_activar_eleam(
+  p_eleam_id uuid,
+  p_monto integer,
+  p_plan text,
+  p_fecha_inicio date,
+  p_fecha_fin date,
+  p_metodo_pago text default null,
+  p_notas text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_pago_id uuid;
+begin
+  if not public.is_superadmin() then
+    raise exception 'Solo superadmin puede registrar pagos' using errcode = '42501';
+  end if;
+
+  if p_monto is null or p_monto <= 0 then
+    raise exception 'Monto invalido' using errcode = 'P0001';
+  end if;
+
+  if not exists (select 1 from public.eleams where id = p_eleam_id) then
+    raise exception 'ELEAM no encontrado' using errcode = 'P0001';
+  end if;
+
+  insert into public.pagos (
+    eleam_id, monto, plan, fecha_inicio, fecha_fin,
+    metodo_pago, notas, estado, registrado_por
+  )
+  values (
+    p_eleam_id, p_monto, coalesce(p_plan, 'mensual'), p_fecha_inicio, p_fecha_fin,
+    p_metodo_pago, p_notas, 'completado', v_user
+  )
+  returning id into v_pago_id;
+
+  update public.eleams
+  set pago_activo = true,
+      plan = coalesce(p_plan, 'mensual'),
+      subscription_status = 'activo',
+      fecha_pago = now(),
+      fecha_vencimiento_suscripcion = p_fecha_fin::timestamptz,
+      proximo_cobro_en = p_fecha_fin::timestamptz,
+      crm_estado = 'cliente_activo',
+      riesgo_churn = case when riesgo_churn = 'alto' then 'medio' else riesgo_churn end,
+      ultimo_contacto = now()
+  where id = p_eleam_id;
+
+  insert into public.crm_interactions (
+    eleam_id, tipo, canal, resumen, resultado, creado_por
+  )
+  values (
+    p_eleam_id, 'sistema', 'sistema',
+    'Pago registrado por ' || coalesce(p_metodo_pago, 'metodo no especificado') ||
+      ' - ' || p_monto::text || ' CLP - plan ' || coalesce(p_plan, 'mensual'),
+    'positivo', v_user
+  );
+
+  return jsonb_build_object('pago_id', v_pago_id, 'eleam_id', p_eleam_id, 'fecha_fin', p_fecha_fin);
+end;
+$$;
+
+create or replace function public.blog_increment_views(p_slug text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.blog_posts
+  set views = views + 1
+  where slug = p_slug and estado = 'publicado';
+$$;
+
+-- Triggers
+drop trigger if exists trg_sync_pago_activo on public.eleams;
+create trigger trg_sync_pago_activo
+  before insert or update of subscription_status, fecha_vencimiento_suscripcion on public.eleams
+  for each row execute function public.sync_pago_activo();
+
+drop trigger if exists trg_residentes_limit on public.residentes;
+create trigger trg_residentes_limit
+  before insert or update of estado, eleam_id on public.residentes
+  for each row execute function public.check_residentes_limit();
+
+drop trigger if exists trg_funcionarios_limit on public.profiles;
+create trigger trg_funcionarios_limit
+  before insert or update of eleam_id, rol on public.profiles
+  for each row execute function public.check_funcionarios_limit();
+
+drop trigger if exists trg_prevent_role_eleam_escalation on public.profiles;
+create trigger trg_prevent_role_eleam_escalation
+  before update on public.profiles
+  for each row execute function public.prevent_role_eleam_escalation();
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+drop trigger if exists trg_residentes_updated_at on public.residentes;
+create trigger trg_residentes_updated_at
+  before update on public.residentes
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_observaciones_updated_at on public.observaciones_diarias;
+create trigger trg_observaciones_updated_at
+  before update on public.observaciones_diarias
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_acred_re_updated_at on public.acred_requisitos_eleam;
+create trigger trg_acred_re_updated_at
+  before update on public.acred_requisitos_eleam
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_acred_obs_updated_at on public.acred_observaciones;
+create trigger trg_acred_obs_updated_at
+  before update on public.acred_observaciones
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_crm_tasks_updated_at on public.crm_tasks;
+create trigger trg_crm_tasks_updated_at
+  before update on public.crm_tasks
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_blog_posts_updated_at on public.blog_posts;
+create trigger trg_blog_posts_updated_at
+  before update on public.blog_posts
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_acred_provision_on_eleam on public.eleams;
+create trigger trg_acred_provision_on_eleam
+  after insert on public.eleams
+  for each row execute function public.acred_on_eleam_created();
+
+-- RPC permissions
+revoke all on function public.ensure_platform_superadmin() from public;
+grant execute on function public.ensure_platform_superadmin() to authenticated;
+
+revoke all on function public.acred_provision_requisitos(uuid) from public;
+grant execute on function public.acred_provision_requisitos(uuid) to authenticated;
+
+revoke all on function public.acred_marcar_vencidos(uuid) from public;
+grant execute on function public.acred_marcar_vencidos(uuid) to authenticated;
+
+revoke all on function public.registrar_pago_y_activar_eleam(uuid, integer, text, date, date, text, text) from public;
+grant execute on function public.registrar_pago_y_activar_eleam(uuid, integer, text, date, date, text, text) to authenticated;
+
+revoke all on function public.blog_increment_views(text) from public;
+grant execute on function public.blog_increment_views(text) to anon, authenticated;
+
+-- ============================================================
+-- 8. Row Level Security
+-- ============================================================
+
+alter table public.profiles enable row level security;
+alter table public.planes enable row level security;
+alter table public.eleams enable row level security;
+alter table public.residentes enable row level security;
+alter table public.signos_vitales enable row level security;
+alter table public.observaciones_diarias enable row level security;
+alter table public.funcionario_invitaciones enable row level security;
+alter table public.familiar_residentes enable row level security;
+alter table public.visitas_familiar enable row level security;
+alter table public.pagos enable row level security;
+alter table public.mp_webhook_events enable row level security;
+alter table public.acred_ambitos enable row level security;
+alter table public.acred_requisitos enable row level security;
+alter table public.acred_requisitos_eleam enable row level security;
+alter table public.acred_documentos enable row level security;
+alter table public.acred_observaciones enable row level security;
+alter table public.acred_audit enable row level security;
+alter table public.crm_tasks enable row level security;
+alter table public.crm_interactions enable row level security;
+alter table public.blog_posts enable row level security;
+
+-- Profiles
+drop policy if exists "profiles_own_select" on public.profiles;
+drop policy if exists "profiles_own_update" on public.profiles;
+drop policy if exists "profiles_admin_eleam_select" on public.profiles;
+drop policy if exists "superadmin_select_profiles" on public.profiles;
+
+create policy "profiles_own_select" on public.profiles
+  for select using ((select auth.uid()) = id);
+
+create policy "profiles_own_update" on public.profiles
+  for update using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
+
+create policy "profiles_admin_eleam_select" on public.profiles
+  for select using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id is not null
+    and eleam_id = public.my_eleam_id()
+  );
+
+create policy "superadmin_select_profiles" on public.profiles
+  for select using (public.is_superadmin());
+
+-- Planes
+drop policy if exists "planes_select_public" on public.planes;
+drop policy if exists "planes_superadmin_write" on public.planes;
+
+create policy "planes_select_public" on public.planes
+  for select using (activo = true or public.is_superadmin());
+
+create policy "planes_superadmin_write" on public.planes
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+-- ELEAMs
+drop policy if exists "eleams_select" on public.eleams;
+drop policy if exists "eleams_insert_superadmin" on public.eleams;
+drop policy if exists "eleams_update" on public.eleams;
+
+create policy "eleams_select" on public.eleams
+  for select using (
+    public.is_superadmin()
+    or id = public.my_eleam_id()
+  );
+
+create policy "eleams_insert_superadmin" on public.eleams
+  for insert with check (public.is_superadmin());
+
+create policy "eleams_update" on public.eleams
+  for update using (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and id = public.my_eleam_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and id = public.my_eleam_id())
+  );
+
+-- Residentes
+drop policy if exists "residentes_select" on public.residentes;
+drop policy if exists "residentes_insert" on public.residentes;
+drop policy if exists "residentes_update" on public.residentes;
+drop policy if exists "residentes_delete" on public.residentes;
+
+create policy "residentes_select" on public.residentes
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (public.my_rol() = 'familiar' and id in (select public.my_familiar_residente_ids()))
+  );
+
+create policy "residentes_insert" on public.residentes
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+  );
+
+create policy "residentes_update" on public.residentes
+  for update using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+create policy "residentes_delete" on public.residentes
+  for delete using (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+  );
+
+-- Signos vitales
+drop policy if exists "sv_select" on public.signos_vitales;
+drop policy if exists "sv_insert" on public.signos_vitales;
+drop policy if exists "sv_update" on public.signos_vitales;
+drop policy if exists "sv_delete" on public.signos_vitales;
+
+create policy "sv_select" on public.signos_vitales
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+    or (
+      public.my_rol() = 'familiar'
+      and residente_id in (select public.my_familiar_residente_ids())
+    )
+  );
+
+create policy "sv_insert" on public.signos_vitales
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+  );
+
+create policy "sv_update" on public.signos_vitales
+  for update using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+create policy "sv_delete" on public.signos_vitales
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+-- Observaciones diarias
+drop policy if exists "obs_select" on public.observaciones_diarias;
+drop policy if exists "obs_insert" on public.observaciones_diarias;
+drop policy if exists "obs_update" on public.observaciones_diarias;
+drop policy if exists "obs_delete" on public.observaciones_diarias;
+
+create policy "obs_select" on public.observaciones_diarias
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+    or (
+      public.my_rol() = 'familiar'
+      and residente_id in (select public.my_familiar_residente_ids())
+    )
+  );
+
+create policy "obs_insert" on public.observaciones_diarias
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+  );
+
+create policy "obs_update" on public.observaciones_diarias
+  for update using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+create policy "obs_delete" on public.observaciones_diarias
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+-- Invitaciones y familiares
+drop policy if exists "inv_admin_select" on public.funcionario_invitaciones;
+drop policy if exists "inv_admin_insert" on public.funcionario_invitaciones;
+drop policy if exists "inv_admin_delete" on public.funcionario_invitaciones;
+
+create policy "inv_admin_select" on public.funcionario_invitaciones
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+  );
+
+create policy "inv_admin_insert" on public.funcionario_invitaciones
+  for insert with check (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+create policy "inv_admin_delete" on public.funcionario_invitaciones
+  for delete using (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "fr_select_self_or_admin" on public.familiar_residentes;
+drop policy if exists "fr_insert_admin" on public.familiar_residentes;
+drop policy if exists "fr_delete_admin" on public.familiar_residentes;
+
+create policy "fr_select_self_or_admin" on public.familiar_residentes
+  for select using (
+    profile_id = (select auth.uid())
+    or public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+create policy "fr_insert_admin" on public.familiar_residentes
+  for insert with check (
+    public.my_rol() = 'admin_eleam'
+    and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+  );
+
+create policy "fr_delete_admin" on public.familiar_residentes
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+drop policy if exists "vf_select" on public.visitas_familiar;
+drop policy if exists "vf_insert" on public.visitas_familiar;
+drop policy if exists "vf_delete" on public.visitas_familiar;
+
+create policy "vf_select" on public.visitas_familiar
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'familiar'
+      and residente_id in (select public.my_familiar_residente_ids())
+    )
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+create policy "vf_insert" on public.visitas_familiar
+  for insert with check (
+    (
+      public.my_rol() = 'familiar'
+      and residente_id in (select public.my_familiar_residente_ids())
+      and profile_id = (select auth.uid())
+    )
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+create policy "vf_delete" on public.visitas_familiar
+  for delete using (
+    public.is_superadmin()
+    or profile_id = (select auth.uid())
+    or (
+      public.my_rol() = 'admin_eleam'
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+-- Pagos / Webhooks
+drop policy if exists "superadmin_all_pagos" on public.pagos;
+drop policy if exists "eleam_select_pagos" on public.pagos;
+
+create policy "superadmin_all_pagos" on public.pagos
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+create policy "eleam_select_pagos" on public.pagos
+  for select using (
+    public.my_rol() = 'admin_eleam'
+    and eleam_id = public.my_eleam_id()
+  );
+
+drop policy if exists "mp_events_superadmin_select" on public.mp_webhook_events;
+create policy "mp_events_superadmin_select" on public.mp_webhook_events
+  for select using (public.is_superadmin());
+
+-- Acreditacion
+drop policy if exists "acred_ambitos_select" on public.acred_ambitos;
+drop policy if exists "acred_requisitos_select" on public.acred_requisitos;
+
+create policy "acred_ambitos_select" on public.acred_ambitos
+  for select using ((select auth.uid()) is not null);
+
+create policy "acred_requisitos_select" on public.acred_requisitos
+  for select using ((select auth.uid()) is not null);
+
+drop policy if exists "acred_re_select" on public.acred_requisitos_eleam;
+drop policy if exists "acred_re_insert" on public.acred_requisitos_eleam;
+drop policy if exists "acred_re_update" on public.acred_requisitos_eleam;
+
+create policy "acred_re_select" on public.acred_requisitos_eleam
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_re_insert" on public.acred_requisitos_eleam
+  for insert with check (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_re_update" on public.acred_requisitos_eleam
+  for update using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "acred_docs_select" on public.acred_documentos;
+drop policy if exists "acred_docs_insert" on public.acred_documentos;
+drop policy if exists "acred_docs_update" on public.acred_documentos;
+drop policy if exists "acred_docs_delete" on public.acred_documentos;
+
+create policy "acred_docs_select" on public.acred_documentos
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_docs_insert" on public.acred_documentos
+  for insert with check (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_docs_update" on public.acred_documentos
+  for update using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_docs_delete" on public.acred_documentos
+  for delete using (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "acred_obs_select" on public.acred_observaciones;
+drop policy if exists "acred_obs_insert_admin" on public.acred_observaciones;
+drop policy if exists "acred_obs_insert_func_interna" on public.acred_observaciones;
+drop policy if exists "acred_obs_update_admin" on public.acred_observaciones;
+drop policy if exists "acred_obs_update_func" on public.acred_observaciones;
+drop policy if exists "acred_obs_delete" on public.acred_observaciones;
+
+create policy "acred_obs_select" on public.acred_observaciones
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_obs_insert_admin" on public.acred_observaciones
+  for insert with check (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_obs_insert_func_interna" on public.acred_observaciones
+  for insert with check (
+    public.my_rol() = 'funcionario'
+    and eleam_id = public.my_eleam_id()
+    and origen = 'interna'
+  );
+
+create policy "acred_obs_update_admin" on public.acred_observaciones
+  for update using (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+  )
+  with check (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_obs_update_func" on public.acred_observaciones
+  for update using (
+    public.my_rol() = 'funcionario'
+    and eleam_id = public.my_eleam_id()
+    and origen = 'interna'
+    and creado_por = (select auth.uid())
+  )
+  with check (
+    public.my_rol() = 'funcionario'
+    and eleam_id = public.my_eleam_id()
+    and origen = 'interna'
+    and creado_por = (select auth.uid())
+  );
+
+create policy "acred_obs_delete" on public.acred_observaciones
+  for delete using (
+    public.is_superadmin()
+    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+  );
+
+drop policy if exists "acred_audit_select" on public.acred_audit;
+drop policy if exists "acred_audit_insert" on public.acred_audit;
+
+create policy "acred_audit_select" on public.acred_audit
+  for select using (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+create policy "acred_audit_insert" on public.acred_audit
+  for insert with check (
+    public.is_superadmin()
+    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+  );
+
+-- CRM y blog
+drop policy if exists "crm_tasks_superadmin_all" on public.crm_tasks;
+create policy "crm_tasks_superadmin_all" on public.crm_tasks
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+drop policy if exists "crm_interactions_superadmin_all" on public.crm_interactions;
+create policy "crm_interactions_superadmin_all" on public.crm_interactions
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+drop policy if exists "blog_select_public" on public.blog_posts;
+drop policy if exists "blog_superadmin_all" on public.blog_posts;
+
+create policy "blog_select_public" on public.blog_posts
+  for select using (estado = 'publicado' or public.is_superadmin());
+
+create policy "blog_superadmin_all" on public.blog_posts
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+-- ============================================================
+-- 9. Storage
+-- ============================================================
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'documentos-acreditacion',
+  'documentos-acreditacion',
+  false,
+  10485760,
+  array[
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+  ]
+)
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "storage_acreditacion_select" on storage.objects;
+drop policy if exists "storage_acreditacion_insert" on storage.objects;
+drop policy if exists "storage_acreditacion_delete" on storage.objects;
+
+create policy "storage_acreditacion_select" on storage.objects
+  for select using (
+    bucket_id = 'documentos-acreditacion'
+    and (
+      public.is_superadmin()
+      or (
+        public.my_rol() in ('admin_eleam','funcionario')
+        and split_part(name, '/', 2) = public.my_eleam_id()::text
+      )
+    )
+  );
+
+create policy "storage_acreditacion_insert" on storage.objects
+  for insert with check (
+    bucket_id = 'documentos-acreditacion'
+    and (
+      public.is_superadmin()
+      or (
+        public.my_rol() in ('admin_eleam','funcionario')
+        and split_part(name, '/', 2) = public.my_eleam_id()::text
+      )
+    )
+  );
+
+create policy "storage_acreditacion_delete" on storage.objects
+  for delete using (
+    bucket_id = 'documentos-acreditacion'
+    and (
+      public.is_superadmin()
+      or (
+        public.my_rol() = 'admin_eleam'
+        and split_part(name, '/', 2) = public.my_eleam_id()::text
+      )
+    )
+  );
+
+-- ============================================================
+-- 10. Seeds
+-- ============================================================
+
+insert into public.planes
+  (codigo, nombre, descripcion, precio_clp, max_residentes, max_funcionarios, orden, destacado)
+values
+  ('plan-14', 'Hasta 14 residentes', 'Ideal para residencias pequeñas', 50000, 14, 10, 1, false),
+  ('plan-24', 'Hasta 24 residentes', 'El plan mas elegido', 80000, 24, 20, 2, true),
+  ('plan-34', 'Hasta 34 residentes', 'Para residencias grandes', 120000, 34, 30, 3, false)
 on conflict (codigo) do update set
-  nombre      = excluded.nombre,
+  nombre = excluded.nombre,
   descripcion = excluded.descripcion,
-  icono       = excluded.icono,
-  orden       = excluded.orden;
+  precio_clp = excluded.precio_clp,
+  max_residentes = excluded.max_residentes,
+  max_funcionarios = excluded.max_funcionarios,
+  orden = excluded.orden,
+  destacado = excluded.destacado,
+  activo = true;
 
--- ── Seed: requisitos ───────────────────────────────────────────
--- Patrón: por cada ámbito insertamos un set acotado pero útil de
--- requisitos típicos. (codigo, nombre, descripcion, medio_verificador,
--- requiere_vencimiento, vigencia_dias_sugerida, orden)
+insert into public.eleams (
+  id, nombre, email_admin, pago_activo, plan, subscription_status, crm_estado
+)
+values (
+  'a0000000-0000-0000-0000-000000000001'::uuid,
+  'ELEAM Demo - FichaEleam',
+  'demo@fichaeleam.cl',
+  true,
+  'demo',
+  'activo',
+  'cliente_activo'
+)
+on conflict (id) do update set
+  nombre = excluded.nombre,
+  email_admin = excluded.email_admin,
+  pago_activo = true,
+  plan = 'demo',
+  subscription_status = 'activo',
+  crm_estado = 'cliente_activo';
+
+-- Superadmin real: funciona tanto para usuarios nuevos (trigger) como
+-- para una cuenta ya creada con Google antes de ejecutar este schema.
+insert into public.profiles (id, nombre, email, rol, eleam_id)
+select
+  u.id,
+  coalesce(
+    u.raw_user_meta_data->>'nombre',
+    u.raw_user_meta_data->>'full_name',
+    u.raw_user_meta_data->>'name',
+    split_part(u.email, '@', 1)
+  ),
+  u.email,
+  'superadmin',
+  null
+from auth.users u
+where lower(u.email) = 'gabrielgarrido89@gmail.com'
+on conflict (id) do update set
+  nombre = excluded.nombre,
+  email = excluded.email,
+  rol = 'superadmin',
+  eleam_id = null;
+
+insert into public.acred_ambitos (codigo, nombre, descripcion, icono, orden) values
+  ('A01','Antecedentes legales del ELEAM','Documentos que acreditan la existencia legal y vigencia de la entidad sostenedora.','📄',1),
+  ('A02','Autorizacion sanitaria','Resolucion sanitaria, autorizacion de funcionamiento y permisos municipales.','✅',2),
+  ('A03','Infraestructura y condiciones sanitarias','Estado del inmueble, instalaciones electricas, gas, agua, ascensores, calderas.','🏗️',3),
+  ('A04','Seguridad, incendios y evacuacion','Plan de emergencia, extintores, simulacros, señaletica y luces de emergencia.','🚨',4),
+  ('A05','Direccion tecnica','Profesional responsable, contrato y carta de aceptacion SEREMI.','👨‍⚕️',5),
+  ('A06','Personal, dotacion y turnos','Nomina, contratos, titulos, salud y capacitaciones del personal.','👥',6),
+  ('A07','Protocolos obligatorios','Protocolos clinicos y operativos (PCI, lavado de manos, medicamentos, etc.).','📋',7),
+  ('A08','Residentes y carpetas personales','Fichas clinicas, evaluaciones funcionales y planes de cuidado individual.','📁',8),
+  ('A09','Contratos, consentimientos y derechos','Contrato de residencia, consentimientos y carta de derechos de los residentes.','✍️',9),
+  ('A10','Medicamentos y registros','Botiquin, kardex, prescripciones, control de psicotropicos y QF asesor.','💊',10),
+  ('A11','Alimentacion y manipulacion','Minutas, manipuladores, control HACCP y dietas especiales.','🍽️',11),
+  ('A12','Aseo, lavanderia, residuos y plagas','Programas y registros de aseo, lavanderia, residuos y control de plagas.','🧼',12),
+  ('A13','Reclamos, sugerencias y comunicacion','Libro de reclamos, sugerencias y comunicacion con familias.','📣',13),
+  ('A14','Fiscalizaciones y subsanaciones','Actas, observaciones de fiscalizacion y planes de subsanacion.','🔍',14)
+on conflict (codigo) do update set
+  nombre = excluded.nombre,
+  descripcion = excluded.descripcion,
+  icono = excluded.icono,
+  orden = excluded.orden;
+
 with vals(codigo, nombre, descripcion, medio_verificador, req_venc, vigencia, orden) as (values
-  -- A01 Antecedentes legales
-  ('A01-R01','Escritura de constitución de la sociedad/entidad','Documento legal que constituye la persona jurídica que opera el ELEAM.','Copia escritura inscrita en el Registro de Comercio',false,null,1),
-  ('A01-R02','Certificado de vigencia de la persona jurídica','Acredita que la sociedad sigue vigente. Caduca con el tiempo y debe renovarse.','Certificado emitido por el Registro de Comercio',true,180,2),
-  ('A01-R03','RUT y rol único tributario de la entidad','Identificación tributaria de la entidad sostenedora.','Cédula RUT o e-RUT del SII',false,null,3),
-  ('A01-R04','Iniciación de actividades en el SII','Declaración de inicio de actividades comerciales ante el Servicio de Impuestos Internos.','Formulario 4415 o e-RUT con giro',false,null,4),
-  ('A01-R05','Identificación del representante legal','Documento que acredita quién representa legalmente al ELEAM.','Cédula identidad + escritura de poder vigente',false,null,5),
-
-  -- A02 Autorización sanitaria
-  ('A02-R01','Resolución sanitaria de funcionamiento vigente','Resolución de la SEREMI de Salud que autoriza operar como ELEAM.','Resolución firmada por la SEREMI',true,365,1),
-  ('A02-R02','Solicitud y antecedentes de autorización','Carpeta presentada a la SEREMI con planos, dotación y documentos de apoyo.','Copia del expediente presentado',false,null,2),
-  ('A02-R03','Certificado de Informaciones Previas (CIP) municipal','Certificado de la municipalidad que confirma uso de suelo permitido.','CIP emitido por la Dirección de Obras',true,365,3),
-  ('A02-R04','Permiso de edificación municipal','Permiso que acredita que el inmueble fue construido con autorización.','Permiso DOM',false,null,4),
-  ('A02-R05','Recepción final de obra municipal','Documento que acredita que la obra fue recibida conforme.','Certificado DOM',false,null,5),
-
-  -- A03 Infraestructura
-  ('A03-R01','Planos del establecimiento actualizados','Planos arquitectónicos vigentes con la distribución actual del ELEAM.','Planos firmados por arquitecto/a',false,null,1),
-  ('A03-R02','Certificado de instalación eléctrica (SEC)','Documento TE-1 emitido por instalador autorizado.','Formulario TE-1 SEC vigente',true,1095,2),
-  ('A03-R03','Certificado de instalación de gas (SEC)','Documento TC-6/TC-7 si el establecimiento usa gas.','Certificado SEC vigente',true,730,3),
-  ('A03-R04','Informe de potabilidad del agua','Análisis físico-químico del agua de consumo.','Informe laboratorio acreditado',true,365,4),
-  ('A03-R05','Certificado de fumigación y desratización','Tratamiento de control de plagas vigente.','Certificado de empresa autorizada',true,180,5),
-  ('A03-R06','Certificado de ascensor (si aplica)','Mantención y certificación periódica del o los ascensores.','Certificado empresa de mantención',true,365,6),
-  ('A03-R07','Certificado de calderas (si aplica)','Documento de mantención de calderas/calefones.','Certificado SEC vigente',true,365,7),
-
-  -- A04 Seguridad
-  ('A04-R01','Plan de emergencia y evacuación aprobado','Documento que define cómo evacuar ante un siniestro.','Plan firmado por responsable y SEREMI',false,null,1),
-  ('A04-R02','Certificado de extintores vigente','Mantención y recarga anual de los extintores.','Certificado empresa autorizada',true,365,2),
-  ('A04-R03','Señalética de emergencia instalada','Vías de evacuación, salidas y zonas seguras debidamente señalizadas.','Foto inventario + check de inspección',false,null,3),
-  ('A04-R04','Registro de simulacros (mínimo 2/año)','Bitácora de simulacros de evacuación realizados.','Acta de simulacro firmada',true,180,4),
-  ('A04-R05','Luces de emergencia operativas','Luces que funcionan ante corte eléctrico.','Bitácora de inspección mensual',true,90,5),
-  ('A04-R06','Protocolo de búsqueda y rescate','Procedimiento para ubicar residentes en una emergencia.','Protocolo escrito',false,null,6),
-
-  -- A05 Dirección técnica
-  ('A05-R01','Credencial vigente del director técnico','Identifica al profesional responsable del ELEAM.','Credencial emitida por SEREMI',true,365,1),
-  ('A05-R02','Título profesional del director técnico','Acredita su formación profesional.','Copia legalizada del título',false,null,2),
-  ('A05-R03','Contrato de prestación del director técnico','Contrato laboral o de servicios.','Contrato firmado',false,null,3),
-  ('A05-R04','Carta de aceptación SEREMI','SEREMI acepta a la persona como dirección técnica del ELEAM.','Resolución/aceptación SEREMI',false,null,4),
-
-  -- A06 Personal
-  ('A06-R01','Nómina actualizada del personal','Listado del personal vigente con cargos y horarios.','Excel/PDF con nómina vigente',true,180,1),
-  ('A06-R02','Contratos de trabajo del personal','Contratos firmados de cada trabajador.','Copias de los contratos',false,null,2),
-  ('A06-R03','Títulos y certificados profesionales','Acredita la formación de TENS, enfermeras, médicos, etc.','Copias de títulos por funcionario',false,null,3),
-  ('A06-R04','Certificados de salud del personal','Aptos médicamente para trabajar con adultos mayores.','Certificado de salud vigente',true,365,4),
-  ('A06-R05','Registro de capacitaciones del personal','Bitácora con cursos y capacitaciones realizadas.','Bitácora + certificados',false,null,5),
-  ('A06-R06','Convenios con prestadores de salud','Acuerdos con clínicas, ambulancias o servicios externos.','Convenios firmados vigentes',false,null,6),
-  ('A06-R07','Protocolo de turnos y guardia nocturna','Define la dotación mínima por turno y la guardia nocturna.','Protocolo escrito',false,null,7),
-
-  -- A07 Protocolos
-  ('A07-R01','Programa PCI (Prevención y Control de Infecciones)','Documento maestro de control de infecciones intrahospitalarias.','Programa PCI escrito',false,null,1),
-  ('A07-R02','Protocolo de lavado de manos','Procedimiento estandarizado de higiene de manos.','Protocolo escrito + difusión',false,null,2),
-  ('A07-R03','Protocolo de aislamiento de contacto y gotitas','Acciones ante un residente con sospecha o cuadro infeccioso.','Protocolo escrito',false,null,3),
-  ('A07-R04','Protocolo de manejo de residuos hospitalarios','Manejo seguro de residuos generados (REAS).','Protocolo + bitácora retiro',false,null,4),
-  ('A07-R05','Protocolo de manejo de medicamentos','Almacenamiento, administración y registro de medicamentos.','Protocolo escrito',false,null,5),
-  ('A07-R06','Protocolo de alimentación y deglución','Manejo de pacientes con disfagia y dietas especiales.','Protocolo escrito',false,null,6),
-  ('A07-R07','Protocolo de emergencias clínicas','Acción inmediata ante caída, paro, ahogo, hipoglicemia, etc.','Protocolo escrito',false,null,7),
-
-  -- A08 Residentes y carpetas
-  ('A08-R01','Ficha clínica completa por residente','Información personal, clínica, social y de contacto al día.','Sistema FichaEleam (módulo Residentes)',false,null,1),
-  ('A08-R02','Evaluación funcional (Índice de Barthel)','Evaluación periódica de la independencia para AVD.','Registro en ficha del residente',true,180,2),
-  ('A08-R03','Evaluación cognitiva (MMSE / Test del reloj)','Estado cognitivo del residente registrado periódicamente.','Registro en ficha del residente',true,180,3),
-  ('A08-R04','Evaluación nutricional individual','Evaluación inicial y de seguimiento por nutricionista.','Registro firmado por nutricionista',true,180,4),
-  ('A08-R05','Plan de cuidados individualizado (PAI)','Plan de cuidados con objetivos, intervenciones y responsable.','PAI firmado',true,180,5),
-  ('A08-R06','Consentimiento informado firmado','Autorización del residente o representante para los cuidados.','Consentimiento escrito',false,null,6),
-  ('A08-R07','Evaluación de riesgo de caídas (Morse)','Identifica residentes con alto riesgo de caer.','Registro en ficha',true,180,7),
-
-  -- A09 Contratos, consentimientos y derechos
+  ('A01-R01','Escritura de constitucion de la sociedad/entidad','Documento legal que constituye la persona juridica que opera el ELEAM.','Copia escritura inscrita en el Registro de Comercio',false,null,1),
+  ('A01-R02','Certificado de vigencia de la persona juridica','Acredita que la sociedad sigue vigente.','Certificado emitido por el Registro de Comercio',true,180,2),
+  ('A01-R03','RUT y rol unico tributario de la entidad','Identificacion tributaria de la entidad sostenedora.','Cedula RUT o e-RUT del SII',false,null,3),
+  ('A01-R04','Iniciacion de actividades en el SII','Declaracion de inicio de actividades ante el SII.','Formulario 4415 o e-RUT con giro',false,null,4),
+  ('A01-R05','Identificacion del representante legal','Documento que acredita quien representa legalmente al ELEAM.','Cedula identidad y poder vigente',false,null,5),
+  ('A02-R01','Resolucion sanitaria de funcionamiento vigente','Resolucion de la SEREMI que autoriza operar como ELEAM.','Resolucion firmada por SEREMI',true,365,1),
+  ('A02-R02','Solicitud y antecedentes de autorizacion','Carpeta presentada a SEREMI con planos, dotacion y documentos.','Copia del expediente presentado',false,null,2),
+  ('A02-R03','Certificado de Informaciones Previas municipal','Certificado municipal que confirma uso de suelo permitido.','CIP emitido por la Direccion de Obras',true,365,3),
+  ('A02-R04','Permiso de edificacion municipal','Permiso que acredita construccion autorizada.','Permiso DOM',false,null,4),
+  ('A02-R05','Recepcion final de obra municipal','Acredita que la obra fue recibida conforme.','Certificado DOM',false,null,5),
+  ('A03-R01','Planos del establecimiento actualizados','Planos arquitectonicos vigentes con la distribucion actual.','Planos firmados por arquitecto/a',false,null,1),
+  ('A03-R02','Certificado de instalacion electrica (SEC)','Documento TE-1 emitido por instalador autorizado.','Formulario TE-1 SEC vigente',true,1095,2),
+  ('A03-R03','Certificado de instalacion de gas (SEC)','Documento TC-6/TC-7 si el establecimiento usa gas.','Certificado SEC vigente',true,730,3),
+  ('A03-R04','Informe de potabilidad del agua','Analisis fisico-quimico del agua de consumo.','Informe laboratorio acreditado',true,365,4),
+  ('A03-R05','Certificado de fumigacion y desratizacion','Tratamiento de control de plagas vigente.','Certificado de empresa autorizada',true,180,5),
+  ('A03-R06','Certificado de ascensor (si aplica)','Mantencion y certificacion periodica del ascensor.','Certificado empresa de mantencion',true,365,6),
+  ('A03-R07','Certificado de calderas (si aplica)','Documento de mantencion de calderas/calefones.','Certificado SEC vigente',true,365,7),
+  ('A04-R01','Plan de emergencia y evacuacion aprobado','Documento que define como evacuar ante un siniestro.','Plan firmado por responsable',false,null,1),
+  ('A04-R02','Certificado de extintores vigente','Mantencion y recarga anual de extintores.','Certificado empresa autorizada',true,365,2),
+  ('A04-R03','Señaletica de emergencia instalada','Vias de evacuacion, salidas y zonas seguras señalizadas.','Foto inventario y check de inspeccion',false,null,3),
+  ('A04-R04','Registro de simulacros (minimo 2/año)','Bitacora de simulacros de evacuacion realizados.','Acta de simulacro firmada',true,180,4),
+  ('A04-R05','Luces de emergencia operativas','Luces que funcionan ante corte electrico.','Bitacora de inspeccion mensual',true,90,5),
+  ('A04-R06','Protocolo de busqueda y rescate','Procedimiento para ubicar residentes en emergencia.','Protocolo escrito',false,null,6),
+  ('A05-R01','Credencial vigente del director tecnico','Identifica al profesional responsable del ELEAM.','Credencial emitida por SEREMI',true,365,1),
+  ('A05-R02','Titulo profesional del director tecnico','Acredita su formacion profesional.','Copia legalizada del titulo',false,null,2),
+  ('A05-R03','Contrato de prestacion del director tecnico','Contrato laboral o de servicios.','Contrato firmado',false,null,3),
+  ('A05-R04','Carta de aceptacion SEREMI','SEREMI acepta a la direccion tecnica del ELEAM.','Resolucion o aceptacion SEREMI',false,null,4),
+  ('A06-R01','Nomina actualizada del personal','Listado del personal vigente con cargos y horarios.','Excel/PDF con nomina vigente',true,180,1),
+  ('A06-R02','Contratos de trabajo del personal','Contratos firmados de cada trabajador.','Copias de contratos',false,null,2),
+  ('A06-R03','Titulos y certificados profesionales','Acredita formacion de TENS, enfermeras, medicos, etc.','Copias de titulos por funcionario',false,null,3),
+  ('A06-R04','Certificados de salud del personal','Aptitud medica para trabajar con adultos mayores.','Certificado de salud vigente',true,365,4),
+  ('A06-R05','Registro de capacitaciones del personal','Bitacora con cursos y capacitaciones realizadas.','Bitacora y certificados',false,null,5),
+  ('A06-R06','Convenios con prestadores de salud','Acuerdos con clinicas, ambulancias o servicios externos.','Convenios firmados vigentes',false,null,6),
+  ('A06-R07','Protocolo de turnos y guardia nocturna','Define dotacion minima por turno y guardia nocturna.','Protocolo escrito',false,null,7),
+  ('A07-R01','Programa PCI','Documento maestro de prevencion y control de infecciones.','Programa PCI escrito',false,null,1),
+  ('A07-R02','Protocolo de lavado de manos','Procedimiento estandarizado de higiene de manos.','Protocolo escrito y difusion',false,null,2),
+  ('A07-R03','Protocolo de aislamiento de contacto y gotitas','Acciones ante residente con sospecha infecciosa.','Protocolo escrito',false,null,3),
+  ('A07-R04','Protocolo de manejo de residuos hospitalarios','Manejo seguro de residuos generados (REAS).','Protocolo y bitacora retiro',false,null,4),
+  ('A07-R05','Protocolo de manejo de medicamentos','Almacenamiento, administracion y registro de medicamentos.','Protocolo escrito',false,null,5),
+  ('A07-R06','Protocolo de alimentacion y deglucion','Manejo de pacientes con disfagia y dietas especiales.','Protocolo escrito',false,null,6),
+  ('A07-R07','Protocolo de emergencias clinicas','Accion ante caida, paro, ahogo, hipoglicemia, etc.','Protocolo escrito',false,null,7),
+  ('A08-R01','Ficha clinica completa por residente','Informacion personal, clinica, social y de contacto al dia.','Sistema FichaEleam',false,null,1),
+  ('A08-R02','Evaluacion funcional (Indice de Barthel)','Evaluacion periodica de independencia para AVD.','Registro en ficha del residente',true,180,2),
+  ('A08-R03','Evaluacion cognitiva (MMSE / Test del reloj)','Estado cognitivo registrado periodicamente.','Registro en ficha del residente',true,180,3),
+  ('A08-R04','Evaluacion nutricional individual','Evaluacion inicial y seguimiento por nutricionista.','Registro firmado por nutricionista',true,180,4),
+  ('A08-R05','Plan de cuidados individualizado (PAI)','Plan con objetivos, intervenciones y responsable.','PAI firmado',true,180,5),
+  ('A08-R06','Consentimiento informado firmado','Autorizacion del residente o representante para cuidados.','Consentimiento escrito',false,null,6),
+  ('A08-R07','Evaluacion de riesgo de caidas (Morse)','Identifica residentes con alto riesgo de caer.','Registro en ficha',true,180,7),
   ('A09-R01','Contrato de residencia firmado','Acuerdo formal entre residente/familia y ELEAM.','Contrato firmado por las partes',false,null,1),
-  ('A09-R02','Carta de derechos del residente entregada','Documento entregado al ingreso con los derechos del residente.','Acta de entrega firmada',false,null,2),
-  ('A09-R03','Reglamento interno del ELEAM','Reglas de convivencia y operación del establecimiento.','Reglamento publicado',false,null,3),
+  ('A09-R02','Carta de derechos del residente entregada','Documento entregado al ingreso con derechos del residente.','Acta de entrega firmada',false,null,2),
+  ('A09-R03','Reglamento interno del ELEAM','Reglas de convivencia y operacion del establecimiento.','Reglamento publicado',false,null,3),
   ('A09-R04','Carta de tarifas vigente','Tarifa actual de cuidados y servicios adicionales.','Carta firmada',true,365,4),
-
-  -- A10 Medicamentos
-  ('A10-R01','Inventario de botiquín','Listado actualizado de medicamentos disponibles.','Inventario escrito + ubicación',true,90,1),
-  ('A10-R02','Kardex de administración por residente','Registro de cada administración de medicamento.','Sistema FichaEleam (módulo Observaciones)',false,null,2),
-  ('A10-R03','Prescripciones médicas vigentes','Indicaciones médicas firmadas por residente.','Receta médica vigente',true,180,3),
-  ('A10-R04','Control de psicotrópicos y estupefacientes','Libro foliado con ingreso, salida y stock.','Libro foliado SEREMI',false,null,4),
-  ('A10-R05','Convenio con químico farmacéutico asesor','Profesional asesor para el manejo de medicamentos.','Convenio firmado',false,null,5),
-
-  -- A11 Alimentación
-  ('A11-R01','Minuta alimentaria mensual','Plan de alimentación visado por nutricionista.','Minuta firmada',true,30,1),
-  ('A11-R02','Certificados de manipulación de alimentos','Acredita la formación del personal de cocina.','Certificados vigentes',true,1095,2),
-  ('A11-R03','Control de temperaturas (HACCP)','Bitácora diaria de temperaturas de equipos y alimentos.','Bitácora HACCP',true,30,3),
-  ('A11-R04','Protocolo de dietas especiales y deglución','Procedimiento para residentes con disfagia o diabetes.','Protocolo escrito',false,null,4),
-  ('A11-R05','Encuesta de satisfacción alimentaria','Recoge opinión de residentes sobre la comida.','Encuesta aplicada',true,180,5),
-
-  -- A12 Aseo, lavandería, residuos
-  ('A12-R01','Programa de aseo y desinfección','Cronograma y procedimientos de aseo por área.','Programa escrito',false,null,1),
-  ('A12-R02','Bitácora de aseo','Registro diario de aseo realizado.','Bitácora firmada',true,30,2),
-  ('A12-R03','Manejo de lavandería y ropa de cama','Procedimiento para evitar contaminación cruzada.','Protocolo escrito',false,null,3),
-  ('A12-R04','Manejo de residuos peligrosos (REAS)','Convenio con empresa autorizada de retiro.','Convenio + bitácora de retiros',true,365,4),
-  ('A12-R05','Certificado de control de plagas','Igual que A03-R05; se replica si se gestiona aparte.','Certificado vigente',true,180,5),
-
-  -- A13 Reclamos
-  ('A13-R01','Libro de reclamos disponible','Libro físico foliado o sistema digital equivalente.','Libro foliado',false,null,1),
+  ('A10-R01','Inventario de botiquin','Listado actualizado de medicamentos disponibles.','Inventario escrito y ubicacion',true,90,1),
+  ('A10-R02','Kardex de administracion por residente','Registro de cada administracion de medicamento.','Sistema FichaEleam',false,null,2),
+  ('A10-R03','Prescripciones medicas vigentes','Indicaciones medicas firmadas por residente.','Receta medica vigente',true,180,3),
+  ('A10-R04','Control de psicotropicos y estupefacientes','Libro foliado con ingreso, salida y stock.','Libro foliado SEREMI',false,null,4),
+  ('A10-R05','Convenio con quimico farmaceutico asesor','Profesional asesor para manejo de medicamentos.','Convenio firmado',false,null,5),
+  ('A11-R01','Minuta alimentaria mensual','Plan de alimentacion visado por nutricionista.','Minuta firmada',true,30,1),
+  ('A11-R02','Certificados de manipulacion de alimentos','Formacion del personal de cocina.','Certificados vigentes',true,1095,2),
+  ('A11-R03','Control de temperaturas (HACCP)','Bitacora diaria de temperaturas.','Bitacora HACCP',true,30,3),
+  ('A11-R04','Protocolo de dietas especiales y deglucion','Procedimiento para disfagia, diabetes u otras dietas.','Protocolo escrito',false,null,4),
+  ('A11-R05','Encuesta de satisfaccion alimentaria','Opinion de residentes sobre alimentacion.','Encuesta aplicada',true,180,5),
+  ('A12-R01','Programa de aseo y desinfeccion','Cronograma y procedimientos de aseo por area.','Programa escrito',false,null,1),
+  ('A12-R02','Bitacora de aseo','Registro diario de aseo realizado.','Bitacora firmada',true,30,2),
+  ('A12-R03','Manejo de lavanderia y ropa de cama','Procedimiento para evitar contaminacion cruzada.','Protocolo escrito',false,null,3),
+  ('A12-R04','Manejo de residuos peligrosos (REAS)','Convenio con empresa autorizada de retiro.','Convenio y bitacora de retiros',true,365,4),
+  ('A12-R05','Certificado de control de plagas','Control periodico de plagas.','Certificado vigente',true,180,5),
+  ('A13-R01','Libro de reclamos disponible','Libro fisico foliado o sistema digital equivalente.','Libro foliado',false,null,1),
   ('A13-R02','Procedimiento de respuesta a reclamos','Define plazos y responsables para responder.','Procedimiento escrito',false,null,2),
-  ('A13-R03','Buzón de sugerencias','Mecanismo de retroalimentación para residentes y familias.','Foto + bitácora de revisión',false,null,3),
-  ('A13-R04','Registro de comunicaciones con familias','Cuaderno o sistema con avisos enviados/recibidos.','Bitácora de comunicaciones',false,null,4),
-  ('A13-R05','Reuniones periódicas con familias','Acta de reuniones con familias.','Actas firmadas',true,180,5),
-
-  -- A14 Fiscalizaciones y subsanaciones
-  ('A14-R01','Acta de la última fiscalización','Documento entregado por la SEREMI/Municipalidad.','Acta firmada',false,null,1),
-  ('A14-R02','Plan de subsanación de observaciones','Compromisos de mejora firmados con plazo y responsable.','Plan escrito',false,null,2),
-  ('A14-R03','Bitácora de seguimiento de subsanaciones','Avance en cada compromiso adquirido.','Bitácora interna',true,90,3),
-  ('A14-R04','Comunicaciones con SEREMI','Cartas, oficios e informes enviados a la autoridad.','Archivo de oficios',false,null,4)
+  ('A13-R03','Buzon de sugerencias','Mecanismo de retroalimentacion para residentes y familias.','Foto y bitacora de revision',false,null,3),
+  ('A13-R04','Registro de comunicaciones con familias','Avisos enviados y recibidos.','Bitacora de comunicaciones',false,null,4),
+  ('A13-R05','Reuniones periodicas con familias','Actas de reuniones con familias.','Actas firmadas',true,180,5),
+  ('A14-R01','Acta de la ultima fiscalizacion','Documento entregado por SEREMI/Municipalidad.','Acta firmada',false,null,1),
+  ('A14-R02','Plan de subsanacion de observaciones','Compromisos de mejora con plazo y responsable.','Plan escrito',false,null,2),
+  ('A14-R03','Bitacora de seguimiento de subsanaciones','Avance en compromisos adquiridos.','Bitacora interna',true,90,3),
+  ('A14-R04','Comunicaciones con SEREMI','Cartas, oficios e informes enviados a autoridad.','Archivo de oficios',false,null,4)
 )
 insert into public.acred_requisitos (
   ambito_id, codigo, nombre, descripcion, medio_verificador,
@@ -2632,14 +1765,13 @@ select a.id, v.codigo, v.nombre, v.descripcion, v.medio_verificador,
 from vals v
 join public.acred_ambitos a on a.codigo = split_part(v.codigo, '-', 1)
 on conflict (codigo) do update set
-  nombre                  = excluded.nombre,
-  descripcion             = excluded.descripcion,
-  medio_verificador       = excluded.medio_verificador,
-  requiere_vencimiento    = excluded.requiere_vencimiento,
-  vigencia_dias_sugerida  = excluded.vigencia_dias_sugerida,
-  orden                   = excluded.orden;
+  nombre = excluded.nombre,
+  descripcion = excluded.descripcion,
+  medio_verificador = excluded.medio_verificador,
+  requiere_vencimiento = excluded.requiere_vencimiento,
+  vigencia_dias_sugerida = excluded.vigencia_dias_sugerida,
+  orden = excluded.orden;
 
--- Provisionar requisitos para los ELEAMs ya existentes (si hay).
 do $$
 declare
   e record;
@@ -2649,853 +1781,9 @@ begin
   end loop;
 end $$;
 
-
--- ════════════════════════════════════════════════════════════════
--- v10: Hardening de RLS UPDATE — agregar WITH CHECK a las policies
--- de UPDATE que solo declaran USING. Sin WITH CHECK, un usuario que
--- puede leer/actualizar una fila propia podría modificar columnas
--- sensibles (ej. eleam_id) y mover datos a otro tenant.
--- ════════════════════════════════════════════════════════════════
-
--- residentes
-drop policy if exists "residentes_update" on public.residentes;
-create policy "residentes_update" on public.residentes
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  )
-  with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
-
--- signos_vitales
-drop policy if exists "sv_update" on public.signos_vitales;
-create policy "sv_update" on public.signos_vitales
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  )
-  with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
--- observaciones_diarias
-drop policy if exists "obs_update" on public.observaciones_diarias;
-create policy "obs_update" on public.observaciones_diarias
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  )
-  with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and residente_id in (select id from public.residentes
-                          where eleam_id = public.my_eleam_id())
-  );
-
--- documentos_acreditacion (legacy, todavía existe)
-drop policy if exists "docs_update" on public.documentos_acreditacion;
-create policy "docs_update" on public.documentos_acreditacion
-  for update using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  )
-  with check (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
--- acred_requisitos_eleam
-drop policy if exists "acred_re_update" on public.acred_requisitos_eleam;
-create policy "acred_re_update" on public.acred_requisitos_eleam
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  )
-  with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
-
--- acred_documentos
-drop policy if exists "acred_docs_update" on public.acred_documentos;
-create policy "acred_docs_update" on public.acred_documentos
-  for update using (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  )
-  with check (
-    public.my_rol() in ('admin_eleam','funcionario')
-    and eleam_id = public.my_eleam_id()
-  );
-
--- acred_observaciones (admin)
-drop policy if exists "acred_obs_update_admin" on public.acred_observaciones;
-create policy "acred_obs_update_admin" on public.acred_observaciones
-  for update using (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  )
-  with check (
-    public.my_rol() = 'admin_eleam'
-    and eleam_id = public.my_eleam_id()
-  );
-
--- acred_observaciones (funcionario solo internas creadas por sí mismo)
-drop policy if exists "acred_obs_update_func" on public.acred_observaciones;
-create policy "acred_obs_update_func" on public.acred_observaciones
-  for update using (
-    public.my_rol() = 'funcionario'
-    and eleam_id = public.my_eleam_id()
-    and origen = 'interna'
-    and creado_por = (select auth.uid())
-  )
-  with check (
-    public.my_rol() = 'funcionario'
-    and eleam_id = public.my_eleam_id()
-    and origen = 'interna'
-    and creado_por = (select auth.uid())
-  );
-
--- profiles update (no permitir cambiar id; el trigger
--- prevent_role_eleam_escalation cubre rol/eleam_id)
-drop policy if exists "profiles_own_update" on public.profiles;
-create policy "profiles_own_update" on public.profiles
-  for update
-  using ((select auth.uid()) = id)
-  with check ((select auth.uid()) = id);
-
--- ════════════════════════════════════════════════════════════════
--- v11: Limpieza — drop de vista no usada
--- ════════════════════════════════════════════════════════════════
-drop view if exists public.eleam_subscription_summary;
-
-
--- ════════════════════════════════════════════════════════════════
--- v12: Superadmin como CRM interno del SaaS
---
--- Campos CRM en eleams + tablas crm_tasks y crm_interactions.
--- Solo accesibles al rol superadmin (RLS estricto).
--- Función RPC transaccional registrar_pago_y_activar_eleam que
--- inserta el pago, activa la suscripción, ajusta vencimiento y deja
--- una interacción CRM automática.
--- ════════════════════════════════════════════════════════════════
-
--- ── 1. Columnas CRM en eleams ──────────────────────────────────
-do $$ begin
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='crm_estado'
-  ) then alter table public.eleams
-    add column crm_estado text not null default 'lead'
-      check (crm_estado in (
-        'lead','contactado','demo_agendada','demo_realizada','prueba',
-        'pendiente_pago','cliente_activo','cliente_riesgo','perdido'
-      ));
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='origen_lead'
-  ) then alter table public.eleams add column origen_lead text;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='ultimo_contacto'
-  ) then alter table public.eleams add column ultimo_contacto timestamptz;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='proxima_accion_fecha'
-  ) then alter table public.eleams add column proxima_accion_fecha date;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='responsable_comercial'
-  ) then alter table public.eleams
-    add column responsable_comercial uuid references public.profiles(id) on delete set null;
-  end if;
-
-  if not exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='eleams' and column_name='riesgo_churn'
-  ) then alter table public.eleams
-    add column riesgo_churn text not null default 'desconocido'
-      check (riesgo_churn in ('bajo','medio','alto','desconocido'));
-  end if;
-end $$;
-
-create index if not exists idx_eleams_crm_estado on public.eleams(crm_estado);
-create index if not exists idx_eleams_riesgo_churn on public.eleams(riesgo_churn);
-
--- Backfill: ELEAMs existentes con suscripción activa → cliente_activo
-update public.eleams set crm_estado = 'cliente_activo'
-  where crm_estado = 'lead'
-    and (pago_activo = true or subscription_status in ('activo','en_gracia'));
-
--- ── 2. Tabla crm_tasks ─────────────────────────────────────────
-create table if not exists public.crm_tasks (
-  id                  uuid        primary key default gen_random_uuid(),
-  eleam_id            uuid        references public.eleams(id) on delete cascade,
-  titulo              text        not null,
-  descripcion         text,
-  tipo                text        not null default 'general'
-                        check (tipo in ('general','llamada','correo','reunion','demo','seguimiento','onboarding','renovacion','otro')),
-  estado              text        not null default 'pendiente'
-                        check (estado in ('pendiente','en_curso','completada','cancelada')),
-  prioridad           text        not null default 'media'
-                        check (prioridad in ('baja','media','alta','urgente')),
-  fecha_vencimiento   date,
-  creado_por          uuid        references public.profiles(id) on delete set null,
-  completado_por      uuid        references public.profiles(id) on delete set null,
-  creado_en           timestamptz not null default now(),
-  completado_en       timestamptz,
-  actualizado_en      timestamptz not null default now()
-);
-
-alter table public.crm_tasks enable row level security;
-
-create index if not exists idx_crm_tasks_eleam   on public.crm_tasks(eleam_id, estado);
-create index if not exists idx_crm_tasks_venc    on public.crm_tasks(fecha_vencimiento)
-  where estado in ('pendiente','en_curso');
-create index if not exists idx_crm_tasks_estado  on public.crm_tasks(estado);
-
-drop trigger if exists trg_crm_tasks_updated_at on public.crm_tasks;
-create trigger trg_crm_tasks_updated_at
-  before update on public.crm_tasks
-  for each row execute function public.set_updated_at();
-
-drop policy if exists "crm_tasks_superadmin_all" on public.crm_tasks;
-create policy "crm_tasks_superadmin_all" on public.crm_tasks
-  for all
-  using    (public.is_superadmin())
-  with check (public.is_superadmin());
-
--- ── 3. Tabla crm_interactions ──────────────────────────────────
-create table if not exists public.crm_interactions (
-  id                uuid        primary key default gen_random_uuid(),
-  eleam_id          uuid        not null references public.eleams(id) on delete cascade,
-  tipo              text        not null default 'nota'
-                      check (tipo in ('nota','llamada','correo','reunion','demo','soporte','sistema','otro')),
-  canal             text        check (canal in ('telefono','email','whatsapp','presencial','videollamada','sistema','otro') or canal is null),
-  resumen           text        not null,
-  resultado         text        check (resultado in ('positivo','neutro','negativo','sin_respuesta','sistema') or resultado is null),
-  proxima_accion    text,
-  creado_por        uuid        references public.profiles(id) on delete set null,
-  creado_en         timestamptz not null default now()
-);
-
-alter table public.crm_interactions enable row level security;
-
-create index if not exists idx_crm_int_eleam_fecha
-  on public.crm_interactions(eleam_id, creado_en desc);
-
-drop policy if exists "crm_interactions_superadmin_all" on public.crm_interactions;
-create policy "crm_interactions_superadmin_all" on public.crm_interactions
-  for all
-  using    (public.is_superadmin())
-  with check (public.is_superadmin());
-
--- ── 4. RPC transaccional: registrar pago + activar ELEAM ───────
--- Solo superadmin puede ejecutarla. Hace todo en una transacción:
---   • inserta pago
---   • activa la suscripción del ELEAM (pago_activo + subscription_status)
---   • setea fecha_pago, fecha_vencimiento_suscripcion y plan
---   • cambia crm_estado a 'cliente_activo'
---   • registra interacción automática (canal=sistema)
-create or replace function public.registrar_pago_y_activar_eleam(
-  p_eleam_id    uuid,
-  p_monto       integer,
-  p_plan        text,
-  p_fecha_inicio date,
-  p_fecha_fin   date,
-  p_metodo_pago text default null,
-  p_notas       text default null
-) returns jsonb
-  language plpgsql
-  security definer
-  set search_path = public
-as $$
-declare
-  v_user uuid := (select auth.uid());
-  v_pago_id uuid;
-  v_eleam   record;
-begin
-  -- Solo superadmin
-  if not public.is_superadmin() then
-    raise exception 'Solo superadmin puede registrar pagos' using errcode = '42501';
-  end if;
-
-  if p_monto is null or p_monto <= 0 then
-    raise exception 'Monto inválido' using errcode = 'P0001';
-  end if;
-
-  -- Verificar que el ELEAM existe
-  select * into v_eleam from public.eleams where id = p_eleam_id;
-  if not found then
-    raise exception 'ELEAM no encontrado' using errcode = 'P0001';
-  end if;
-
-  -- 1) Inserta el pago (estado = completado)
-  insert into public.pagos (
-    eleam_id, monto, plan, fecha_inicio, fecha_fin,
-    metodo_pago, notas, estado, registrado_por
-  ) values (
-    p_eleam_id, p_monto, p_plan, p_fecha_inicio, p_fecha_fin,
-    p_metodo_pago, p_notas, 'completado', v_user
-  ) returning id into v_pago_id;
-
-  -- 2) Activa la suscripción del ELEAM
-  update public.eleams set
-    pago_activo                   = true,
-    plan                          = p_plan,
-    subscription_status           = 'activo',
-    fecha_pago                    = now(),
-    fecha_vencimiento_suscripcion = (p_fecha_fin::timestamptz),
-    proximo_cobro_en              = (p_fecha_fin::timestamptz),
-    crm_estado                    = 'cliente_activo',
-    riesgo_churn                  = case when riesgo_churn = 'alto' then 'medio' else riesgo_churn end,
-    ultimo_contacto               = now()
-  where id = p_eleam_id;
-
-  -- 3) Interacción automática
-  insert into public.crm_interactions (
-    eleam_id, tipo, canal, resumen, resultado, creado_por
-  ) values (
-    p_eleam_id, 'sistema', 'sistema',
-    'Pago registrado por ' || coalesce(p_metodo_pago, 'método no especificado') || ' · ' ||
-      to_char(p_monto, 'FM999G999G999') || ' CLP · plan ' || p_plan,
-    'positivo', v_user
-  );
-
-  return jsonb_build_object(
-    'pago_id', v_pago_id,
-    'eleam_id', p_eleam_id,
-    'fecha_fin', p_fecha_fin
-  );
-end;
-$$;
-
-revoke all on function public.registrar_pago_y_activar_eleam(
-  uuid, integer, text, date, date, text, text
-) from public;
-grant execute on function public.registrar_pago_y_activar_eleam(
-  uuid, integer, text, date, date, text, text
-) to authenticated;
-
-
--- ════════════════════════════════════════════════════════════════
--- v13: Blog público + gestión desde superadmin
---
--- - Tabla blog_posts con campos SEO completos.
--- - Lectura pública: solo posts en estado 'publicado'.
--- - Escritura: solo superadmin (RLS).
--- - Slug único, contenido markdown, tags, contador de vistas.
--- ════════════════════════════════════════════════════════════════
-
-create table if not exists public.blog_posts (
-  id                  uuid        primary key default gen_random_uuid(),
-  slug                text        unique not null,
-  titulo              text        not null,
-  resumen             text        not null,
-  contenido_md        text        not null,
-  cover_url           text,
-  cover_alt           text,
-  meta_title          text,
-  meta_description    text,
-  keywords            text[]      default '{}',
-  estado              text        not null default 'borrador'
-                        check (estado in ('borrador','publicado','archivado')),
-  publicado_en        timestamptz,
-  autor_nombre        text        default 'Equipo FichaEleam',
-  autor_id            uuid        references public.profiles(id) on delete set null,
-  tiempo_lectura_min  integer,
-  views               integer     not null default 0,
-  destacado           boolean     not null default false,
-  creado_en           timestamptz not null default now(),
-  actualizado_en      timestamptz not null default now()
-);
-
-alter table public.blog_posts enable row level security;
-
-create index if not exists idx_blog_posts_estado_pub
-  on public.blog_posts(estado, publicado_en desc);
-create index if not exists idx_blog_posts_slug on public.blog_posts(slug);
-
-drop trigger if exists trg_blog_posts_updated_at on public.blog_posts;
-create trigger trg_blog_posts_updated_at
-  before update on public.blog_posts
-  for each row execute function public.set_updated_at();
-
--- RLS: público lee solo posts publicados; superadmin lee/escribe todo.
-drop policy if exists "blog_select_public" on public.blog_posts;
-create policy "blog_select_public" on public.blog_posts
-  for select using (
-    estado = 'publicado'
-    or public.is_superadmin()
-  );
-
-drop policy if exists "blog_superadmin_all" on public.blog_posts;
-create policy "blog_superadmin_all" on public.blog_posts
-  for all
-  using    (public.is_superadmin())
-  with check (public.is_superadmin());
-
--- RPC para incrementar vistas sin requerir auth (read-only escalation):
-create or replace function public.blog_increment_views(p_slug text)
-  returns void
-  language sql
-  security definer
-  set search_path = public
-as $$
-  update public.blog_posts
-    set views = views + 1
-    where slug = p_slug and estado = 'publicado';
-$$;
-revoke all on function public.blog_increment_views(text) from public;
-grant execute on function public.blog_increment_views(text) to anon, authenticated;
-
--- ── Seed: 5 artículos iniciales de alto valor ──────────────────
-insert into public.blog_posts
-  (slug, titulo, resumen, meta_title, meta_description, keywords,
-   tiempo_lectura_min, autor_nombre, estado, publicado_en, destacado, contenido_md)
-values
-(
-  'ds-14-2017-fiscalizacion-seremi-eleam',
-  'DS 14/2017 explicado: qué exige la SEREMI a un ELEAM en Chile (guía 2026)',
-  'Guía práctica del Decreto 14/2017 del MINSAL. Qué documentos pide la SEREMI, en qué falla la mayoría de las residencias y cómo prepararte sin perder noches.',
-  'DS 14/2017: qué exige la SEREMI a un ELEAM en Chile · FichaEleam',
-  'Guía 2026 del DS 14/2017 para ELEAM en Chile: 14 ámbitos, documentos clave y cómo evitar las observaciones más comunes en una fiscalización SEREMI.',
-  ARRAY['DS 14/2017','fiscalización SEREMI','ELEAM','acreditación','adulto mayor','Chile'],
-  9, 'Equipo FichaEleam', 'publicado', now() - interval '2 days', true,
-$post$
-## ¿Qué es el DS 14/2017?
-
-El **Decreto Supremo 14 del Ministerio de Salud** (publicado el 2 de febrero de 2018) establece el reglamento que rige a los **Establecimientos de Larga Estadía para Adultos Mayores (ELEAM)** en Chile. Reemplazó al antiguo DS 466 e introdujo exigencias mucho más estrictas de infraestructura, dotación, registros clínicos y derechos de los residentes.
-
-> Si tu ELEAM funciona en Chile, **es la norma sobre la que serás fiscalizado** por la SEREMI de Salud de tu región.
-
-## Los 14 ámbitos que la SEREMI revisa
-
-En la práctica, una fiscalización SEREMI revisa estos **14 ámbitos**:
-
-1. Antecedentes legales del ELEAM
-2. Autorización sanitaria y resolución de funcionamiento
-3. Infraestructura, inmueble y condiciones sanitarias
-4. Seguridad, incendios, evacuación y señalética
-5. Dirección técnica
-6. Personal, dotación y turnos
-7. Protocolos obligatorios
-8. Residentes y carpetas personales
-9. Contratos, consentimientos y derechos de residentes
-10. Medicamentos y registros asociados
-11. Alimentación, cocina y manipulación de alimentos
-12. Aseo, lavandería, residuos y control de plagas
-13. Reclamos, sugerencias y comunicación con familias
-14. Fiscalizaciones, actas, observaciones y subsanaciones
-
-Cada ámbito agrupa **entre 4 y 8 requisitos** específicos: documentos vigentes, protocolos firmados, registros al día, condiciones físicas verificables.
-
-## Las 5 observaciones más comunes (y cómo evitarlas)
-
-### 1. Documentos vencidos
-Certificados SEC, fumigación, extintores, salud del personal. La SEREMI no acepta "estaba vigente la semana pasada".
-**Solución:** un sistema con alertas de vencimiento por documento (lo que hace [FichaEleam](/) en el módulo Carpeta SEREMI).
-
-### 2. Plan de cuidados individualizado (PAI) inexistente o desactualizado
-Cada residente debe tener un PAI firmado y revisado periódicamente.
-**Solución:** revisar Barthel + plan cada 6 meses como parte del protocolo.
-
-### 3. Kardex de medicamentos en papel ilegible
-La SEREMI revisa cómo registras la administración. Cuadernos con tachones son una observación segura.
-**Solución:** registro digital con firma electrónica del funcionario.
-
-### 4. Falta de simulacros de evacuación
-Mínimo 2 al año, con acta firmada. Casi nadie los registra correctamente.
-
-### 5. Bitácora de aseo y control HACCP en blanco
-Cocina y aseo son los ámbitos donde más fallan los ELEAM.
-
-## ¿Cómo prepararte?
-
-1. **Inventario:** lista los 14 ámbitos y marca qué tienes y qué te falta.
-2. **Vigencias:** revisa fechas de todos los certificados; muchos vencen a los 6-12 meses.
-3. **Protocolos firmados y conocidos:** no basta con tenerlos, el personal debe poder explicarlos.
-4. **Carpetas de residentes:** ficha clínica, evaluaciones funcionales, consentimientos, prescripciones vigentes.
-5. **Acta de simulacro:** programa simulacros con anticipación.
-
-## Cómo te ayuda FichaEleam
-
-[FichaEleam](/) es la primera plataforma chilena hecha específicamente para el DS 14/2017:
-
-- **Carpeta SEREMI con los 14 ámbitos** ya pre-cargados (~70 requisitos).
-- **Alertas de vencimiento** automáticas por documento.
-- **Versionado de evidencias:** cada vez que reemplazas un certificado, el anterior queda en historial.
-- **Export imprimible** para llegar a la fiscalización con todo en orden.
-
-> [Crea tu cuenta gratis](/register) y revisa qué está al día y qué te falta en menos de 10 minutos.
-
-## Recursos oficiales
-
-- [Decreto 14/2017 — BCN](https://bcn.cl)
-- [SEREMI de Salud por región](https://www.minsal.cl)
-
----
-
-*¿Tienes una fiscalización pendiente? Prueba el [demo de FichaEleam](/demo) y te mostramos cómo se ve un ELEAM con la documentación al día.*
-$post$
-),
-
-(
-  'checklist-fiscalizacion-seremi-eleam',
-  'Checklist completo de fiscalización SEREMI para tu ELEAM (descargable)',
-  'El checklist de los documentos, protocolos y registros que tu ELEAM necesita tener visibles cuando llegue la SEREMI. Ordenado por los 14 ámbitos del DS 14/2017.',
-  'Checklist fiscalización SEREMI para ELEAM · DS 14/2017 · FichaEleam',
-  'Checklist 2026: 14 ámbitos y +70 requisitos que la SEREMI revisa en una fiscalización a tu ELEAM en Chile. Documentos, protocolos y registros clave.',
-  ARRAY['checklist fiscalización SEREMI','ELEAM','documentos SEREMI','DS 14/2017','acreditación adulto mayor'],
-  7, 'Equipo FichaEleam', 'publicado', now() - interval '4 days', true,
-$post$
-## ¿Por qué necesitas un checklist?
-
-Cuando llega la SEREMI a tu ELEAM tienes **una sola oportunidad** de mostrar que todo está en orden. Las observaciones se quedan en acta, y subsanarlas después implica plazos, cartas oficiales y, a veces, multas.
-
-Este checklist te entrega **los requisitos críticos por ámbito** para que llegues con la carpeta lista.
-
-## Checklist por ámbito
-
-### A01 · Antecedentes legales
-- [ ] Escritura de constitución de la sociedad
-- [ ] Certificado de vigencia persona jurídica (≤ 6 meses)
-- [ ] RUT empresa
-- [ ] Iniciación de actividades SII
-- [ ] Identificación del representante legal
-
-### A02 · Autorización sanitaria
-- [ ] Resolución sanitaria vigente
-- [ ] CIP municipal vigente
-- [ ] Permiso de edificación
-- [ ] Recepción final de obra
-
-### A03 · Infraestructura
-- [ ] Planos actualizados
-- [ ] Certificado SEC eléctrico (TE-1)
-- [ ] Certificado SEC gas (si aplica)
-- [ ] Informe potabilidad de agua (anual)
-- [ ] Certificado fumigación y desratización (≤ 6 meses)
-- [ ] Certificado ascensor (si aplica)
-
-### A04 · Seguridad y emergencias
-- [ ] Plan de emergencia y evacuación firmado
-- [ ] Certificado extintores vigente
-- [ ] Señalética instalada
-- [ ] Acta de **2 simulacros al año**
-- [ ] Bitácora de luces de emergencia
-- [ ] Protocolo de búsqueda y rescate
-
-### A05 · Dirección técnica
-- [ ] Credencial vigente del director técnico
-- [ ] Título profesional
-- [ ] Contrato de prestación
-- [ ] Carta de aceptación SEREMI
-
-### A06 · Personal
-- [ ] Nómina actualizada
-- [ ] Contratos de todos
-- [ ] Títulos profesionales
-- [ ] **Certificados de salud vigentes** (anuales)
-- [ ] Registro de capacitaciones
-- [ ] Convenios con prestadores externos
-
-### A07 · Protocolos obligatorios
-- [ ] PCI (prevención y control de infecciones)
-- [ ] Lavado de manos
-- [ ] Aislamiento (contacto y gotitas)
-- [ ] Manejo de residuos REAS
-- [ ] Manejo de medicamentos
-- [ ] Alimentación y deglución
-- [ ] Emergencias clínicas
-
-### A08 · Carpetas de residentes
-- [ ] Ficha clínica completa
-- [ ] Índice de Barthel actualizado (≤ 6 meses)
-- [ ] MMSE / Test del reloj
-- [ ] Evaluación nutricional
-- [ ] **Plan de cuidados individualizado (PAI)** firmado
-- [ ] Consentimiento informado
-- [ ] Escala de Morse (riesgo caídas)
-
-### A09 · Contratos y derechos
-- [ ] Contrato de residencia firmado
-- [ ] Carta de derechos entregada (con acuse)
-- [ ] Reglamento interno publicado
-- [ ] Carta de tarifas vigente
-
-### A10 · Medicamentos
-- [ ] Inventario de botiquín
-- [ ] Kardex de administración por residente
-- [ ] Prescripciones médicas vigentes
-- [ ] **Libro foliado de psicotrópicos**
-- [ ] Convenio con químico farmacéutico
-
-### A11 · Alimentación
-- [ ] Minuta mensual visada por nutricionista
-- [ ] Certificados de manipuladores
-- [ ] **Bitácora HACCP de temperaturas**
-- [ ] Protocolo de dietas especiales
-- [ ] Encuestas de satisfacción
-
-### A12 · Aseo y residuos
-- [ ] Programa de aseo
-- [ ] Bitácora diaria
-- [ ] Protocolo de lavandería
-- [ ] Convenio retiro REAS
-- [ ] Certificado de control de plagas
-
-### A13 · Reclamos y comunicación con familias
-- [ ] Libro de reclamos foliado
-- [ ] Procedimiento de respuesta
-- [ ] Buzón de sugerencias
-- [ ] Bitácora de comunicaciones
-- [ ] Actas de reuniones con familias
-
-### A14 · Fiscalizaciones previas
-- [ ] Acta de la última fiscalización
-- [ ] Plan de subsanación firmado
-- [ ] Bitácora de seguimiento
-
-## Cómo gestionar este checklist sin volverte loco
-
-Imprimirlo y pegarlo en la pared no escala. Necesitas:
-
-1. **Estado por requisito:** cumple / pendiente / observado / vencido / no aplica.
-2. **Vencimiento por documento.**
-3. **Evidencia digital adjunta** (PDF, foto del certificado).
-4. **Historial:** qué cambió y cuándo.
-
-[FichaEleam](/) trae los 14 ámbitos y +70 requisitos pre-cargados. Cada vez que subes una evidencia, el sistema marca el requisito como cumple, calcula el vencimiento y te avisa 30 días antes.
-
-> **Crea tu cuenta gratis y descarga la Carpeta SEREMI lista para imprimir** en 10 minutos. [Empezar →](/register)
-$post$
-),
-
-(
-  'digitalizar-ficha-clinica-eleam',
-  'Cómo digitalizar la ficha clínica de un ELEAM en 30 días',
-  'Plan paso a paso para llevar las fichas clínicas de tu ELEAM al mundo digital sin romper la operación. Qué priorizar las primeras 4 semanas.',
-  'Digitaliza la ficha clínica de tu ELEAM en 30 días · FichaEleam',
-  'Plan de 30 días para digitalizar la ficha clínica de un ELEAM en Chile: residentes, signos vitales, observaciones de turno y carpeta SEREMI.',
-  ARRAY['ficha clínica digital','ELEAM','digitalización','Chile','adulto mayor'],
-  8, 'Equipo FichaEleam', 'publicado', now() - interval '7 days', false,
-$post$
-## ¿Por qué digitalizar?
-
-Hay tres razones que aparecen en cada ELEAM con el que conversamos:
-
-1. **La SEREMI cada vez exige más trazabilidad.** Cuadernos en lápiz son insuficientes.
-2. **Rotación del personal:** los registros viven en la cabeza de quien renuncia.
-3. **Familias quieren saber.** Y deben saber, por derecho.
-
-Lo que sigue es un plan **realista de 30 días**, hecho con ELEAMs reales que ya hicieron la transición.
-
-## Semana 1 · Inventario y residentes
-
-**Objetivo:** todos los residentes activos cargados en sistema.
-
-- Día 1-2: Lista en Excel con `nombre · RUT · fecha nacimiento · diagnóstico principal · alergias · contacto familiar`.
-- Día 3-5: Carga en el sistema. En FichaEleam se hace en ~3 minutos por residente.
-- Día 6-7: Verificación cruzada con la lista en papel. **No avances si quedan residentes sin cargar.**
-
-> El error más común es saltar este paso. Sin residentes, el resto no funciona.
-
-## Semana 2 · Signos vitales
-
-**Objetivo:** cero signos vitales en cuaderno desde el día 8.
-
-- Capacita al personal de turno mañana primero (es donde más se registra).
-- Define **rangos clínicos** que disparen alertas (ej. SatO₂ < 92, FC > 110).
-- Empieza a registrar **en paralelo** con el cuaderno en los primeros 3 días, luego solo digital.
-
-FichaEleam muestra el rango clínico en vivo: cuando el funcionario escribe 88 de saturación, ve la celda en rojo y sabe que hay que avisar.
-
-## Semana 3 · Observaciones por turno
-
-**Objetivo:** dejar de tener "el cuaderno de novedades".
-
-Define las **12 categorías** que vas a usar (caídas, incidentes, curaciones, medicamentos, cambios posturales, higiene, alimentación, etc.).
-
-Reglas que funcionan:
-- Toda caída se registra **antes de terminar el turno**.
-- Toda observación marcada como "requiere seguimiento" tiene un responsable.
-- El director revisa el módulo cada mañana en lugar de leer cuadernos.
-
-## Semana 4 · Carpeta SEREMI
-
-**Objetivo:** ámbitos legales, infraestructura y residentes con evidencia digital.
-
-- Sube los certificados que tienes a mano (resolución sanitaria, SEC, fumigación).
-- Asigna responsable a los requisitos pendientes.
-- Programa los simulacros de evacuación pendientes.
-
-Después de 30 días no tendrás todo perfecto, pero tendrás **el sistema funcionando**, una carpeta visible y trazabilidad real.
-
-## Errores típicos que no debes cometer
-
-- **Cargar todos los residentes "en paralelo" mientras siguen en cuaderno.** Define una fecha de corte.
-- **Dejar la digitalización al "día cuando haya tiempo".** No lo va a haber.
-- **Comprar un sistema genérico de salud** que no entiende el flujo ELEAM.
-
-## Por qué FichaEleam acelera esto
-
-- Pre-cargado para Chile (DS 14/2017, 14 ámbitos, 12 categorías de observación).
-- Permisos por rol: admin, funcionario clínico, familiar.
-- Funciona desde el celular del turno.
-- Suscripción mensual desde **$50.000 CLP** por establecimiento (no por usuario).
-
-> [Empieza ahora con el demo gratuito](/demo) y, si te convence, [crea tu cuenta](/register).
-$post$
-),
-
-(
-  'signos-vitales-adulto-mayor-rangos-criticos',
-  'Signos vitales en adultos mayores: rangos normales, alertas y errores típicos',
-  'Tabla actualizada de signos vitales para adultos mayores institucionalizados, con qué pasa cuando salen de rango y cuándo avisar al médico de turno.',
-  'Signos vitales adulto mayor: rangos normales y alertas críticas · FichaEleam',
-  'Rangos clínicos de signos vitales en adultos mayores: presión, frecuencia cardíaca, saturación, temperatura, glucosa y dolor. Cuándo es alerta crítica.',
-  ARRAY['signos vitales adulto mayor','rangos clínicos','ELEAM','enfermería geriátrica','presión arterial'],
-  6, 'Equipo FichaEleam', 'publicado', now() - interval '10 days', false,
-$post$
-## ¿Por qué los rangos del adulto mayor son distintos?
-
-En geriatría los signos vitales tienen **rangos distintos a los del adulto joven**: la fragilidad, la polifarmacia y los diagnósticos crónicos cambian la lectura. Lo que en una persona de 30 sería tolerable, en un residente de 85 puede ser una urgencia.
-
-Este artículo entrega los rangos que usamos en FichaEleam y cuándo deberías escalar al médico de turno.
-
-## Tabla de rangos clínicos
-
-| Parámetro | Normal | Atención (warning) | Crítico |
-|-----------|--------|--------------------|---------|
-| **Presión sistólica** (mmHg) | 100–139 | 90–99 ó 140–179 | <90 ó ≥180 |
-| **Presión diastólica** (mmHg) | 60–89 | 50–59 ó 90–109 | <50 ó ≥110 |
-| **Frecuencia cardíaca** (lpm) | 60–100 | 50–59 ó 101–120 | <50 ó >120 |
-| **Frecuencia respiratoria** (rpm) | 12–20 | 10–11 ó 21–24 | <10 ó >24 |
-| **Temperatura** (°C) | 36.0–37.7 | 35.0–35.9 ó 37.8–38.9 | <35 ó ≥39 |
-| **Saturación O₂** (%) | ≥95 | 90–94 | <90 |
-| **Glucosa** (mg/dL) | 70–179 | 60–69 ó 180–249 | <60 ó ≥250 |
-| **Dolor** (0–10) | 0–3 | 4–6 | ≥7 |
-
-## Cuándo escalar al médico de turno
-
-Escalar **siempre** ante:
-
-- **SatO₂ < 90** sin oxígeno o que no recupera con O₂ a 2 lpm.
-- **PAS < 90 sostenida** + síntomas (mareo, piel pálida).
-- **Temperatura ≥ 39** o hipotermia < 35.
-- **Glucemia < 60** sintomática o ≥ 300.
-- **Dolor 7+** sin causa identificada.
-- **Frecuencia respiratoria > 24** con uso de musculatura accesoria.
-
-## Errores típicos al registrar
-
-1. **Saltarse el primer control matinal porque "está dormido".** El residente con sepsis suele estar somnoliento.
-2. **Confiar solo en la SatO₂ del oxímetro de dedo en pacientes con uñas pintadas o frío periférico.**
-3. **No registrar el dolor.** Si no se mide, no se trata.
-4. **No anotar la postura en la presión arterial.** PAS de pie vs acostado puede diferir 30 mmHg.
-
-## Cómo lo hace FichaEleam
-
-Cada parámetro tiene **su rango clínico cargado**. Cuando el funcionario escribe el valor, ve **en vivo** el color del rango (verde/ámbar/rojo) y un resumen global del registro. Si SatO₂ es 89, el sistema marca el registro como "Requiere atención inmediata" antes de guardarlo.
-
-> [Prueba el demo de signos vitales](/demo/funcionario) y mira cómo se ve un control de turno con alertas automáticas.
-
-## Bibliografía rápida
-
-- *Manual de Geriatría* — Sociedad de Geriatría y Gerontología de Chile.
-- *Vital signs in the elderly* — Journal of Gerontological Nursing.
-$post$
-),
-
-(
-  'comunicacion-familias-eleam-protocolo',
-  'Comunicación con familias en ELEAM: protocolo, herramientas y formato que sí funciona',
-  'Cómo informar a las familias sin saturarlas, qué decir cuando hay un evento clínico y por qué dar acceso digital reduce reclamos a la mitad.',
-  'Comunicación con familias en ELEAM: protocolo y formato · FichaEleam',
-  'Buenas prácticas de comunicación con familias en ELEAM: qué informar, cuándo y cómo. Reduce reclamos y mejora la confianza.',
-  ARRAY['comunicación familias ELEAM','adulto mayor','protocolo familias','ELEAM Chile'],
-  6, 'Equipo FichaEleam', 'publicado', now() - interval '14 days', false,
-$post$
-## El problema real
-
-Las familias no reclaman porque les llamen poco. Reclaman porque **no entienden qué está pasando con su familiar**. Una llamada al mes que dice "todo bien" genera más ansiedad que cuatro mensajes cortos con datos concretos.
-
-Si un ELEAM mejora su comunicación con familias, baja reclamos, baja rotación de residentes y sube la cuota promedio que las familias están dispuestas a pagar.
-
-## Qué información esperan las familias
-
-Por encuestas y conversaciones con familiares, lo que más quieren saber es:
-
-1. **Estado anímico y físico de su familiar.**
-2. **Comió, durmió, fue al baño.**
-3. **Se cayó, se enfermó, lo vio el médico.**
-4. **Cuándo es la próxima visita médica.**
-5. **Cuándo y cómo los pueden visitar.**
-
-Casi nunca preguntan por la presión arterial exacta. Pero sí quieren saber si "está bien".
-
-## Protocolo simple que funciona
-
-### Comunicación de rutina (sin eventos)
-
-- **Bitácora semanal** automática: estado general, peso, situaciones destacables.
-- Familia puede revisar cuando quiera, sin esperar a que el ELEAM llame.
-
-### Comunicación ante evento clínico
-
-Sigue siempre este orden:
-
-1. **Estabilizar** al residente.
-2. **Llamada al contacto familiar primario** dentro de los primeros 30 minutos.
-3. **Mensaje escrito** (WhatsApp o portal) con: qué pasó, qué se hizo, próximos pasos.
-4. **Registro en sistema** firmado por el funcionario.
-
-### Comunicación de visitas
-
-- Calendario claro y visible.
-- Confirmación 24h antes.
-- Bitácora de visitas con duración.
-
-## Por qué dar acceso digital baja reclamos
-
-Cuando la familia tiene un **portal donde ve los signos vitales recientes, las observaciones del turno y puede registrar sus visitas**, se siente parte del cuidado en lugar de cliente que reclama.
-
-FichaEleam tiene un **portal del familiar** integrado: cada residente puede tener uno o varios familiares autorizados, ven solo a su residente y no pueden modificar registros clínicos. Esa frontera es importante.
-
-## Errores que aún se ven
-
-- **Mandar foto del cuaderno por WhatsApp.** Es ilegible y no es trazable.
-- **Llamar solo cuando hay problemas.** La familia entra en pánico cada vez que ve la llamada.
-- **Decir "está bien" sin datos.** Genera desconfianza.
-
-## Cómo lo hace FichaEleam
-
-- Portal del familiar con últimos signos vitales y observaciones.
-- Registro de visitas (en sistema o en papel + digital).
-- Permisos limitados al residente vinculado.
-- Sin costo extra por familiar.
-
-> [Mira cómo se ve el portal del familiar en el demo](/demo/familiar) — sin registro, sin instalación.
-
----
-
-*¿Tienes tu propia plantilla de comunicación con familias? Escríbenos a contacto@fichaeleam.cl y la sumamos a este artículo con tu crédito.*
-$post$
-)
-on conflict (slug) do update set
-  titulo            = excluded.titulo,
-  resumen           = excluded.resumen,
-  contenido_md      = excluded.contenido_md,
-  meta_title        = excluded.meta_title,
-  meta_description  = excluded.meta_description,
-  keywords          = excluded.keywords,
-  destacado         = excluded.destacado,
-  actualizado_en    = now();
+update public.eleams
+set crm_estado = 'cliente_activo'
+where crm_estado = 'lead'
+  and (pago_activo = true or subscription_status in ('activo','en_gracia'));
+
+-- El seed del blog publico vive en supabase_blog_seed.sql.

@@ -462,10 +462,10 @@ Rol `superadmin` reservado para el dueño/operador de la plataforma FichaEleam.
 -- Ejecutar en Supabase SQL Editor después de registrar la cuenta:
 UPDATE public.profiles
 SET rol = 'superadmin'
-WHERE email = 'operador@fichaeleam.cl';
+WHERE email = 'gabrielgarrido89@gmail.com';
 ```
 
-El superadmin no necesita `eleam_id`. `pagoActivo` siempre es `true` para este rol.
+El schema también promueve automáticamente a `gabrielgarrido89@gmail.com` al re-ejecutarse si el perfil ya existe. El superadmin no necesita `eleam_id`. `pagoActivo` siempre es `true` para este rol.
 
 ### Funcionalidades del panel
 

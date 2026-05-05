@@ -269,8 +269,10 @@ const pagoActivo = profile?.rol === "superadmin"
 ### 🟣 Superadmin (dueño de la plataforma)
 
 1. Te creas una cuenta normal por `/register`.
-2. En **Supabase SQL Editor** ejecutas
-   `update public.profiles set rol = 'superadmin' where email = 'tu@email.cl';`
+2. Si el schema ya está ejecutado, el correo `gabrielgarrido89@gmail.com`
+   queda como `superadmin` automáticamente. Si la cuenta existía antes,
+   re-ejecuta `supabase_schema.sql` o usa:
+   `update public.profiles set rol = 'superadmin', eleam_id = null where lower(email) = 'gabrielgarrido89@gmail.com';`
 3. Cierras sesión y vuelves a entrar.
 4. `homePath = /superadmin`. El Navbar solo muestra **Superadmin**, **Demo** y **Cerrar sesión**.
 5. Desde `/superadmin` ves todos los ELEAMs, métricas, pagos.
@@ -387,8 +389,15 @@ El badge muestra las razones en `title` (tooltip nativo) y permite expandirlas e
 
 ### Cómo crear el primer superadmin
 
-1. Registrar una cuenta normal en la aplicación.
-2. Ir a **Supabase Dashboard → SQL Editor** y ejecutar:
+El schema deja configurado como superadmin real al correo:
+
+```text
+gabrielgarrido89@gmail.com
+```
+
+Si esa cuenta se registra después de ejecutar el schema, el trigger la crea automáticamente con `rol = 'superadmin'` y sin `eleam_id`. Si la cuenta ya existe, al re-ejecutar `supabase_schema.sql` se actualiza de forma idempotente.
+
+Para cambiarlo manualmente por otro correo:
 
 ```sql
 UPDATE public.profiles
@@ -396,8 +405,7 @@ SET rol = 'superadmin'
 WHERE email = 'tu@email.com';
 ```
 
-3. Cerrar sesión y volver a iniciar sesión.
-4. Navegar a `/superadmin` — la ruta aparece automáticamente en el Navbar.
+Cerrar sesión y volver a iniciar sesión. Navegar a `/superadmin` — la ruta aparece automáticamente en el Navbar.
 
 > El superadmin **no necesita** un ELEAM asociado. Las RLS (`is_superadmin()`) le dan acceso global a `eleams`, `pagos`, `crm_tasks`, `crm_interactions`. Las tablas clínicas siguen aisladas por tenant para el resto de roles.
 
