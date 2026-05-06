@@ -5,9 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import Login            from "../features/auth/Login";
 import Register         from "../features/auth/Register";
 import LandingPage      from "../features/landing/LandingPage";
-import DemoSelector     from "../features/demo/DemoSelector";
-import DemoPage         from "../features/demo/DemoPage";
-import FamiliarDemoPage from "../features/demo/FamiliarDemoPage";
+import GuidedDemoPage  from "../features/demo/GuidedDemoPage";
 import PaymentPage      from "../features/payment/PaymentPage";
 import PaymentReturn    from "../features/payment/PaymentReturn";
 import TeamManagement      from "../features/team/TeamManagement";
@@ -47,12 +45,11 @@ import Loading         from "../components/Loading";
 
 const NO_NAVBAR_PATHS_EXACT = new Set([
   "/", "/login", "/register",
-  "/demo", "/demo/admin", "/demo/funcionario", "/demo/familiar",
   "/pago", "/pago/return",
   "/blog",
   "/cambiar-clave",
 ]);
-const NO_NAVBAR_PREFIXES = ["/blog/"];
+const NO_NAVBAR_PREFIXES = ["/blog/", "/demo/"];
 
 // Roles abreviados para legibilidad de las rutas
 const STAFF = ["admin_eleam", "funcionario"];
@@ -78,10 +75,7 @@ function AppRouter() {
         <Route path="/"            element={<LandingPage />} />
         <Route path="/login"       element={user ? signedInRedirect : <Login />} />
         <Route path="/register"    element={user ? signedInRedirect : <Register />} />
-        <Route path="/demo"             element={<DemoSelector />} />
-        <Route path="/demo/admin"       element={<DemoPage role="admin" />} />
-        <Route path="/demo/funcionario" element={<DemoPage role="funcionario" />} />
-        <Route path="/demo/familiar"    element={<FamiliarDemoPage />} />
+        <Route path="/demo/:token"      element={<GuidedDemoPage />} />
         <Route path="/pago"             element={<PaymentPage />} />
         <Route path="/pago/return" element={<PaymentReturn />} />
         <Route path="/blog"        element={<PublicBlogList />} />

@@ -12,6 +12,8 @@ import PaymentModal         from "./components/PaymentModal";
 import RecentPaymentsTable  from "./components/RecentPaymentsTable";
 import CrmTasksPanel        from "./components/CrmTasksPanel";
 import EleamCustomerDrawer  from "./components/EleamCustomerDrawer";
+import LeadsPanel           from "./components/LeadsPanel";
+import LandingMetrics       from "./components/LandingMetrics";
 
 import { daysUntil } from "./utils/superadminFormatters";
 
@@ -24,9 +26,11 @@ export default function SuperAdminDashboard() {
   const {
     metrics, eleams, payments, tasks,
     loading, error, byEleam, loadingEleam,
+    leads, activeInDemo, contactRequests, landingMetrics, leadsLoading,
     refresh,
     loadEleamDetail, updateEleam, registerPayment,
     createTask, completeTask, createInteraction,
+    loadLeads, updateLead, grantDemoAccess,
   } = data;
 
   const [filters, setFilters]       = useState({});
@@ -34,6 +38,7 @@ export default function SuperAdminDashboard() {
   const [showPay, setShowPay]       = useState(false);
   const [payForEleamId, setPayFor]  = useState("");
   const [drawerEleam, setDrawer]    = useState(null);
+  const [leadsTab, setLeadsTab]     = useState("leads"); // leads | metricas
 
   // Conteo de tareas vencidas por ELEAM (para badge de salud y tabla)
   const taskOverdueByEleam = useMemo(() => {
@@ -113,6 +118,11 @@ export default function SuperAdminDashboard() {
 
       {/* Métricas */}
       <SuperAdminMetrics
+        leadsNuevos={leads.filter((l) => {
+          const d = new Date(l.creado_en);
+          return d > new Date(Date.now() - 7 * 86400000);
+        }).length}
+        activeInDemoCount={activeInDemo.length}
         metrics={metrics}
         onFilterRisk={()  => setFilters((p) => ({ ...p, riesgo: "alto" }))}
         onFilterLeads={() => setFilters((p) => ({ ...p, crmEstado: "lead" }))}
@@ -148,6 +158,57 @@ export default function SuperAdminDashboard() {
           />
         </aside>
       </div>
+
+      {/* Leads & Demo section */}
+      <section className="mb-6">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-gray-700">Leads & Demo</h2>
+            {contactRequests.length > 0 && (
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                {contactRequests.length} solicitan contacto
+              </span>
+            )}
+            {activeInDemo.length > 0 && (
+              <span className="bg-teal-500 text-white text-xs px-2 py-0.5 rounded-full font-bold animate-pulse">
+                {activeInDemo.length} en demo
+              </span>
+            )}
+          </div>
+          <div className="flex gap-1">
+            {["leads", "metricas"].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => {
+                  setLeadsTab(tab);
+                  if (tab === "leads" && leads.length === 0) loadLeads();
+                  if (tab === "metricas" && leads.length === 0) loadLeads();
+                }}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  leadsTab === tab
+                    ? "bg-slate-700 text-white"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >
+                {tab === "leads" ? "Leads" : "Métricas Landing"}
+              </button>
+            ))}
+          </div>
+        </div>
+        {leadsTab === "leads" ? (
+          <LeadsPanel
+            leads={leads}
+            activeInDemo={activeInDemo}
+            contactRequests={contactRequests}
+            loading={leadsLoading}
+            onGrantDemo={grantDemoAccess}
+            onUpdateLead={updateLead}
+            onLoadLeads={loadLeads}
+          />
+        ) : (
+          <LandingMetrics metrics={landingMetrics} activeInDemo={activeInDemo} />
+        )}
+      </section>
 
       {/* Pagos recientes */}
       <section className="space-y-2">

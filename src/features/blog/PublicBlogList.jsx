@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { getPublishedPosts } from "./blogService";
 import Loading from "../../components/Loading";
 import { useSEO, breadcrumbJsonLd } from "../../utils/seo";
+import DemoRequestModal from "../landing/DemoRequestModal";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -65,6 +66,7 @@ export default function PublicBlogList() {
   const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
 
   useSEO({
     title: "Blog · gestión de ELEAM, fiscalización SEREMI y cuidado del adulto mayor",
@@ -106,12 +108,14 @@ export default function PublicBlogList() {
             FichaEleam
           </button>
           <nav className="flex items-center gap-3 text-sm">
-            <Link to="/demo" className="text-gray-500 hover:text-gray-800">Demo</Link>
             <Link to="/pago" className="text-gray-500 hover:text-gray-800">Planes</Link>
             <Link to="/login" className="text-gray-500 hover:text-gray-800">Iniciar sesión</Link>
-            <Link to="/register" className="bg-[var(--color-primary)] text-white font-semibold px-4 py-1.5 rounded-lg hover:bg-[var(--color-button-hover)]">
-              Crear cuenta
-            </Link>
+            <button
+              onClick={() => setModal(true)}
+              className="bg-teal-600 text-white font-semibold px-4 py-1.5 rounded-lg hover:bg-teal-700"
+            >
+              Solicitar Demo
+            </button>
           </nav>
         </div>
       </header>
@@ -131,40 +135,61 @@ export default function PublicBlogList() {
           </p>
         </div>
 
-        {loading ? <Loading message="Cargando artículos..." /> : (
-          posts.length === 0 ? (
-            <p className="text-center text-gray-400 py-12">Aún no publicamos artículos.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {posts.map((p, idx) => (
-                <PostCard key={p.id} post={p} featured={idx === 0 && p.destacado} />
-              ))}
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex-1">
+            {loading ? <Loading message="Cargando artículos..." /> : (
+              posts.length === 0 ? (
+                <p className="text-center text-gray-400 py-12">Aún no publicamos artículos.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {posts.map((p, idx) => (
+                    <PostCard key={p.id} post={p} featured={idx === 0 && p.destacado} />
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+
+          {/* Sidebar CTA */}
+          <aside className="lg:w-72 shrink-0 space-y-4">
+            <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-2xl p-6 text-white sticky top-20">
+              <p className="text-xs font-bold uppercase tracking-wide text-teal-200 mb-2">
+                ¿Buscas gestionar mejor tu ELEAM?
+              </p>
+              <h3 className="font-bold text-lg leading-tight mb-3">
+                Digitaliza tu carpeta SEREMI y ficha clínica
+              </h3>
+              <p className="text-sm text-teal-100 mb-5 leading-relaxed">
+                FichaEleam es el único software con los 14 ámbitos del DS 14/2017 pre-cargados.
+              </p>
+              <button
+                onClick={() => setModal(true)}
+                className="w-full bg-white text-teal-700 font-bold py-2.5 rounded-xl text-sm hover:bg-teal-50"
+              >
+                Solicitar Demo Gratuito
+              </button>
+              <p className="text-xs text-teal-200 mt-2 text-center">
+                Sin compromiso · 24h de respuesta
+              </p>
             </div>
-          )
-        )}
+          </aside>
+        </div>
 
         {/* CTA bottom */}
         <section className="mt-16 bg-gradient-to-r from-teal-600 to-emerald-700 rounded-2xl p-8 text-white text-center">
           <h2 className="text-2xl font-black mb-2">¿Listo para digitalizar tu ELEAM?</h2>
           <p className="opacity-90 mb-4">
-            Activa tu cuenta y arma la Carpeta SEREMI en menos de un día.
+            Solicita tu demo guiado y conoce la plataforma en 24 horas.
           </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            <Link
-              to="/register"
-              className="bg-white text-teal-700 font-bold px-5 py-2.5 rounded-xl hover:bg-teal-50"
-            >
-              Crear cuenta gratis
-            </Link>
-            <Link
-              to="/demo"
-              className="border border-white/40 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-white/10"
-            >
-              Probar el demo
-            </Link>
-          </div>
+          <button
+            onClick={() => setModal(true)}
+            className="bg-white text-teal-700 font-bold px-8 py-3 rounded-xl hover:bg-teal-50"
+          >
+            Solicitar Demo Gratuito
+          </button>
         </section>
       </main>
+      <DemoRequestModal isOpen={modal} onClose={() => setModal(false)} defaultCta="blog_list_cta" />
 
       <footer className="border-t border-gray-100 py-8 text-center text-sm text-gray-400">
         © {new Date().getFullYear()} FichaEleam · Software para ELEAM en Chile

@@ -18,10 +18,10 @@ function MetricCard({ label, value, sub, color = "text-gray-800", onClick }) {
   );
 }
 
-export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads }) {
+export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads, leadsNuevos = 0, activeInDemoCount = 0 }) {
   if (!metrics) return null;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3 mb-6">
       <MetricCard
         label="ELEAMs"
         value={metrics.totalEleams}
@@ -61,6 +61,18 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
         label="Residentes"
         value={metrics.totalResidents}
         sub={`${metrics.activeResidents} activos`}
+      />
+      <MetricCard
+        label="Leads nuevos (7d)"
+        value={leadsNuevos}
+        color="text-violet-600"
+        sub="Landing page"
+      />
+      <MetricCard
+        label="En demo ahora"
+        value={activeInDemoCount}
+        color={activeInDemoCount > 0 ? "text-teal-600" : "text-gray-500"}
+        sub={activeInDemoCount > 0 ? "Activos" : "Ninguno"}
       />
     </div>
   );

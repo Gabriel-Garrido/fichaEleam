@@ -390,16 +390,10 @@ export default function PaymentPage() {
           </div>
         )}
 
-        <div className="text-center space-y-2 pt-2">
+        <div className="text-center pt-2">
           <p className="text-xs text-gray-400">
             Procesado por MercadoPago · puedes cancelar cuando quieras
           </p>
-          <button
-            onClick={() => navigate("/demo")}
-            className="text-sm text-[var(--color-primary)] hover:underline"
-          >
-            Explorar el demo primero
-          </button>
         </div>
       </div>
     </div>

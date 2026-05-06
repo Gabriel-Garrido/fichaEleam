@@ -1952,3 +1952,82 @@ where crm_estado = 'lead'
   and (pago_activo = true or subscription_status in ('activo','en_gracia'));
 
 -- El seed del blog publico vive en supabase_blog_seed.sql.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Leads de landing page y acceso al demo guiado
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists public.demo_leads (
+  id                        uuid default gen_random_uuid() primary key,
+  nombre                    text not null,
+  cargo                     text not null,
+  eleam_nombre              text not null,
+  email                     text not null,
+  telefono                  text not null,
+  num_residentes            text,
+  utm_source                text,
+  utm_medium                text,
+  utm_campaign              text,
+  pagina_origen             text,
+  referrer                  text,
+  estado                    text not null default 'nuevo'
+    check (estado in ('nuevo','contactado','demo_activo','demo_completado','descartado','convertido')),
+  notas_admin               text,
+  demo_token                uuid unique,
+  demo_access_granted_at    timestamptz,
+  demo_expires_at           timestamptz,
+  demo_ultimo_ping          timestamptz,
+  demo_progreso             jsonb default '{}'::jsonb,
+  solicita_contacto         boolean default false,
+  solicita_contacto_en      timestamptz,
+  solicita_contacto_mensaje text,
+  creado_en                 timestamptz default now() not null
+);
+
+alter table public.demo_leads enable row level security;
+
+create policy "anon_insert_leads" on public.demo_leads
+  for insert to anon, authenticated with check (true);
+
+create policy "superadmin_manage_leads" on public.demo_leads
+  for all to authenticated using (public.is_superadmin());
+
+create policy "token_read_demo" on public.demo_leads
+  for select to anon
+  using (demo_token is not null and demo_expires_at > now());
+
+create policy "token_update_demo" on public.demo_leads
+  for update to anon
+  using (demo_token is not null and demo_expires_at > now())
+  with check (true);
+
+create index if not exists idx_demo_leads_token  on public.demo_leads(demo_token) where demo_token is not null;
+create index if not exists idx_demo_leads_estado on public.demo_leads(estado);
+create index if not exists idx_demo_leads_ping   on public.demo_leads(demo_ultimo_ping) where estado = 'demo_activo';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Eventos de analytics de landing (anónimos)
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists public.landing_events (
+  id          uuid default gen_random_uuid() primary key,
+  tipo        text not null,
+  pagina      text,
+  elemento    text,
+  valor       text,
+  session_id  text,
+  utm_source  text,
+  utm_medium  text,
+  utm_campaign text,
+  referrer    text,
+  creado_en   timestamptz default now() not null
+);
+
+alter table public.landing_events enable row level security;
+
+create policy "anon_insert_events" on public.landing_events
+  for insert to anon, authenticated with check (true);
+
+create policy "superadmin_read_events" on public.landing_events
+  for select to authenticated using (public.is_superadmin());
+
+create index if not exists idx_landing_events_tipo    on public.landing_events(tipo, creado_en desc);
+create index if not exists idx_landing_events_session on public.landing_events(session_id);

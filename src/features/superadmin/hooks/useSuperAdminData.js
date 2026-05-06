@@ -14,6 +14,12 @@ import {
   completeCrmTask,
   updateCrmTask,
   createEleamInteraction,
+  getLeads,
+  updateLead,
+  grantDemoAccess,
+  getActiveInDemo,
+  getContactRequests,
+  getLandingMetrics,
 } from "../superadminService";
 
 // Hook centralizado: carga, refresh, mutaciones para el panel
@@ -21,12 +27,17 @@ import {
 // rendericen.
 export function useSuperAdminData() {
   const toast = useToast();
-  const [metrics, setMetrics]     = useState(null);
-  const [eleams, setEleams]       = useState([]);
-  const [payments, setPayments]   = useState([]);
-  const [tasks, setTasks]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(null);
+  const [metrics, setMetrics]         = useState(null);
+  const [eleams, setEleams]           = useState([]);
+  const [payments, setPayments]       = useState([]);
+  const [tasks, setTasks]             = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+  const [leads, setLeads]             = useState([]);
+  const [activeInDemo, setActiveInDemo] = useState([]);
+  const [contactRequests, setContactRequests] = useState([]);
+  const [landingMetrics, setLandingMetrics]   = useState(null);
+  const [leadsLoading, setLeadsLoading]       = useState(false);
 
   // Cache por ELEAM: { [eleamId]: { detail, payments, interactions, tasks } }
   const [byEleam, setByEleam]     = useState({});
@@ -53,6 +64,39 @@ export function useSuperAdminData() {
   }, [toast]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // ── Leads loader ────────────────────────────────────────────
+  const loadLeads = useCallback(async (filters = {}) => {
+    setLeadsLoading(true);
+    try {
+      const [l, active, contacts, lm] = await Promise.allSettled([
+        getLeads(filters),
+        getActiveInDemo(),
+        getContactRequests(),
+        getLandingMetrics(30),
+      ]);
+      if (l.status       === "fulfilled") setLeads(l.value);
+      if (active.status  === "fulfilled") setActiveInDemo(active.value);
+      if (contacts.status=== "fulfilled") setContactRequests(contacts.value);
+      if (lm.status      === "fulfilled") setLandingMetrics(lm.value);
+    } catch (e) {
+      toast(e.message || "Error cargando leads", "error");
+    } finally {
+      setLeadsLoading(false);
+    }
+  }, [toast]);
+
+  const handleUpdateLead = useCallback(async (id, payload) => {
+    const updated = await updateLead(id, payload);
+    setLeads((prev) => prev.map((l) => (l.id === id ? updated : l)));
+    return updated;
+  }, []);
+
+  const handleGrantDemoAccess = useCallback(async (leadId) => {
+    const updated = await grantDemoAccess(leadId);
+    setLeads((prev) => prev.map((l) => (l.id === leadId ? updated : l)));
+    return updated;
+  }, []);
 
   // ── ELEAM detail loader (lazy, cacheado por id) ─────────────
   const loadEleamDetail = useCallback(async (eleamId) => {
@@ -164,14 +208,18 @@ export function useSuperAdminData() {
     // estado
     metrics, eleams, payments, tasks, loading, error,
     byEleam, loadingEleam,
+    leads, activeInDemo, contactRequests, landingMetrics, leadsLoading,
     // operaciones
     refresh,
     loadEleamDetail,
+    loadLeads,
     updateEleam:        handleUpdateEleam,
     registerPayment:    handleRegisterPayment,
     createTask:         handleCreateTask,
     completeTask:       handleCompleteTask,
     updateTask:         handleUpdateTask,
     createInteraction:  handleCreateInteraction,
+    updateLead:         handleUpdateLead,
+    grantDemoAccess:    handleGrantDemoAccess,
   };
 }

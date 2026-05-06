@@ -18,11 +18,10 @@ function buildMenu({ rol, eleamId, pagoActivo, handleLogout }) {
     ];
   }
 
-  // Superadmin sin ELEAM: solo su panel + demo.
+  // Superadmin sin ELEAM: solo su panel.
   if (rol === "superadmin" && !eleamId) {
     return [
       { label: "Superadmin", path: "/superadmin" },
-      { label: "Demo",        path: "/demo" },
       close,
     ];
   }
@@ -31,7 +30,6 @@ function buildMenu({ rol, eleamId, pagoActivo, handleLogout }) {
   if (rol === "admin_eleam" && !pagoActivo) {
     return [
       { label: "Activar ELEAM", path: "/pago?sinAcceso=1" },
-      { label: "Demo",          path: "/demo" },
       close,
     ];
   }

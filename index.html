@@ -38,7 +38,7 @@
     <meta name="twitter:description" content="Plataforma chilena para ELEAM: fichas, turnos, signos vitales y carpeta SEREMI lista." />
     <meta name="twitter:image" content="https://app.fichaeleam.cl/og-image.png" />
 
-    <!-- LLM/Rich-results: Organization + SoftwareApplication -->
+    <!-- LLM/Rich-results: Organization + SoftwareApplication + HowTo -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -49,8 +49,9 @@
           "name": "FichaEleam",
           "url": "https://app.fichaeleam.cl/",
           "logo": "https://app.fichaeleam.cl/og-image.png",
-          "description": "Plataforma chilena de gestión clínica y administrativa para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM), conforme al DS 14/2017.",
-          "areaServed": "CL"
+          "description": "FichaEleam es el único software diseñado exclusivamente para ELEAM en Chile que cubre los 14 ámbitos del DS 14/2017. Incluye ficha clínica digital, signos vitales con alertas, observaciones de turno, Carpeta SEREMI y portal para familias.",
+          "areaServed": "CL",
+          "knowsAbout": ["DS 14/2017", "SEREMI", "ELEAM", "adulto mayor Chile", "ficha clínica digital"]
         },
         {
           "@type": "SoftwareApplication",
@@ -60,20 +61,44 @@
           "operatingSystem": "Web",
           "url": "https://app.fichaeleam.cl/",
           "inLanguage": "es-CL",
+          "description": "Plataforma chilena para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM): ficha clínica digital, signos vitales con alertas, 12 tipos de observaciones de turno, Carpeta SEREMI con 14 ámbitos del DS 14/2017 y portal para familias.",
           "offers": [
-            { "@type": "Offer", "priceCurrency": "CLP", "price": "50000", "name": "Plan hasta 14 residentes" },
-            { "@type": "Offer", "priceCurrency": "CLP", "price": "80000", "name": "Plan hasta 24 residentes" },
-            { "@type": "Offer", "priceCurrency": "CLP", "price": "120000", "name": "Plan hasta 34 residentes" }
+            { "@type": "Offer", "priceCurrency": "CLP", "price": "50000", "name": "Plan hasta 14 residentes", "priceValidUntil": "2026-12-31" },
+            { "@type": "Offer", "priceCurrency": "CLP", "price": "80000", "name": "Plan hasta 24 residentes", "priceValidUntil": "2026-12-31" },
+            { "@type": "Offer", "priceCurrency": "CLP", "price": "120000", "name": "Plan hasta 34 residentes", "priceValidUntil": "2026-12-31" }
           ],
           "featureList": [
             "Ficha clínica digital de residentes",
-            "Registro de signos vitales con rangos clínicos",
-            "Observaciones de turno (12 categorías)",
-            "Carpeta SEREMI DS 14/2017 con 14 ámbitos",
+            "Registro de signos vitales con rangos clínicos para adultos mayores",
+            "Observaciones de turno con 12 categorías y firma digital",
+            "Carpeta SEREMI DS 14/2017 con 14 ámbitos y 70+ requisitos pre-cargados",
             "Portal para familiares de residentes",
-            "Suscripciones MercadoPago"
+            "Demo guiado personalizado por establecimiento",
+            "Suscripción mensual con MercadoPago"
           ],
           "publisher": { "@id": "https://app.fichaeleam.cl/#organization" }
+        },
+        {
+          "@type": "HowTo",
+          "name": "Cómo digitalizar un ELEAM con FichaEleam",
+          "description": "Pasos para digitalizar la gestión clínica y documental de un Establecimiento de Larga Estadía para Adultos Mayores (ELEAM) en Chile.",
+          "step": [
+            {
+              "@type": "HowToStep",
+              "name": "Solicita tu demo personalizado",
+              "text": "Completa el formulario en fichaeleam.cl. Un especialista te envía tu enlace de demo en menos de 24 horas."
+            },
+            {
+              "@type": "HowToStep",
+              "name": "Explora la plataforma",
+              "text": "Accede al demo guiado y recorre las vistas del administrador, del funcionario y del familiar con datos de ejemplo."
+            },
+            {
+              "@type": "HowToStep",
+              "name": "Activa tu ELEAM",
+              "text": "Elige el plan según el número de residentes, paga con MercadoPago y el equipo te ayuda a cargar los datos iniciales."
+            }
+          ]
         }
       ]
     }

@@ -239,6 +239,128 @@ export async function getEleamInteractions(eleamId, limit = 100) {
   return data ?? [];
 }
 
+// ─────────────────────────────────────────────────────────────
+// Leads de landing page y demo guiado
+// ─────────────────────────────────────────────────────────────
+export async function getLeads({ estado = null, search = "", limit = 200 } = {}) {
+  let q = supabase
+    .from("demo_leads")
+    .select("*")
+    .order("creado_en", { ascending: false })
+    .limit(limit);
+  if (estado) q = q.eq("estado", estado);
+  if (search.trim()) {
+    const s = search.trim();
+    q = q.or(`nombre.ilike.%${s}%,email.ilike.%${s}%,eleam_nombre.ilike.%${s}%`);
+  }
+  const { data, error } = await q;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateLead(id, payload) {
+  const { data, error } = await supabase
+    .from("demo_leads")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function grantDemoAccess(leadId) {
+  const token     = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("demo_leads")
+    .update({
+      demo_token:              token,
+      demo_access_granted_at:  new Date().toISOString(),
+      demo_expires_at:         expiresAt,
+      estado:                  "demo_activo",
+    })
+    .eq("id", leadId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getActiveInDemo() {
+  const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("demo_leads")
+    .select("id, nombre, eleam_nombre, demo_ultimo_ping, demo_progreso, solicita_contacto")
+    .eq("estado", "demo_activo")
+    .gte("demo_ultimo_ping", cutoff);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getContactRequests() {
+  const { data, error } = await supabase
+    .from("demo_leads")
+    .select("*")
+    .eq("solicita_contacto", true)
+    .order("solicita_contacto_en", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getLandingMetrics(days = 30) {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+
+  const [eventsRes, leadsRes] = await Promise.allSettled([
+    supabase.from("landing_events").select("tipo, elemento, creado_en, utm_source, utm_medium, session_id").gte("creado_en", since),
+    supabase.from("demo_leads").select("id, creado_en").gte("creado_en", since),
+  ]);
+
+  const events = eventsRes.status === "fulfilled" ? (eventsRes.value.data ?? []) : [];
+  const leads  = leadsRes.status  === "fulfilled" ? (leadsRes.value.data ?? []) : [];
+
+  const sessions = new Set(events.filter((e) => e.tipo === "page_view" && e.session_id).map((e) => e.session_id));
+  const ctaClicks = events.filter((e) => e.tipo === "cta_click");
+  const topCtaMap = {};
+  for (const e of ctaClicks) {
+    if (!e.elemento) continue;
+    topCtaMap[e.elemento] = (topCtaMap[e.elemento] ?? 0) + 1;
+  }
+  const topCtas = Object.entries(topCtaMap).sort((a,b) => b[1] - a[1]).slice(0, 8).map(([elem, count]) => ({ elem, count }));
+
+  const sourceMap = {};
+  for (const e of events.filter((e) => e.utm_source && e.tipo === "page_view")) {
+    const k = `${e.utm_source}/${e.utm_medium ?? "(none)"}`;
+    sourceMap[k] = (sourceMap[k] ?? 0) + 1;
+  }
+  const sources = Object.entries(sourceMap).sort((a,b) => b[1] - a[1]).slice(0, 8).map(([src, count]) => ({ src, count }));
+
+  // Visitas diarias últimos 14 días
+  const last14 = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(Date.now() - (13 - i) * 86400000);
+    return d.toISOString().slice(0, 10);
+  });
+  const visitsByDay = {};
+  for (const ev of events.filter((e) => e.tipo === "page_view")) {
+    const day = ev.creado_en.slice(0, 10);
+    visitsByDay[day] = (visitsByDay[day] ?? 0) + 1;
+  }
+  const dailyVisits = last14.map((d) => ({ date: d, count: visitsByDay[d] ?? 0 }));
+
+  return {
+    totalVisits:    sessions.size,
+    totalLeads:     leads.length,
+    conversionRate: sessions.size > 0 ? Math.round((leads.length / sessions.size) * 100) : 0,
+    topCtas,
+    sources,
+    dailyVisits,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// CRM interactions (original)
+// ─────────────────────────────────────────────────────────────
 export async function createEleamInteraction(payload) {
   if (!payload.eleam_id) throw new Error("ELEAM requerido.");
   if (!payload.resumen?.trim()) throw new Error("El resumen es obligatorio.");
