@@ -34,8 +34,9 @@ function Register() {
     if (invitedEmail) setUserData((prev) => ({ ...prev, email: invitedEmail }));
   }, [invitedEmail]);
 
-  // Sin token de invitación → redirigir al login con mensaje
-  if (!authLoading && !loading && !inviteToken) {
+  // Sin token de invitación → mostrar pantalla explicativa
+  // (solo cuando auth terminó de cargar; durante authLoading el spinner de abajo lo maneja)
+  if (!authLoading && !inviteToken) {
     return (
       <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
         <div className="mb-6 text-center">

@@ -26,22 +26,29 @@ export default function ResetPassword() {
   const [error, setError]         = useState(null);
   const [done, setDone]           = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [linkExpired, setLinkExpired]   = useState(false);
 
   const strength = strengthLabel(password);
 
   useEffect(() => {
-    // Supabase inserta el access_token en el hash de la URL después del reset.
-    // El onAuthStateChange lo detecta y establece la sesión automáticamente.
+    // Supabase inserta access_token en el hash después del reset.
+    // El onAuthStateChange lo detecta y establece la sesión.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") setSessionReady(true);
     });
 
-    // Si ya hay sesión (el link ya fue procesado por Supabase antes de montar)
+    // Si la sesión ya fue procesada antes de montar el componente
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setSessionReady(true);
     });
 
-    return () => subscription.unsubscribe();
+    // Timeout: si después de 8s el link no fue reconocido, es inválido/expirado
+    const timer = setTimeout(() => setLinkExpired(true), 8000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timer);
+    };
   }, []);
 
   const validatePassword = () => {
@@ -75,19 +82,38 @@ export default function ResetPassword() {
     return (
       <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
-          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto">
-            <svg className="w-6 h-6 text-amber-600 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-            </svg>
-          </div>
-          <p className="text-gray-600 text-sm">Verificando link de recuperación...</p>
-          <p className="text-xs text-gray-400">
-            Si el link expiró,{" "}
-            <button onClick={() => navigate("/recuperar-acceso")} className="text-[var(--color-primary)] hover:underline">
-              solicita uno nuevo
-            </button>.
-          </p>
+          {linkExpired ? (
+            <>
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-bold text-gray-800">Link inválido o expirado</h2>
+              <p className="text-sm text-gray-500">
+                Este link de recuperación ya no es válido. Los links expiran en 1 hora.
+              </p>
+              <button
+                onClick={() => navigate("/recuperar-acceso")}
+                className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+              >
+                Solicitar nuevo link
+              </button>
+              <button onClick={() => navigate("/login")} className="text-sm text-gray-400 hover:text-gray-600">
+                ← Volver al inicio de sesión
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6 text-amber-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              </div>
+              <p className="text-gray-600 text-sm">Verificando link de recuperación...</p>
+            </>
+          )}
         </div>
       </div>
     );

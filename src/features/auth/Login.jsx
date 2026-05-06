@@ -50,15 +50,17 @@ export default function Login() {
   const [showPw,   setShowPw]   = useState(false);
   const [error,    setError]    = useState(null);
   const [googleLoading, setGoogleLoading] = useState(false);
-  // Evitar flash del formulario durante el callback de Google OAuth
-  const [oauthPending, setOauthPending] = useState(false);
+  // Evitar flash del formulario durante el callback de Google OAuth.
+  // Se detecta si hay token en el hash (callback de OAuth); se limpia
+  // cuando authLoading termina para no bloquear la redirección al homePath.
+  const hasOauthHash = typeof window !== "undefined" &&
+    (window.location.hash.includes("access_token") ||
+     window.location.hash.includes("error_description"));
+  const [oauthPending, setOauthPending] = useState(hasOauthHash);
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && (hash.includes("access_token") || hash.includes("error_description"))) {
-      setOauthPending(true);
-    }
-  }, []);
+    if (!authLoading) setOauthPending(false);
+  }, [authLoading]);
 
   if (authLoading || loading || oauthPending) return <Loading message="Verificando autenticación..." />;
   if (user && !profileLoading) return <Navigate to={homePath} replace />;

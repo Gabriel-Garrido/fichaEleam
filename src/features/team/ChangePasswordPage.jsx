@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { supabase } from "../../services/supabaseConfig";
-import { loginWithGoogle } from "../auth/authService";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 
@@ -74,12 +73,22 @@ export default function ChangePasswordPage() {
     setError(null);
     setGoogleLoading(true);
     try {
-      // Limpiar la bandera de reset antes de redirigir a Google
+      // Limpiar la bandera antes de vincular: si el usuario ya inició sesión
+      // con email/password y vincula Google, la sesión existente se mantiene.
+      // linkIdentity añade Google como proveedor sin crear una cuenta nueva,
+      // evitando cuentas duplicadas (problema de signInWithOAuth en este contexto).
       await supabase.from("profiles").update({ must_reset_password: false }).eq("id", user.id);
-      await loginWithGoogle();
+      const { error: linkErr } = await supabase.auth.linkIdentity({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/login` },
+      });
+      if (linkErr) throw linkErr;
+      // linkIdentity redirige al proveedor; si llega aquí es un entorno sin redirect
     } catch (err) {
-      console.warn("Error Google OAuth:", err);
-      setError("No fue posible conectar con Google. Intenta de nuevo.");
+      console.warn("Error al vincular Google:", err);
+      setError("No fue posible vincular con Google. Intenta de nuevo.");
+      // Revertir si hubo error antes de redirigir
+      await supabase.from("profiles").update({ must_reset_password: true }).eq("id", user.id).catch(() => {});
       setGoogleLoading(false);
     }
   };

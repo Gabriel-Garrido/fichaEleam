@@ -340,8 +340,9 @@ export default function LeadsPanel({
                         ))}
                       </select>
 
-                      {/* Grant demo — creates real admin_eleam account */}
-                      {!lead.demo_user_id ? (
+                      {/* Grant demo — creates real admin_eleam account.
+                          Check both demo_user_id (new flow) and demo_token (legacy) to avoid duplicates. */}
+                      {!lead.demo_user_id && !lead.demo_token ? (
                         <button
                           onClick={() => handleGrant(lead)}
                           className="bg-teal-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-teal-700 font-semibold"

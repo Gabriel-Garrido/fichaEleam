@@ -40,8 +40,8 @@ src/
 ├── context/
 │   └── AuthContext.jsx         # useAuth() + useLoading()
 ├── features/
-│   ├── auth/                   # Login, Register, authService
-│   ├── landing/                # LandingPage
+│   ├── auth/                   # Login, Register, RecuperarAcceso, ResetPassword, authService
+│   ├── landing/                # LandingPage (CTA demo, sin auto-registro público)
 │   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService
 │   ├── dashboard/              # AdminDashboard + summaries clínicas
 │   ├── residents/              # CRUD residentes + detalles
@@ -49,10 +49,10 @@ src/
 │   ├── observations/           # 12 tipos de observaciones diarias
 │   ├── accreditation/          # Modelo v9: ámbitos, requisitos, evidencias, observaciones, auditoría
 │   ├── payment/                # PaymentPage, PaymentReturn (MercadoPago)
-│   ├── team/                   # TeamManagement (invitar funcionarios/familiares) + cambio de clave
+│   ├── team/                   # TeamManagement (crear funcionarios/familiares) + ChangePasswordPage
 │   ├── familiar/               # Portal restringido + registro de visitas
 │   ├── demo/                   # DemoSelector, DemoPage (admin/funcionario), FamiliarDemoPage
-│   ├── superadmin/             # Dashboard CRM + blog editor + gestión de pagos
+│   ├── superadmin/             # Dashboard CRM + blog editor + gestión de pagos + LeadsPanel
 │   │   └── blog/               # BlogManagement, BlogEditor (solo para superadmin)
 │   └── utils/                  # Markdown renderer, customer health, etc.
 ├── routes/
@@ -64,6 +64,16 @@ src/
     ├── dateUtils.js
     ├── validators.js           # Email, UUID, RUT, phone
     └── seo.js                  # Hook useSEO + JSON-LD builders
+
+supabase/functions/
+├── _shared/
+│   └── email.ts                # Resend API helper; sendEmail(), staffWelcomeEmail(), demoWelcomeEmail()
+├── create-demo-user/           # Crea usuario real cuando superadmin aprueba demo lead
+├── create-staff-user/          # Crea funcionario/familiar con contraseña temporal
+├── invite-funcionario/         # Flujo antiguo (invitación por email con token)
+├── mp-create-subscription/
+├── mp-webhook/
+└── mp-cancel-subscription/
 ```
 
 ---
@@ -78,6 +88,17 @@ src/
 | `admin_eleam` | Dueño del ELEAM | ✓ | `/pago?sinAcceso=1` (sin pago) o `/dashboard` |
 | `funcionario` | Personal clínico del ELEAM | ✗ | `/dashboard` |
 | `familiar` | Familiar de residente | ✗ | `/familiar` |
+
+### Flujos de acceso
+
+**No existe auto-registro público.** La landing solo muestra "Iniciar sesión" y CTA de demo. Los nuevos admins entran vía el flujo de aprobación de demo:
+
+1. **Demo → Admin**: Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba desde `/superadmin` → Edge Function `create-demo-user` crea cuenta `admin_eleam` con contraseña temporal → email con credenciales (vía Resend) + superadmin ve las credenciales en modal UI.
+2. **Funcionario/Familiar creado por admin**: Admin crea staff desde `/equipo` → Edge Function `create-staff-user` crea cuenta con contraseña temporal + envía email de bienvenida.
+3. **Primer acceso (cualquier rol)**: Si `must_reset_password=true`, `ProtectedRoute` fuerza redirect a `/cambiar-clave`. Allí puede establecer nueva contraseña o, si tiene Gmail, vincular Google con `supabase.auth.linkIdentity` (no crea cuenta duplicada).
+4. **Recuperación de contraseña**: `/recuperar-acceso` → `supabase.auth.resetPasswordForEmail` → email con link → `/reset-password` → nueva contraseña vía `supabase.auth.updateUser`.
+5. **Google OAuth**: `supabase.auth.signInWithOAuth` en login normal; `supabase.auth.linkIdentity` cuando se quiere vincular desde `/cambiar-clave` (evita cuentas duplicadas).
+6. **Registro por invitación (legado)**: `/register?invite=TOKEN&email=EMAIL` — sigue funcionando para compatibilidad. Sin token de invitación, la página muestra pantalla de bloqueo.
 
 ### useAuth() — Propiedades
 
@@ -114,15 +135,18 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 | Ruta | Componente | Guard | Notas |
 |------|-----------|-------|-------|
-| `/` | LandingPage | — | Público |
-| `/login`, `/register` | Auth | — | Público; redirige si ya autenticado |
+| `/` | LandingPage | — | Público; CTA de demo, sin auto-registro |
+| `/login` | Login | — | Público; redirige si ya autenticado |
+| `/register` | Register | — | Solo con `?invite=TOKEN`; sin token muestra pantalla de bloqueo |
+| `/recuperar-acceso` | RecuperarAcceso | — | Solicita email para reset de contraseña |
+| `/reset-password` | ResetPassword | — | Procesa callback de Supabase; timeout 8s para links expirados |
 | `/demo` | DemoSelector | — | Selector: Admin / Funcionario / Familiar |
 | `/demo/admin`, `/demo/funcionario`, `/demo/familiar` | Demo* | — | Demo offline con localStorage |
 | `/pago` | PaymentPage | `requireActive=false` | Planes MercadoPago |
 | `/pago/return` | PaymentReturn | — | Post-checkout; polling |
 | `/blog` | PublicBlogList | — | Blog público |
 | `/blog/:slug` | PublicBlogPost | — | Post público |
-| `/cambiar-clave` | ChangePasswordPage | `requireActive=false` | Forzado si `mustResetPassword=true` |
+| `/cambiar-clave` | ChangePasswordPage | `requireActive=false` | Forzado si `mustResetPassword=true`; opción Google para Gmail |
 | `/dashboard` | AdminDashboard | `allowedRoles=[admin_eleam, funcionario]` | Índice operativo |
 | `/residents`, `/residents/new`, `/residents/:id`, `/residents/:id/edit` | Resident* | STAFF | CRUD residentes |
 | `/vital-signs`, `/vital-signs/new` | VitalSigns* | STAFF | CRUD + rangos visuales |
@@ -132,10 +156,10 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | `/accreditation/requisito/:id` | AccreditationRequisito | STAFF | Detalle: evidencias, observaciones, auditoría, cambio de estado |
 | `/accreditation/observaciones` | AccreditationObservaciones | STAFF | Observaciones internas/fiscalización |
 | `/accreditation/carpeta` | AccreditationCarpeta | STAFF | Export imprimible (Ctrl+P) |
-| `/equipo` | TeamManagement | `allowedRoles=[admin_eleam]` | Invitar funcionarios/familiares, cambiar roles |
+| `/equipo` | TeamManagement | `allowedRoles=[admin_eleam]` | Crear funcionarios/familiares con contraseña temporal |
 | `/familiar` | FamiliarPortal | `allowedRoles=[familiar]` | Residente asignado + últimos signos + observaciones |
 | `/familiar/visitas` | FamiliarVisitas | `allowedRoles=[familiar]` | Historial + registro de visitas |
-| `/superadmin` | SuperAdminDashboard | SuperAdminRoute | CRM: métricas, tabla ELEAMs, edición, pagos |
+| `/superadmin` | SuperAdminDashboard | SuperAdminRoute | CRM: métricas, tabla ELEAMs, leads, edición, pagos |
 | `/superadmin/blog` | BlogManagement | SuperAdminRoute | Lista de posts |
 | `/superadmin/blog/new`, `/superadmin/blog/:id/edit` | BlogEditor | SuperAdminRoute | Editor de posts |
 | `*` | Fallback | — | Redirige a `homePath` |
@@ -254,6 +278,8 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 **`crm_interactions`** — tipo, canal, resumen, resultado, proxima_accion, creado_por, eleam_id, fecha.
 
+**`demo_leads`** — Leads del formulario de landing: nombre, email, telefono, nombre_eleam, num_residentes, mensaje, estado (nuevo|contactado|demo_activo|convertido|descartado), demo_token (flujo legado), demo_user_id (uuid FK auth.users; vincula al usuario real cuando superadmin aprueba demo), demo_expires_at, creado_en.
+
 ### RLS (Row Level Security)
 
 Todas las tablas usan RLS. Patrones clave:
@@ -290,32 +316,36 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 
 ### admin_eleam (Dueño del ELEAM)
 
-1. **Signup**: Crea cuenta → Trigger `handle_new_user` crea ELEAM + profile automáticamente.
-2. **Sin pago**: Redirige a `/pago?sinAcceso=1`. Solo ve "Activar ELEAM", "Demo", "Cerrar sesión".
-3. **Primer acceso**: Si `must_reset_password=true`, fuerza `/cambiar-clave`.
-4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/equipo` (invitar staff) + `/accreditation` (gestionar carpeta SEREMI).
-5. **Invitar funcionarios**: Email + nombre → Trigger `ensure_invitation_token_valid` valida y crea row en `funcionario_invitaciones`. Funcionario abre link `/register?invite=TOKEN&email=...` → Trigger `handle_new_user` lo asigna al ELEAM.
-6. **Invitar familiares**: Selecciona residente + email → Mismo flujo pero con `familiar_residentes` y permisos limitados.
+1. **Onboarding vía demo**: Prospecto llena formulario en landing → superadmin aprueba en LeadsPanel → Edge Function `create-demo-user` crea cuenta con contraseña temporal → email enviado + credenciales visibles en modal UI. Trigger `handle_new_user` crea el ELEAM automáticamente; suscripción activada con 30 días de prueba.
+2. **Primer acceso**: `must_reset_password=true` → forzado a `/cambiar-clave` → establece contraseña personal o vincula Google (si Gmail, usando `linkIdentity`).
+3. **Sin pago**: Redirige a `/pago?sinAcceso=1`. Solo ve "Activar ELEAM", "Demo", "Cerrar sesión".
+4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/equipo` + `/accreditation`.
+5. **Crear funcionarios**: Email + nombre + permisos → Edge Function `create-staff-user` crea cuenta con contraseña temporal + envía email de bienvenida con credenciales.
+6. **Crear familiares**: Selecciona residente + email → Mismo flujo; `familiar_residentes` los vincula al residente asignado.
 
 ### funcionario (Personal clínico)
 
 - Ruta home: `/dashboard` (sin `/equipo`, sin `/pago`).
-- Recibe invitación de admin_eleam.
-- Puede: crear/editar residentes, signos, observaciones, acreditación (según permisos granulares en `funcionario_permisos`).
+- Creado por admin_eleam desde `/equipo`; recibe email con contraseña temporal.
+- Primer acceso: forzado a `/cambiar-clave` (mismo flujo que admin).
+- Puede: crear/editar residentes, signos, observaciones, acreditación (según `funcionario_permisos`).
 - No puede: eliminar datos, administrar equipo, cambiar planes.
 
 ### familiar (Acceso de visitante)
 
 - Ruta home: `/familiar`.
+- Creado por admin_eleam desde `/equipo`; recibe email con contraseña temporal.
+- Primer acceso: forzado a `/cambiar-clave` (mismo flujo).
 - Ve: 1 residente asignado, últimos signos vitales (5), observaciones (5), visitas registradas.
 - Puede: registrar visitas (duración, notas).
 - Acceso: RLS verifica `profile_id` en `familiar_residentes`.
 
 ### superadmin (Operador de la plataforma)
 
-- Sin ELEAM: `/superadmin` (CRM puro). Ve todos los ELEAMs, gestión de pagos manual, blog, métricas.
+- Sin ELEAM: `/superadmin` (CRM puro). Ve todos los ELEAMs, gestión de pagos, leads, blog, métricas.
+- Aprobar demo desde LeadsPanel: invoca `create-demo-user`, muestra credenciales en modal.
 - Con ELEAM demo: `/dashboard` (muestra la app como cliente de demostración).
-- Acceso RLS: Funciones `is_superadmin()` le dan acceso universal (aunque RLS sigue filtrando por tabla).
+- Acceso RLS: Funciones `is_superadmin()` le dan acceso universal.
 
 ---
 
@@ -391,19 +421,32 @@ Internas (admin levanta) o de fiscalización (SEREMI detecta). Flujo: `abierta` 
 - `mp-create-subscription`: Crea preapproval; solo `admin_eleam` con suscripción inactiva.
 - `mp-webhook`: Público; valida HMAC SHA-256; deduplica con `mp_request_id`; actualiza estado.
 - `mp-cancel-subscription`: Cancela preapproval; solo `admin_eleam`.
-- `invite-funcionario`: Crea invitation; valida plan y límites.
+- `invite-funcionario`: Crea invitation token; valida plan y límites (flujo legado).
+- `create-staff-user`: Crea funcionario/familiar con contraseña temporal; envía email via Resend (si configurado). Retorna `{ ok, profile_id, email, temp_password, email_sent }`.
+- `create-demo-user`: Crea admin_eleam para lead aprobado; activa ELEAM 30 días; envía email de bienvenida. Retorna `{ ok, profile_id, eleam_id, email, temp_password, email_sent }`.
+
+### Email (Resend — opcional)
+
+`supabase/functions/_shared/email.ts` centraliza el envío. Si `RESEND_API_KEY` no está configurado, `sendEmail()` retorna `false` (no-op) y el sistema sigue funcionando — las credenciales se muestran directamente en la UI al superadmin/admin.
 
 ### Env vars (server-only, Edge Function secrets)
 
 - `MP_ACCESS_TOKEN` — Bearer MP.
 - `MP_WEBHOOK_SECRET` — HMAC secret.
 - `PUBLIC_APP_URL` — URL frontend (para back_url, invite links).
+- `RESEND_API_KEY` — Opcional; si ausente, emails no se envían pero credenciales se retornan en respuesta.
 
 NUNCA exponer como `VITE_*`.
 
 ---
 
 ## Demo
+
+### Demo guiado (flujo principal)
+
+Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba en LeadsPanel (`/superadmin`) → Edge Function `create-demo-user` crea cuenta `admin_eleam` real con 30 días de prueba → email con credenciales (si Resend configurado) → superadmin ve temp_password en modal → prospecto inicia sesión y completa `/cambiar-clave`.
+
+### Demo offline (exploración libre)
 
 Ruta `/demo` abre selector: Admin / Funcionario / Familiar. Cada demo es **offline** con mock data en `localStorage`.
 
@@ -441,6 +484,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Ficha 360 del ELEAM**: Contacto, estado, suscripción, riesgo churn, tareas vencidas, interacciones recientes, salud cliente (healthy/warning/risk).
 - **Tareas**: Crear, asignar, marcar completadas, vencimiento, prioridad.
 - **Interacciones**: Registro de contactos (call, email, meeting, etc.); proxima acción; audit trail.
+- **LeadsPanel**: Tabla de `demo_leads` con estado (nuevo/contactado/demo_activo/convertido/descartado). Botón "Dar acceso" invoca `create-demo-user`; muestra modal con email + contraseña temporal + estado de email enviado. Leads con `demo_token` (flujo legado) no muestran el botón de acceso real.
 
 **Salud del cliente** (`utils/customerHealth.js`): Combina pago, vencimiento, último contacto, riesgo, tareas vencidas, estado CRM → `healthy | warning | risk | unknown`.
 
