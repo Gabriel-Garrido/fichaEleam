@@ -1,57 +1,26 @@
-# FichaEleam — Documentación del Proyecto
+# FichaEleam — Documentación Técnica
 
-## Resumen
+## Propósito
 
-**FichaEleam** es una aplicación web SPA para la digitalización de registros clínicos, administrativos y documentales de **ELEAM** (Establecimientos de Larga Estadía para Adultos Mayores) en Chile. Diseñada para apoyar la gestión diaria del personal y facilitar la preparación para fiscalizaciones de la **SEREMI de Salud** según el **DS 14/2017**.
-
----
-
-## UX Operativa
-
-La experiencia está orientada a personal ELEAM que trabaja por turnos y necesita priorizar rápido:
-
-- Dashboard con índice operativo, prioridades del turno, alertas clínicas, documentos por vencer y matriz de riesgo.
-- Signos vitales con rangos visuales por parámetro y estado global del registro.
-- Formularios con avisos claros cuando no hay residentes activos disponibles.
-- Acciones destructivas o administrativas visibles solo para `admin_eleam` y `superadmin`.
-- Demo offline en `/demo` con selector de perfil (Admin / Funcionario / Familiar) — sin demo de superadmin (rol exclusivo del operador).
+Aplicación web SPA para digitalización de registros clínicos, administrativos y documentales de **ELEAM** (Establecimientos de Larga Estadía para Adultos Mayores) en Chile. Incluye suscripción vía MercadoPago, carpeta SEREMI (acreditación v9), blog público y panel CRM para operador.
 
 ---
 
 ## Stack Tecnológico
 
-| Capa | Tecnología |
-|------|------------|
-| Frontend | React 19 + Vite 6 |
-| Estilos | Tailwind CSS 4 |
-| Routing | React Router DOM 7 |
-| Backend / Auth | Supabase (PostgreSQL + Auth + Storage) |
-| Build | Vite |
-| Linting | ESLint 9 |
+- **Frontend**: React 19 + Vite 6 + Tailwind CSS 4 + React Router 7
+- **Backend**: Supabase (PostgreSQL + Auth + Storage)
+- **Tooling**: ESLint 9, Vite
 
----
-
-## Comandos de Desarrollo
-
+**Comandos**:
 ```bash
-npm run dev       # Servidor de desarrollo en localhost:5173
-npm run build     # Build de producción en /dist
-npm run lint      # Análisis de código con ESLint
-npm run preview   # Preview del build de producción
+npm run dev       # localhost:5173
+npm run build     # /dist
+npm run lint      # ESLint
+npm run preview   # preview del build
 ```
 
----
-
-## Configuración de Variables de Entorno
-
-Copiar `.env.example` a `.env` y rellenar con las credenciales del proyecto Supabase:
-
-```env
-VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
-VITE_SUPABASE_ANON_KEY=tu-anon-key
-```
-
-Las variables con prefijo `VITE_` son expuestas al cliente (comportamiento estándar de Vite). Las anon keys de Supabase son seguras para exponer en el cliente porque la seguridad se gestiona con Row Level Security (RLS).
+**Env**: Copiar `.env.example` → `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 
 ---
 
@@ -60,956 +29,537 @@ Las variables con prefijo `VITE_` son expuestas al cliente (comportamiento está
 ```
 src/
 ├── components/
-│   ├── Button.jsx           # Botón base consistente con focus/disabled states
-│   ├── ErrorBoundary.jsx    # Class component; muestra stack trace solo en DEV
-│   ├── Input.jsx            # Input base consistente para formularios
-│   ├── Loading.jsx          # Spinner inline con prop message
-│   ├── Modal.jsx            # Modal accesible: Escape, backdrop, role="dialog"
-│   ├── Navbar.jsx           # Nav sin prop isLoggedIn; lee useAuth() directamente
-│   ├── ProtectedRoute.jsx   # Guarda sesión, cuenta activa y roles
-│   ├── SuperAdminRoute.jsx  # Wrapper de ProtectedRoute para rol superadmin
-│   └── Toast.jsx            # ToastProvider + useToast() hook
+│   ├── Navbar.jsx              # Nav responsivo; oculta items según rol/pago
+│   ├── ProtectedRoute.jsx      # Guard: sesión, pago activo, rol, cambio de clave
+│   ├── SuperAdminRoute.jsx     # Guard: solo superadmin
+│   ├── Button.jsx, Input.jsx   # Base UI consistente
+│   ├── Modal.jsx               # Accesible: Escape, backdrop, role=dialog
+│   ├── Toast.jsx, Loading.jsx  # Notificaciones y spinners
+│   ├── ErrorBoundary.jsx       # Stack trace solo en DEV
+│   └── SupabaseError.jsx       # Manejo de error de conexión
 ├── context/
-│   └── AuthContext.jsx      # useAuth() + useLoading(); escucha onAuthStateChange
+│   └── AuthContext.jsx         # useAuth() + useLoading()
 ├── features/
-│   ├── accreditation/
-│   │   ├── AccreditationDashboard.jsx  # Progreso global + lista de categorías
-│   │   ├── AccreditationCategory.jsx   # Documentos por categoría + signed URLs
-│   │   ├── AccreditationUpload.jsx     # Subida con validación MIME + tamaño
-│   │   └── accreditationService.js     # CRUD + sanitizeFilename + getSignedUrl
-│   ├── auth/
-│   │   ├── Login.jsx
-│   │   ├── Register.jsx                # Valida email con validateEmail()
-│   │   ├── authService.js              # login(), register(), logout()
-│   │   └── useAuth.js                  # Re-exporta useAuth desde AuthContext
-│   ├── dashboard/
-│   │   ├── AdminDashboard.jsx          # Índice operativo, prioridades, riesgos, docs
-│   │   └── dashboardService.js         # loadDashboard() con Promise.allSettled
-│   ├── landing/
-│   │   └── LandingPage.jsx
-│   ├── observations/
-│   │   ├── ObservationForm.jsx         # 12 tipos; usa useToast
-│   │   ├── ObservationList.jsx         # Filtros: residente, tipo, fecha, seguimiento
-│   │   └── observationsService.js      # getObservations({ desde, hasta, tipo, soloSeguimiento })
-│   ├── residents/
-│   │   ├── ResidentDetails.jsx         # Tabs lazy: info, signos (5 recientes), observaciones (5 recientes)
-│   │   ├── ResidentForm.jsx            # Campos: escala_katz, fecha_egreso, motivo_egreso
-│   │   ├── ResidentList.jsx            # Búsqueda + filtro estado; useCallback
-│   │   └── residentService.js
-│   ├── superadmin/
-│   │   ├── SuperAdminDashboard.jsx     # Métricas, tabla ELEAMs, pagos, modales edición/pago
-│   │   └── superadminService.js        # getMetrics, getAllEleams, updateEleam, registerPayment
-│   └── vitalSigns/
-│       ├── VitalSignsForm.jsx          # Form clínico con feedback visual de rango en vivo
-│       ├── VitalSignsList.jsx          # Vista tarjetas/tabla + chips por estado clínico
-│       ├── VitalCard.jsx               # Tarjeta visual de un parámetro (verde/ámbar/rojo)
-│       ├── vitalRanges.js              # Rangos clínicos + helpers de status por parámetro
-│       └── vitalSignsService.js        # getVitalSigns({ desde, hasta, limit })
+│   ├── auth/                   # Login, Register, authService
+│   ├── landing/                # LandingPage
+│   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService
+│   ├── dashboard/              # AdminDashboard + summaries clínicas
+│   ├── residents/              # CRUD residentes + detalles
+│   ├── vitalSigns/             # Formulario + lista + rangos clínicos
+│   ├── observations/           # 12 tipos de observaciones diarias
+│   ├── accreditation/          # Modelo v9: ámbitos, requisitos, evidencias, observaciones, auditoría
+│   ├── payment/                # PaymentPage, PaymentReturn (MercadoPago)
+│   ├── team/                   # TeamManagement (invitar funcionarios/familiares) + cambio de clave
+│   ├── familiar/               # Portal restringido + registro de visitas
+│   ├── demo/                   # DemoSelector, DemoPage (admin/funcionario), FamiliarDemoPage
+│   ├── superadmin/             # Dashboard CRM + blog editor + gestión de pagos
+│   │   └── blog/               # BlogManagement, BlogEditor (solo para superadmin)
+│   └── utils/                  # Markdown renderer, customer health, etc.
 ├── routes/
-│   └── AppRouter.jsx                   # Rutas con ProtectedRoute + /superadmin con SuperAdminRoute
+│   └── AppRouter.jsx           # Rutas con guards
 ├── services/
-│   └── supabaseConfig.js               # Cliente Supabase singleton; null si faltan env vars
+│   └── supabaseConfig.js       # Cliente Supabase singleton
 └── utils/
     ├── constants.js
     ├── dateUtils.js
-    └── validators.js                   # validateEmail, validateRut, isValidUUID, validatePhone
+    ├── validators.js           # Email, UUID, RUT, phone
+    └── seo.js                  # Hook useSEO + JSON-LD builders
 ```
 
 ---
 
-## Base de Datos (Supabase / PostgreSQL)
+## Autenticación y Autorización
 
-El schema completo está en `supabase_schema.sql`. Ejecutarlo en **Supabase Dashboard → SQL Editor**.
+### Roles
 
-### Tablas
+| Rol | Quién | Paga | Ruta home |
+|-----|-------|------|-----------|
+| `superadmin` | Operador de la plataforma | n/a | `/superadmin` (sin ELEAM) o `/dashboard` (demo) |
+| `admin_eleam` | Dueño del ELEAM | ✓ | `/pago?sinAcceso=1` (sin pago) o `/dashboard` |
+| `funcionario` | Personal clínico del ELEAM | ✗ | `/dashboard` |
+| `familiar` | Familiar de residente | ✗ | `/familiar` |
 
-#### `profiles`
-Extiende `auth.users`. Se crea automáticamente vía trigger `on_auth_user_created`.
-| Columna | Tipo | Descripción |
-|---------|------|-------------|
-| id | uuid (FK → auth.users) | PK |
-| nombre | text | Nombre del usuario |
-| email | text | Correo |
-| rol | text | `admin_eleam`, `funcionario`, `superadmin` |
-| creado_en | timestamptz | Fecha de creación |
+### useAuth() — Propiedades
 
-#### `residentes`
-Ficha maestra de cada residente del ELEAM.
-| Columna | Descripción |
-|---------|-------------|
-| id | UUID PK |
-| nombre, apellido | Nombre completo |
-| rut | RUT chileno (único, opcional) |
-| fecha_nacimiento, sexo, estado_civil | Datos personales |
-| diagnostico_principal | Diagnóstico base |
-| alergias | `text[]` — array de alergias |
-| indice_barthel | Entero 0-100 |
-| nivel_dependencia | leve/moderado/severo/total |
-| fecha_ingreso, fecha_egreso | Fechas de estadía |
-| estado | activo/hospitalizado/egresado/fallecido |
-| habitacion, cama | Ubicación física |
+```javascript
+{
+  user,                    // auth.users
+  profile,                 // profiles + eleams (FK) + planes (FK)
+  eleam,                   // ELEAM data si aplica
+  plan,                    // Plan activo
+  pagoActivo,             // bool: superadmin=true, staff=subscripción activa o en gracia
+  rol, isAdminEleam, isFuncionario, isFamiliar, isSuperadmin, isStaff, // Helpers
+  homePath,               // Ruta inicial según rol+pago
+  permisos,               // null (admin/superadmin/familiar) o {perm: bool} (funcionario)
+  can(permiso),           // Verifica permiso granular (admin/superadmin siempre true)
+  mustResetPassword,      // Requiere cambio de clave (primer acceso)
+  profileLoading, authLoading, authNotice, supabaseError,
+  refetchProfile(),        // Reload del contexto
+}
+```
 
-#### `signos_vitales`
-Registro diario por turno de signos vitales.
-| Columna | Descripción |
-|---------|-------------|
-| residente_id | FK → residentes |
-| fecha_hora | Timestamp del registro |
-| turno | mañana/tarde/noche |
-| presion_sistolica, presion_diastolica | mmHg (check 50–300 / 30–200) |
-| frecuencia_cardiaca | lpm (check 20–300) |
-| frecuencia_respiratoria | rpm (check 5–60) |
-| temperatura | °C (check 30–45) |
-| saturacion_oxigeno | % (check 0–100) |
-| glucosa | mg/dL |
-| peso | kg |
-| dolor_escala | 0-10 |
-| estado_conciencia | alerta/somnoliento/estuporoso/coma |
+### ProtectedRoute
 
-#### `observaciones_diarias`
-Notas de turno, incidentes, procedimientos.
-| Columna | Descripción |
-|---------|-------------|
-| residente_id | FK → residentes |
-| turno | mañana/tarde/noche |
-| tipo | observacion_general, caida, incidente, curacion, visita_medica, administracion_medicamento, cambio_posicion, higiene, alimentacion, eliminacion, actividad, otro |
-| descripcion | Texto libre obligatorio |
-| acciones_tomadas | Texto libre |
-| requiere_seguimiento | Boolean |
+```jsx
+<ProtectedRoute>...</ProtectedRoute>                  // sesión + pago activo
+<ProtectedRoute requireActive={false}>...</ProtectedRoute>  // sin pago ok (familiar, cambio clave)
+<ProtectedRoute allowedRoles={["admin_eleam"]}>...</ProtectedRoute>  // Restricción de rol
+```
 
-#### `categorias_acreditacion` / `documentos_acreditacion` (legacy)
-Tablas heredadas del primer modelo. **Ya no se usan** desde la app
-(se reemplazan por el modelo v9 detallado abajo). Se conservan en el
-schema por compatibilidad y para referencias históricas.
-
-#### Modelo v9 — Carpeta SEREMI
-
-| Tabla | Rol |
-|-------|-----|
-| `acred_ambitos` | 14 ámbitos fijos. |
-| `acred_requisitos` | Catálogo maestro (~70 requisitos con medio verificador y vigencia sugerida). |
-| `acred_requisitos_eleam` | Estado por ELEAM por requisito (`pendiente / cumple / no_cumple / no_aplica / vencido / observado`). |
-| `acred_documentos` | Evidencias **versionadas** (vigente / histórico, `reemplazado_por_id`). |
-| `acred_observaciones` | Observaciones internas o de fiscalización con cierre. |
-| `acred_audit` | Trazabilidad inmutable (create/update/replace/archive/close). |
-
-`acred_provision_requisitos(eleam_id)` y trigger
-`acred_on_eleam_created` siembran las filas por ELEAM.
-`acred_marcar_vencidos(eleam_id)` se llama desde el cliente (RPC).
+Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta completar.
 
 ---
 
-## Carpeta SEREMI — 14 ámbitos (v9)
+## Rutas
 
-| Código | Ámbito |
-|--------|--------|
-| A01 | Antecedentes legales del ELEAM |
-| A02 | Autorización sanitaria |
-| A03 | Infraestructura y condiciones sanitarias |
-| A04 | Seguridad, incendios y evacuación |
-| A05 | Dirección técnica |
-| A06 | Personal, dotación y turnos |
-| A07 | Protocolos obligatorios |
-| A08 | Residentes y carpetas personales |
-| A09 | Contratos, consentimientos y derechos |
-| A10 | Medicamentos y registros |
-| A11 | Alimentación y manipulación |
-| A12 | Aseo, lavandería, residuos y plagas |
-| A13 | Reclamos, sugerencias y comunicación |
-| A14 | Fiscalizaciones y subsanaciones |
+| Ruta | Componente | Guard | Notas |
+|------|-----------|-------|-------|
+| `/` | LandingPage | — | Público |
+| `/login`, `/register` | Auth | — | Público; redirige si ya autenticado |
+| `/demo` | DemoSelector | — | Selector: Admin / Funcionario / Familiar |
+| `/demo/admin`, `/demo/funcionario`, `/demo/familiar` | Demo* | — | Demo offline con localStorage |
+| `/pago` | PaymentPage | `requireActive=false` | Planes MercadoPago |
+| `/pago/return` | PaymentReturn | — | Post-checkout; polling |
+| `/blog` | PublicBlogList | — | Blog público |
+| `/blog/:slug` | PublicBlogPost | — | Post público |
+| `/cambiar-clave` | ChangePasswordPage | `requireActive=false` | Forzado si `mustResetPassword=true` |
+| `/dashboard` | AdminDashboard | `allowedRoles=[admin_eleam, funcionario]` | Índice operativo |
+| `/residents`, `/residents/new`, `/residents/:id`, `/residents/:id/edit` | Resident* | STAFF | CRUD residentes |
+| `/vital-signs`, `/vital-signs/new` | VitalSigns* | STAFF | CRUD + rangos visuales |
+| `/observations`, `/observations/new` | Observation* | STAFF | 12 tipos de observaciones |
+| `/accreditation` | AccreditationDashboard | STAFF | Resumen global: cumplimiento, alertas, ámbitos |
+| `/accreditation/ambito/:codigo` | AccreditationAmbito | STAFF | Lista requisitos filtrable por estado |
+| `/accreditation/requisito/:id` | AccreditationRequisito | STAFF | Detalle: evidencias, observaciones, auditoría, cambio de estado |
+| `/accreditation/observaciones` | AccreditationObservaciones | STAFF | Observaciones internas/fiscalización |
+| `/accreditation/carpeta` | AccreditationCarpeta | STAFF | Export imprimible (Ctrl+P) |
+| `/equipo` | TeamManagement | `allowedRoles=[admin_eleam]` | Invitar funcionarios/familiares, cambiar roles |
+| `/familiar` | FamiliarPortal | `allowedRoles=[familiar]` | Residente asignado + últimos signos + observaciones |
+| `/familiar/visitas` | FamiliarVisitas | `allowedRoles=[familiar]` | Historial + registro de visitas |
+| `/superadmin` | SuperAdminDashboard | SuperAdminRoute | CRM: métricas, tabla ELEAMs, edición, pagos |
+| `/superadmin/blog` | BlogManagement | SuperAdminRoute | Lista de posts |
+| `/superadmin/blog/new`, `/superadmin/blog/:id/edit` | BlogEditor | SuperAdminRoute | Editor de posts |
+| `*` | Fallback | — | Redirige a `homePath` |
 
-Cada ámbito agrupa entre 4 y 8 requisitos seedados con `ON CONFLICT DO UPDATE`.
-
----
-
-## Rutas de la Aplicación
-
-| Ruta | Componente | Auth |
-|------|-----------|------|
-| `/` | LandingPage | Pública |
-| `/login` | Login | Pública |
-| `/register` | Register | Pública |
-| `/dashboard` | AdminDashboard | ✓ |
-| `/residents` | ResidentList | ✓ |
-| `/residents/new` | ResidentForm | ✓ |
-| `/residents/:id` | ResidentDetails | ✓ |
-| `/residents/:id/edit` | ResidentForm | ✓ |
-| `/vital-signs` | VitalSignsList | ✓ |
-| `/vital-signs/new` | VitalSignsForm | ✓ |
-| `/observations` | ObservationList | ✓ |
-| `/observations/new` | ObservationForm | ✓ |
-| `/accreditation` | AccreditationDashboard | ✓ |
-| `/accreditation/category/:id` | AccreditationCategory | ✓ |
-| `/accreditation/upload` | AccreditationUpload | ✓ |
-
-Query params soportados:
+**Query params**:
 - `/vital-signs/new?residenteId=UUID` — preselecciona residente
 - `/observations/new?residenteId=UUID` — preselecciona residente
-- `/accreditation/upload?categoriaId=UUID` — preselecciona categoría
 
 ---
 
-## Autenticación
+## Base de Datos
 
-Supabase Auth con email/password. El flujo:
+21 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
 
-1. `register()` → `supabase.auth.signUp()` + upsert en `profiles`
-2. Trigger de Supabase crea el perfil automáticamente (fallback)
-3. `login()` → `supabase.auth.signInWithPassword()`
-4. `AuthContext` escucha `onAuthStateChange` y expone `user`, `profile`, `eleam`, `pagoActivo`, `authLoading` y `profileLoading`
-5. `ProtectedRoute` bloquea rutas por sesión, perfil, cuenta activa y roles permitidos
+### Tablas principales
 
-`ProtectedRoute` acepta `requireActive` y `allowedRoles`. Si el usuario no inició sesión redirige a `/login`; si no tiene perfil o pago activo redirige a `/pago?sinAcceso=1`; si el rol no coincide redirige a `/dashboard` o `/pago` según el estado de activación.
+#### `profiles` (usuarios)
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | uuid FK auth.users | PK |
+| nombre, email | text | |
+| rol | text (enum 4) | admin_eleam, funcionario, familiar, superadmin |
+| eleam_id | uuid FK eleams | null para superadmin operador |
+| must_reset_password | bool | Trigger fuerza cambio en primer acceso |
+| creado_en | timestamptz | |
 
-El Navbar respeta la misma autorización. Una cuenta sin activación ve solo Demo, Activar ELEAM y Cerrar sesión; las vistas clínicas y administrativas quedan ocultas y también bloqueadas por ruta.
+#### `eleams` (tenants)
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id, nombre, email_admin | uuid, text | PK, contacto |
+| rut_empresa, telefono | text | |
+| plan_id | uuid FK planes | Planificación actual |
+| subscription_status | text (enum 7) | inactivo, pendiente, activo, en_gracia, pausado, cancelado, vencido |
+| pago_activo | bool | Derivado de status + vencimiento (sync_pago_activo trigger) |
+| mp_preapproval_id, mp_payer_email | text | MercadoPago preapproval |
+| fecha_vencimiento_suscripcion, proximo_cobro_en | timestamptz | Lifecycle |
+| max_residentes, max_funcionarios | int | Límites del plan |
+| crm_estado | text (enum 9) | lead ... cliente_riesgo; gestión comercial |
+| origen_lead, ultimo_contacto, proxima_accion_fecha | text, timestamptz, date | Trazabilidad CRM |
+| responsable_comercial | uuid FK profiles | Gerente asignado |
+| riesgo_churn | text (enum 4) | bajo, medio, alto, desconocido |
+| notas_admin | text | Internas (no expuestas a admin_eleam) |
+| creado_en | timestamptz | |
 
----
+#### `residentes` (fichas de pacientes)
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id, eleam_id | uuid | PK, FK eleams |
+| nombre, apellido, rut | text | |
+| fecha_nacimiento, sexo, estado_civil | date, text | |
+| diagnostico_principal, alergias | text, text[] | |
+| indice_barthel, nivel_dependencia | int, text | 0-100; leve/moderado/severo/total |
+| fecha_ingreso, fecha_egreso, motivo_egreso | date, date, text | Ciclo de vida |
+| estado | text (enum 4) | activo, hospitalizado, egresado, fallecido |
+| habitacion, cama | text | Ubicación |
+| creado_en | timestamptz | |
 
-## Supabase Storage
+#### `signos_vitales`
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id, residente_id | uuid | PK, FK residentes |
+| fecha_hora, turno | timestamptz, text | mañana/tarde/noche |
+| presion_sistolica, presion_diastolica | int (50-300, 30-200) | mmHg; checks en DB |
+| frecuencia_cardiaca, frecuencia_respiratoria | int | lpm, rpm |
+| temperatura, saturacion_oxigeno | numeric, int | °C (30-45), % (0-100) |
+| glucosa, peso, dolor_escala | int, numeric, int (0-10) | Variados |
+| estado_conciencia | text | alerta, somnoliento, estuporoso, coma |
+| creado_en | timestamptz | |
 
-**Buckets:**
-- `documentos-acreditacion` — Archivos de acreditación (privado, 10 MB máx.)
-- `residentes-archivos` — Archivos de residentes (privado)
+#### `observaciones_diarias`
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id, residente_id | uuid | PK, FK residentes |
+| turno, tipo | text | mañana/tarde/noche; 12 tipos |
+| descripcion, acciones_tomadas | text | Obligatorio + opcional |
+| requiere_seguimiento | bool | |
+| creado_en | timestamptz | |
 
-**Tipos MIME permitidos en `documentos-acreditacion`:**
-`application/pdf`, `image/jpeg`, `image/png`, `image/webp`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+#### Tablas de acreditación (modelo v9)
 
-Los archivos se almacenan en: `acreditacion/{eleamId}/{categoriaId}/{timestamp}_{nombre_sanitizado}`
+**`acred_ambitos`** — 14 ámbitos fijos DS 14/2017 (A01-A14)
 
-**Acceso a archivos:** se genera una URL firmada de 1 hora con `supabase.storage.from('documentos-acreditacion').createSignedUrl(path, 3600)`. Las URLs cacheadas en el estado local expiran; se regeneran al hacer clic en "Ver".
+**`acred_requisitos`** — Catálogo maestro (~70 requisitos): medio verificador, vigencia sugerida, codelength
 
----
+**`acred_requisitos_eleam`** — Estado por ELEAM/requisito: `pendiente | cumple | no_cumple | no_aplica | vencido | observado`
 
-## Row Level Security (RLS)
+**`acred_documentos`** — Evidencias versionadas (vigente=true/false, reemplazado_por_id, reemplazado_en). Storage path: `acreditacion/{eleamId}/req/{requisitoEleamId}/{ts}_v{n}_{filename}`. RLS scoped por eleam_id.
 
-Todas las tablas tienen RLS habilitado. Patrón usado:
+**`acred_observaciones`** — Internas o de fiscalización: `abierta | en_proceso | cerrada`. Con `acciones_subsanacion`, `fecha_compromiso`, `responsable_id`, `autor_cierre`.
+
+**`acred_audit`** — Inmutable: acción (create, update, replace, archive, close), timestamp, usuario, tabla, ID, cambios.
+
+#### Tablas de suscripción
+
+**`planes`** — Catálogo: código, precio_clp, max_residentes, max_funcionarios, frequency, frequency_type, orden, destacado.
+
+**`pagos`** — Registro manual: eleam_id, monto (CLP), plan, fecha_inicio, fecha_fin, metodo_pago, estado (pendiente, completado, fallido, reembolsado), registrado_por, mp_*.
+
+**`mp_webhook_events`** — Auditoría de webhooks MercadoPago: mp_request_id (idempotencia), event_type, body, procesado_en.
+
+#### Tablas de equipo
+
+**`funcionario_invitaciones`** — Token + email + rol + residente_id (para familiar) + expiración (7 días).
+
+**`familiar_residentes`** — PK (profile_id, residente_id): parentesco, creado_por, creado_en.
+
+**`funcionario_permisos`** — Permisos granulares por funcionario. Columnas dinámicas: `crear_residente`, `editar_residente`, `eliminar_residente`, `crear_signos`, `eliminar_signos`, `crear_observacion`, `eliminar_observacion`, `subir_acreditacion`, `archivar_acreditacion`, etc. (todas bool).
+
+**`visitas_familiar`** — Registro de visitas: residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por.
+
+#### Tablas de blog y CRM
+
+**`blog_posts`** — Slug único, titulo, resumen, contenido_md, cover_url, cover_alt, meta_title, meta_description, keywords[], estado (borrador|publicado|archivado), publicado_en, destacado, autor_nombre, tiempo_lectura_min, views.
+
+**`crm_tasks`** — titulo, descripcion, tipo, estado, prioridad, fecha_vencimiento, creado_por, completado_por, eleam_id.
+
+**`crm_interactions`** — tipo, canal, resumen, resultado, proxima_accion, creado_por, eleam_id, fecha.
+
+### RLS (Row Level Security)
+
+Todas las tablas usan RLS. Patrones clave:
 
 ```sql
--- Correcto (evita cache de role stale):
-(select auth.uid()) is not null
-
--- Evitado (patrón antiguo/deprecated):
-auth.role() = 'authenticated'
-```
-
-### Modelo multi-tenant
-
-Cada ELEAM es un tenant independiente. El aislamiento funciona así:
-
-1. `profiles.eleam_id` vincula cada usuario a su ELEAM.
-2. Las tablas de datos (`residentes`, `documentos_acreditacion`) tienen columna `eleam_id`.
-3. Las tablas derivadas (`signos_vitales`, `observaciones_diarias`) se aislan via JOIN con `residentes.eleam_id`.
-4. RLS verifica el `eleam_id` del perfil del usuario autenticado en cada operación.
-
-```sql
--- Patrón RLS para tabla con eleam_id directo:
+-- Tabla con eleam_id directo (documentos, residentes):
 (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
 
--- Patrón RLS para tabla con FK a residentes:
+-- Tabla con FK a residentes (signos, observaciones):
 residente_id in (
   select id from public.residentes
   where eleam_id = (select eleam_id from public.profiles where id = (select auth.uid()))
 )
+
+-- Superadmin (función is_superadmin()):
+public.is_superadmin()
 ```
 
-### Patrón getMyContext() / getMyEleamId()
+Helpers `security definer`: `is_superadmin()`, `my_eleam_id()`, `my_rol()`.
 
-Los servicios que insertan datos obtienen el `eleam_id` del perfil en el servidor, no confían en ningún parámetro enviado por el cliente:
+### Storage
 
-```js
-// accreditationService.js
-async function getMyContext() {
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data } = await supabase.from("profiles").select("eleam_id").eq("id", user.id).single();
-  return { userId: user.id, eleamId: data.eleam_id };
-}
-```
+**Bucket**: `documentos-acreditacion` (privado, max 10 MB)
 
-Esto garantiza que aunque el cliente envíe un `eleam_id` malicioso, el INSERT siempre usa el del perfil.
+**MIME permitidos**: pdf, image/jpeg, image/png, image/webp, word, docx
 
-### Políticas implementadas
+**RLS**: `split_part(name, '/', 2) = my_eleam_id()`
 
-| Tabla | SELECT | INSERT | UPDATE | DELETE |
-|-------|--------|--------|--------|--------|
-| profiles | propio perfil **o** superadmin | propio | propio | — |
-| eleams | propio ELEAM **o** superadmin | autenticado **o** superadmin | admin_eleam **o** superadmin | — |
-| residentes | mismo eleam_id **o** superadmin | mismo eleam_id | mismo eleam_id | mismo eleam_id |
-| signos_vitales | residente del ELEAM | residente del ELEAM | residente del ELEAM | residente del ELEAM |
-| observaciones_diarias | residente del ELEAM | residente del ELEAM | residente del ELEAM | residente del ELEAM |
-| categorias_acreditacion | autenticado | — | — | — |
-| documentos_acreditacion | mismo eleam_id | mismo eleam_id | mismo eleam_id | mismo eleam_id |
-| pagos | mismo eleam_id (solo SELECT) **o** superadmin (todo) | superadmin | superadmin | superadmin |
-
-**Storage policies** (scoped a `bucket_id = 'documentos-acreditacion'`):
-- SELECT / INSERT / DELETE: path scoped por `eleam_id` (`split_part(name, '/', 2)`)
-
-**Storage path**: `acreditacion/{eleamId}/{categoriaId}/{timestamp}_{filename}` — el `eleamId` en el path asegura aislamiento físico adicional en Storage.
-
-### Función `is_superadmin()`
-
-```sql
-create or replace function public.is_superadmin()
-  returns boolean language sql stable security definer
-as $$
-  select exists (
-    select 1 from public.profiles
-    where id = (select auth.uid()) and rol = 'superadmin'
-  );
-$$;
-```
-
-Todas las políticas de superadmin llaman a esta función en lugar de hardcodear la condición, lo que permite futuros cambios de rol sin tocar cada política.
+URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 
 ---
 
-## Seguridad — Decisiones Clave
+## Flujos por Rol
 
-### Sanitización de nombres de archivo
-`accreditationService.js` → `sanitizeFilename()`: elimina `..`, `/`, `\` y caracteres especiales para prevenir path traversal en Storage. Whitelist de extensiones: `pdf`, `doc`, `docx`, `xls`, `xlsx`, `jpg`, `jpeg`, `png`.
+### admin_eleam (Dueño del ELEAM)
 
-### Validación de archivos en el cliente
-`AccreditationUpload.jsx` → `validateFile()`: comprueba MIME type (whitelist) y tamaño (≤ 10 MB) antes de hacer el upload. El check se aplica tanto al input como al drag-and-drop.
+1. **Signup**: Crea cuenta → Trigger `handle_new_user` crea ELEAM + profile automáticamente.
+2. **Sin pago**: Redirige a `/pago?sinAcceso=1`. Solo ve "Activar ELEAM", "Demo", "Cerrar sesión".
+3. **Primer acceso**: Si `must_reset_password=true`, fuerza `/cambiar-clave`.
+4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/equipo` (invitar staff) + `/accreditation` (gestionar carpeta SEREMI).
+5. **Invitar funcionarios**: Email + nombre → Trigger `ensure_invitation_token_valid` valida y crea row en `funcionario_invitaciones`. Funcionario abre link `/register?invite=TOKEN&email=...` → Trigger `handle_new_user` lo asigna al ELEAM.
+6. **Invitar familiares**: Selecciona residente + email → Mismo flujo pero con `familiar_residentes` y permisos limitados.
 
-### Validación de UUID en parámetros de ruta y query
-Todos los componentes que reciben IDs desde la URL (`:id` params o `?residenteId=`) los validan con `isValidUUID()` antes de usarlos. Si el UUID es inválido: redirigen al listado o muestran error, sin hacer queries a la DB.
+### funcionario (Personal clínico)
 
-Archivos con validación: `ResidentDetails.jsx`, `ResidentForm.jsx`, `VitalSignsForm.jsx`, `ObservationForm.jsx`, `AccreditationUpload.jsx`, `residentService.js`.
+- Ruta home: `/dashboard` (sin `/equipo`, sin `/pago`).
+- Recibe invitación de admin_eleam.
+- Puede: crear/editar residentes, signos, observaciones, acreditación (según permisos granulares en `funcionario_permisos`).
+- No puede: eliminar datos, administrar equipo, cambiar planes.
 
-### Sin URLs públicas de Storage
-Se usa `storage_path` (ruta relativa) en la base de datos, no una URL pública. `getSignedUrl()` genera URLs temporales de 1 hora.
+### familiar (Acceso de visitante)
 
-### ErrorBoundary seguro
-`ErrorBoundary.jsx` muestra el stack trace del error solo si `import.meta.env.DEV` es `true`. En producción muestra únicamente un mensaje genérico.
+- Ruta home: `/familiar`.
+- Ve: 1 residente asignado, últimos signos vitales (5), observaciones (5), visitas registradas.
+- Puede: registrar visitas (duración, notas).
+- Acceso: RLS verifica `profile_id` en `familiar_residentes`.
 
-### Headers de seguridad (Vite dev)
+### superadmin (Operador de la plataforma)
+
+- Sin ELEAM: `/superadmin` (CRM puro). Ve todos los ELEAMs, gestión de pagos manual, blog, métricas.
+- Con ELEAM demo: `/dashboard` (muestra la app como cliente de demostración).
+- Acceso RLS: Funciones `is_superadmin()` le dan acceso universal (aunque RLS sigue filtrando por tabla).
+
+---
+
+## Rangos Clínicos (Signos Vitales)
+
+`src/features/vitalSigns/vitalRanges.js` centraliza los rangos para adultos mayores. Cuatro estados:
+- **normal** (verde): dentro del rango seguro.
+- **warning** (ámbar): fuera del rango pero no crítico.
+- **critical** (rojo): fuera del rango + riesgo elevado.
+- **unknown** (gris): dato inválido o no presente.
+
+Cada parámetro tiene un `*Status(valor)` que devuelve uno de los cuatro. `recordOverallStatus(record)` → peor estado del registro (usado para filtros y pills).
+
+### Tabla de rangos
+
+| Parámetro | Normal | Warning | Crítico |
+|-----------|--------|---------|---------|
+| Sistólica | 100–139 | 90–99, 140–179 | <90, ≥180 |
+| Diastólica | 60–89 | 50–59, 90–109 | <50, ≥110 |
+| FC (lpm) | 60–100 | 50–59, 101–120 | <50, >120 |
+| FR (rpm) | 12–20 | 10–11, 21–24 | <10, >24 |
+| Temperatura | 36–37.7 | 35–35.9, 37.8–38.9 | <35, ≥39 |
+| SatO₂ (%) | ≥95 | 90–94 | <90 |
+| Glucosa | 70–179 | 60–69, 180–249 | <60, ≥250 |
+| Dolor (0–10) | 0–3 | 4–6 | ≥7 |
+
+Componentes: `VitalCard.jsx` (tarjeta individual), `VitalSignsList.jsx` (lista/tabla filtrable), `VitalSignsForm.jsx` (feedback en vivo), `ResidentDetails.jsx` (snapshot + histórico).
+
+---
+
+## Acreditación (Carpeta SEREMI)
+
+Modelo v9 con 14 ámbitos DS 14/2017, requisitos en catálogo maestro, estados, evidencias versionadas, observaciones de auditoría y trazabilidad completa.
+
+### Estados de requisito
+
+- `pendiente`: No gestionado.
+- `cumple`: Satisface requisito.
+- `no_cumple`: No cumple; requiere subsanación.
+- `no_aplica`: No aplicable al ELEAM (motivo en BD).
+- `vencido`: Documento expiró.
+- `observado`: Fiscalización detectó incumplimiento.
+
+### Evidencias
+
+Versionadas en Storage + BD. Cambio de estado: nueva versión, `reemplazado_por_id` + `reemplazado_en`. Historial completo accesible.
+
+### Observaciones
+
+Internas (admin levanta) o de fiscalización (SEREMI detecta). Flujo: `abierta` → `en_proceso` (con acciones y fecha compromiso) → `cerrada` (por quién y cuándo).
+
+### Componentes
+
+- `AccreditationDashboard.jsx`: KPI global, alertas (vencidos, <30d, observaciones abiertas), grilla de 14 ámbitos con barra de cumplimiento.
+- `AccreditationAmbito.jsx`: Lista requisitos filtrable por estado + búsqueda.
+- `AccreditationRequisito.jsx`: Detalle 360: evidencias (versiones), observaciones, auditoría, cambio de estado, carga/reemplazo de archivos.
+- `AccreditationObservaciones.jsx`: Observaciones globales con filtros.
+- `AccreditationCarpeta.jsx`: Export PDF-friendly (Ctrl+P): portada, resumen, cumplimiento por ámbito, observaciones, detalle.
+
+---
+
+## Suscripción (MercadoPago)
+
+### Flujo
+
+1. Admin entra `/pago` → selecciona plan → llamada a Edge Function `mp-create-subscription`.
+2. Función retorna `init_point` (URL de checkout MP).
+3. Admin redirige a MP → paga → webhook `mp-webhook` actualiza `eleam.subscription_status` = `activo` y `fecha_vencimiento_suscripcion`.
+4. Período de gracia: ELEAM cancelado pero todavía pagado → `pago_activo=true` hasta vencimiento.
+
+### Edge Functions (Deno en `supabase/functions/`)
+
+- `mp-create-subscription`: Crea preapproval; solo `admin_eleam` con suscripción inactiva.
+- `mp-webhook`: Público; valida HMAC SHA-256; deduplica con `mp_request_id`; actualiza estado.
+- `mp-cancel-subscription`: Cancela preapproval; solo `admin_eleam`.
+- `invite-funcionario`: Crea invitation; valida plan y límites.
+
+### Env vars (server-only, Edge Function secrets)
+
+- `MP_ACCESS_TOKEN` — Bearer MP.
+- `MP_WEBHOOK_SECRET` — HMAC secret.
+- `PUBLIC_APP_URL` — URL frontend (para back_url, invite links).
+
+NUNCA exponer como `VITE_*`.
+
+---
+
+## Demo
+
+Ruta `/demo` abre selector: Admin / Funcionario / Familiar. Cada demo es **offline** con mock data en `localStorage`.
+
+- **Admin** (`/demo/admin`): CRUD residentes, signos, observaciones, acreditación con upload (simulado).
+- **Funcionario** (`/demo/funcionario`): Igual que admin pero sin botón de upload en acreditación.
+- **Familiar** (`/demo/familiar`): 1 residente, últimos signos, observaciones recientes, registro de visitas en estado local.
+
+`DemoBanner` permite cambiar perfil o limpiar localStorage.
+
+---
+
+## Blog Público
+
+**Rutas**: `/blog` (lista), `/blog/:slug` (post).
+
+**Editor superadmin**: `/superadmin/blog` (lista), `/superadmin/blog/new` (crear), `/superadmin/blog/:id/edit` (editar).
+
+**SEO**: Meta tags (description, OG, Twitter), JSON-LD (Article, Organization, SoftwareApplication, FAQ, Breadcrumb), `robots.txt` (GPTBot, ClaudeBot, PerplexityBot, etc.), `sitemap.xml`.
+
+**Hook**: `useSEO({title, description, path, image, type, keywords, jsonLd})` inyecta meta tags + JSON-LD sin librerías externas.
+
+---
+
+## CRM Superadmin
+
+Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
+
+### Funcionalidades
+
+- **Métricas**: ELEAMs totales, activos, demos, nuevos este mes, residentes, MRR (CLP).
+- **Tabla de ELEAMs**: Búsqueda, filtro por estado, plan, vencimiento. Edición inline: activar/desactivar, cambiar plan, max_residentes, fecha_vencimiento, notas.
+- **Registrar pago**: Monto, plan, método, fecha inicio/fin → RPC transaccional `registrar_pago_y_activar_eleam`.
+- **Historial de pagos**: Últimos 20 con ELEAM, monto, plan, estado.
+- **Pipeline CRM**: ELEAMs agrupados por `crm_estado` (lead → cliente_riesgo). Draggy de estado (future).
+- **Ficha 360 del ELEAM**: Contacto, estado, suscripción, riesgo churn, tareas vencidas, interacciones recientes, salud cliente (healthy/warning/risk).
+- **Tareas**: Crear, asignar, marcar completadas, vencimiento, prioridad.
+- **Interacciones**: Registro de contactos (call, email, meeting, etc.); proxima acción; audit trail.
+
+**Salud del cliente** (`utils/customerHealth.js`): Combina pago, vencimiento, último contacto, riesgo, tareas vencidas, estado CRM → `healthy | warning | risk | unknown`.
+
+---
+
+## Seguridad
+
+### Validación cliente
+
+- **Email**: Regex estricto en `validateEmail()`.
+- **UUID**: `isValidUUID()` antes de usarlo en queries; rechazo silencioso de inválidos.
+- **RUT**: `validateRut()` con módulo-11; campo opcional → true si vacío.
+- **Archivos**: MIME whitelist + tamaño ≤10 MB en `AccreditationUpload.jsx`.
+- **Nombres de archivo**: `sanitizeFilename()` → elimina `..`, `/`, `\`, especiales; whitelist de extensiones.
+
+### Validación servidor (RLS)
+
+- **Aislamiento multi-tenant**: `eleam_id` en tablas clínicas; RLS verifica vía `my_eleam_id()`.
+- **getMyContext()**: Servicios extraen `eleam_id` del perfil, no del cliente.
+- **Superadmin**: Función `is_superadmin()` en todas las RLS; bypass seguro.
+- **Storage path scoped**: `acreditacion/{eleamId}/...`; RLS filtra por `split_part(name, '/', 2)`.
+- **Permisos granulares**: `funcionario_permisos` con checks en UI + RLS.
+
+### Headers (Vite)
+
 `vite.config.js` inyecta: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=()`.
 
-### Modal accesible
-`Modal.jsx` implementa: `role="dialog"`, `aria-modal="true"`, cierre con tecla Escape, cierre al hacer clic en el backdrop, `aria-label="Cerrar"` en el botón X, y `z-index: 50` para superposición correcta.
+### ErrorBoundary
+
+Stack trace solo si `import.meta.env.DEV`; producción muestra mensaje genérico.
+
+---
+
+## Permisos Granulares (Funcionario)
+
+Tabla `funcionario_permisos` con columnas bool por acción. Verificación en UI + `can()` desde `useAuth()`.
+
+| Permiso | Nota |
+|---------|------|
+| `crear_residente`, `editar_residente`, `eliminar_residente` | CRUD residentes |
+| `crear_signos`, `eliminar_signos` | Signos vitales |
+| `crear_observacion`, `eliminar_observacion` | Observaciones |
+| `subir_acreditacion`, `archivar_acreditacion` | Acreditación |
+| Otros | Expandibles según necesidad |
+
+Default: Si no hay row en `funcionario_permisos`, `can()` retorna `true` para crear (NO eliminar), `false` para destructivas.
 
 ---
 
 ## Componentes Compartidos
 
-### `Toast.jsx`
-- `<ToastProvider>` envuelve toda la app en `main.jsx`
-- `useToast()` devuelve una función `toast(message, type)` donde `type` es `success | error | warning | info`
-- Auto-dismiss a los 4 segundos; también dismissible manualmente
-- `aria-live="polite"` para accesibilidad
+### Toast
+```javascript
+const toast = useToast();
+toast("Guardado", "success");  // auto-dismiss 4s
+```
 
-### `ErrorBoundary.jsx`
-- Class component que captura errores no manejados en el árbol de React
-- Botón "Recargar página" para recovery
-- Stack trace visible solo en desarrollo
+### Modal
+```jsx
+<Modal isOpen={open} onClose={handleClose} title="Título">
+  {children}
+</Modal>
+```
+Escape cierra; backdrop clickeable; accesible.
 
-### `Loading.jsx`
-- Spinner inline con prop `message` (default: `"Cargando..."`)
-- No es full-screen; se inserta en el flujo del documento
+### Button, Input
+Base consistente. Propagan className + rest para override.
 
-### `Button.jsx`
-- `type="button"` por defecto (evita submit accidental en formularios)
-- Base visual consistente: layout inline-flex, radio 8px, focus ring, transición y estados disabled
-- Propaga `disabled`, `className` y `...rest`; las clases del consumidor siguen pudiendo ajustar color/tamaño
-
-### `Input.jsx`
-- Base visual consistente para formularios: borde slate, fondo blanco, shadow suave y focus ring teal
-- Propaga todos los props nativos del input
+### Loading
+```jsx
+<Loading message="Cargando..." />
+```
 
 ---
 
-## Validadores (`utils/validators.js`)
+## Inicialización
 
-### `validateEmail(email)`
-Regex estricto: requiere `@`, dominio y TLD de al menos 2 caracteres. Usado en `Register.jsx` antes de enviar a Supabase. Maneja `null`/`undefined` sin lanzar excepción.
+1. Crear proyecto en supabase.com.
+2. SQL Editor → ejecutar `supabase_schema.sql`.
+3. Storage Dashboard → crear bucket `documentos-acreditacion` (privado).
+4. Project Settings → API → copiar URL + anon key.
+5. `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+6. `npm install && npm run dev`.
 
-### `isValidUUID(str)`
-Valida formato UUID v4 (`/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i`). Usado en todos los componentes que reciben IDs desde URL params y en `residentService.js` antes de queries a la DB.
-
-### `validateRut(rut)`
-Valida RUT chileno con algoritmo módulo-11. Acepta formatos `12345678-9`, `12.345.678-9` o sin formato. Retorna `true` si el RUT está vacío (campo opcional).
-
-### `formatRut(rut)`
-Formatea un RUT al estilo `XX.XXX.XXX-X`.
-
-### `validatePhone(phone)`
-Valida número de teléfono chileno. Acepta `+56912345678`, `912345678` o formatos internacionales de 9-12 dígitos. Retorna `true` si está vacío (campo opcional).
-
----
-
-## Configuración Inicial de Supabase
-
-1. Crear proyecto en [supabase.com](https://supabase.com)
-2. Ir a **SQL Editor** y ejecutar `supabase_schema.sql`
-3. Verificar en **Storage** que el bucket `documentos-acreditacion` fue creado
-4. Ir a **Project Settings → API** y copiar `Project URL` y `anon public` key
-5. Crear `.env` con esas credenciales (ver `.env.example`)
-
----
-
-## Superadmin — Gestión del Negocio
-
-Rol `superadmin` reservado para el dueño/operador de la plataforma FichaEleam.
-
-### Ruta y acceso
-
-- Ruta: `/superadmin`
-- Guard: `SuperAdminRoute` (`src/components/SuperAdminRoute.jsx`) — redirige a `/dashboard` si `profile.rol !== 'superadmin'`
-- Aparece en el Navbar solo cuando `profile.rol === 'superadmin'`
-
-### Cómo crear el primer superadmin
-
+**Primer superadmin**: SQL en Supabase SQL Editor:
 ```sql
--- Ejecutar en Supabase SQL Editor después de registrar la cuenta:
-UPDATE public.profiles
-SET rol = 'superadmin'
-WHERE email = 'gabrielgarrido89@gmail.com';
+update public.profiles set rol = 'superadmin' where email = 'tu-email@gmail.com';
 ```
-
-El schema también promueve automáticamente a `gabrielgarrido89@gmail.com` al re-ejecutarse si el perfil ya existe. El superadmin no necesita `eleam_id`. `pagoActivo` siempre es `true` para este rol.
-
-### Funcionalidades del panel
-
-| Sección | Descripción |
-|---------|-------------|
-| Métricas del negocio | ELEAMs totales, activos, demos, nuevos este mes, residentes, ingresos del mes (CLP) |
-| Tabla de ELEAMs | Listado completo con búsqueda por nombre/email, plan, estado, vencimiento |
-| Editar ELEAM | Activar/desactivar suscripción, cambiar plan, límite de residentes, fecha de vencimiento, notas internas |
-| Registrar Pago | Asociar pago a ELEAM (monto, plan, método) — activa suscripción automáticamente |
-| Historial de pagos | Últimos 20 pagos con ELEAM, monto, plan y estado |
-
-### Tabla `pagos`
-
-Registro manual de pagos. No es una integración con pasarela (eso es trabajo futuro).
-
-```sql
-pagos (
-  eleam_id uuid,      -- FK a eleams
-  monto integer,      -- CLP, > 0
-  plan text,          -- 'mensual' | 'anual'
-  fecha_inicio date,
-  fecha_fin date,
-  metodo_pago text,   -- texto libre
-  estado text,        -- 'pendiente' | 'completado' | 'fallido' | 'reembolsado'
-  registrado_por uuid -- FK a auth.users (superadmin que registró)
-)
-```
-
-### Seguridad del superadmin
-
-- Las políticas RLS llaman a `public.is_superadmin()` (función `security definer`)
-- El superadmin no puede modificar RLS ni el schema (eso requiere service role en el servidor)
-- Los datos de un ELEAM (signos, observaciones) NO son accesibles al superadmin a menos que se agreguen políticas explícitas — actualmente solo accede a `eleams`, `profiles`, `residentes` (solo conteo) y `pagos`
+(Alternativamente, ejecutar `supabase_schema.sql` con tu email ya será promocionado automáticamente.)
 
 ---
 
-## Signos Vitales — UX visual (rangos clínicos)
+## Convenciones
 
-`src/features/vitalSigns/vitalRanges.js` centraliza los rangos de referencia para adultos mayores y expone, por cada parámetro, una función `*Status(valor)` que devuelve `"normal" | "warning" | "critical" | "unknown"`. Esos cuatro estados están mapeados en `STATUS` a clases Tailwind (badge, text, dot, ring) para mantener consistencia visual en toda la app.
-
-| Parámetro | Normal | Warning | Crítico |
-|-----------|--------|---------|---------|
-| Sistólica (mmHg)   | 100–139 | 90–99 ó 140–179 | <90 ó ≥180 |
-| Diastólica (mmHg)  | 60–89   | 50–59 ó 90–109  | <50 ó ≥110 |
-| FC (lpm)           | 60–100  | 50–59 ó 101–120 | <50 ó >120 |
-| FR (rpm)           | 12–20   | 10–11 ó 21–24   | <10 ó >24  |
-| Temperatura (°C)   | 36.0–37.7 | 35.0–35.9 ó 37.8–38.9 | <35 ó ≥39 |
-| SatO₂ (%)          | ≥95     | 90–94           | <90        |
-| Glucosa (mg/dL)    | 70–179  | 60–69 ó 180–249 | <60 ó ≥250 |
-| Dolor (0–10)       | 0–3     | 4–6             | ≥7         |
-
-`VITAL_DEFS` agrupa label, unidad, ícono, rango normal y un `statusFor(record)` listo para consumir desde la UI. `recordOverallStatus(record)` y `recordOverallLabel(record)` devuelven el peor estado entre todos los parámetros del registro, usado para pintar la pill global del registro y para filtrar la lista.
-
-### Componentes que consumen `vitalRanges`
-
-- **`VitalCard.jsx`**: tarjeta visual de un único parámetro. Muestra ícono, valor grande con color según status, pill con punto de color, y rango normal en pie. Es el bloque base usado en list/details/dashboard.
-- **`VitalSignsList.jsx`**: header con stats clickeables (Total / Dentro de rango / Atención / Crítico) que actúan como filtros rápidos. Toggle Tarjetas vs Tabla. Las tarjetas muestran cabecera con residente, fecha, turno y pill global, y un grid de `VitalCard`. La tabla mantiene el formato compacto pero colorea cada celda según el status del parámetro.
-- **`VitalSignsForm.jsx`**: cada `NumField` muestra una pill en vivo (verde/ámbar/rojo) en cuanto el usuario escribe el valor, además del rango normal bajo el input. La sección de signos vitales muestra una pill global con el estado combinado del registro que se está creando — el personal sabe antes de guardar si lo que ingresó es preocupante.
-- **`ResidentDetails.jsx` → `SignosTab`**: snapshot del último registro como grid de `VitalCard` (gran legibilidad), con pill global del registro y tabla histórica abajo con celdas coloreadas.
-
-## Residentes — UI
-
-### `ResidentList.jsx`
-
-- Header con stats por estado (Total / Activos / Hospitalizados / Egresados / Fallecidos) que también actúan como filtros toggleables.
-- Toolbar con buscador (icono inline) y selector de vista Tarjetas / Lista.
-- **Vista tarjetas (default)**: grid responsive (1/2/3 col) con tarjeta que incluye banda gradient teal superior, avatar con iniciales, pill de estado con punto de color, edad, ubicación, dependencia con tono según severidad, diagnóstico truncado y banner rojo de alergias si existen. Toda la tarjeta es clickeable hacia la ficha; los botones internos hacen `stopPropagation`.
-- **Vista lista**: fila compacta con avatar+iniciales, igual que la versión anterior pero con avatar y badges con punto.
-
-Helpers locales: `initials(nombre, apellido)` y `calcAge(fechaNacimiento)`. El cálculo de edad considera mes/día actual.
-
-### `ResidentDetails.jsx`
-
-- Header card moderna con banda gradient teal de 80px, avatar grande (80×80) con iniciales superpuesto, nombre + estado + edad/sexo/RUT/habitación.
-- Strip de quick stats: Ingreso (con días en ELEAM calculados), Dependencia (color según severidad), Índice Barthel y Diagnóstico (truncado).
-- Banner rojo de alergias prominente si el residente tiene.
-- Tabs: Información / Signos Vitales / Observaciones (lazy load por tab).
-
-## Posibles Mejoras Futuras
-
-- Cron `pg_cron` para recordatorios de vencimiento al admin del ELEAM
-- Job de marcado de `vencido` tras N días en `en_gracia`
-- Cambio de plan in-place (PUT preapproval con nuevo `transaction_amount`)
-- Dashboard de analytics: gráficos de crecimiento de ELEAMs, MRR histórico, churn
-- Exportación PDF de fichas clínicas y listas de signos vitales
-- Módulo de medicamentos con kardex digital
-- Notificaciones push de documentos próximos a vencer
-- Módulo de agenda / citas médicas
-- Confirmación de email al registrarse
+- **Sin comentarios**: Código auto-documentado. Solo WHY si hay restricción/workaround no obvio.
+- **Naming**: camelCase (variables, funciones), kebab-case (rutas, archivos), UPPER_CASE (constantes).
+- **Imports**: Explícitos. Prefer `import X from...` over `import * as X`.
+- **null vs undefined**: null = dato ausente deliberado; undefined = no existe.
+- **Componentes**: Functional + hooks. Evitar props drilling: Context para estado compartido.
+- **useCallback**: Para callbacks en listas grandes o dependencias externas.
+- **Toast + Loading**: Centrales en App. Providers en main.jsx.
 
 ---
 
-## MercadoPago — Suscripciones (v5)
+## Qué Hacer Ahora
 
-El cobro real usa el endpoint **Preapproval** de MercadoPago (soporta CLP en
-Chile). El admin del ELEAM paga; los funcionarios del mismo ELEAM heredan
-el acceso sin pagar.
-
-### Tablas / columnas relevantes
-
-- `planes` — catálogo (precio, max_residentes, max_funcionarios).
-- `eleams.subscription_status` — `inactivo / pendiente / activo / en_gracia / pausado / cancelado / vencido`.
-- `eleams.mp_preapproval_id` — id del preapproval en MP.
-- `eleams.proximo_cobro_en` — próxima fecha de cobro (lo setea el webhook).
-- `mp_webhook_events` — auditoría e idempotencia (`mp_request_id` único).
-- `funcionario_invitaciones` — token + email + expiración (7 días).
-- `pagos.mp_*` — vínculo con MP (`mp_payment_id`, `mp_authorized_payment_id`).
-
-### Edge Functions (Deno) en `supabase/functions/`
-
-- `mp-create-subscription` — crea preapproval, devuelve `init_point`. Solo admin_eleam.
-- `mp-webhook` — público; valida HMAC SHA-256 (`x-signature`); refresca el ELEAM.
-- `mp-cancel-subscription` — `PUT /preapproval/{id}` con status=cancelled.
-- `invite-funcionario` — crea row en `funcionario_invitaciones` y devuelve URL.
-- `_shared/cors.ts`, `_shared/mercadopago.ts`, `_shared/supabase.ts` — helpers.
-
-### Triggers / funciones de seguridad
-
-- `prevent_role_eleam_escalation` — bloquea cambios de `rol` o `eleam_id` por usuarios no-superadmin.
-- `check_residentes_limit` — exige suscripción activa + cupo del plan al insertar/activar residentes.
-- `check_funcionarios_limit` — cupo del plan al insertar profile con rol=funcionario.
-- `sync_pago_activo` — mantiene `eleams.pago_activo` derivado de `subscription_status`.
-- `handle_new_user` — consume `invite_token` desde `user_metadata` si está presente y valida contra `funcionario_invitaciones`.
-- `is_superadmin()`, `my_eleam_id()`, `my_rol()` — helpers `security definer` para RLS sin recursión.
-
-### Variables de entorno (server-side, Edge Function secrets)
-
-- `MP_ACCESS_TOKEN` (Bearer)
-- `MP_WEBHOOK_SECRET` (HMAC SHA-256)
-- `PUBLIC_APP_URL` (back_url + invite links)
-- `ALLOWED_ORIGINS` (CSV para CORS de las Edge Functions)
-
-NUNCA exponer estos como `VITE_*`. La Public Key de MP NO es necesaria
-porque usamos el flujo de redirect (no Bricks/card tokenization).
-
-### Frontend
-
-- `src/features/payment/PaymentPage.jsx` — lista planes desde `planes`,
-  llama a `startSubscription()` y redirige a `init_point`.
-- `src/features/payment/PaymentReturn.jsx` — landing post-checkout con polling.
-- `src/features/payment/paymentService.js` — invoca Edge Functions vía
-  `supabase.functions.invoke()` (incluye automáticamente el JWT).
-- `src/features/team/TeamManagement.jsx` — admin invita funcionarios,
-  ve listado y cancela invitaciones pendientes.
-- `src/features/team/teamService.js` — invoca `invite-funcionario` y CRUD.
-
-### Flujo de invitación
-
-1. Admin entra `/equipo` → escribe email → llamada a `invite-funcionario`.
-2. Edge function crea row en `funcionario_invitaciones` con token aleatorio.
-3. Admin copia el link `/register?invite=<token>&email=...` y lo envía.
-4. Funcionario abre el link, registra cuenta. `signUp` envía
-   `user_metadata.invite_token`.
-5. Trigger `handle_new_user` valida (token + email + no usado + no expirado),
-   asigna `rol='funcionario'` + `eleam_id` correcto y marca la invitación
-   como usada.
+1. **Revisar rutas reales** vs documentación — ya están sincronizadas en este archivo.
+2. **Permisos granulares de funcionario**: Si necesitas más permisos o cambiar defaults, edita la lógica en `useAuth()` + `funcionario_permisos` tabla.
+3. **Acreditación**: Si el modelo v9 requiere cambios (ámbitos, requisitos, estados), edita `supabase_schema.sql` + servicios.
+4. **Blog/CRM**: Editable desde UI; no requiere cambios de código.
+5. **MercadoPago**: Secrets en Edge Functions; pruebas con TEST token.
+6. **SEO**: Valida sitemap + JSON-LD con Google Search Console.
 
 ---
 
-## Roles y permisos (v6 — incluye `familiar`)
-
-Cuatro roles con jerarquía clara:
-
-| Rol           | Quién                                       | Paga | Vista principal       |
-|---------------|--------------------------------------------|------|------------------------|
-| `superadmin`  | Dueño/operador de FichaEleam                | n/a  | `/superadmin`          |
-| `admin_eleam` | Dueño del ELEAM, paga la suscripción        | sí   | `/dashboard`+`/equipo` |
-| `funcionario` | Personal clínico del ELEAM                  | no   | `/dashboard`           |
-| `familiar`    | Familiar de un residente, vista limitada    | no   | `/familiar`            |
-
-### Helpers expuestos por `useAuth()`
-
-- `rol` — string del rol del usuario
-- `isAdminEleam`, `isFuncionario`, `isFamiliar`, `isSuperadmin`, `isStaff`
-- `homePath` — ruta inicial coherente con el rol y la suscripción
-
-### Reglas server-side
-
-- `prevent_role_eleam_escalation`: bloquea cambios de `rol` o `eleam_id` por usuario común.
-- `handle_new_user`: solo asigna rol distinto a `admin_eleam` si el `invite_token`
-  pertenece a `funcionario_invitaciones` (token + email + no usado + no expirado).
-- `familiar_residentes` (PK `(profile_id, residente_id)`): vínculo solo el admin
-  puede crear/eliminar; el familiar puede leer los suyos.
-- `familiar_can_view_residente(rid)` y `my_familiar_residente_ids()` se usan en
-  RLS de `residentes`, `signos_vitales`, `observaciones_diarias`, `visitas_familiar`.
-- `pagos` SELECT solo `admin_eleam` (no funcionario ni familiar) o superadmin.
-- `documentos_acreditacion` no es accesible al familiar.
-
-### Tablas nuevas
-
-- `familiar_residentes (profile_id, residente_id, parentesco, creado_por, creado_en)` PK compuesta.
-- `visitas_familiar (id, residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por)`.
-- `funcionario_invitaciones.rol` (`funcionario` | `familiar`) y
-  `funcionario_invitaciones.residente_id` (obligatorio para familiar).
-
-### Frontend
-
-- `src/features/familiar/FamiliarPortal.jsx` — vista del residente con últimos
-  signos vitales, observaciones y visitas; botón "registrar visita ahora".
-- `src/features/familiar/FamiliarVisitas.jsx` — historial + formulario.
-- `src/features/familiar/familiarService.js` — wrappers Supabase (RLS hace el filtro).
-- `src/components/Navbar.jsx` — `buildMenu({rol, pagoActivo, ...})` produce
-  menús distintos por rol; el familiar solo ve "Mi residente" y "Visitas".
-- `src/components/ProtectedRoute.jsx` — usa `homePath` para evitar loops y
-  redirigir según rol; expone `allowedRoles` por ruta.
-- `src/routes/AppRouter.jsx` — todas las rutas declaran `allowedRoles`
-  (constantes `STAFF`, `ADMIN`, `["familiar"]`, etc.).
-- `src/features/team/TeamManagement.jsx` — tabs Funcionarios / Familiares
-  con selector de residente para invitaciones de familiares.
-
----
-
-## v7 — Auditoría de flujos y fixes de consistencia
-
-### Decisiones clave
-
-- **Creación atómica de ELEAM en signup**: el trigger `handle_new_user`
-  crea el ELEAM y el profile en una sola sentencia (SECURITY DEFINER).
-  El cliente nunca toca `eleam_id` después de creado — `prevent_role_eleam_escalation`
-  bloquearía la UPDATE.
-- **`eleams.insert` desde cliente**: solo `superadmin`. El trigger
-  no se ve afectado porque corre en SECURITY DEFINER.
-- **Acreditación**: INSERT/UPDATE/DELETE solo `admin_eleam` en BD y UI.
-- **Período de gracia post-cancelación**: `sync_pago_activo` mantiene
-  `pago_activo=true` cuando `subscription_status='cancelado'` y
-  `fecha_vencimiento_suscripcion > now()`. El cómputo en
-  `AuthContext.pagoActivo` reproduce la misma lógica.
-- **Demo user (superadmin con `eleam_id`)**: `homePath = /dashboard`
-  para mostrar la app completa; `Navbar` incluye items operativos +
-  "Superadmin". Real superadmin (sin ELEAM) → `homePath=/superadmin`.
-- **`ProtectedRoute`** permite siempre al `superadmin` (RLS sigue
-  filtrando datos), bloquea al `familiar` fuera de `/familiar/*`,
-  redirige al rol al `homePath` si no calza con `allowedRoles`.
-
-### Tabla de flujos por rol (E2E)
-
-| Rol | Onboarding | `homePath` | Navbar | Rutas permitidas |
-|-----|-----------|------------|--------|------------------|
-| `superadmin` (real)   | SQL: `update profiles set rol='superadmin' where email=...` | `/superadmin` | Superadmin · Demo · Cerrar sesión | Todas (RLS filtra) |
-| `superadmin` (demo)   | Signup `demo@fichaeleam.cl` (trigger asigna ELEAM demo) | `/dashboard` | Operativo + Superadmin | Todas (RLS filtra) |
-| `admin_eleam`         | `/register` sin invite → trigger crea ELEAM | `/pago?sinAcceso=1` hasta pagar; luego `/dashboard` | Sin pago: Activar · Demo · Cerrar / Con pago: operativo + Equipo + Suscripción | Operativas + `/equipo` + `/pago` |
-| `funcionario`         | Admin invita → `/register?invite=...` | `/dashboard` | Operativo (sin Equipo, sin Suscripción) | Operativas (sin `/equipo`) |
-| `familiar`            | Admin invita con residente → `/register?invite=...` | `/familiar` | Mi residente · Visitas · Cerrar sesión | `/familiar`, `/familiar/visitas` |
-
-### Quién puede crear/borrar qué (BD + UI consistente)
-
-| Acción                           | superadmin | admin_eleam | funcionario | familiar |
-|----------------------------------|:----------:|:-----------:|:-----------:|:--------:|
-| Crear residente                  |     RLS    |     ✅      |     ✅      |          |
-| Editar residente                 |     RLS    |     ✅      |     ✅      |          |
-| Eliminar residente               |     RLS    |     ✅      |             |          |
-| Crear / editar signo vital       |     RLS    |     ✅      |     ✅      |          |
-| Eliminar signo vital             |     RLS    |     ✅      |             |          |
-| Crear / editar observación       |     RLS    |     ✅      |     ✅      |          |
-| Eliminar observación             |     RLS    |     ✅      |             |          |
-| Subir / editar / eliminar acreditación | RLS  |     ✅      |             |          |
-| Ver historial de pagos del ELEAM |     RLS    |     ✅      |             |          |
-| Invitar funcionarios             |            |     ✅      |             |          |
-| Invitar familiares (con residente)|           |     ✅      |             |          |
-| Cancelar suscripción             |            |     ✅      |             |          |
-| Registrar visitas familiares     |            |     ✅*     |     ✅*     |    ✅    |
-
-*Staff puede registrar visitas en nombre del familiar (registro físico
-de visita). El familiar solo registra las suyas (RLS exige
-`profile_id = auth.uid()` en INSERT).
-
-### Servicios server-side comprobados
-
-- `mp-create-subscription` rechaza si `rol ≠ admin_eleam` o si ya hay
-  suscripción `activo`/`en_gracia`. Solo `admin_eleam` paga.
-- `mp-cancel-subscription` rechaza si `rol ≠ admin_eleam`.
-- `invite-funcionario` rechaza si `rol ≠ admin_eleam`, si la
-  suscripción no está activa, si `rol='familiar'` y el `residente_id`
-  no pertenece al ELEAM, o si supera `max_funcionarios` del plan.
-- `mp-webhook` valida HMAC, deduplica con `mp_request_id` y nunca
-  confía en el body — re-fetch del recurso vía API MP.
-
----
-
-## v8 — Demo dividido por perfil (sin superadmin)
-
-### Decisión
-
-El demo público (`/demo`) ahora muestra un **selector de perfiles**
-y NO incluye la experiencia superadmin (rol exclusivo del operador
-de la plataforma). Los tres demos son cliente-céntricos: el dueño del
-ELEAM, el funcionario y el familiar.
-
-### Rutas y archivos
-
-| Ruta | Componente | Notas |
-|------|-----------|-------|
-| `/demo` | `DemoSelector` | 3 cards con copy "Soy dueño/director", "Trabajo en un ELEAM", "Tengo un familiar". |
-| `/demo/admin` | `DemoPage role="admin"` | Vista completa del operativo (residentes, signos, obs, acreditación con upload). |
-| `/demo/funcionario` | `DemoPage role="funcionario"` | Igual que admin pero **sin** botón "Subir documento" en acreditación; copy explícito de los límites. |
-| `/demo/familiar` | `FamiliarDemoPage` | Portal limitado: 1 residente, último signos vitales, observaciones recientes, registro de visitas en estado local. |
-
-`DemoPage` recibe un prop `role` y `TabAcreditacion` lo respeta para
-ocultar acciones admin. El `DemoBanner` muestra el nombre del perfil
-("Estás explorando el demo como Personal del ELEAM…") y un link
-"Cambiar perfil" que vuelve al selector.
-
-### Datos del demo
-
-- Mock data en `mockData.js` (5 residentes, signos, observaciones).
-- El demo admin/funcionario persiste lo que el usuario crea en
-  `localStorage` (`fichaeleam_demo_v1`) — clear desde el banner.
-- El demo familiar usa el primer residente de `MOCK_RESIDENTS` y un
-  parentesco fijo "Hija". Las visitas viven solo en estado local
-  del componente (no persisten).
-
-### Implicaciones
-
-- El usuario interno `demo@fichaeleam.cl` (superadmin con ELEAM demo)
-  sigue siendo válido como cuenta de prueba para el operador, pero
-  ya no aparece referenciado en ningún flujo de demo público.
-- El Navbar para `superadmin sin eleam_id` (operador real) sigue
-  mostrando el link "Demo" → lleva al selector — útil para que el
-  operador muestre la app a clientes.
-- Las landing/marketing CTAs apuntan a `/demo` (selector); ya no
-  llevan directo a la vista admin.
-
----
-
-## v9 — Acreditación / Carpeta SEREMI completa
-
-### Decisión
-
-La sección de acreditación deja de ser una "lista de archivos por
-categoría" y pasa a ser una **herramienta operativa de preparación
-para fiscalización SEREMI**.
-
-### Modelo
-
-- 14 **ámbitos** (`acred_ambitos`) con icono y orden.
-- Catálogo maestro de **requisitos** (`acred_requisitos`) con medio
-  verificador y vigencia sugerida.
-- Por cada ELEAM se provisionan **filas de estado** (`acred_requisitos_eleam`)
-  vía trigger al crear el ELEAM. Estados: `pendiente / cumple /
-  no_cumple / no_aplica / vencido / observado`.
-- **Evidencias versionadas** (`acred_documentos`): subir o reemplazar
-  guarda `version+1` y marca el anterior `vigente=false` con
-  `reemplazado_por_id` y `reemplazado_en`. Nunca se borra historial.
-- **Observaciones** (`acred_observaciones`) internas o de fiscalización,
-  con `acciones_subsanacion`, `fecha_compromiso`, `responsable_id` y
-  ciclo `abierta → en_proceso → cerrada` con autor de cierre.
-- **Audit log** (`acred_audit`) inmutable; cada acción del servicio
-  registra una fila (`create / update / replace / archive / close`).
-
-### Frontend
-
-- `accreditationService.js` reescrito: catálogo, estado, evidencias
-  con versionado, observaciones, cierre, auditoría, helper
-  `buildResumen()` que agrupa por ámbito y calcula `% = cumple /
-  (total - no_aplica)`.
-- `AccreditationDashboard.jsx`: panel principal con KPI globales,
-  alertas (vencidos, por vencer 30d, observaciones abiertas), grilla
-  de 14 ámbitos con barra y semáforo, leyenda.
-- `AccreditationAmbito.jsx`: lista filtrable por estado.
-- `AccreditationRequisito.jsx`: detalle con tabs (Evidencias /
-  Observaciones / Historial), cambio de estado, marcar "no aplica" con
-  motivo, subir/reemplazar evidencia, registrar y cerrar
-  observaciones, audit timeline.
-- `AccreditationObservaciones.jsx`: vista global de observaciones con
-  filtros (abiertas/cerradas + interna/fiscalización).
-- `AccreditationCarpeta.jsx`: **export imprimible** (Ctrl+P → PDF) con
-  portada, resumen, cumplimiento por ámbito, observaciones abiertas y
-  detalle completo de requisitos.
-
-### Integración con dashboard del ELEAM
-
-`AdminDashboard.jsx` consume `acreditacionSummary` desde
-`dashboardService` y muestra:
-- KPI "Cumplimiento SEREMI" con vencidos.
-- `AccreditationCard` con barra global y mini-grilla de los primeros
-  6 ámbitos (cada uno linkea al detalle).
-- `ExpiringDocsCard` con los próximos 30 días linkeando al requisito.
-- Atajo "Carpeta SEREMI" en quick actions.
-
-### Permisos
-
-| Acción                                  | admin_eleam | funcionario |
-|-----------------------------------------|:-----------:|:-----------:|
-| Ver toda la carpeta                     |     ✅      |     ✅      |
-| Subir / reemplazar evidencia            |     ✅      |     ✅      |
-| Archivar (DELETE)                       |     ✅      |             |
-| Cambiar estado cumple/pendiente         |     ✅      |     ✅      |
-| Marcar "no aplica"                      |     ✅      |             |
-| Registrar observación interna           |     ✅      |     ✅      |
-| Registrar observación de fiscalización  |     ✅      |             |
-| Cerrar observación                      |     ✅      |             |
-| Generar Carpeta SEREMI                  |     ✅      |     ✅      |
-
-Familiar y superadmin sin ELEAM no tienen acceso (RLS lo bloquea).
-
-### Storage
-
-Bucket existente `documentos-acreditacion`, path:
-
-```
-acreditacion/{eleamId}/req/{requisitoEleamId}/{ts}_v{n}_{filename}
-```
-
-La RLS por `split_part(name, '/', 2) = my_eleam_id` se mantiene válida.
-Las URLs son firmadas con TTL de 1 hora.
-
-### Migración desde v8
-
-Las tablas legacy (`categorias_acreditacion`, `documentos_acreditacion`)
-**no son leídas ni escritas** por la app. Se mantienen en el schema
-para evitar romper bases existentes; se pueden dropear más adelante.
-
----
-
-## v12 — Superadmin como CRM SaaS interno
-
-### Decisión
-
-El módulo `/superadmin` deja de ser un panel de "registrar pagos
-manuales" y pasa a ser el **CRM interno** del SaaS, con pipeline,
-tareas, interacciones, salud del cliente y registro transaccional
-de pagos. La app clínica (residentes, signos, observaciones,
-acreditación) **no cambió**.
-
-### Schema (additivo, idempotente)
-
-- `eleams` añade: `crm_estado` (9 estados), `origen_lead`,
-  `ultimo_contacto`, `proxima_accion_fecha`, `responsable_comercial`
-  (FK → profiles), `riesgo_churn` (bajo/medio/alto/desconocido).
-- Tabla `crm_tasks` (titulo, descripcion, tipo, estado, prioridad,
-  fecha_vencimiento, creado_por, completado_por).
-- Tabla `crm_interactions` (tipo, canal, resumen, resultado,
-  proxima_accion, creado_por).
-- RLS: ambas tablas solo `is_superadmin()`. **No** se exponen a
-  admin_eleam, funcionario o familiar.
-- RPC `registrar_pago_y_activar_eleam(...)` SECURITY DEFINER:
-  inserta pago + activa ELEAM + deja interacción "sistema" en una
-  sola transacción. `revoke from public; grant to authenticated`,
-  pero el body chequea `is_superadmin()` y bota `42501` si no.
-
-### Arquitectura del módulo
-
-```
-src/features/superadmin/
-├── SuperAdminDashboard.jsx        ← Container liviano (sin I/O)
-├── superadminService.js
-├── components/
-│   ├── SuperAdminMetrics.jsx
-│   ├── EleamFilters.jsx
-│   ├── EleamTable.jsx
-│   ├── EleamEditModal.jsx
-│   ├── PaymentModal.jsx
-│   ├── RecentPaymentsTable.jsx
-│   ├── CrmPipeline.jsx
-│   ├── EleamCustomerDrawer.jsx    ← Ficha 360
-│   ├── CrmTasksPanel.jsx
-│   ├── InteractionTimeline.jsx
-│   └── CustomerHealthBadge.jsx
-├── hooks/
-│   └── useSuperAdminData.js       ← Carga, refresh, mutaciones
-└── utils/
-    ├── superadminFormatters.js
-    └── customerHealth.js
-```
-
-### Reglas
-
-- El container no contiene formularios ni cálculos; solo orquesta
-  los componentes y mantiene estado de UI (filtros, modales abiertos).
-- `useSuperAdminData` mantiene cache por ELEAM (`byEleam[eleamId]`)
-  para evitar re-fetch al abrir/cerrar el drawer.
-- Salud del cliente (`utils/customerHealth.js`): combina pago,
-  vencimiento, último contacto, riesgo churn, tareas vencidas y
-  estado CRM → `healthy / warning / risk / unknown` con razones legibles.
-- `registerPayment` del service usa la RPC transaccional —
-  no hace múltiples INSERT/UPDATE separados desde el cliente.
-- Las tablas clínicas (residentes, signos, observaciones, acreditación)
-  no se modifican desde el superadmin.
-
-### Roles que no ven CRM
-
-- `admin_eleam`, `funcionario`, `familiar`: RLS bloquea SELECT/INSERT/UPDATE/DELETE
-  en `crm_tasks` y `crm_interactions`. Las nuevas columnas en `eleams`
-  son visibles solo en su propio ELEAM (vía RLS existente).
-
----
-
-## v13 — Blog público + SEO global
-
-### Decisión
-
-El sitio público gana un blog manejable desde el superadmin con
-artículos optimizados para SEO y para que LLMs (ChatGPT, Perplexity,
-Claude) recomienden FichaEleam como fuente.
-
-### Schema
-
-- `blog_posts` con campos SEO completos: slug, titulo, resumen,
-  contenido_md, cover_url, cover_alt, meta_title, meta_description,
-  keywords[], estado (borrador|publicado|archivado), publicado_en,
-  destacado, autor_nombre, tiempo_lectura_min, views.
-- RLS: SELECT público solo de posts publicados; superadmin lee y
-  escribe todo.
-- RPC `blog_increment_views(slug)` SECURITY DEFINER para registrar
-  vistas sin requerir auth.
-- Seed de 5 posts iniciales de alto valor: DS 14/2017, checklist
-  fiscalización SEREMI, digitalizar ficha clínica, signos vitales y
-  comunicación con familias.
-
-### Frontend
-
-- `src/features/blog/`
-  - `PublicBlogList.jsx` (`/blog`)
-  - `PublicBlogPost.jsx` (`/blog/:slug`)
-  - `blogService.js`
-  - `utils/markdown.jsx` (renderer minimalista sin deps)
-- `src/features/superadmin/blog/`
-  - `BlogManagement.jsx` (`/superadmin/blog`)
-  - `BlogEditor.jsx` (`/superadmin/blog/new`, `/superadmin/blog/:id/edit`)
-- `src/utils/seo.js`: hook `useSEO({title, description, path, image,
-  type, keywords, jsonLd})` y helpers `articleJsonLd`, `breadcrumbJsonLd`,
-  `faqJsonLd`. Inyecta meta tags y JSON-LD por ruta sin react-helmet.
-
-### SEO base
-
-- `index.html` con meta description, OG, Twitter cards, robots,
-  canonical, theme-color, JSON-LD de Organization +
-  SoftwareApplication.
-- `public/robots.txt` permite GPTBot, ChatGPT-User, PerplexityBot,
-  Google-Extended, ClaudeBot y anthropic-ai.
-- `public/sitemap.xml` con todas las URLs públicas.
-- `public/favicon.svg` propio.
-
-### Conversión
-
-- LandingPage: hero con propuesta de valor concreta ("Tu ELEAM listo
-  para fiscalización en menos de un día"), trust bar con DS 14/2017,
-  MercadoPago CLP, "funcionarios y familias incluidos" y RLS.
-- LandingPage CTA primario "Crear cuenta gratis" (antes "Activar mi
-  ELEAM"). Reduce fricción y baja al funnel de signup.
-- DemoSelector con bloque "Antes / Después" de 4 puntos cada uno
-  para que el visitante entienda el problema y la solución antes de
-  abrir el demo.
-- Blog incluido en el nav público.
-- FAQPage JSON-LD en LandingPage y DemoSelector — Google puede
-  mostrar las preguntas como rich-results y los LLMs recogen las
-  respuestas como hechos sobre el producto.
+## Archivos de Referencia
+
+- `supabase_schema.sql` — Schema completo (21 tablas, RLS, funciones, triggers).
+- `src/routes/AppRouter.jsx` — Definición de todas las rutas.
+- `src/context/AuthContext.jsx` — useAuth(), helpers, derivados.
+- `src/components/ProtectedRoute.jsx` — Guarding de sesión, pago, rol.
+- `src/features/vitalSigns/vitalRanges.js` — Rangos clínicos.
