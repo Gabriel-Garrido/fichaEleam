@@ -543,7 +543,7 @@ export default function AccreditationRequisito() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const { isAdminEleam, can } = useAuth();
+  const { profile, isAdminEleam, can } = useAuth();
 
   const [re, setRe] = useState(null);
   const [docs, setDocs] = useState([]);
@@ -617,6 +617,11 @@ export default function AccreditationRequisito() {
   };
 
   const handleAssignSelf = async () => {
+    if (!profile?.id) {
+      toast("No se pudo identificar tu perfil", "error");
+      return;
+    }
+
     try {
       await asignarResponsable(id, profile.id);
       toast("Te asignaste como responsable", "success");
