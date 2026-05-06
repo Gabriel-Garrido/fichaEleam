@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { isValidUUID } from "../../utils/validators";
 
 // Obtiene el eleam_id del perfil del usuario autenticado actual
 async function getMyEleamId() {
@@ -80,8 +81,3 @@ export const getResidentStats = async () => {
   const egresados     = data.filter((r) => r.estado === "egresado").length;
   return { total, activos, hospitalizados, egresados };
 };
-
-// Valida formato UUID v4
-function isValidUUID(str) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
-}

@@ -1,33 +1,47 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getVitalSigns, deleteVitalSigns } from "./vitalSignsService";
 import { getResidents } from "../residents/residentService";
+import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
+import VitalCard from "./VitalCard";
+import {
+  VITAL_DEFS,
+  STATUS,
+  recordOverallStatus,
+  recordOverallLabel,
+} from "./vitalRanges";
 
 function firstOfMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
-
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function VitalSignsList() {
+const TURNO_ICON = { mañana: "🌅", tarde: "🌇", noche: "🌙" };
+
+export default function VitalSignsList() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { can } = useAuth();
+  const canDelete = can("eliminar_signos_vitales");
+  const canCreate = can("crear_signos_vitales");
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get("residenteId");
 
-  const [records, setRecords]           = useState([]);
-  const [residents, setResidents]       = useState([]);
+  const [records, setRecords] = useState([]);
+  const [residents, setResidents] = useState([]);
   const [filtroResidente, setFiltroResidente] = useState(preselectedId ?? "");
-  const [filtroDesde, setFiltroDesde]   = useState(firstOfMonth());
-  const [filtroHasta, setFiltroHasta]   = useState(today());
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState(null);
+  const [filtroDesde, setFiltroDesde] = useState(firstOfMonth());
+  const [filtroHasta, setFiltroHasta] = useState(today());
+  const [filtroEstado, setFiltroEstado] = useState(""); // normal | warning | critical
+  const [view, setView] = useState("cards"); // cards | table
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     getResidents()
@@ -51,12 +65,15 @@ function VitalSignsList() {
     }
   }, [filtroResidente, filtroDesde, filtroHasta]);
 
-  useEffect(() => { fetchRecords(); }, [fetchRecords]);
+  useEffect(() => {
+    fetchRecords();
+  }, [fetchRecords]);
 
   const clearFilters = () => {
     setFiltroResidente("");
     setFiltroDesde(firstOfMonth());
     setFiltroHasta(today());
+    setFiltroEstado("");
   };
 
   const handleDelete = async (id) => {
@@ -70,34 +87,88 @@ function VitalSignsList() {
     }
   };
 
-  const formatPA = (s, d) => (s && d ? `${s}/${d}` : s || d || "—");
+  const filtered = useMemo(() => {
+    if (!filtroEstado) return records;
+    return records.filter((r) => recordOverallStatus(r) === filtroEstado);
+  }, [records, filtroEstado]);
+
+  const stats = useMemo(() => {
+    const out = { total: records.length, normal: 0, warning: 0, critical: 0 };
+    for (const r of records) {
+      const s = recordOverallStatus(r);
+      if (s in out) out[s]++;
+    }
+    return out;
+  }, [records]);
 
   if (loading) return <Loading message="Cargando registros..." />;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-[var(--color-primary)]">Signos Vitales</h1>
-        <Button
-          onClick={() =>
-            navigate(
-              preselectedId
-                ? `/vital-signs/new?residenteId=${preselectedId}`
-                : "/vital-signs/new"
-            )
-          }
-          className="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
-        >
-          + Nuevo Registro
-        </Button>
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)]">Signos Vitales</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {stats.total} registro{stats.total !== 1 ? "s" : ""} en el período seleccionado
+          </p>
+        </div>
+        {canCreate && (
+          <Button
+            onClick={() =>
+              navigate(
+                preselectedId
+                  ? `/vital-signs/new?residenteId=${preselectedId}`
+                  : "/vital-signs/new"
+              )
+            }
+            className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] font-medium shadow-sm"
+          >
+            + Nuevo Registro
+          </Button>
+        )}
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex justify-between items-center">
           <span>{error}</span>
-          <button onClick={fetchRecords} className="underline text-sm ml-2">Reintentar</button>
+          <button onClick={fetchRecords} className="underline text-sm ml-2">
+            Reintentar
+          </button>
         </div>
       )}
+
+      {/* Stats / quick filter chips */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        <StatChip
+          active={filtroEstado === ""}
+          onClick={() => setFiltroEstado("")}
+          label="Todos"
+          value={stats.total}
+          tone="gray"
+        />
+        <StatChip
+          active={filtroEstado === "normal"}
+          onClick={() => setFiltroEstado(filtroEstado === "normal" ? "" : "normal")}
+          label="Dentro de rango"
+          value={stats.normal}
+          tone="emerald"
+        />
+        <StatChip
+          active={filtroEstado === "warning"}
+          onClick={() => setFiltroEstado(filtroEstado === "warning" ? "" : "warning")}
+          label="Atención"
+          value={stats.warning}
+          tone="amber"
+        />
+        <StatChip
+          active={filtroEstado === "critical"}
+          onClick={() => setFiltroEstado(filtroEstado === "critical" ? "" : "critical")}
+          label="Crítico"
+          value={stats.critical}
+          tone="rose"
+        />
+      </div>
 
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-end">
@@ -140,83 +211,281 @@ function VitalSignsList() {
         >
           Limpiar filtros
         </button>
+
+        <div className="ml-auto inline-flex rounded-lg border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setView("cards")}
+            className={`px-3 py-1.5 text-xs font-medium ${
+              view === "cards"
+                ? "bg-[var(--color-primary)] text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Tarjetas
+          </button>
+          <button
+            onClick={() => setView("table")}
+            className={`px-3 py-1.5 text-xs font-medium border-l border-gray-200 ${
+              view === "table"
+                ? "bg-[var(--color-primary)] text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Tabla
+          </button>
+        </div>
       </div>
 
-      {records.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
+      {filtered.length === 0 ? (
+        <div className="text-center py-16 text-gray-500 bg-white rounded-xl border border-gray-100">
           <div className="text-5xl mb-4">📊</div>
-          <p>No hay registros para el período seleccionado.</p>
+          <p>No hay registros para el período / filtro seleccionado.</p>
+        </div>
+      ) : view === "cards" ? (
+        <div className="space-y-4">
+          {filtered.map((r) => (
+            <VitalRecordCard
+              key={r.id}
+              record={r}
+              onDelete={canDelete ? () => handleDelete(r.id) : null}
+            />
+          ))}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl shadow-sm border border-gray-100">
-          <table className="min-w-full bg-white text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-              <tr>
-                <th className="px-4 py-3 text-left">Residente</th>
-                <th className="px-4 py-3 text-left">Fecha/Hora</th>
-                <th className="px-4 py-3 text-center">P/A</th>
-                <th className="px-4 py-3 text-center">FC</th>
-                <th className="px-4 py-3 text-center">FR</th>
-                <th className="px-4 py-3 text-center">Temp.</th>
-                <th className="px-4 py-3 text-center">SatO₂</th>
-                <th className="px-4 py-3 text-center">Glucosa</th>
-                <th className="px-4 py-3 text-center">Dolor</th>
-                <th className="px-4 py-3 text-center">Turno</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {records.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-800">
-                    {r.residentes
-                      ? `${r.residentes.apellido}, ${r.residentes.nombre}`
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {new Date(r.fecha_hora).toLocaleString("es-CL", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {formatPA(r.presion_sistolica, r.presion_diastolica)}
-                  </td>
-                  <td className="px-4 py-3 text-center">{r.frecuencia_cardiaca ?? "—"}</td>
-                  <td className="px-4 py-3 text-center">{r.frecuencia_respiratoria ?? "—"}</td>
-                  <td className={`px-4 py-3 text-center font-medium ${r.temperatura > 37.5 ? "text-red-600" : "text-gray-700"}`}>
-                    {r.temperatura != null ? `${r.temperatura}°` : "—"}
-                  </td>
-                  <td className={`px-4 py-3 text-center font-medium ${r.saturacion_oxigeno != null && r.saturacion_oxigeno < 95 ? "text-red-600" : "text-gray-700"}`}>
-                    {r.saturacion_oxigeno != null ? `${r.saturacion_oxigeno}%` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-center">{r.glucosa ?? "—"}</td>
-                  <td className="px-4 py-3 text-center">
-                    {r.dolor_escala != null ? (
-                      <span className={`font-medium ${r.dolor_escala >= 7 ? "text-red-600" : r.dolor_escala >= 4 ? "text-yellow-600" : "text-green-600"}`}>
-                        {r.dolor_escala}/10
-                      </span>
-                    ) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-center capitalize text-gray-500">
-                    {r.turno ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      className="text-red-400 hover:text-red-600 text-xs"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <VitalRecordsTable records={filtered} onDelete={canDelete ? handleDelete : null} />
       )}
     </div>
   );
 }
 
-export default VitalSignsList;
+/* ─── StatChip ───────────────────────────────────────────────── */
+
+const TONE = {
+  gray:    { bg: "bg-white",      text: "text-gray-700",     ring: "ring-gray-200",    accent: "text-gray-500"   },
+  emerald: { bg: "bg-emerald-50", text: "text-emerald-700",  ring: "ring-emerald-200", accent: "text-emerald-600" },
+  amber:   { bg: "bg-amber-50",   text: "text-amber-800",    ring: "ring-amber-200",   accent: "text-amber-600"  },
+  rose:    { bg: "bg-rose-50",    text: "text-rose-700",     ring: "ring-rose-200",    accent: "text-rose-600"   },
+};
+
+function StatChip({ active, onClick, label, value, tone }) {
+  const t = TONE[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left rounded-xl border border-gray-100 ${t.bg} px-4 py-3 shadow-sm transition-all hover:shadow-md ${
+        active ? `ring-2 ${t.ring}` : ""
+      }`}
+    >
+      <div className={`text-xs font-medium ${t.accent}`}>{label}</div>
+      <div className={`text-2xl font-bold tabular-nums ${t.text}`}>{value}</div>
+    </button>
+  );
+}
+
+/* ─── VitalRecordCard ───────────────────────────────────────── */
+
+function VitalRecordCard({ record, onDelete }) {
+  const overall = recordOverallLabel(record);
+  const s = STATUS[overall.status];
+  const fecha = new Date(record.fecha_hora).toLocaleString("es-CL", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  return (
+    <article className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <header className="flex flex-col sm:flex-row justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-gray-800 truncate">
+              {record.residentes
+                ? `${record.residentes.apellido}, ${record.residentes.nombre}`
+                : "Residente"}
+            </h3>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.badge}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+              {overall.label}
+            </span>
+          </div>
+          <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            <span>{fecha}</span>
+            {record.turno && (
+              <span className="capitalize">
+                {TURNO_ICON[record.turno] ?? "•"} {record.turno}
+              </span>
+            )}
+            {record.estado_conciencia && (
+              <span className="capitalize">Conciencia: {record.estado_conciencia}</span>
+            )}
+          </div>
+        </div>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            className="self-start text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+          >
+            Eliminar
+          </button>
+        )}
+      </header>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4">
+        <VitalCard
+          icon={VITAL_DEFS.presion.icon}
+          label={VITAL_DEFS.presion.label}
+          value={VITAL_DEFS.presion.format(record.presion_sistolica, record.presion_diastolica)}
+          unit={VITAL_DEFS.presion.unit}
+          status={VITAL_DEFS.presion.statusFor(record)}
+          normal={VITAL_DEFS.presion.normal}
+        />
+        <VitalCard
+          icon={VITAL_DEFS.fc.icon}
+          label={VITAL_DEFS.fc.label}
+          value={VITAL_DEFS.fc.format(record.frecuencia_cardiaca)}
+          unit={VITAL_DEFS.fc.unit}
+          status={VITAL_DEFS.fc.statusFor(record)}
+          normal={VITAL_DEFS.fc.normal}
+        />
+        <VitalCard
+          icon={VITAL_DEFS.fr.icon}
+          label={VITAL_DEFS.fr.label}
+          value={VITAL_DEFS.fr.format(record.frecuencia_respiratoria)}
+          unit={VITAL_DEFS.fr.unit}
+          status={VITAL_DEFS.fr.statusFor(record)}
+          normal={VITAL_DEFS.fr.normal}
+        />
+        <VitalCard
+          icon={VITAL_DEFS.temp.icon}
+          label={VITAL_DEFS.temp.label}
+          value={VITAL_DEFS.temp.format(record.temperatura)}
+          status={VITAL_DEFS.temp.statusFor(record)}
+          normal={VITAL_DEFS.temp.normal}
+        />
+        <VitalCard
+          icon={VITAL_DEFS.spo2.icon}
+          label={VITAL_DEFS.spo2.label}
+          value={VITAL_DEFS.spo2.format(record.saturacion_oxigeno)}
+          status={VITAL_DEFS.spo2.statusFor(record)}
+          normal={VITAL_DEFS.spo2.normal}
+        />
+        <VitalCard
+          icon={VITAL_DEFS.glucosa.icon}
+          label={VITAL_DEFS.glucosa.label}
+          value={VITAL_DEFS.glucosa.format(record.glucosa)}
+          unit={VITAL_DEFS.glucosa.unit}
+          status={VITAL_DEFS.glucosa.statusFor(record)}
+          normal={VITAL_DEFS.glucosa.normal}
+        />
+        <VitalCard
+          icon={VITAL_DEFS.dolor.icon}
+          label={VITAL_DEFS.dolor.label}
+          value={VITAL_DEFS.dolor.format(record.dolor_escala)}
+          status={VITAL_DEFS.dolor.statusFor(record)}
+          normal={VITAL_DEFS.dolor.normal}
+        />
+        {record.peso != null && (
+          <VitalCard
+            icon="⚖️"
+            label="Peso"
+            value={`${record.peso}`}
+            unit="kg"
+            status="normal"
+          />
+        )}
+      </div>
+
+      {record.observaciones && (
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 text-sm text-gray-600">
+          <span className="text-xs uppercase tracking-wide text-gray-400 mr-2">Notas</span>
+          {record.observaciones}
+        </div>
+      )}
+    </article>
+  );
+}
+
+/* ─── Tabla compacta (vista alternativa) ─────────────────────── */
+
+function VitalRecordsTable({ records, onDelete }) {
+  const cellTone = (status) => {
+    const s = STATUS[status];
+    if (status === "critical") return `font-semibold ${s.text}`;
+    if (status === "warning") return `font-medium ${s.text}`;
+    if (status === "unknown") return "text-gray-300";
+    return "text-gray-700";
+  };
+
+  return (
+    <div className="overflow-x-auto rounded-xl shadow-sm border border-gray-100 bg-white">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+          <tr>
+            <th className="px-4 py-3 text-left">Residente</th>
+            <th className="px-4 py-3 text-left">Fecha/Hora</th>
+            <th className="px-4 py-3 text-center">P/A</th>
+            <th className="px-4 py-3 text-center">FC</th>
+            <th className="px-4 py-3 text-center">FR</th>
+            <th className="px-4 py-3 text-center">Temp.</th>
+            <th className="px-4 py-3 text-center">SatO₂</th>
+            <th className="px-4 py-3 text-center">Glucosa</th>
+            <th className="px-4 py-3 text-center">Dolor</th>
+            <th className="px-4 py-3 text-center">Turno</th>
+            {onDelete && <th className="px-4 py-3"></th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {records.map((r) => (
+            <tr key={r.id} className="hover:bg-gray-50">
+              <td className="px-4 py-3 font-medium text-gray-800">
+                {r.residentes ? `${r.residentes.apellido}, ${r.residentes.nombre}` : "—"}
+              </td>
+              <td className="px-4 py-3 text-gray-600">
+                {new Date(r.fecha_hora).toLocaleString("es-CL", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+              </td>
+              <td className={`px-4 py-3 text-center tabular-nums ${cellTone(VITAL_DEFS.presion.statusFor(r))}`}>
+                {VITAL_DEFS.presion.format(r.presion_sistolica, r.presion_diastolica)}
+              </td>
+              <td className={`px-4 py-3 text-center tabular-nums ${cellTone(VITAL_DEFS.fc.statusFor(r))}`}>
+                {VITAL_DEFS.fc.format(r.frecuencia_cardiaca)}
+              </td>
+              <td className={`px-4 py-3 text-center tabular-nums ${cellTone(VITAL_DEFS.fr.statusFor(r))}`}>
+                {VITAL_DEFS.fr.format(r.frecuencia_respiratoria)}
+              </td>
+              <td className={`px-4 py-3 text-center tabular-nums ${cellTone(VITAL_DEFS.temp.statusFor(r))}`}>
+                {VITAL_DEFS.temp.format(r.temperatura)}
+              </td>
+              <td className={`px-4 py-3 text-center tabular-nums ${cellTone(VITAL_DEFS.spo2.statusFor(r))}`}>
+                {VITAL_DEFS.spo2.format(r.saturacion_oxigeno)}
+              </td>
+              <td className={`px-4 py-3 text-center tabular-nums ${cellTone(VITAL_DEFS.glucosa.statusFor(r))}`}>
+                {VITAL_DEFS.glucosa.format(r.glucosa)}
+              </td>
+              <td className={`px-4 py-3 text-center tabular-nums ${cellTone(VITAL_DEFS.dolor.statusFor(r))}`}>
+                {VITAL_DEFS.dolor.format(r.dolor_escala)}
+              </td>
+              <td className="px-4 py-3 text-center capitalize text-gray-500">
+                {r.turno ?? "—"}
+              </td>
+              {onDelete && (
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => onDelete(r.id)}
+                    className="text-red-400 hover:text-red-600 text-xs"
+                  >
+                    Eliminar
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

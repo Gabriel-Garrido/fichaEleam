@@ -71,6 +71,7 @@ function ObservationForm() {
   };
 
   if (loadingRes) return <Loading message="Cargando..." />;
+  const noActiveResidents = residents.length === 0;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -83,6 +84,22 @@ function ObservationForm() {
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">{error}</div>}
 
+      {noActiveResidents && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-4 rounded-xl mb-5">
+          <h2 className="font-semibold">No hay residentes activos para registrar observaciones</h2>
+          <p className="text-sm text-amber-800 mt-1">
+            Primero agrega un residente activo para asociar el registro de turno.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/residents/new")}
+            className="mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-lg hover:bg-amber-100"
+          >
+            Agregar residente
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Datos generales</h2>
@@ -90,6 +107,7 @@ function ObservationForm() {
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-600 mb-1">Residente *</label>
               <select name="residente_id" value={form.residente_id} onChange={handleChange} required
+                disabled={noActiveResidents}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]">
                 <option value="">Seleccionar residente...</option>
                 {residents.map((r) => (
@@ -151,8 +169,9 @@ function ObservationForm() {
             className="px-6 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">
             Cancelar
           </Button>
-          <Button type="submit" disabled={saving}
-            className="px-6 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-button-hover)] disabled:opacity-50">
+          <Button type="submit"
+            className="px-6 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+            disabled={saving || noActiveResidents}>
             {saving ? "Guardando..." : "Guardar Observación"}
           </Button>
         </div>

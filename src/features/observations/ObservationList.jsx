@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getObservations, deleteObservation } from "./observationsService";
 import { getResidents } from "../residents/residentService";
+import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
@@ -45,6 +46,9 @@ function today() {
 function ObservationList() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { can } = useAuth();
+  const canDelete = can("eliminar_observaciones");
+  const canCreate = can("crear_observaciones");
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get("residenteId");
 
@@ -109,18 +113,20 @@ function ObservationList() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-3xl font-bold text-[var(--color-primary)]">Observaciones Diarias</h1>
-        <Button
-          onClick={() =>
-            navigate(
-              preselectedId
-                ? `/observations/new?residenteId=${preselectedId}`
-                : "/observations/new"
-            )
-          }
-          className="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
-        >
-          + Nueva Observación
-        </Button>
+        {canCreate && (
+          <Button
+            onClick={() =>
+              navigate(
+                preselectedId
+                  ? `/observations/new?residenteId=${preselectedId}`
+                  : "/observations/new"
+              )
+            }
+            className="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
+          >
+            + Nueva Observación
+          </Button>
+        )}
       </div>
 
       {error && (
@@ -237,12 +243,14 @@ function ObservationList() {
                       timeStyle: "short",
                     })}
                   </span>
-                  <button
-                    onClick={() => handleDelete(r.id)}
-                    className="text-red-400 hover:text-red-600 text-xs"
-                  >
-                    Eliminar
-                  </button>
+                  {canDelete && (
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      className="text-red-400 hover:text-red-600 text-xs"
+                    >
+                      Eliminar
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

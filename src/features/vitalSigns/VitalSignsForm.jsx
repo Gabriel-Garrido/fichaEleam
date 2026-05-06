@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createVitalSigns } from "./vitalSignsService";
 import { getResidents } from "../residents/residentService";
@@ -6,6 +6,18 @@ import { isValidUUID } from "../../utils/validators";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
+import {
+  STATUS,
+  systolicStatus,
+  diastolicStatus,
+  heartRateStatus,
+  respiratoryRateStatus,
+  temperatureStatus,
+  oxygenStatus,
+  glucoseStatus,
+  painStatus,
+  recordOverallLabel,
+} from "./vitalRanges";
 
 const INITIAL = {
   residente_id: "",
@@ -35,7 +47,7 @@ function VitalSignsForm() {
   const [residents, setResidents] = useState([]);
   const [saving, setSaving] = useState(false);
   const [loadingRes, setLoadingRes] = useState(true);
-  const [error, setError] = useState(null); // inline errors only (resident required)
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     getResidents("activo")
@@ -48,6 +60,20 @@ function VitalSignsForm() {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
+
+  // Resumen general en vivo a partir de lo que el usuario va escribiendo.
+  const liveOverall = useMemo(() => {
+    return recordOverallLabel({
+      presion_sistolica: form.presion_sistolica,
+      presion_diastolica: form.presion_diastolica,
+      frecuencia_cardiaca: form.frecuencia_cardiaca,
+      frecuencia_respiratoria: form.frecuencia_respiratoria,
+      temperatura: form.temperatura,
+      saturacion_oxigeno: form.saturacion_oxigeno,
+      glucosa: form.glucosa,
+      dolor_escala: form.dolor_escala,
+    });
+  }, [form]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -92,31 +118,62 @@ function VitalSignsForm() {
 
   if (loadingRes) return <Loading message="Cargando residentes..." />;
 
+  const liveBadge = STATUS[liveOverall.status];
+  const noActiveResidents = residents.length === 0;
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="text-[var(--color-primary)] hover:underline text-sm">
+        <button
+          onClick={() => navigate(-1)}
+          className="text-[var(--color-primary)] hover:underline text-sm"
+        >
           ← Volver
         </button>
-        <h1 className="text-3xl font-bold text-[var(--color-primary)]">Registrar Signos Vitales</h1>
+        <h1 className="text-3xl font-bold text-[var(--color-primary)]">
+          Registrar Signos Vitales
+        </h1>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">{error}</div>
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+          {error}
+        </div>
+      )}
+
+      {noActiveResidents && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-4 rounded-xl mb-5">
+          <h2 className="font-semibold">No hay residentes activos para registrar signos vitales</h2>
+          <p className="text-sm text-amber-800 mt-1">
+            Agrega un residente activo o cambia el estado de una ficha existente antes de registrar controles.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/residents/new")}
+            className="mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-lg hover:bg-amber-100"
+          >
+            Agregar residente
+          </button>
+        </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Residente y turno */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Datos generales</h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">
+            Datos generales
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-600 mb-1">Residente *</label>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Residente *
+              </label>
               <select
                 name="residente_id"
                 value={form.residente_id}
                 onChange={handleChange}
                 required
+                disabled={noActiveResidents}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
               >
                 <option value="">Seleccionar residente...</option>
@@ -128,7 +185,9 @@ function VitalSignsForm() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Fecha y hora *</label>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Fecha y hora *
+              </label>
               <input
                 type="datetime-local"
                 name="fecha_hora"
@@ -156,30 +215,116 @@ function VitalSignsForm() {
 
         {/* Signos vitales */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Signos Vitales</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <NumField label="P/A Sistólica (mmHg)" name="presion_sistolica" value={form.presion_sistolica} onChange={handleChange} placeholder="120" />
-            <NumField label="P/A Diastólica (mmHg)" name="presion_diastolica" value={form.presion_diastolica} onChange={handleChange} placeholder="80" />
-            <NumField label="FC (lpm)" name="frecuencia_cardiaca" value={form.frecuencia_cardiaca} onChange={handleChange} placeholder="70" />
-            <NumField label="FR (rpm)" name="frecuencia_respiratoria" value={form.frecuencia_respiratoria} onChange={handleChange} placeholder="16" />
-            <NumField label="Temperatura (°C)" name="temperatura" value={form.temperatura} onChange={handleChange} step="0.1" placeholder="36.5" />
-            <NumField label="SatO₂ (%)" name="saturacion_oxigeno" value={form.saturacion_oxigeno} onChange={handleChange} min="0" max="100" placeholder="98" />
-            <NumField label="Glucosa (mg/dL)" name="glucosa" value={form.glucosa} onChange={handleChange} placeholder="100" />
-            <NumField label="Peso (kg)" name="peso" value={form.peso} onChange={handleChange} step="0.1" placeholder="65.0" />
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Dolor (0-10)</label>
+          <div className="flex items-center justify-between mb-4 border-b pb-2 gap-3 flex-wrap">
+            <h2 className="text-lg font-semibold text-gray-700">Signos Vitales</h2>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${liveBadge.badge}`}
+              title="Estado general según los valores ingresados"
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${liveBadge.dot}`} />
+              {liveOverall.label}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <NumField
+              label="P/A Sistólica"
+              unit="mmHg"
+              normal="100–139"
+              name="presion_sistolica"
+              value={form.presion_sistolica}
+              onChange={handleChange}
+              placeholder="120"
+              status={systolicStatus(form.presion_sistolica)}
+            />
+            <NumField
+              label="P/A Diastólica"
+              unit="mmHg"
+              normal="60–89"
+              name="presion_diastolica"
+              value={form.presion_diastolica}
+              onChange={handleChange}
+              placeholder="80"
+              status={diastolicStatus(form.presion_diastolica)}
+            />
+            <NumField
+              label="Frec. cardiaca"
+              unit="lpm"
+              normal="60–100"
+              name="frecuencia_cardiaca"
+              value={form.frecuencia_cardiaca}
+              onChange={handleChange}
+              placeholder="70"
+              status={heartRateStatus(form.frecuencia_cardiaca)}
+            />
+            <NumField
+              label="Frec. respiratoria"
+              unit="rpm"
+              normal="12–20"
+              name="frecuencia_respiratoria"
+              value={form.frecuencia_respiratoria}
+              onChange={handleChange}
+              placeholder="16"
+              status={respiratoryRateStatus(form.frecuencia_respiratoria)}
+            />
+            <NumField
+              label="Temperatura"
+              unit="°C"
+              normal="36.0–37.7"
+              name="temperatura"
+              value={form.temperatura}
+              onChange={handleChange}
+              step="0.1"
+              placeholder="36.5"
+              status={temperatureStatus(form.temperatura)}
+            />
+            <NumField
+              label="SatO₂"
+              unit="%"
+              normal="≥ 95"
+              name="saturacion_oxigeno"
+              value={form.saturacion_oxigeno}
+              onChange={handleChange}
+              min="0"
+              max="100"
+              placeholder="98"
+              status={oxygenStatus(form.saturacion_oxigeno)}
+            />
+            <NumField
+              label="Glucosa"
+              unit="mg/dL"
+              normal="70–179"
+              name="glucosa"
+              value={form.glucosa}
+              onChange={handleChange}
+              placeholder="100"
+              status={glucoseStatus(form.glucosa)}
+            />
+            <NumField
+              label="Peso"
+              unit="kg"
+              name="peso"
+              value={form.peso}
+              onChange={handleChange}
+              step="0.1"
+              placeholder="65.0"
+            />
+
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-gray-600">Dolor (0-10)</label>
+                <PainBadge value={form.dolor_escala} />
+              </div>
               <input
                 type="range"
                 name="dolor_escala"
-                value={form.dolor_escala}
+                value={form.dolor_escala || 0}
                 onChange={handleChange}
                 min="0"
                 max="10"
-                className="w-full"
+                className="w-full accent-[var(--color-primary)]"
               />
               <div className="flex justify-between text-xs text-gray-400">
                 <span>0 Sin dolor</span>
-                <span className="font-semibold text-gray-700">{form.dolor_escala || 0}</span>
                 <span>10 Máximo</span>
               </div>
             </div>
@@ -188,10 +333,14 @@ function VitalSignsForm() {
 
         {/* Estado y observaciones */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Estado y Observaciones</h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">
+            Estado y Observaciones
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Estado de conciencia</label>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Estado de conciencia
+              </label>
               <select
                 name="estado_conciencia"
                 value={form.estado_conciencia}
@@ -205,7 +354,9 @@ function VitalSignsForm() {
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-600 mb-1">Observaciones</label>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Observaciones
+              </label>
               <textarea
                 name="observaciones"
                 value={form.observaciones}
@@ -219,12 +370,18 @@ function VitalSignsForm() {
         </section>
 
         <div className="flex gap-4 justify-end">
-          <Button type="button" onClick={() => navigate(-1)}
-            className="px-6 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">
+          <Button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="px-6 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
+          >
             Cancelar
           </Button>
-          <Button type="submit" disabled={saving}
-            className="px-6 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-button-hover)] disabled:opacity-50">
+          <Button
+            type="submit"
+            disabled={saving || noActiveResidents}
+            className="px-6 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+          >
             {saving ? "Guardando..." : "Guardar Registro"}
           </Button>
         </div>
@@ -233,10 +390,44 @@ function VitalSignsForm() {
   );
 }
 
-function NumField({ label, name, value, onChange, placeholder, step, min, max }) {
+function NumField({
+  label,
+  unit,
+  normal,
+  name,
+  value,
+  onChange,
+  placeholder,
+  step,
+  min,
+  max,
+  status,
+}) {
+  const s = status ? STATUS[status] : null;
+  const showStatus = status && status !== "unknown";
+  const ringClass = !showStatus
+    ? "border-gray-300 focus:ring-[var(--color-secondary)]"
+    : status === "critical"
+      ? "border-rose-300 focus:ring-rose-200"
+      : status === "warning"
+        ? "border-amber-300 focus:ring-amber-200"
+        : "border-emerald-300 focus:ring-emerald-200";
+
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-600 mb-1">{label}</label>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-sm font-medium text-gray-600">
+          {label} {unit && <span className="text-gray-400 font-normal">({unit})</span>}
+        </label>
+        {showStatus && (
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${s.badge}`}
+          >
+            <span className={`h-1 w-1 rounded-full ${s.dot}`} />
+            {s.label}
+          </span>
+        )}
+      </div>
       <input
         type="number"
         name={name}
@@ -246,9 +437,28 @@ function NumField({ label, name, value, onChange, placeholder, step, min, max })
         step={step}
         min={min}
         max={max}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${ringClass}`}
       />
+      {normal && (
+        <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-400">
+          Normal: <span className="text-gray-500 normal-case">{normal}</span>
+        </div>
+      )}
     </div>
+  );
+}
+
+function PainBadge({ value }) {
+  const status = painStatus(value);
+  if (status === "unknown") return null;
+  const s = STATUS[status];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${s.badge}`}
+    >
+      <span className={`h-1 w-1 rounded-full ${s.dot}`} />
+      {value}/10 — {s.label}
+    </span>
   );
 }
 
