@@ -32,10 +32,10 @@ function SinSupabase() {
           {message}
         </p>
         <button
-          onClick={() => navigate("/demo")}
+          onClick={() => navigate("/")}
           className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
         >
-          Explorar el demo sin conexión
+          Volver al inicio
         </button>
         <Link to="/" className="block mt-3 text-sm text-gray-400 hover:text-gray-600">
           ← Volver al inicio
@@ -181,23 +181,27 @@ export default function Login() {
           </Button>
         </form>
 
-        {/* Demo CTA — prominente */}
-        <div className="mt-6 bg-teal-50 border border-teal-200 rounded-xl p-4 text-center">
-          <p className="text-sm text-teal-800 font-medium mb-2">¿Quieres ver cómo funciona antes de registrarte?</p>
-          <button
-            onClick={() => navigate("/demo")}
-            className="text-sm bg-[var(--color-primary)] text-white px-5 py-2 rounded-lg font-semibold hover:bg-[var(--color-button-hover)] transition-colors"
-          >
-            Explorar demo sin registrarme
-          </button>
+        {/* Orientación por tipo de usuario */}
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-200">
+          <div className="px-4 py-3">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-0.5">Funcionario o familiar</p>
+            <p className="text-sm text-slate-600">
+              Usa el correo y contraseña que te entregó el administrador de tu ELEAM. Si tu correo es Gmail también puedes usar el botón de Google.
+            </p>
+          </div>
+          <div className="px-4 py-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-0.5">Administrador nuevo</p>
+              <p className="text-sm text-slate-600">¿Quieres digitalizar tu ELEAM?</p>
+            </div>
+            <button
+              onClick={() => navigate("/pago")}
+              className="shrink-0 text-sm bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[var(--color-button-hover)] transition-colors"
+            >
+              Activar mi ELEAM
+            </button>
+          </div>
         </div>
-
-        <p className="text-center text-xs text-gray-400 mt-5">
-          ¿Aún no tienes cuenta?{" "}
-          <button onClick={() => navigate("/pago")} className="text-[var(--color-primary)] font-semibold hover:underline">
-            Activar mi ELEAM
-          </button>
-        </p>
       </div>
     </div>
   );

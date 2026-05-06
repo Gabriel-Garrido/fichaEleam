@@ -76,6 +76,44 @@ const DEFAULT_PERMS = {
   registrar_visitas: true,
 };
 
+const PLANTILLAS_CARGO = {
+  "Enfermero/a": {
+    crear_residentes: false,  editar_residentes: true,   eliminar_residentes: false,
+    crear_signos_vitales: true, editar_signos_vitales: true, eliminar_signos_vitales: false,
+    crear_observaciones: true, editar_observaciones: true, eliminar_observaciones: false,
+    subir_acreditacion: true,  editar_acreditacion: false, archivar_acreditacion: false,
+    registrar_visitas: true,
+  },
+  "Kinesiólogo/a": {
+    crear_residentes: false,  editar_residentes: true,   eliminar_residentes: false,
+    crear_signos_vitales: true, editar_signos_vitales: true, eliminar_signos_vitales: false,
+    crear_observaciones: true, editar_observaciones: true, eliminar_observaciones: false,
+    subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
+    registrar_visitas: false,
+  },
+  "Médico/a": {
+    crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
+    crear_signos_vitales: true, editar_signos_vitales: true, eliminar_signos_vitales: false,
+    crear_observaciones: true, editar_observaciones: true, eliminar_observaciones: false,
+    subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
+    registrar_visitas: false,
+  },
+  "Auxiliar ATD": {
+    crear_residentes: false,  editar_residentes: false,  eliminar_residentes: false,
+    crear_signos_vitales: true, editar_signos_vitales: false, eliminar_signos_vitales: false,
+    crear_observaciones: true, editar_observaciones: false, eliminar_observaciones: false,
+    subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
+    registrar_visitas: true,
+  },
+  "Administrativo/a": {
+    crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
+    crear_signos_vitales: false, editar_signos_vitales: false, eliminar_signos_vitales: false,
+    crear_observaciones: false, editar_observaciones: false, eliminar_observaciones: false,
+    subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: true,
+    registrar_visitas: false,
+  },
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function formatDate(iso) {
@@ -120,10 +158,15 @@ export default function TeamManagement() {
   const [createdUser, setCreatedUser] = useState(null);
   const [creating, setCreating] = useState(false);
 
-  // Permisos
+  // Permisos (modal edición existente)
   const [editedPerms, setEditedPerms] = useState({});
   const [loadingPerms, setLoadingPerms] = useState(false);
   const [savingPerms,  setSavingPerms]  = useState(false);
+
+  // Permisos en modal de creación
+  const [selectedCargo,   setSelectedCargo]   = useState(null);
+  const [createPerms,     setCreatePerms]     = useState({ ...DEFAULT_PERMS });
+  const [showPermSection, setShowPermSection] = useState(false);
 
   // Eliminación
   const [deleting, setDeleting] = useState(false);
@@ -194,11 +237,16 @@ export default function TeamManagement() {
     setCreating(true);
     try {
       const result = await createStaffUser({
-        nombre:     createForm.nombre.trim(),
-        email:      createForm.email.trim(),
-        rol:        createForm.rol,
+        nombre:      createForm.nombre.trim(),
+        email:       createForm.email.trim(),
+        rol:         createForm.rol,
         residenteId: createForm.rol === "familiar" ? createForm.residenteId || null : null,
       });
+      // Aplicar permisos personalizados si es funcionario
+      if (createForm.rol === "funcionario" && result.profile_id) {
+        try { await updateFuncionarioPermisos(result.profile_id, createPerms); }
+        catch { /* no bloquear: los permisos se pueden editar después */ }
+      }
       setCreatedUser(result);
       toast("Usuario creado correctamente", "success");
       await refresh();
@@ -213,6 +261,9 @@ export default function TeamManagement() {
     setCreateModal(false);
     setCreatedUser(null);
     setCreateForm({ nombre: "", email: "", rol: "funcionario", residenteId: "" });
+    setSelectedCargo(null);
+    setCreatePerms({ ...DEFAULT_PERMS });
+    setShowPermSection(false);
   };
 
   const copyText = (text) => {
@@ -555,7 +606,12 @@ export default function TeamManagement() {
                   <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">Rol</label>
                   <select
                     value={createForm.rol}
-                    onChange={(e) => setCreateForm(f => ({ ...f, rol: e.target.value, residenteId: "" }))}
+                    onChange={(e) => {
+                      setCreateForm(f => ({ ...f, rol: e.target.value, residenteId: "" }));
+                      setSelectedCargo(null);
+                      setCreatePerms({ ...DEFAULT_PERMS });
+                      setShowPermSection(false);
+                    }}
                     className="w-full rounded-lg border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
                     disabled={creating}
                   >
@@ -588,6 +644,80 @@ export default function TeamManagement() {
                     disabled={creating}
                   />
                 </div>
+
+                {/* Cargo y permisos (solo funcionario) */}
+                {createForm.rol === "funcionario" && (
+                  <>
+                    <div>
+                      <label className="text-xs uppercase font-semibold text-gray-500 mb-2 block">
+                        Cargo (define los permisos iniciales)
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.keys(PLANTILLAS_CARGO).map((cargo) => (
+                          <button
+                            key={cargo}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCargo(cargo);
+                              setCreatePerms({ ...PLANTILLAS_CARGO[cargo] });
+                            }}
+                            disabled={creating}
+                            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                              selectedCargo === cargo
+                                ? "bg-teal-600 text-white border-teal-600"
+                                : "bg-white text-gray-600 border-gray-300 hover:border-teal-400 hover:text-teal-600"
+                            }`}
+                          >
+                            {cargo}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPermSection((v) => !v)}
+                        disabled={creating}
+                        className="text-xs text-[var(--color-primary)] hover:underline font-medium flex items-center gap-1"
+                      >
+                        <span>{showPermSection ? "▼" : "▶"}</span>
+                        {showPermSection ? "Ocultar permisos detallados" : "Ver y ajustar permisos detallados"}
+                      </button>
+
+                      {showPermSection && (
+                        <div className="mt-3 border border-gray-100 rounded-xl p-4 bg-gray-50 space-y-3">
+                          {PERM_GROUPS.map((group) => (
+                            <div key={group.label}>
+                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-2">{group.label}</p>
+                              <div className="space-y-1.5">
+                                {group.perms.map(({ key, label }) => (
+                                  <label key={key} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={createPerms[key] ?? DEFAULT_PERMS[key]}
+                                      onChange={(e) =>
+                                        setCreatePerms((p) => ({ ...p, [key]: e.target.checked }))
+                                      }
+                                      disabled={creating}
+                                      className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-200"
+                                    />
+                                    <span className="text-xs text-gray-700">{label}</span>
+                                    {(key.startsWith("eliminar_") || key === "archivar_acreditacion") && (
+                                      <span className="text-[10px] text-rose-500 bg-rose-50 border border-rose-200 rounded px-1">
+                                        destructivo
+                                      </span>
+                                    )}
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {/* Residente (solo familiar) */}
                 {createForm.rol === "familiar" && (

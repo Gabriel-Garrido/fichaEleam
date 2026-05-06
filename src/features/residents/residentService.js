@@ -71,6 +71,26 @@ export const deleteResident = async (id) => {
   if (error) throw error;
 };
 
+export const getFamiliarForResidente = async (residenteId) => {
+  if (!isValidUUID(residenteId)) return null;
+  const { data, error } = await supabase
+    .from("familiar_residentes")
+    .select("parentesco, profile_id, profiles(id, nombre, email)")
+    .eq("residente_id", residenteId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+export const removeFamiliarLink = async (residenteId) => {
+  if (!isValidUUID(residenteId)) throw new Error("ID de residente inválido.");
+  const { error } = await supabase
+    .from("familiar_residentes")
+    .delete()
+    .eq("residente_id", residenteId);
+  if (error) throw error;
+};
+
 export const getResidentStats = async () => {
   // La RLS filtra automáticamente al ELEAM del usuario
   const { data, error } = await supabase.from("residentes").select("estado");
