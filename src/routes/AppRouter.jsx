@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 
 import Login            from "../features/auth/Login";
 import Register         from "../features/auth/Register";
+import RecuperarAcceso  from "../features/auth/RecuperarAcceso";
+import ResetPassword    from "../features/auth/ResetPassword";
 import LandingPage      from "../features/landing/LandingPage";
 import GuidedDemoPage  from "../features/demo/GuidedDemoPage";
 import PaymentPage      from "../features/payment/PaymentPage";
@@ -45,6 +47,7 @@ import Loading         from "../components/Loading";
 
 const NO_NAVBAR_PATHS_EXACT = new Set([
   "/", "/login", "/register",
+  "/recuperar-acceso", "/reset-password",
   "/pago", "/pago/return",
   "/blog",
   "/cambiar-clave",
@@ -73,8 +76,10 @@ function AppRouter() {
       <Routes>
         {/* ── Públicas ──────────────────────────────────────── */}
         <Route path="/"            element={<LandingPage />} />
-        <Route path="/login"       element={user ? signedInRedirect : <Login />} />
-        <Route path="/register"    element={user ? signedInRedirect : <Register />} />
+        <Route path="/login"             element={user ? signedInRedirect : <Login />} />
+        <Route path="/register"          element={user ? signedInRedirect : <Register />} />
+        <Route path="/recuperar-acceso"  element={<RecuperarAcceso />} />
+        <Route path="/reset-password"    element={<ResetPassword />} />
         <Route path="/demo/:token"      element={<GuidedDemoPage />} />
         <Route path="/pago"             element={<PaymentPage />} />
         <Route path="/pago/return" element={<PaymentReturn />} />

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
 import { login, loginWithGoogle } from "./authService";
 import { useAuth, useLoading } from "../../context/AuthContext";
@@ -28,18 +28,13 @@ function SinSupabase() {
       <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center">
         <div className="text-4xl mb-4">🔧</div>
         <h2 className="text-xl font-bold text-gray-800 mb-2">Supabase no configurado</h2>
-        <p className="text-gray-500 text-sm mb-6">
-          {message}
-        </p>
+        <p className="text-gray-500 text-sm mb-6">{message}</p>
         <button
           onClick={() => navigate("/")}
           className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
         >
           Volver al inicio
         </button>
-        <Link to="/" className="block mt-3 text-sm text-gray-400 hover:text-gray-600">
-          ← Volver al inicio
-        </Link>
       </div>
     </div>
   );
@@ -52,11 +47,20 @@ export default function Login() {
 
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
+  const [showPw,   setShowPw]   = useState(false);
   const [error,    setError]    = useState(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Evitar flash del formulario durante el callback de Google OAuth
+  const [oauthPending, setOauthPending] = useState(false);
 
-  if (authLoading || loading) return <Loading message="Verificando autenticación..." />;
-  // Redirigir al home propio del rol (no siempre a /dashboard).
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && (hash.includes("access_token") || hash.includes("error_description"))) {
+      setOauthPending(true);
+    }
+  }, []);
+
+  if (authLoading || loading || oauthPending) return <Loading message="Verificando autenticación..." />;
   if (user && !profileLoading) return <Navigate to={homePath} replace />;
   if (!isSupabaseConfigured) return <SinSupabase />;
 
@@ -70,9 +74,6 @@ export default function Login() {
     setLoading(true);
     try {
       await login({ email, password });
-      // No navegamos manualmente: el componente re-renderiza al
-      // actualizarse `user` y el guard al inicio redirige al homePath
-      // del rol (admin → /dashboard, familiar → /familiar, etc.).
     } catch (err) {
       console.warn("Error de login:", err);
       setError("No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente.");
@@ -86,7 +87,6 @@ export default function Login() {
     setGoogleLoading(true);
     try {
       await loginWithGoogle();
-      // La redirección la maneja Supabase OAuth (va a /dashboard)
     } catch (err) {
       console.warn("Error de Google OAuth:", err);
       setError("Google no respondió como esperábamos. Intenta otra vez en unos segundos.");
@@ -96,7 +96,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
-      {/* Logo / Brand */}
+      {/* Logo */}
       <div className="mb-6 text-center">
         <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
           FichaEleam
@@ -114,7 +114,7 @@ export default function Login() {
           </div>
         )}
 
-        {/* Google */}
+        {/* Google OAuth */}
         <button
           onClick={handleGoogle}
           disabled={googleLoading}
@@ -131,14 +131,12 @@ export default function Login() {
           {googleLoading ? "Redirigiendo..." : "Continuar con Google"}
         </button>
 
-        {/* Divisor */}
         <div className="flex items-center gap-3 mb-5">
           <div className="flex-1 h-px bg-gray-200" />
           <span className="text-xs text-gray-400">o con correo</span>
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
-        {/* Formulario email */}
         <form onSubmit={handleLogin} className="space-y-4" noValidate>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Correo electrónico</label>
@@ -153,18 +151,46 @@ export default function Login() {
               className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
             />
           </div>
+
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Contraseña</label>
-            <Input
-              type="password"
-              name="password"
-              placeholder="••••••••"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-gray-600">Contraseña</label>
+              <Link
+                to="/recuperar-acceso"
+                className="text-xs text-[var(--color-primary)] hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
+            <div className="relative">
+              <Input
+                type={showPw ? "text" : "password"}
+                name="password"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                tabIndex={-1}
+              >
+                {showPw ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -195,10 +221,10 @@ export default function Login() {
               <p className="text-sm text-slate-600">¿Quieres digitalizar tu ELEAM?</p>
             </div>
             <button
-              onClick={() => navigate("/pago")}
+              onClick={() => navigate("/")}
               className="shrink-0 text-sm bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[var(--color-button-hover)] transition-colors"
             >
-              Activar mi ELEAM
+              Solicitar demo
             </button>
           </div>
         </div>

@@ -270,21 +270,24 @@ export async function updateLead(id, payload) {
 }
 
 export async function grantDemoAccess(leadId) {
-  const token     = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
+  // Crea un usuario real admin_eleam para el lead y activa su ELEAM.
+  // La edge function también envía email de bienvenida si RESEND_API_KEY está configurado.
+  const { data, error } = await supabase.functions.invoke("create-demo-user", {
+    body: { lead_id: leadId },
+  });
+  if (error) throw new Error(error.message ?? "Error al crear usuario demo");
+  if (data?.error) throw new Error(data.error);
+
+  // Leer el lead actualizado para reflejar el estado en la UI
+  const { data: lead, error: leadErr } = await supabase
     .from("demo_leads")
-    .update({
-      demo_token:              token,
-      demo_access_granted_at:  new Date().toISOString(),
-      demo_expires_at:         expiresAt,
-      estado:                  "demo_activo",
-    })
+    .select("*")
     .eq("id", leadId)
-    .select()
     .single();
-  if (error) throw error;
-  return data;
+  if (leadErr) throw leadErr;
+
+  // Adjuntar credenciales al objeto retornado (no se persisten en BD)
+  return { ...lead, _temp_password: data.temp_password, _email_sent: data.email_sent };
 }
 
 export async function getActiveInDemo() {

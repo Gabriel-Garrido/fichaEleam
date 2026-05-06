@@ -1980,8 +1980,13 @@ create table if not exists public.demo_leads (
   solicita_contacto         boolean default false,
   solicita_contacto_en      timestamptz,
   solicita_contacto_mensaje text,
+  demo_user_id              uuid references auth.users(id) on delete set null,
   creado_en                 timestamptz default now() not null
 );
+
+-- Añadir demo_user_id si la tabla ya existía antes de esta versión del schema
+alter table public.demo_leads
+  add column if not exists demo_user_id uuid references auth.users(id) on delete set null;
 
 alter table public.demo_leads enable row level security;
 

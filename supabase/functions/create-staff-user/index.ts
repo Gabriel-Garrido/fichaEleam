@@ -14,6 +14,7 @@
 
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
+import { sendEmail, staffWelcomeEmail } from "../_shared/email.ts";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -154,12 +155,28 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "No se pudo crear el usuario." }, 500);
     }
 
+    // Enviar email de bienvenida si Resend está configurado
+    const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://fichaeleam.cl";
+    const emailSent = await sendEmail({
+      to: cleanEmail,
+      subject: `Tu acceso a FichaEleam — ${eleam.nombre}`,
+      html: staffWelcomeEmail({
+        nombre,
+        email: cleanEmail,
+        tempPassword,
+        eleamNombre: eleam.nombre,
+        rol,
+        loginUrl: `${appUrl}/login`,
+      }),
+    });
+
     return jsonResponse(req, {
       ok: true,
       temp_password: tempPassword,
       profile_id: created.user.id,
       email: cleanEmail,
       rol,
+      email_sent: emailSent,
     });
   } catch (e) {
     console.error("create-staff-user", e);
