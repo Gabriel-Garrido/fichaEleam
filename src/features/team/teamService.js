@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
 
 function ensureSupabase() {
   if (!supabase) throw new Error("Supabase no está configurado.");
@@ -41,7 +42,7 @@ export async function inviteMember({ email, rol = "funcionario", residenteId = n
   const { data, error } = await sb.functions.invoke("invite-funcionario", {
     body: { email, rol, residente_id: residenteId },
   });
-  if (error) throw new Error(error.message ?? "No se pudo invitar");
+  if (error) await throwEdgeFunctionError(error, "No se pudo invitar");
   if (data?.error) throw new Error(data.error);
   return data;
 }
@@ -100,7 +101,7 @@ export async function createStaffUser({ nombre, email, rol, residenteId = null }
   const { data, error } = await sb.functions.invoke("create-staff-user", {
     body: { nombre, email, rol, residente_id: residenteId },
   });
-  if (error) throw new Error(error.message ?? "No se pudo crear el usuario");
+  if (error) await throwEdgeFunctionError(error, "No se pudo crear el usuario");
   if (data?.error) throw new Error(data.error);
   return data;
 }
@@ -111,7 +112,7 @@ export async function deleteStaffUser(profileId) {
   const { data, error } = await sb.functions.invoke("delete-staff-user", {
     body: { profile_id: profileId },
   });
-  if (error) throw new Error(error.message ?? "No se pudo eliminar el usuario");
+  if (error) await throwEdgeFunctionError(error, "No se pudo eliminar el usuario");
   if (data?.error) throw new Error(data.error);
 }
 

@@ -59,6 +59,21 @@ export default function Login() {
   const [oauthPending, setOauthPending] = useState(hasOauthHash);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.replace(/^#/, "");
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+    const oauthError = params.get("error_description") || params.get("error");
+    if (oauthError) {
+      setError(
+        "No encontramos una cuenta habilitada para ese correo. Solicita una demo aprobada o pide al administrador de tu ELEAM que cree tu usuario."
+      );
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      setOauthPending(false);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!authLoading) setOauthPending(false);
   }, [authLoading]);
 
@@ -108,7 +123,9 @@ export default function Login() {
 
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">Bienvenido de vuelta</h1>
-        <p className="text-sm text-gray-500 mb-6">Ingresa a tu cuenta para continuar</p>
+        <p className="text-sm text-gray-500 mb-6">
+          Ingresa solo si tu cuenta ya fue habilitada por FichaEleam o por tu ELEAM.
+        </p>
 
         {(supabaseError || authNotice) && (
           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -132,6 +149,10 @@ export default function Login() {
           )}
           {googleLoading ? "Redirigiendo..." : "Continuar con Google"}
         </button>
+        <p className="text-xs text-gray-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-5">
+          Google no crea cuentas nuevas. Solo funciona si ese correo ya fue aprobado para demo,
+          tiene un ELEAM vigente o fue creado como funcionario/familiar.
+        </p>
 
         <div className="flex items-center gap-3 mb-5">
           <div className="flex-1 h-px bg-gray-200" />
@@ -214,7 +235,7 @@ export default function Login() {
           <div className="px-4 py-3">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-0.5">Funcionario o familiar</p>
             <p className="text-sm text-slate-600">
-              Usa el correo y contraseña que te entregó el administrador de tu ELEAM. Si tu correo es Gmail también puedes usar el botón de Google.
+              Usa el correo y contraseña que te entregó el administrador o funcionario autorizado de tu ELEAM. Si luego vinculas Google, debe ser el mismo correo.
             </p>
           </div>
           <div className="px-4 py-3 flex items-center justify-between gap-3">

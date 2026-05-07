@@ -87,10 +87,11 @@ export default function LeadsPanel({
         email_sent: updated._email_sent,
         reused_existing_user: updated._reused_existing_user,
         already_active: updated._already_active,
+        repaired_existing_auth_user: updated._repaired_existing_auth_user,
         nombre: lead.nombre,
       });
       toast(
-        updated._reused_existing_user || updated._already_active
+        updated._reused_existing_user || updated._already_active || updated._repaired_existing_auth_user
           ? "Demo activado para una cuenta existente"
           : "Usuario demo creado correctamente",
         "success",
@@ -132,15 +133,32 @@ export default function LeadsPanel({
             <p className="text-sm text-gray-600">
               {credenciales.temp_password ? (
                 <>
-                  Se creó una cuenta para <strong>{credenciales.nombre}</strong>.
+                  {credenciales.repaired_existing_auth_user ? (
+                    <>
+                      Se reparó una cuenta Auth existente para <strong>{credenciales.nombre}</strong>.
+                    </>
+                  ) : (
+                    <>
+                      Se creó una cuenta para <strong>{credenciales.nombre}</strong>.
+                    </>
+                  )}
                   {credenciales.email_sent
                     ? " Le enviamos las credenciales por correo."
                     : " Comparte estas credenciales manualmente."}
                 </>
               ) : (
                 <>
-                  El demo quedó activo para <strong>{credenciales.nombre}</strong> usando una cuenta existente.
-                  No se generó una contraseña temporal nueva.
+                  {credenciales.repaired_existing_auth_user ? (
+                    <>
+                      El demo quedó activo para <strong>{credenciales.nombre}</strong> reparando una cuenta Auth existente.
+                      Se generó una contraseña temporal nueva.
+                    </>
+                  ) : (
+                    <>
+                      El demo quedó activo para <strong>{credenciales.nombre}</strong> usando una cuenta existente.
+                      No se generó una contraseña temporal nueva.
+                    </>
+                  )}
                 </>
               )}
             </p>

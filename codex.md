@@ -90,7 +90,7 @@ npx supabase functions deploy  # Deploy Edge Functions
 | `/accreditation*` | STAFF | Accreditation |
 | `/cambiar-clave` | requireActive=false | Change password (forzado primer acceso) |
 | `/equipo` | admin_eleam | Team management |
-| `/familiar*` | familiar | Familiar portal |
+| `/familiar*` | familiar + ELEAM vigente | Familiar portal |
 | `/superadmin*` | superadmin | CRM + Blog editor |
 
 Ver **[CLAUDE.md — Rutas](./CLAUDE.md#rutas)** para detalles completos.
@@ -124,11 +124,15 @@ const {
 | `funcionario` | Heredado | `/dashboard` | Staff clínico |
 | `familiar` | Heredado | `/familiar` | Visitante de residente |
 
+### Alta de cuentas
+
+No hay auto-registro público. `handle_new_user` solo acepta superadmin plataforma, demo aprobada por superadmin, usuarios creados por Edge Functions con `app_metadata` de Admin API o invitación legacy con token válido. Google OAuth no autoriza cuentas nuevas: solo sirve si el correo ya tiene perfil habilitado o fue vinculado desde `/cambiar-clave`.
+
 ### ProtectedRoute
 
 ```jsx
 <ProtectedRoute>...</ProtectedRoute>                  // Sesión + pago activo
-<ProtectedRoute requireActive={false}>...</ProtectedRoute>  // Sin pago ok
+<ProtectedRoute requireActive={false}>...</ProtectedRoute>  // Solo pago/cambio clave
 <ProtectedRoute allowedRoles={["admin_eleam"]}>...</ProtectedRoute>  // Rol restringido
 ```
 
@@ -211,9 +215,9 @@ Admin contrata en `/pago` → Edge Function crea preapproval → checkout MP →
 - `mp-create-subscription` — Crea preapproval
 - `mp-webhook` — Valida HMAC, actualiza BD
 - `mp-cancel-subscription` — Cancela
-- `invite-funcionario` — Invita staff
-- `create-demo-user` — Superadmin crea o reutiliza admin ELEAM demo
-- `create-staff-user` — Admin crea funcionario/familiar con contraseña temporal
+- `invite-funcionario` — Invitación legacy; admin invita staff/familiares y funcionario solo familiares
+- `create-demo-user` — Superadmin crea, reutiliza o repara admin ELEAM demo
+- `create-staff-user` — Admin crea o repara funcionario/familiar; funcionario crea familiar vinculado
 - `delete-staff-user` — Admin elimina staff/familiar
 
 ### Secrets (server-only, no VITE_)
@@ -254,7 +258,7 @@ Ruta `/demo/:token` — demo guiado para leads aprobados.
 - Datos mock en frontend (`src/features/demo/demoData.js`).
 - Progreso y pings guardados en `demo_leads`.
 - Solicitudes de contacto visibles para superadmin.
-- `create-demo-user` crea una cuenta `admin_eleam` nueva o reutiliza una existente compatible.
+- `create-demo-user` crea el ELEAM demo y una cuenta `admin_eleam` con `app_metadata` server-side, reutiliza una existente compatible o repara un usuario Auth huérfano del mismo correo asignando contraseña temporal nueva.
 
 ---
 
@@ -326,6 +330,8 @@ residente_id in (
 
 Superadmin acceso universal vía `is_superadmin()`.
 
+El acceso operativo requiere además `eleam_has_access(eleam_id)`: si el ELEAM no tiene demo/suscripción vigente o período pagado posterior a cancelación, staff y familiares no leen ni escriben datos clínicos, acreditación o Storage.
+
 ### Validación cliente
 
 - Email: Regex estricto
@@ -342,9 +348,9 @@ Superadmin acceso universal vía `is_superadmin()`.
 ### Triggers
 
 - `prevent_role_eleam_escalation` — No cambiar rol/eleam_id
+- `handle_new_user` — Rechaza registros/OAuth sin invitación válida o `app_metadata` server-side
 - `check_residentes_limit` — Cupo de residentes
 - `check_funcionarios_limit` — Cupo de funcionarios
-- `ensure_invitation_token_valid` — Validar invitaciones
 
 ---
 

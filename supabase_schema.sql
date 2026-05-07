@@ -518,6 +518,29 @@ as $$
   select rol from public.profiles where id = (select auth.uid());
 $$;
 
+create or replace function public.eleam_has_access(p_eleam_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.eleams e
+    where e.id = p_eleam_id
+      and (
+        e.pago_activo = true
+        or e.subscription_status in ('activo','en_gracia')
+        or (
+          e.subscription_status = 'cancelado'
+          and e.fecha_vencimiento_suscripcion is not null
+          and e.fecha_vencimiento_suscripcion > now()
+        )
+      )
+  );
+$$;
+
 create or replace function public.familiar_can_view_residente(rid uuid)
 returns boolean
 language sql
@@ -527,9 +550,11 @@ set search_path = public
 as $$
   select exists (
     select 1
-    from public.familiar_residentes
-    where profile_id = (select auth.uid())
-      and residente_id = rid
+    from public.familiar_residentes fr
+    join public.residentes r on r.id = fr.residente_id
+    where fr.profile_id = (select auth.uid())
+      and fr.residente_id = rid
+      and public.eleam_has_access(r.eleam_id)
   );
 $$;
 
@@ -540,9 +565,11 @@ stable
 security definer
 set search_path = public
 as $$
-  select residente_id
-  from public.familiar_residentes
-  where profile_id = (select auth.uid());
+  select fr.residente_id
+  from public.familiar_residentes fr
+  join public.residentes r on r.id = fr.residente_id
+  where fr.profile_id = (select auth.uid())
+    and public.eleam_has_access(r.eleam_id);
 $$;
 
 create or replace function public.funcionario_can(perm text)
@@ -558,6 +585,10 @@ declare
 begin
   if v_rol in ('admin_eleam', 'superadmin') then return true; end if;
   if v_rol <> 'funcionario' then return false; end if;
+
+  if not public.eleam_has_access(public.my_eleam_id()) then
+    return false;
+  end if;
 
   select case perm
     when 'crear_residentes'        then crear_residentes
@@ -785,12 +816,13 @@ as $$
 declare
   v_email text := lower(new.email);
   v_nombre text;
-  v_rol text := 'admin_eleam';
+  v_rol text := null;
   v_eleam_id uuid := null;
   v_token text;
   v_invitacion record;
   v_residente_id uuid := null;
   v_invitado_por uuid := null;
+  v_account_source text := coalesce(new.raw_app_meta_data->>'fichaeleam_account_source', '');
 begin
   v_nombre := coalesce(
     new.raw_user_meta_data->>'nombre',
@@ -827,26 +859,52 @@ begin
     return new;
   end if;
 
-  -- Creación directa por Edge Function (solo el service role puede poner eleam_id_direct)
-  if new.raw_user_meta_data->>'eleam_id_direct' is not null then
-    v_eleam_id := (new.raw_user_meta_data->>'eleam_id_direct')::uuid;
-    v_rol      := coalesce(nullif(trim(new.raw_user_meta_data->>'rol_direct'), ''), 'funcionario');
+  -- Creacion directa autorizada por Edge Function.
+  -- Importante: la autorizacion vive en raw_app_meta_data, no en
+  -- raw_user_meta_data. El cliente puede escribir user_metadata al hacer
+  -- signUp/OAuth; app_metadata solo debe escribirlo Admin API/service role.
+  if new.raw_app_meta_data->>'eleam_id_direct' is not null then
+    v_eleam_id := (new.raw_app_meta_data->>'eleam_id_direct')::uuid;
+    v_rol      := coalesce(nullif(trim(new.raw_app_meta_data->>'rol_direct'), ''), 'funcionario');
 
-    -- Validar que el ELEAM existe (evita referencias huérfanas)
     if not exists (select 1 from public.eleams where id = v_eleam_id) then
-      raise exception 'eleam_id_direct inválido: ELEAM no encontrado (id=%)', v_eleam_id;
+      raise exception 'eleam_id_direct invalido: ELEAM no encontrado (id=%)', v_eleam_id
+        using errcode = '42501';
     end if;
 
-    -- Validar que el rol es uno de los permitidos para este flujo
-    if v_rol not in ('funcionario', 'familiar') then
-      raise exception 'rol_direct inválido: debe ser funcionario o familiar, recibido %', v_rol;
+    if v_rol not in ('admin_eleam', 'funcionario', 'familiar') then
+      raise exception 'rol_direct invalido: rol no permitido (%)', coalesce(v_rol, 'null')
+        using errcode = '42501';
+    end if;
+
+    if v_rol = 'admin_eleam' and v_account_source not in ('demo_approved', 'superadmin_created') then
+      raise exception 'Cuenta admin_eleam no autorizada para este flujo'
+        using errcode = '42501';
     end if;
 
     v_residente_id := case
-      when new.raw_user_meta_data->>'residente_id_direct' is not null
-      then (new.raw_user_meta_data->>'residente_id_direct')::uuid
+      when new.raw_app_meta_data->>'residente_id_direct' is not null
+      then (new.raw_app_meta_data->>'residente_id_direct')::uuid
       else null
     end;
+
+    if v_rol = 'familiar' then
+      if v_residente_id is null then
+        raise exception 'residente_id_direct requerido para familiar'
+          using errcode = '42501';
+      end if;
+
+      if not exists (
+        select 1
+        from public.residentes r
+        where r.id = v_residente_id
+          and r.eleam_id = v_eleam_id
+          and r.estado = 'activo'
+      ) then
+        raise exception 'residente_id_direct invalido para este ELEAM'
+          using errcode = '42501';
+      end if;
+    end if;
 
     insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
     values (
@@ -888,13 +946,15 @@ begin
       update public.funcionario_invitaciones
       set usado = true, usado_en = now()
       where id = v_invitacion.id;
+    else
+      raise exception 'Invitacion invalida, vencida o usada'
+        using errcode = '42501';
     end if;
   end if;
 
-  if v_rol = 'admin_eleam' and v_eleam_id is null then
-    insert into public.eleams (nombre, email_admin, pago_activo, subscription_status)
-    values ('ELEAM de ' || v_nombre, new.email, false, 'inactivo')
-    returning id into v_eleam_id;
+  if v_token is null or v_token = '' then
+    raise exception 'Cuenta no autorizada. Debe ser aprobada por superadmin o creada por un ELEAM activo.'
+      using errcode = '42501';
   end if;
 
   insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
@@ -1223,6 +1283,7 @@ create policy "profiles_admin_eleam_select" on public.profiles
     public.my_rol() = 'admin_eleam'
     and eleam_id is not null
     and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
   );
 
 create policy "superadmin_select_profiles" on public.profiles
@@ -1272,30 +1333,51 @@ drop policy if exists "residentes_delete" on public.residentes;
 create policy "residentes_select" on public.residentes
   for select using (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
-    or (public.my_rol() = 'familiar' and id in (select public.my_familiar_residente_ids()))
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+    or (
+      public.my_rol() = 'familiar'
+      and public.eleam_has_access(eleam_id)
+      and id in (select public.my_familiar_residente_ids())
+    )
   );
 
 create policy "residentes_insert" on public.residentes
   for insert with check (
     public.funcionario_can('crear_residentes')
     and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
   );
 
 create policy "residentes_update" on public.residentes
   for update using (
     public.is_superadmin()
-    or (public.funcionario_can('editar_residentes') and eleam_id = public.my_eleam_id())
+    or (
+      public.funcionario_can('editar_residentes')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   )
   with check (
     public.is_superadmin()
-    or (public.funcionario_can('editar_residentes') and eleam_id = public.my_eleam_id())
+    or (
+      public.funcionario_can('editar_residentes')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "residentes_delete" on public.residentes
   for delete using (
     public.is_superadmin()
-    or (public.funcionario_can('eliminar_residentes') and eleam_id = public.my_eleam_id())
+    or (
+      public.funcionario_can('eliminar_residentes')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 -- Signos vitales
@@ -1406,19 +1488,28 @@ drop policy if exists "inv_admin_delete" on public.funcionario_invitaciones;
 create policy "inv_admin_select" on public.funcionario_invitaciones
   for select using (
     public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "inv_admin_insert" on public.funcionario_invitaciones
   for insert with check (
     public.my_rol() = 'admin_eleam'
     and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
   );
 
 create policy "inv_admin_delete" on public.funcionario_invitaciones
   for delete using (
     public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 drop policy if exists "fr_select_self_or_admin" on public.familiar_residentes;
@@ -1427,7 +1518,10 @@ drop policy if exists "fr_delete_admin" on public.familiar_residentes;
 
 create policy "fr_select_self_or_admin" on public.familiar_residentes
   for select using (
-    profile_id = (select auth.uid())
+    (
+      profile_id = (select auth.uid())
+      and residente_id in (select public.my_familiar_residente_ids())
+    )
     or public.is_superadmin()
     or (
       public.my_rol() in ('admin_eleam','funcionario')
@@ -1437,7 +1531,10 @@ create policy "fr_select_self_or_admin" on public.familiar_residentes
 
 create policy "fr_insert_admin" on public.familiar_residentes
   for insert with check (
-    public.my_rol() = 'admin_eleam'
+    (
+      public.my_rol() = 'admin_eleam'
+      or public.funcionario_can('editar_residentes')
+    )
     and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
   );
 
@@ -1445,7 +1542,10 @@ create policy "fr_delete_admin" on public.familiar_residentes
   for delete using (
     public.is_superadmin()
     or (
-      public.my_rol() = 'admin_eleam'
+      (
+        public.my_rol() = 'admin_eleam'
+        or public.funcionario_can('editar_residentes')
+      )
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   );
@@ -1493,7 +1593,10 @@ create policy "vf_select" on public.visitas_familiar
       and residente_id in (select public.my_familiar_residente_ids())
     )
     or (
-      public.my_rol() in ('admin_eleam','funcionario')
+      (
+        public.my_rol() = 'admin_eleam'
+        or public.funcionario_can('registrar_visitas')
+      )
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   );
@@ -1556,23 +1659,39 @@ drop policy if exists "acred_re_update" on public.acred_requisitos_eleam;
 create policy "acred_re_select" on public.acred_requisitos_eleam
   for select using (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_re_insert" on public.acred_requisitos_eleam
   for insert with check (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_re_update" on public.acred_requisitos_eleam
   for update using (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   )
   with check (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 drop policy if exists "acred_docs_select" on public.acred_documentos;
@@ -1583,29 +1702,49 @@ drop policy if exists "acred_docs_delete" on public.acred_documentos;
 create policy "acred_docs_select" on public.acred_documentos
   for select using (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_docs_insert" on public.acred_documentos
   for insert with check (
     public.is_superadmin()
-    or (public.funcionario_can('subir_acreditacion') and eleam_id = public.my_eleam_id())
+    or (
+      public.funcionario_can('subir_acreditacion')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_docs_update" on public.acred_documentos
   for update using (
     public.is_superadmin()
-    or (public.funcionario_can('editar_acreditacion') and eleam_id = public.my_eleam_id())
+    or (
+      public.funcionario_can('editar_acreditacion')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   )
   with check (
     public.is_superadmin()
-    or (public.funcionario_can('editar_acreditacion') and eleam_id = public.my_eleam_id())
+    or (
+      public.funcionario_can('editar_acreditacion')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_docs_delete" on public.acred_documentos
   for delete using (
     public.is_superadmin()
-    or (public.funcionario_can('archivar_acreditacion') and eleam_id = public.my_eleam_id())
+    or (
+      public.funcionario_can('archivar_acreditacion')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 drop policy if exists "acred_obs_select" on public.acred_observaciones;
@@ -1618,42 +1757,61 @@ drop policy if exists "acred_obs_delete" on public.acred_observaciones;
 create policy "acred_obs_select" on public.acred_observaciones
   for select using (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_obs_insert_admin" on public.acred_observaciones
   for insert with check (
     public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_obs_insert_func_interna" on public.acred_observaciones
   for insert with check (
     public.my_rol() = 'funcionario'
     and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
     and origen = 'interna'
   );
 
 create policy "acred_obs_update_admin" on public.acred_observaciones
   for update using (
     public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   )
   with check (
     public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_obs_update_func" on public.acred_observaciones
   for update using (
     public.my_rol() = 'funcionario'
     and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
     and origen = 'interna'
     and creado_por = (select auth.uid())
   )
   with check (
     public.my_rol() = 'funcionario'
     and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
     and origen = 'interna'
     and creado_por = (select auth.uid())
   );
@@ -1661,7 +1819,11 @@ create policy "acred_obs_update_func" on public.acred_observaciones
 create policy "acred_obs_delete" on public.acred_observaciones
   for delete using (
     public.is_superadmin()
-    or (public.my_rol() = 'admin_eleam' and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 drop policy if exists "acred_audit_select" on public.acred_audit;
@@ -1670,13 +1832,21 @@ drop policy if exists "acred_audit_insert" on public.acred_audit;
 create policy "acred_audit_select" on public.acred_audit
   for select using (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 create policy "acred_audit_insert" on public.acred_audit
   for insert with check (
     public.is_superadmin()
-    or (public.my_rol() in ('admin_eleam','funcionario') and eleam_id = public.my_eleam_id())
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
   );
 
 -- CRM y blog
@@ -1737,6 +1907,7 @@ create policy "storage_acreditacion_select" on storage.objects
       public.is_superadmin()
       or (
         public.my_rol() in ('admin_eleam','funcionario')
+        and public.eleam_has_access(public.my_eleam_id())
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
     )
@@ -1749,6 +1920,7 @@ create policy "storage_acreditacion_insert" on storage.objects
       public.is_superadmin()
       or (
         public.my_rol() in ('admin_eleam','funcionario')
+        and public.eleam_has_access(public.my_eleam_id())
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
     )
@@ -1761,6 +1933,7 @@ create policy "storage_acreditacion_delete" on storage.objects
       public.is_superadmin()
       or (
         public.my_rol() = 'admin_eleam'
+        and public.eleam_has_access(public.my_eleam_id())
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
     )

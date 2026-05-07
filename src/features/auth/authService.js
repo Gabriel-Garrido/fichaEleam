@@ -40,14 +40,9 @@ export const register = async ({ nombre, email, password, inviteToken }) => {
   const client = requireSupabase();
   const cleanEmail = email.trim();
 
-  // El trigger handle_new_user (server-side, SECURITY DEFINER) crea
-  // automáticamente el profile y, si corresponde, el ELEAM:
-  //   • Sin invite_token → rol=admin_eleam + ELEAM nuevo (inactivo).
-  //   • Con invite_token válido → rol=funcionario|familiar + eleam_id
-  //     de la invitación; si es familiar, crea el vínculo en
-  //     familiar_residentes con el residente_id de la invitación.
-  // No tocamos eleam_id desde el cliente — está bloqueado por el
-  // trigger prevent_role_eleam_escalation.
+  // El trigger handle_new_user solo acepta registro con invite_token
+  // valido. Las cuentas admin ELEAM se crean desde Edge Functions con
+  // app_metadata server-side; el cliente nunca puede asignarse rol/eleam_id.
   const { data, error } = await client.auth.signUp({
     email: cleanEmail,
     password,

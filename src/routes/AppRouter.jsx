@@ -148,14 +148,14 @@ function AppRouter() {
           <ProtectedRoute allowedRoles={ADMIN}><TeamManagement /></ProtectedRoute>
         } />
 
-        {/* ── Familiar (sin requireActive: depende del ELEAM) ───── */}
+        {/* ── Familiar: acceso solo si el ELEAM mantiene acceso vigente ───── */}
         <Route path="/familiar" element={
-          <ProtectedRoute allowedRoles={["familiar"]} requireActive={false}>
+          <ProtectedRoute allowedRoles={["familiar"]}>
             <FamiliarPortal />
           </ProtectedRoute>
         } />
         <Route path="/familiar/visitas" element={
-          <ProtectedRoute allowedRoles={["familiar"]} requireActive={false}>
+          <ProtectedRoute allowedRoles={["familiar"]}>
             <FamiliarVisitas />
           </ProtectedRoute>
         } />

@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
 
 function ensureSupabase() {
   if (!supabase) throw new Error("Supabase no está configurado.");
@@ -24,7 +25,7 @@ export async function startSubscription({ planCodigo, backUrl = "/pago/return" }
   const { data, error } = await sb.functions.invoke("mp-create-subscription", {
     body: { plan_codigo: planCodigo, back_url: backUrl },
   });
-  if (error) throw new Error(error.message ?? "No se pudo iniciar el pago");
+  if (error) await throwEdgeFunctionError(error, "No se pudo iniciar el pago");
   if (data?.error) throw new Error(data.error);
   if (!data?.init_point) throw new Error("MercadoPago no devolvió URL de pago");
   return data;
@@ -36,7 +37,7 @@ export async function cancelSubscription() {
   const { data, error } = await sb.functions.invoke("mp-cancel-subscription", {
     body: {},
   });
-  if (error) throw new Error(error.message ?? "No se pudo cancelar");
+  if (error) await throwEdgeFunctionError(error, "No se pudo cancelar");
   if (data?.error) throw new Error(data.error);
   return data;
 }

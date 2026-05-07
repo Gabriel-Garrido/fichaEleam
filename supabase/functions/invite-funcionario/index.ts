@@ -6,7 +6,8 @@
 // de registro `/register?invite=<token>` para enviársela al destinatario.
 //
 // Reglas:
-//   • Solo admin_eleam puede invitar.
+//   • Admin ELEAM puede invitar funcionarios y familiares.
+//   • Funcionario puede invitar familiares vinculados a residentes activos.
 //   • El ELEAM debe estar con suscripción activa o en gracia.
 //   • Si rol='familiar' → residente_id es obligatorio y debe pertenecer al ELEAM.
 //   • Si rol='funcionario' → respeta max_funcionarios del plan.
@@ -36,8 +37,8 @@ Deno.serve(async (req) => {
     if (error || !user || !profile) {
       return jsonResponse(req, { error: "No autenticado" }, 401);
     }
-    if (profile.rol !== "admin_eleam" || !profile.eleam_id) {
-      return jsonResponse(req, { error: "Solo admin del ELEAM" }, 403);
+    if (!["admin_eleam", "funcionario"].includes(profile.rol) || !profile.eleam_id) {
+      return jsonResponse(req, { error: "Tu cuenta no puede crear invitaciones para un ELEAM" }, 403);
     }
 
     const body = await req.json().catch(() => ({}));
@@ -52,6 +53,11 @@ Deno.serve(async (req) => {
     }
     if (!["funcionario", "familiar"].includes(rol)) {
       return jsonResponse(req, { error: "Rol inválido" }, 400);
+    }
+    if (profile.rol === "funcionario" && rol !== "familiar") {
+      return jsonResponse(req, {
+        error: "Un funcionario solo puede invitar familiares vinculados a residentes.",
+      }, 403);
     }
     if (rol === "familiar" && !residenteId) {
       return jsonResponse(req, {
@@ -79,12 +85,17 @@ Deno.serve(async (req) => {
     if (rol === "familiar") {
       const { data: res } = await sb
         .from("residentes")
-        .select("id, eleam_id, nombre, apellido")
+        .select("id, eleam_id, nombre, apellido, estado")
         .eq("id", residenteId!)
         .maybeSingle();
       if (!res || res.eleam_id !== eleam.id) {
         return jsonResponse(req, {
           error: "El residente no pertenece a tu ELEAM",
+        }, 400);
+      }
+      if (res.estado !== "activo") {
+        return jsonResponse(req, {
+          error: "Solo puedes vincular familiares a residentes activos",
         }, 400);
       }
     }

@@ -564,7 +564,7 @@ export default function TeamManagement() {
               </h2>
               <p className="text-sm text-gray-500 mt-1">
                 Se generará una contraseña temporal que deberás compartir.
-                El usuario la cambiará al iniciar sesión por primera vez.
+                El usuario la cambiará al iniciar sesión por primera vez. Google solo podrá usarse si queda vinculado a este mismo correo.
               </p>
             </div>
 

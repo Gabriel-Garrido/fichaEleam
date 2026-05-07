@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
 
 // Patrón:
 //  • Toda la I/O contra Supabase pasa por aquí; los componentes se
@@ -275,7 +276,7 @@ export async function grantDemoAccess(leadId) {
   const { data, error } = await supabase.functions.invoke("create-demo-user", {
     body: { lead_id: leadId },
   });
-  if (error) throw new Error(error.message ?? "Error al crear usuario demo");
+  if (error) await throwEdgeFunctionError(error, "Error al crear usuario demo");
   if (data?.error) throw new Error(data.error);
 
   // Leer el lead actualizado para reflejar el estado en la UI
@@ -293,6 +294,7 @@ export async function grantDemoAccess(leadId) {
     _email_sent: data.email_sent,
     _reused_existing_user: data.reused_existing_user === true,
     _already_active: data.already_active === true,
+    _repaired_existing_auth_user: data.repaired_existing_auth_user === true,
   };
 }
 

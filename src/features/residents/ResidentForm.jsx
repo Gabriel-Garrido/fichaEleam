@@ -418,7 +418,7 @@ export default function ResidentForm() {
               <div>
                 <span className="text-sm font-medium text-gray-700">Agregar acceso para un familiar ahora</span>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Opcional. También puedes hacerlo después desde Gestión de Equipo.
+                  Opcional. Admins y funcionarios pueden crear familiares vinculados a residentes activos.
                 </p>
               </div>
             </label>
@@ -437,7 +437,7 @@ export default function ResidentForm() {
                     placeholder="familiar@correo.cl" error={errors.familiar_email} />
                   {isGmail && (
                     <p className="text-xs text-sky-600 mt-1">
-                      Este familiar también podrá iniciar sesión con su cuenta de Google usando este mismo correo.
+                      Google funcionará solo después de que esta cuenta quede creada con este mismo correo.
                     </p>
                   )}
                 </div>
@@ -526,7 +526,7 @@ export default function ResidentForm() {
                       placeholder="familiar@correo.cl" error={familiarErrors.familiar_email} />
                     {isGmail && (
                       <p className="text-xs text-sky-600 mt-1">
-                        Este familiar también podrá iniciar sesión con su cuenta de Google.
+                        Google funcionará solo después de que esta cuenta quede creada con este mismo correo.
                       </p>
                     )}
                   </div>

@@ -3,7 +3,9 @@
 // Body: { lead_id: uuid }
 //
 // Crea una cuenta real de admin_eleam para un lead aprobado.
-// El trigger handle_new_user crea el ELEAM automáticamente.
+// Esta función crea primero el ELEAM demo y luego crea el usuario Auth con
+// app_metadata firmado por Admin API. El trigger handle_new_user solo acepta
+// cuentas admin ELEAM si vienen por este canal server-side.
 // Activa el ELEAM en modo demo (subscription_status = 'activo').
 // Envía email de bienvenida vía Resend si RESEND_API_KEY está configurado.
 //
@@ -12,6 +14,10 @@
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
 import { sendEmail, demoWelcomeEmail } from "../_shared/email.ts";
+import {
+  findAuthUserByEmail,
+  isDuplicateAuthUserError,
+} from "../_shared/authUsers.ts";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -23,6 +29,31 @@ function generatePassword(): string {
     .map((b) => chars[b % chars.length])
     .slice(0, 12)
     .join("");
+}
+
+async function sendDemoCredentials({
+  email,
+  nombre,
+  tempPassword,
+  eleamNombre,
+}: {
+  email: string;
+  nombre: string;
+  tempPassword: string;
+  eleamNombre: string;
+}) {
+  const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://fichaeleam.cl";
+  return await sendEmail({
+    to: email,
+    subject: `Tu demo de FichaEleam está lista, ${nombre}`,
+    html: demoWelcomeEmail({
+      nombre,
+      email,
+      tempPassword,
+      eleamNombre,
+      loginUrl: `${appUrl}/login`,
+    }),
+  });
 }
 
 Deno.serve(async (req) => {
@@ -92,19 +123,26 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "No se pudo validar el correo del lead." }, 500);
     }
 
-    const existingProfile = existingProfiles?.[0] ?? null;
+    const reusableProfile = (existingProfiles ?? [])
+      .find((p) => p.rol === "admin_eleam" && p.eleam_id);
+    const hasIncompatibleProfile = (existingProfiles ?? [])
+      .some((p) => p.id !== reusableProfile?.id);
+    const existingProfile = reusableProfile ?? null;
     if (existingProfile) {
-      if (existingProfile.rol !== "admin_eleam" || !existingProfile.eleam_id) {
+      if (hasIncompatibleProfile) {
         return jsonResponse(req, {
-          error: "Este correo ya pertenece a otra cuenta de FichaEleam. Usa otro correo para crear el demo.",
+          error: "Este correo ya tiene más de un perfil o pertenece a otra cuenta de FichaEleam. Revisa el usuario antes de crear el demo.",
         }, 409);
       }
 
       await sb.from("eleams").update({
         nombre: eleamNombre,
+        plan: "demo",
         subscription_status: "activo",
         pago_activo: true,
         fecha_vencimiento_suscripcion: expiresAt,
+        crm_estado: "prueba",
+        ultimo_contacto: new Date().toISOString(),
       }).eq("id", existingProfile.eleam_id);
 
       await sb.from("demo_leads").update({
@@ -124,15 +162,131 @@ Deno.serve(async (req) => {
       });
     }
 
+    if ((existingProfiles ?? []).length > 0 && !existingProfile) {
+      return jsonResponse(req, {
+        error: "Este correo ya pertenece a otra cuenta de FichaEleam. Usa otro correo para crear el demo.",
+      }, 409);
+    }
+
+    const { user: existingAuthUser, error: authLookupErr } = await findAuthUserByEmail(sb, cleanEmail);
+    if (authLookupErr) {
+      console.error("auth user lookup", authLookupErr);
+      return jsonResponse(req, {
+        error: "No se pudo validar si el correo ya existe en Auth.",
+      }, 500);
+    }
+
     const tempPassword = generatePassword();
 
-    // Crear usuario vía Admin API.
-    // Sin eleam_id_direct ni rol_direct → el trigger handle_new_user
-    // crea el profile como admin_eleam con un ELEAM nuevo.
+    const { data: demoEleam, error: eleamCreateErr } = await sb
+      .from("eleams")
+      .insert({
+        nombre: eleamNombre,
+        email_admin: cleanEmail,
+        pago_activo: true,
+        plan: "demo",
+        subscription_status: "activo",
+        fecha_vencimiento_suscripcion: expiresAt,
+        crm_estado: "prueba",
+        origen_lead: "landing_demo",
+        ultimo_contacto: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (eleamCreateErr || !demoEleam) {
+      console.error("demo eleam create", eleamCreateErr);
+      return jsonResponse(req, { error: "No se pudo crear el ELEAM demo." }, 500);
+    }
+
+    if (existingAuthUser) {
+      const profileInsert = await sb.from("profiles").insert({
+        id: existingAuthUser.id,
+        nombre: lead.nombre,
+        email: cleanEmail,
+        rol: "admin_eleam",
+        eleam_id: demoEleam.id,
+        must_reset_password: true,
+      });
+
+      if (profileInsert.error) {
+        await sb.from("eleams").delete().eq("id", demoEleam.id);
+        console.error("demo profile repair insert", profileInsert.error);
+        return jsonResponse(req, {
+          error: "El correo existe en Auth, pero no se pudo reparar su perfil. Revisa si ya tiene un perfil asociado.",
+        }, 409);
+      }
+
+      const currentAppMetadata =
+        existingAuthUser.app_metadata && typeof existingAuthUser.app_metadata === "object"
+          ? existingAuthUser.app_metadata
+          : {};
+      const currentUserMetadata =
+        existingAuthUser.user_metadata && typeof existingAuthUser.user_metadata === "object"
+          ? existingAuthUser.user_metadata
+          : {};
+
+      const { error: updateAuthErr } = await sb.auth.admin.updateUserById(existingAuthUser.id, {
+        password: tempPassword,
+        email_confirm: true,
+        app_metadata: {
+          ...currentAppMetadata,
+          fichaeleam_account_source: "demo_approved",
+          eleam_id_direct: demoEleam.id,
+          rol_direct: "admin_eleam",
+        },
+        user_metadata: {
+          ...currentUserMetadata,
+          nombre: lead.nombre,
+          must_reset_password: true,
+        },
+      });
+
+      if (updateAuthErr) {
+        await sb.from("profiles").delete().eq("id", existingAuthUser.id);
+        await sb.from("eleams").delete().eq("id", demoEleam.id);
+        console.error("demo auth repair update", updateAuthErr);
+        return jsonResponse(req, {
+          error: "El correo existe en Auth, pero no se pudo habilitar para el demo.",
+        }, 500);
+      }
+
+      await sb.from("demo_leads").update({
+        demo_user_id: existingAuthUser.id,
+        demo_access_granted_at: new Date().toISOString(),
+        demo_expires_at: expiresAt,
+        estado: "demo_activo",
+      }).eq("id", leadId);
+
+      const emailSent = await sendDemoCredentials({
+        email: cleanEmail,
+        nombre: lead.nombre,
+        tempPassword,
+        eleamNombre,
+      });
+
+      return jsonResponse(req, {
+        ok: true,
+        repaired_existing_auth_user: true,
+        profile_id: existingAuthUser.id,
+        eleam_id: demoEleam.id,
+        email: cleanEmail,
+        temp_password: tempPassword,
+        email_sent: emailSent,
+      });
+    }
+
+    // Crear usuario vía Admin API. La autorización de rol/ELEAM viaja en
+    // app_metadata; user_metadata queda solo para datos de presentación.
     const { data: created, error: createError } = await sb.auth.admin.createUser({
       email: cleanEmail,
       password: tempPassword,
       email_confirm: true,
+      app_metadata: {
+        fichaeleam_account_source: "demo_approved",
+        eleam_id_direct: demoEleam.id,
+        rol_direct: "admin_eleam",
+      },
       user_metadata: {
         nombre: lead.nombre,
         must_reset_password: true,
@@ -140,22 +294,20 @@ Deno.serve(async (req) => {
     });
 
     if (createError) {
-      if (
-        createError.message?.toLowerCase().includes("already been registered") ||
-        createError.message?.toLowerCase().includes("already registered") ||
-        createError.message?.toLowerCase().includes("duplicate")
-      ) {
+      await sb.from("eleams").delete().eq("id", demoEleam.id);
+      if (isDuplicateAuthUserError(createError)) {
         return jsonResponse(req, {
-          error: "Este correo ya existe en Auth, pero no tiene un perfil asociado. Revisa Auth > Users o usa otro correo.",
+          error: "Este correo ya existe en Auth. Actualiza la lista y vuelve a intentarlo para reparar la cuenta, o revisa Auth > Users si el problema persiste.",
         }, 409);
       }
       return jsonResponse(req, { error: "No se pudo crear el usuario." }, 500);
     }
 
     const profileId = created.user.id;
+    const eleamId: string = demoEleam.id;
 
-    // Esperar a que el trigger cree el profile + ELEAM (máx 2s)
-    let eleamId: string | null = null;
+    // Esperar a que el trigger cree el profile vinculado al ELEAM demo (máx 2s)
+    let profileReady = false;
     for (let attempt = 0; attempt < 8; attempt++) {
       await new Promise((r) => setTimeout(r, 250));
       const { data: profileRow } = await sb
@@ -163,20 +315,14 @@ Deno.serve(async (req) => {
         .select("eleam_id")
         .eq("id", profileId)
         .maybeSingle();
-      if (profileRow?.eleam_id) {
-        eleamId = profileRow.eleam_id;
+      if (profileRow?.eleam_id === eleamId) {
+        profileReady = true;
         break;
       }
     }
 
-    if (eleamId) {
-      // Actualizar nombre del ELEAM y activar para demo
-      await sb.from("eleams").update({
-        nombre: eleamNombre,
-        subscription_status: "activo",
-        pago_activo: true,
-        fecha_vencimiento_suscripcion: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      }).eq("id", eleamId);
+    if (!profileReady) {
+      console.error("profile not linked after create-demo-user", { profileId, eleamId });
     }
 
     // Actualizar lead con el profile_id del usuario creado
@@ -187,19 +333,11 @@ Deno.serve(async (req) => {
       estado: "demo_activo",
     }).eq("id", leadId);
 
-    // Enviar email de bienvenida si Resend está configurado
-    const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://fichaeleam.cl";
-    const loginUrl = `${appUrl}/login`;
-    const emailSent = await sendEmail({
-      to: lead.email,
-      subject: `Tu demo de FichaEleam está lista, ${lead.nombre}`,
-      html: demoWelcomeEmail({
-        nombre: lead.nombre,
-        email: lead.email,
-        tempPassword,
-        eleamNombre,
-        loginUrl,
-      }),
+    const emailSent = await sendDemoCredentials({
+      email: cleanEmail,
+      nombre: lead.nombre,
+      tempPassword,
+      eleamNombre,
     });
 
     return jsonResponse(req, {

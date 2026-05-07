@@ -5,9 +5,22 @@ import Loading from "../components/Loading";
 const AuthContext = createContext();
 const LoadingContext = createContext();
 const PLATFORM_SUPERADMIN_EMAILS = new Set(["gabrielgarrido89@gmail.com"]);
+const AUTH_NOTICE_STORAGE_KEY = "fichaeleam_auth_notice";
 
 function isPlatformSuperadminEmail(email) {
   return PLATFORM_SUPERADMIN_EMAILS.has((email || "").trim().toLowerCase());
+}
+
+function takeStoredAuthNotice() {
+  if (typeof window === "undefined") return null;
+  const value = window.sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY);
+  if (value) window.sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
+  return value;
+}
+
+function storeAuthNotice(message) {
+  if (typeof window === "undefined" || !message) return;
+  window.sessionStorage.setItem(AUTH_NOTICE_STORAGE_KEY, message);
 }
 
 export function AuthProvider({ children }) {
@@ -18,7 +31,7 @@ export function AuthProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [supabaseError, setSupabaseError]   = useState(false);
-  const [authNotice, setAuthNotice]         = useState(null);
+  const [authNotice, setAuthNotice]         = useState(() => takeStoredAuthNotice());
 
   const fetchProfileAndEleam = useCallback(async (authUser) => {
     if (!supabase) return;
@@ -83,16 +96,30 @@ export function AuthProvider({ children }) {
       }
 
       if (!data) {
-        setAuthNotice("No pudimos cargar tu perfil todavía. Recarga la página en unos segundos.");
+        const message = "No encontramos una cuenta habilitada para este correo. Pide al superadmin que apruebe tu demo o al administrador de tu ELEAM que cree tu usuario.";
+        storeAuthNotice(message);
+        setAuthNotice(message);
+        setProfile(null);
+        setEleam(null);
+        setPermisos(null);
+        await supabase.auth.signOut();
         return;
       }
 
-      // Diagnóstico de inconsistencias (no auto-corregidas — las
-      // resuelve el superadmin desde su panel).
+      // Diagnostico de inconsistencias: una cuenta sin ELEAM no debe
+      // quedar autenticada en la app, salvo superadmin plataforma.
       if (!data.eleam_id && data.rol === "admin_eleam") {
-        setAuthNotice("Tu cuenta de admin no tiene un ELEAM asociado. Contacta a soporte.");
+        const message = "Tu cuenta de administrador no tiene un ELEAM asociado. Contacta a soporte para revisar la activación.";
+        storeAuthNotice(message);
+        setAuthNotice(message);
+        await supabase.auth.signOut();
+        return;
       } else if (!data.eleam_id && (data.rol === "funcionario" || data.rol === "familiar")) {
-        setAuthNotice("Tu cuenta no tiene un ELEAM asociado. Contacta al administrador del establecimiento.");
+        const message = "Tu cuenta no tiene un ELEAM asociado. Contacta al administrador del establecimiento.";
+        storeAuthNotice(message);
+        setAuthNotice(message);
+        await supabase.auth.signOut();
+        return;
       }
 
       setProfile(data);
@@ -144,7 +171,7 @@ export function AuthProvider({ children }) {
           setProfile(null);
           setEleam(null);
           setPermisos(null);
-          setAuthNotice(null);
+          setAuthNotice(takeStoredAuthNotice());
         }
       }
     );
@@ -199,13 +226,12 @@ export function AuthProvider({ children }) {
   // Ruta inicial según rol/estado de suscripción.
   // - superadmin sin ELEAM → /superadmin (operador de la plataforma).
   // - superadmin con ELEAM (cuenta demo) → /dashboard para mostrar la app.
-  // - familiar → /familiar.
-  // - staff con pago activo → /dashboard.
-  // - staff sin pago → /pago.
+  // - familiar con ELEAM activo → /familiar.
+  // - staff/familiar sin acceso vigente → /pago con bloqueo informativo.
   let homePath = "/";
   if (user) {
     if (isSuperadmin)            homePath = profile?.eleam_id ? "/dashboard" : "/superadmin";
-    else if (isFamiliar)         homePath = "/familiar";
+    else if (isFamiliar)         homePath = pagoActivo ? "/familiar" : "/pago?sinAcceso=1";
     else if (pagoActivo)         homePath = "/dashboard";
     else                         homePath = "/pago?sinAcceso=1";
   }

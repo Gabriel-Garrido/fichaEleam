@@ -8,7 +8,7 @@ import SupabaseError from "./SupabaseError";
  * ProtectedRoute
  *
  *   <ProtectedRoute>...</ProtectedRoute>                  → solo sesión + cuenta activa
- *   <ProtectedRoute requireActive={false}>                → permite cuenta sin pago
+ *   <ProtectedRoute requireActive={false}>                → solo para pago/cambio de clave
  *   <ProtectedRoute allowedRoles={["admin_eleam"]}>       → restringe por rol
  *
  * Si el usuario no cumple las condiciones, redirige a la home apropiada
@@ -49,10 +49,9 @@ function ProtectedRoute({
     return <Navigate to="/cambiar-clave" replace />;
   }
 
-  // El familiar y el superadmin no se rigen por pagoActivo del ELEAM
-  // del mismo modo: superadmin siempre activo; familiar depende del
-  // ELEAM al que pertenece (mismo flag pagoActivo).
-  if (requireActive && !pagoActivo && !isFamiliar) {
+  // El acceso operativo depende del estado vigente del ELEAM. Superadmin
+  // ya viene como pagoActivo=true desde AuthContext.
+  if (requireActive && !pagoActivo) {
     return <Navigate to="/pago?sinAcceso=1" replace />;
   }
 

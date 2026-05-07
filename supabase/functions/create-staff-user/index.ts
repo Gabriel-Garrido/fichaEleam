@@ -3,11 +3,13 @@
 // Body: { nombre: string, email: string, rol?: 'funcionario' | 'familiar', residente_id?: uuid }
 //
 // Crea un usuario directamente con contraseña temporal generada aquí.
-// El trigger handle_new_user crea el profile automáticamente.
+// El trigger handle_new_user crea el profile automáticamente usando app_metadata
+// firmado por Admin API. Nunca confiar en user_metadata para eleam_id/rol.
 // Al iniciar sesión por primera vez, el usuario es redirigido a /cambiar-clave.
 //
 // Reglas:
-//   • Solo admin_eleam con suscripción activa/en_gracia puede crear usuarios.
+//   • Admin ELEAM con suscripción activa/en_gracia puede crear funcionarios y familiares.
+//   • Funcionario del ELEAM puede crear familiares vinculados a residentes activos.
 //   • Si rol='familiar' → residente_id obligatorio y debe pertenecer al ELEAM.
 //   • Si rol='funcionario' → respeta max_funcionarios del plan.
 //   • La contraseña temporal se devuelve una sola vez en la respuesta.
@@ -15,6 +17,10 @@
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
 import { sendEmail, staffWelcomeEmail } from "../_shared/email.ts";
+import {
+  findAuthUserByEmail,
+  isDuplicateAuthUserError,
+} from "../_shared/authUsers.ts";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -27,6 +33,34 @@ function generatePassword(): string {
     .map((b) => chars[b % chars.length])
     .slice(0, 12)
     .join("");
+}
+
+async function sendStaffCredentials({
+  email,
+  nombre,
+  tempPassword,
+  eleamNombre,
+  rol,
+}: {
+  email: string;
+  nombre: string;
+  tempPassword: string;
+  eleamNombre: string;
+  rol: string;
+}) {
+  const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://fichaeleam.cl";
+  return await sendEmail({
+    to: email,
+    subject: `Tu acceso a FichaEleam — ${eleamNombre}`,
+    html: staffWelcomeEmail({
+      nombre,
+      email,
+      tempPassword,
+      eleamNombre,
+      rol,
+      loginUrl: `${appUrl}/login`,
+    }),
+  });
 }
 
 Deno.serve(async (req) => {
@@ -42,8 +76,8 @@ Deno.serve(async (req) => {
     if (error || !user || !profile) {
       return jsonResponse(req, { error: "No autenticado" }, 401);
     }
-    if (profile.rol !== "admin_eleam" || !profile.eleam_id) {
-      return jsonResponse(req, { error: "Solo el administrador del ELEAM puede crear usuarios" }, 403);
+    if (!["admin_eleam", "funcionario"].includes(profile.rol) || !profile.eleam_id) {
+      return jsonResponse(req, { error: "Tu cuenta no puede crear usuarios para un ELEAM" }, 403);
     }
 
     const body = await req.json().catch(() => ({}));
@@ -62,6 +96,11 @@ Deno.serve(async (req) => {
     }
     if (!["funcionario", "familiar"].includes(rol)) {
       return jsonResponse(req, { error: "Rol inválido" }, 400);
+    }
+    if (profile.rol === "funcionario" && rol !== "familiar") {
+      return jsonResponse(req, {
+        error: "Un funcionario solo puede crear cuentas familiares vinculadas a residentes.",
+      }, 403);
     }
     if (rol === "familiar" && !residenteId) {
       return jsonResponse(req, { error: "Para crear un familiar debes seleccionar un residente" }, 400);
@@ -115,6 +154,7 @@ Deno.serve(async (req) => {
           .from("funcionario_invitaciones")
           .select("id", { head: true, count: "exact" })
           .eq("eleam_id", eleam.id)
+          .eq("rol", "funcionario")
           .eq("usado", false)
           .gt("expira_en", new Date().toISOString());
 
@@ -127,47 +167,150 @@ Deno.serve(async (req) => {
       }
     }
 
+    const { data: existingProfiles, error: existingProfilesErr } = await sb
+      .from("profiles")
+      .select("id, email, rol, eleam_id")
+      .ilike("email", cleanEmail)
+      .limit(2);
+
+    if (existingProfilesErr) {
+      console.error("staff profiles lookup", existingProfilesErr);
+      return jsonResponse(req, { error: "No se pudo validar si el correo ya tiene perfil." }, 500);
+    }
+
+    if ((existingProfiles ?? []).length > 0) {
+      return jsonResponse(req, {
+        error: "Este correo ya tiene una cuenta registrada en FichaEleam.",
+      }, 409);
+    }
+
+    const { user: existingAuthUser, error: authLookupErr } = await findAuthUserByEmail(sb, cleanEmail);
+    if (authLookupErr) {
+      console.error("staff auth user lookup", authLookupErr);
+      return jsonResponse(req, { error: "No se pudo validar si el correo ya existe en Auth." }, 500);
+    }
+
     const tempPassword = generatePassword();
+
+    if (existingAuthUser) {
+      const { error: profileInsertErr } = await sb.from("profiles").insert({
+        id: existingAuthUser.id,
+        nombre,
+        email: cleanEmail,
+        rol,
+        eleam_id: profile.eleam_id,
+        must_reset_password: true,
+      });
+
+      if (profileInsertErr) {
+        console.error("staff profile repair insert", profileInsertErr);
+        return jsonResponse(req, {
+          error: "El correo existe en Auth, pero no se pudo reparar su perfil. Revisa si ya pertenece a otro flujo.",
+        }, 409);
+      }
+
+      if (rol === "familiar" && residenteId) {
+        const { error: familiarLinkErr } = await sb.from("familiar_residentes").insert({
+          profile_id: existingAuthUser.id,
+          residente_id: residenteId,
+          creado_por: user.id,
+        });
+
+        if (familiarLinkErr) {
+          await sb.from("profiles").delete().eq("id", existingAuthUser.id);
+          console.error("staff familiar repair link", familiarLinkErr);
+          return jsonResponse(req, {
+            error: "No se pudo vincular el familiar al residente seleccionado.",
+          }, 500);
+        }
+      }
+
+      const currentAppMetadata =
+        existingAuthUser.app_metadata && typeof existingAuthUser.app_metadata === "object"
+          ? existingAuthUser.app_metadata
+          : {};
+      const currentUserMetadata =
+        existingAuthUser.user_metadata && typeof existingAuthUser.user_metadata === "object"
+          ? existingAuthUser.user_metadata
+          : {};
+
+      const { error: updateAuthErr } = await sb.auth.admin.updateUserById(existingAuthUser.id, {
+        password: tempPassword,
+        email_confirm: true,
+        app_metadata: {
+          ...currentAppMetadata,
+          fichaeleam_account_source: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
+          eleam_id_direct: profile.eleam_id,
+          rol_direct: rol,
+          ...(rol === "familiar" && residenteId ? { residente_id_direct: residenteId } : {}),
+        },
+        user_metadata: {
+          ...currentUserMetadata,
+          nombre,
+          must_reset_password: true,
+        },
+      });
+
+      if (updateAuthErr) {
+        await sb.from("profiles").delete().eq("id", existingAuthUser.id);
+        console.error("staff auth repair update", updateAuthErr);
+        return jsonResponse(req, {
+          error: "El correo existe en Auth, pero no se pudo habilitar para este ELEAM.",
+        }, 500);
+      }
+
+      const emailSent = await sendStaffCredentials({
+        email: cleanEmail,
+        nombre,
+        tempPassword,
+        eleamNombre: eleam.nombre,
+        rol,
+      });
+
+      return jsonResponse(req, {
+        ok: true,
+        repaired_existing_auth_user: true,
+        temp_password: tempPassword,
+        profile_id: existingAuthUser.id,
+        email: cleanEmail,
+        rol,
+        email_sent: emailSent,
+      });
+    }
 
     // Crear usuario vía Admin API — el trigger handle_new_user crea el profile
     const { data: created, error: createError } = await sb.auth.admin.createUser({
       email: cleanEmail,
       password: tempPassword,
       email_confirm: true,
-      user_metadata: {
-        nombre,
-        must_reset_password: true,
+      app_metadata: {
+        fichaeleam_account_source: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
         eleam_id_direct: profile.eleam_id,
         rol_direct: rol,
         ...(rol === "familiar" && residenteId ? { residente_id_direct: residenteId } : {}),
+      },
+      user_metadata: {
+        nombre,
+        must_reset_password: true,
       },
     });
 
     if (createError) {
       console.error("create-staff-user error:", createError);
-      if (
-        createError.message?.toLowerCase().includes("already been registered") ||
-        createError.message?.toLowerCase().includes("already registered") ||
-        createError.message?.toLowerCase().includes("duplicate")
-      ) {
-        return jsonResponse(req, { error: "Este correo ya tiene una cuenta registrada." }, 409);
+      if (isDuplicateAuthUserError(createError)) {
+        return jsonResponse(req, {
+          error: "Este correo ya existe en Auth. Actualiza la lista y vuelve a intentarlo para reparar la cuenta, o revisa Auth > Users si el problema persiste.",
+        }, 409);
       }
       return jsonResponse(req, { error: "No se pudo crear el usuario." }, 500);
     }
 
-    // Enviar email de bienvenida si Resend está configurado
-    const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://fichaeleam.cl";
-    const emailSent = await sendEmail({
-      to: cleanEmail,
-      subject: `Tu acceso a FichaEleam — ${eleam.nombre}`,
-      html: staffWelcomeEmail({
-        nombre,
-        email: cleanEmail,
-        tempPassword,
-        eleamNombre: eleam.nombre,
-        rol,
-        loginUrl: `${appUrl}/login`,
-      }),
+    const emailSent = await sendStaffCredentials({
+      email: cleanEmail,
+      nombre,
+      tempPassword,
+      eleamNombre: eleam.nombre,
+      rol,
     });
 
     return jsonResponse(req, {

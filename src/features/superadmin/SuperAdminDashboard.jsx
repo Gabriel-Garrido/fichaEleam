@@ -17,6 +17,18 @@ import LandingMetrics       from "./components/LandingMetrics";
 
 import { daysUntil } from "./utils/superadminFormatters";
 
+function SectionHeader({ title, description, right }) {
+  return (
+    <div className="mb-3 flex items-start justify-between gap-3">
+      <div>
+        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+        {description && <p className="text-xs text-slate-500">{description}</p>}
+      </div>
+      {right}
+    </div>
+  );
+}
+
 // Container liviano. Toda la lógica vive en useSuperAdminData
 // y los componentes reutilizables. Aquí solo coordinamos estado UI
 // (filtros, modales abiertos).
@@ -71,6 +83,15 @@ export default function SuperAdminDashboard() {
     });
   }, [eleams, filters]);
 
+  const crmSummary = useMemo(() => {
+    const overdueTasks = Object.values(taskOverdueByEleam).reduce((acc, n) => acc + n, 0);
+    return [
+      { label: "Clientes filtrados", value: filtered.length, sub: `${eleams.length} en cartera` },
+      { label: "Solicitan contacto", value: contactRequests.length, sub: "Leads demo" },
+      { label: "Tareas vencidas", value: overdueTasks, sub: "Seguimiento CRM" },
+    ];
+  }, [contactRequests.length, eleams.length, filtered.length, taskOverdueByEleam]);
+
   const openDrawer = async (eleam) => {
     setDrawer(eleam.id);
     if (!byEleam[eleam.id]) await loadEleamDetail(eleam.id);
@@ -80,35 +101,56 @@ export default function SuperAdminDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-slate-700 to-slate-900 rounded-2xl p-6 mb-6 text-white flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold mb-1">Panel Superadmin · CRM SaaS</h1>
-          <p className="text-slate-300 text-sm">
-            Gestiona clientes ELEAM, pipeline comercial, pagos y tareas de seguimiento.
-          </p>
+      <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+              Superadmin CRM
+            </p>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
+              Cartera ELEAM y seguimiento comercial
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              Revisa salud comercial, conversion de leads, pagos y tareas pendientes desde una sola vista.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/superadmin/blog")}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+            >
+              Blog
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPayFor(""); setShowPay(true); }}
+              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+            >
+              + Registrar pago
+            </button>
+            <button
+              type="button"
+              onClick={refresh}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+            >
+              Refrescar
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => navigate("/superadmin/blog")}
-            className="border border-white/40 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/10"
-          >
-            Blog
-          </button>
-          <button
-            onClick={() => { setPayFor(""); setShowPay(true); }}
-            className="bg-white text-slate-800 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-100"
-          >
-            + Registrar pago
-          </button>
-          <button
-            onClick={refresh}
-            className="border border-white/40 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/10"
-          >
-            Refrescar
-          </button>
+
+        <div className="mt-5 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3">
+          {crmSummary.map((item) => (
+            <div key={item.label}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {item.label}
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{item.value}</p>
+              <p className="text-xs text-slate-500">{item.sub}</p>
+            </div>
+          ))}
         </div>
-      </div>
+      </section>
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3 text-sm mb-4">
@@ -116,7 +158,10 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
-      {/* Métricas */}
+      <SectionHeader
+        title="Resumen ejecutivo"
+        description="Metricas agrupadas por negocio, pipeline y uso operativo. Cada ayuda explica fuente y utilidad."
+      />
       <SuperAdminMetrics
         leadsNuevos={leads.filter((l) => {
           const d = new Date(l.creado_en);
@@ -128,17 +173,18 @@ export default function SuperAdminDashboard() {
         onFilterLeads={() => setFilters((p) => ({ ...p, crmEstado: "lead" }))}
       />
 
-      {/* Pipeline visual */}
       <CrmPipeline
         eleams={eleams}
         activeState={filters.crmEstado ?? null}
         onPickState={(state) => setFilters((p) => ({ ...p, crmEstado: state }))}
       />
 
-      {/* Filtros */}
+      <SectionHeader
+        title="Cartera de clientes"
+        description="Filtra y abre cada ELEAM para revisar pagos, tareas, interacciones y estado de cuenta."
+      />
       <EleamFilters filters={filters} setFilters={setFilters} count={filtered.length} />
 
-      {/* Layout 2 columnas: tabla + side panels */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
         <div className="xl:col-span-2 space-y-4">
           <EleamTable
@@ -159,11 +205,15 @@ export default function SuperAdminDashboard() {
         </aside>
       </div>
 
-      {/* Leads & Demo section */}
       <section className="mb-6">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-gray-700">Leads & Demo</h2>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Leads y demo guiado</h2>
+              <p className="text-xs text-slate-500">
+                Seguimiento de prospectos captados desde la landing y actividad del demo.
+              </p>
+            </div>
             {contactRequests.length > 0 && (
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
                 {contactRequests.length} solicitan contacto
@@ -210,9 +260,11 @@ export default function SuperAdminDashboard() {
         )}
       </section>
 
-      {/* Pagos recientes */}
       <section className="space-y-2">
-        <h2 className="font-semibold text-gray-700">Últimos pagos</h2>
+        <SectionHeader
+          title="Ultimos pagos"
+          description="Pagos completados o registrados para conciliar activacion y renovaciones."
+        />
         <RecentPaymentsTable payments={payments} onSelectEleam={(id) => {
           const e = eleams.find((x) => x.id === id);
           if (e) openDrawer(e);

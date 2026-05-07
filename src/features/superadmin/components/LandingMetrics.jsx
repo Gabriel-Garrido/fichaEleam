@@ -1,4 +1,42 @@
 import React from "react";
+import MetricHelp from "./MetricHelp";
+
+const kpiHelp = {
+  totalVisits: {
+    description: "Sesiones unicas que visitaron la landing durante los ultimos 30 dias.",
+    source: "public.landing_events con tipo = page_view, agrupado por session_id.",
+    action: "Evalua alcance real de campanas y trafico organico.",
+  },
+  totalLeads: {
+    description: "Leads captados por el formulario de demo en los ultimos 30 dias.",
+    source: "public.demo_leads.creado_en dentro de la ventana de 30 dias.",
+    action: "Mide generacion de demanda y volumen para seguimiento comercial.",
+  },
+  conversionRate: {
+    description: "Porcentaje de visitas que terminaron creando un lead.",
+    source: "Leads captados dividido por sesiones unicas de landing.",
+    action: "Ayuda a revisar si la landing convierte o si el trafico no calza con la oferta.",
+  },
+  activeDemo: {
+    description: "Prospectos con demo activa y actividad reciente.",
+    source: "public.demo_leads con estado = demo_activo y demo_ultimo_ping reciente.",
+    action: "Prioriza contacto mientras el prospecto esta usando la demo.",
+  },
+};
+
+function LandingMetricCard({ label, value, tone, help }) {
+  return (
+    <article className={`rounded-lg border bg-white p-4 shadow-sm ${tone}`}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {label}
+        </p>
+        <MetricHelp title={label} {...help} />
+      </div>
+      <p className="mt-2 text-3xl font-bold tabular-nums">{value}</p>
+    </article>
+  );
+}
 
 export default function LandingMetrics({ metrics, activeInDemo }) {
   if (!metrics) {
@@ -10,24 +48,54 @@ export default function LandingMetrics({ metrics, activeInDemo }) {
 
   return (
     <div className="space-y-6">
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Visitas (30d)", value: totalVisits, color: "text-blue-600" },
-          { label: "Leads captados (30d)", value: totalLeads, color: "text-teal-600" },
-          { label: "Tasa conversión", value: `${conversionRate}%`, color: conversionRate > 5 ? "text-green-600" : "text-amber-600" },
-          { label: "En demo ahora", value: activeInDemo?.length ?? 0, color: activeInDemo?.length > 0 ? "text-teal-600 animate-pulse" : "text-gray-500" },
+          {
+            label: "Visitas 30d",
+            value: totalVisits,
+            tone: "border-sky-200 text-sky-700",
+            help: kpiHelp.totalVisits,
+          },
+          {
+            label: "Leads 30d",
+            value: totalLeads,
+            tone: "border-teal-200 text-teal-700",
+            help: kpiHelp.totalLeads,
+          },
+          {
+            label: "Conversion",
+            value: `${conversionRate}%`,
+            tone: conversionRate > 5
+              ? "border-emerald-200 text-emerald-700"
+              : "border-amber-200 text-amber-700",
+            help: kpiHelp.conversionRate,
+          },
+          {
+            label: "En demo ahora",
+            value: activeInDemo?.length ?? 0,
+            tone: activeInDemo?.length > 0
+              ? "border-teal-200 text-teal-700"
+              : "border-slate-200 text-slate-700",
+            help: kpiHelp.activeDemo,
+          },
         ].map((c) => (
-          <div key={c.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{c.label}</p>
-            <p className={`text-3xl font-bold ${c.color}`}>{c.value}</p>
-          </div>
+          <LandingMetricCard key={c.label} {...c} />
         ))}
       </div>
 
-      {/* Daily visits chart */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h3 className="font-semibold text-gray-700 text-sm mb-4">Visitas diarias (últimos 14 días)</h3>
+      <section className="rounded-lg border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Visitas diarias</h3>
+            <p className="text-xs text-slate-500">Ultimos 14 dias, segun eventos de landing.</p>
+          </div>
+          <MetricHelp
+            title="Visitas diarias"
+            description="Cuenta page_view por dia para detectar picos, caidas y efecto de campanas."
+            source="public.landing_events.tipo = page_view, agrupado por fecha de creado_en."
+            action="Cruza los picos con campañas, publicaciones o cambios en la landing."
+          />
+        </div>
         <div className="flex items-end gap-1 h-28">
           {dailyVisits.map((d) => (
             <div key={d.date} className="flex-1 flex flex-col items-center gap-1" title={`${d.date}: ${d.count}`}>
@@ -41,12 +109,22 @@ export default function LandingMetrics({ metrics, activeInDemo }) {
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Top CTAs */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-700 text-sm mb-3">Top CTAs clickeados</h3>
+        <section className="rounded-lg border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">CTAs clickeados</h3>
+              <p className="text-xs text-slate-500">Botones con mas interaccion.</p>
+            </div>
+            <MetricHelp
+              title="CTAs clickeados"
+              description="Ranking de elementos clickeados en la landing."
+              source="public.landing_events.tipo = cta_click, agrupado por elemento."
+              action="Identifica que llamados a la accion generan mas intencion."
+            />
+          </div>
           {topCtas.length === 0 ? (
             <p className="text-xs text-gray-400">Sin datos aún</p>
           ) : (
@@ -65,11 +143,21 @@ export default function LandingMetrics({ metrics, activeInDemo }) {
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Sources */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-700 text-sm mb-3">Fuentes de tráfico</h3>
+        <section className="rounded-lg border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Fuentes de tráfico</h3>
+              <p className="text-xs text-slate-500">Origen declarado por UTM.</p>
+            </div>
+            <MetricHelp
+              title="Fuentes de tráfico"
+              description="Ranking de origen/medio para las visitas registradas."
+              source="public.landing_events.utm_source y utm_medium en eventos page_view."
+              action="Compara rendimiento de canales pagados, organicos y referidos."
+            />
+          </div>
           {sources.length === 0 ? (
             <p className="text-xs text-gray-400">Sin datos UTM aún</p>
           ) : (
@@ -88,7 +176,7 @@ export default function LandingMetrics({ metrics, activeInDemo }) {
               ))}
             </div>
           )}
-        </div>
+        </section>
       </div>
     </div>
   );

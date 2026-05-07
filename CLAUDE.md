@@ -88,19 +88,21 @@ supabase/functions/
 |-----|-------|------|-----------|
 | `superadmin` | Operador de la plataforma | n/a | `/superadmin` (sin ELEAM) o `/dashboard` (demo) |
 | `admin_eleam` | Dueño del ELEAM | ✓ | `/pago?sinAcceso=1` (sin pago) o `/dashboard` |
-| `funcionario` | Personal clínico del ELEAM | ✗ | `/dashboard` |
-| `familiar` | Familiar de residente | ✗ | `/familiar` |
+| `funcionario` | Personal clínico del ELEAM | ✗ | `/dashboard` si ELEAM vigente |
+| `familiar` | Familiar de residente | ✗ | `/familiar` si ELEAM vigente |
 
 ### Flujos de acceso
 
 **No existe auto-registro público.** La landing solo muestra "Iniciar sesión" y CTA de demo. Los nuevos admins entran vía el flujo de aprobación de demo:
 
-1. **Demo → Admin**: Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba desde `/superadmin` → Edge Function `create-demo-user` crea o reutiliza cuenta `admin_eleam` compatible → activa ELEAM demo por 30 días → email con credenciales si aplica (vía Resend) + superadmin ve el resultado en modal UI.
-2. **Funcionario/Familiar creado por admin**: Admin crea staff desde `/equipo` → Edge Function `create-staff-user` crea cuenta con contraseña temporal + envía email de bienvenida.
+1. **Demo → Admin**: Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba desde `/superadmin` → Edge Function `create-demo-user` crea ELEAM demo + cuenta `admin_eleam` con `app_metadata` server-side, reutiliza cuenta compatible o repara Auth huérfano → activa demo por 30 días → email con credenciales si aplica (vía Resend) + superadmin ve el resultado en modal UI.
+2. **Funcionario/Familiar creado por ELEAM**: Admin crea funcionarios/familiares desde `/equipo`; funcionarios pueden crear familiares vinculados a residentes activos desde flujos operativos. Edge Function `create-staff-user` crea o repara cuenta con contraseña temporal + email de bienvenida.
 3. **Primer acceso (cualquier rol)**: Si `must_reset_password=true`, `ProtectedRoute` fuerza redirect a `/cambiar-clave`. Allí puede establecer nueva contraseña o, si tiene Gmail, vincular Google con `supabase.auth.linkIdentity` (no crea cuenta duplicada).
 4. **Recuperación de contraseña**: `/recuperar-acceso` → `supabase.auth.resetPasswordForEmail` → email con link → `/reset-password` → nueva contraseña vía `supabase.auth.updateUser`.
-5. **Google OAuth**: `supabase.auth.signInWithOAuth` en login normal; `supabase.auth.linkIdentity` cuando se quiere vincular desde `/cambiar-clave` (evita cuentas duplicadas).
+5. **Google OAuth**: `supabase.auth.signInWithOAuth` en login normal solo para correos ya habilitados; `supabase.auth.linkIdentity` cuando se quiere vincular desde `/cambiar-clave` (evita cuentas duplicadas). Si el correo no tiene cuenta autorizada, el trigger rechaza el alta y la UI vuelve a `/login` con aviso.
 6. **Registro por invitación (legado)**: `/register?invite=TOKEN&email=EMAIL` — sigue funcionando para compatibilidad. Sin token de invitación, la página muestra pantalla de bloqueo.
+
+**Regla central**: no existe auto-registro público. `handle_new_user` solo acepta superadmin plataforma, demo aprobada por superadmin, usuario creado por Edge Function con `app_metadata` de Admin API, o invitación legacy válida. `raw_user_meta_data` nunca se usa para autorizar `rol` ni `eleam_id`.
 
 ### useAuth() — Propiedades
 
@@ -125,7 +127,7 @@ supabase/functions/
 
 ```jsx
 <ProtectedRoute>...</ProtectedRoute>                  // sesión + pago activo
-<ProtectedRoute requireActive={false}>...</ProtectedRoute>  // sin pago ok (familiar, cambio clave)
+<ProtectedRoute requireActive={false}>...</ProtectedRoute>  // solo pago/cambio clave
 <ProtectedRoute allowedRoles={["admin_eleam"]}>...</ProtectedRoute>  // Restricción de rol
 ```
 
@@ -158,8 +160,8 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | `/accreditation/observaciones` | AccreditationObservaciones | STAFF | Observaciones internas/fiscalización |
 | `/accreditation/carpeta` | AccreditationCarpeta | STAFF | Export imprimible (Ctrl+P) |
 | `/equipo` | TeamManagement | `allowedRoles=[admin_eleam]` | Crear funcionarios/familiares con contraseña temporal |
-| `/familiar` | FamiliarPortal | `allowedRoles=[familiar]` | Residente asignado + últimos signos + observaciones |
-| `/familiar/visitas` | FamiliarVisitas | `allowedRoles=[familiar]` | Historial + registro de visitas |
+| `/familiar` | FamiliarPortal | `allowedRoles=[familiar]` + ELEAM vigente | Residente asignado + últimos signos + observaciones |
+| `/familiar/visitas` | FamiliarVisitas | `allowedRoles=[familiar]` + ELEAM vigente | Historial + registro de visitas |
 | `/superadmin` | SuperAdminDashboard | SuperAdminRoute | CRM: métricas, tabla ELEAMs, leads, edición, pagos |
 | `/superadmin/blog` | BlogManagement | SuperAdminRoute | Lista de posts |
 | `/superadmin/blog/new`, `/superadmin/blog/:id/edit` | BlogEditor | SuperAdminRoute | Editor de posts |
@@ -319,29 +321,30 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 
 ### admin_eleam (Dueño del ELEAM)
 
-1. **Onboarding vía demo**: Prospecto llena formulario en landing → superadmin aprueba en LeadsPanel → Edge Function `create-demo-user` crea cuenta con contraseña temporal o reutiliza una cuenta `admin_eleam` existente → email enviado si aplica + resultado visible en modal UI. Trigger `handle_new_user` crea el ELEAM automáticamente para usuarios nuevos; suscripción activada con 30 días de prueba.
+1. **Onboarding vía demo**: Prospecto llena formulario en landing → superadmin aprueba en LeadsPanel → Edge Function `create-demo-user` crea el ELEAM demo, luego crea cuenta con contraseña temporal usando `app_metadata` server-side, reutiliza una cuenta `admin_eleam` existente o repara Auth huérfano → email enviado si aplica + resultado visible en modal UI. Suscripción activada con 30 días de prueba.
 2. **Primer acceso**: `must_reset_password=true` → forzado a `/cambiar-clave` → establece contraseña personal o vincula Google (si Gmail, usando `linkIdentity`).
 3. **Sin pago**: Redirige a `/pago?sinAcceso=1`. Solo ve "Activar ELEAM", "Demo", "Cerrar sesión".
 4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/equipo` + `/accreditation`.
-5. **Crear funcionarios**: Email + nombre + permisos → Edge Function `create-staff-user` crea cuenta con contraseña temporal + envía email de bienvenida con credenciales.
-6. **Crear familiares**: Selecciona residente + email → Mismo flujo; `familiar_residentes` los vincula al residente asignado.
+5. **Crear funcionarios**: Email + nombre + permisos → Edge Function `create-staff-user` crea o repara cuenta con contraseña temporal + envía email de bienvenida con credenciales.
+6. **Crear familiares**: Selecciona residente activo + email → mismo flujo; `familiar_residentes` vincula al residente asignado. También puede hacerlo un funcionario desde flujos operativos autorizados.
 
 ### funcionario (Personal clínico)
 
-- Ruta home: `/dashboard` (sin `/equipo`, sin `/pago`).
+- Ruta home: `/dashboard` si el ELEAM tiene acceso vigente (sin `/equipo`, sin `/pago`).
 - Creado por admin_eleam desde `/equipo`; recibe email con contraseña temporal.
 - Primer acceso: forzado a `/cambiar-clave` (mismo flujo que admin).
 - Puede: crear/editar residentes, signos, observaciones, acreditación (según `funcionario_permisos`).
-- No puede: eliminar datos, administrar equipo, cambiar planes.
+- Puede crear cuentas familiares vinculadas a residentes activos.
+- No puede: administrar planes ni crear funcionarios.
 
 ### familiar (Acceso de visitante)
 
-- Ruta home: `/familiar`.
+- Ruta home: `/familiar` si el ELEAM tiene acceso vigente.
 - Creado por admin_eleam desde `/equipo`; recibe email con contraseña temporal.
 - Primer acceso: forzado a `/cambiar-clave` (mismo flujo).
 - Ve: 1 residente asignado, últimos signos vitales (5), observaciones (5), visitas registradas.
 - Puede: registrar visitas (duración, notas).
-- Acceso: RLS verifica `profile_id` en `familiar_residentes`.
+- Acceso: RLS verifica `profile_id` en `familiar_residentes` y `eleam_has_access()`.
 
 ### superadmin (Operador de la plataforma)
 
@@ -424,10 +427,10 @@ Internas (admin levanta) o de fiscalización (SEREMI detecta). Flujo: `abierta` 
 - `mp-create-subscription`: Crea preapproval; solo `admin_eleam` con suscripción inactiva.
 - `mp-webhook`: Público; valida HMAC SHA-256; deduplica con `mp_request_id`; actualiza estado.
 - `mp-cancel-subscription`: Cancela preapproval; solo `admin_eleam`.
-- `invite-funcionario`: Crea invitation token; valida plan y límites (flujo legado).
-- `create-staff-user`: Crea funcionario/familiar con contraseña temporal; envía email via Resend (si configurado). Retorna `{ ok, profile_id, email, temp_password, email_sent }`.
+- `invite-funcionario`: Crea invitation token; valida plan y límites (flujo legado). Admin invita funcionarios/familiares; funcionario solo familiares.
+- `create-staff-user`: Crea funcionario/familiar con contraseña temporal usando `app_metadata` server-side; admin crea staff/familiares y funcionario solo familiar vinculado. Si el email existe en Auth pero no tiene `profiles`, repara/adopta esa cuenta para el ELEAM autorizado y asigna contraseña temporal nueva. Envía email via Resend (si configurado). Retorna `{ ok, profile_id, email, temp_password, email_sent, repaired_existing_auth_user? }`.
 - `delete-staff-user`: Elimina usuario de Auth; cascadas limpian `profiles`, `familiar_residentes` y `funcionario_permisos`.
-- `create-demo-user`: Crea o reutiliza admin_eleam para lead aprobado; activa ELEAM 30 días; envía email de bienvenida cuando genera contraseña. Retorna `{ ok, profile_id, eleam_id, email, temp_password?, email_sent, reused_existing_user?, already_active? }`.
+- `create-demo-user`: Crea ELEAM demo + admin_eleam para lead aprobado usando `app_metadata` server-side, reutiliza admin compatible o repara un usuario Auth huérfano del mismo email; activa ELEAM 30 días; envía email de bienvenida cuando genera contraseña. Retorna `{ ok, profile_id, eleam_id, email, temp_password?, email_sent, reused_existing_user?, repaired_existing_auth_user?, already_active? }`.
 
 ### Email (Resend — opcional)
 
@@ -451,7 +454,7 @@ Setear con `npx supabase secrets set NOMBRE=valor`.
 
 ### Demo guiado (flujo principal)
 
-Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba en LeadsPanel (`/superadmin`) → Edge Function `create-demo-user` crea cuenta `admin_eleam` real con 30 días de prueba o reutiliza una cuenta compatible → email con credenciales si se generó contraseña y Resend está configurado → superadmin ve temp_password solo cuando existe → prospecto inicia sesión y completa `/cambiar-clave`.
+Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba en LeadsPanel (`/superadmin`) → Edge Function `create-demo-user` crea ELEAM demo y cuenta `admin_eleam` real con 30 días de prueba mediante `app_metadata` de Admin API, reutiliza una cuenta compatible o repara un usuario Auth huérfano del mismo correo → email con credenciales si se generó contraseña y Resend está configurado → superadmin ve temp_password solo cuando existe → prospecto inicia sesión y completa `/cambiar-clave`.
 
 Ruta pública: `/demo/:token`. Guarda progreso en `demo_leads.demo_progreso`, actualiza `demo_ultimo_ping` y permite solicitar contacto desde el demo.
 
@@ -485,7 +488,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Ficha 360 del ELEAM**: Contacto, estado, suscripción, riesgo churn, tareas vencidas, interacciones recientes, salud cliente (healthy/warning/risk).
 - **Tareas**: Crear, asignar, marcar completadas, vencimiento, prioridad.
 - **Interacciones**: Registro de contactos (call, email, meeting, etc.); proxima acción; audit trail.
-- **LeadsPanel**: Tabla de `demo_leads` con estado (nuevo/contactado/demo_activo/demo_completado/descartado/convertido). Botón "Dar acceso" invoca `create-demo-user`; muestra modal con email + contraseña temporal si se creó cuenta nueva, o aviso de cuenta existente si se reutilizó. Leads ya vinculados no muestran el botón.
+- **LeadsPanel**: Tabla de `demo_leads` con estado (nuevo/contactado/demo_activo/demo_completado/descartado/convertido). Botón "Dar acceso" invoca `create-demo-user`; muestra modal con email + contraseña temporal si se creó/reparó cuenta, o aviso de cuenta existente si se reutilizó. Leads ya vinculados no muestran el botón.
 
 **Salud del cliente** (`utils/customerHealth.js`): Combina pago, vencimiento, último contacto, riesgo, tareas vencidas, estado CRM → `healthy | warning | risk | unknown`.
 
@@ -504,6 +507,8 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 ### Validación servidor (RLS)
 
 - **Aislamiento multi-tenant**: `eleam_id` en tablas clínicas; RLS verifica vía `my_eleam_id()`.
+- **Acceso vigente**: `eleam_has_access(eleam_id)` bloquea lecturas/escrituras operativas si el ELEAM no está `activo`, `en_gracia`, con `pago_activo=true` o dentro del período pagado tras cancelación.
+- **Alta controlada**: `handle_new_user` rechaza OAuth/signUp sin invitación válida o `app_metadata` de Admin API. `raw_user_meta_data` solo sirve para nombre/flags no privilegiados.
 - **getMyContext()**: Servicios extraen `eleam_id` del perfil, no del cliente.
 - **Superadmin**: Función `is_superadmin()` en todas las RLS; bypass seguro.
 - **Storage path scoped**: `acreditacion/{eleamId}/...`; RLS filtra por `split_part(name, '/', 2)`.

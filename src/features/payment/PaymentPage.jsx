@@ -55,9 +55,10 @@ export default function PaymentPage() {
   const [params] = useSearchParams();
   const toast = useToast();
   const {
-    user, profile, eleam, pagoActivo, subscriptionStatus, isAdminEleam,
+    user, profile, eleam, pagoActivo, subscriptionStatus, isAdminEleam, rol,
   } = useAuth();
   const sinAcceso = params.get("sinAcceso") === "1";
+  const blockedNonAdmin = Boolean(user && !isAdminEleam && sinAcceso);
 
   useSEO({
     title: "Planes y precios · activa tu ELEAM",
@@ -178,10 +179,16 @@ export default function PaymentPage() {
             <div className="text-amber-500 text-2xl shrink-0">!</div>
             <div>
               <h3 className="font-bold text-amber-800 mb-1">
-                {user ? "Tu sesión está activa, falta activar el ELEAM" : "Tu ELEAM no tiene suscripción activa"}
+                {blockedNonAdmin
+                  ? "Tu acceso está suspendido por estado de suscripción"
+                  : user
+                    ? "Tu sesión está activa, falta activar el ELEAM"
+                    : "Tu ELEAM no tiene suscripción activa"}
               </h3>
               <p className="text-sm text-amber-700">
-                Para acceder al panel de gestión, el establecimiento debe quedar habilitado.
+                {blockedNonAdmin
+                  ? "Tu usuario existe, pero el ELEAM debe tener demo aprobada o suscripción vigente para usar la plataforma."
+                  : "Para acceder al panel de gestión, el establecimiento debe quedar habilitado."}
                 {user && accountEmail ? ` Estás conectado como ${accountEmail}.` : " Selecciona el plan que corresponde al tamaño de tu residencia."}
               </p>
             </div>
@@ -218,13 +225,20 @@ export default function PaymentPage() {
             </div>
             <div>
               <h3 className="font-semibold text-blue-800 text-sm mb-1">
-                La suscripción la administra el dueño del ELEAM
+                {blockedNonAdmin
+                  ? "Debes contactar al administrador del ELEAM"
+                  : "La suscripción la administra el dueño del ELEAM"}
               </h3>
               <p className="text-sm text-blue-700">
-                Tu acceso está incluido sin costo mientras el administrador
-                del ELEAM mantenga la suscripción activa. Si crees que la
-                suscripción debería estar activa, contáctalo.
+                {blockedNonAdmin
+                  ? "Funcionarios y familiares no pueden activar pagos. Pide al administrador que regularice la suscripción o solicita que el superadmin revise el demo."
+                  : "Tu acceso está incluido sin costo mientras el administrador del ELEAM mantenga la suscripción activa. Si crees que la suscripción debería estar activa, contáctalo."}
               </p>
+              {rol && (
+                <p className="text-xs text-blue-600 mt-2">
+                  Tipo de cuenta: <span className="font-semibold">{rol}</span>
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -266,10 +280,13 @@ export default function PaymentPage() {
         )}
 
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-black text-gray-800 mb-3">Activa tu ELEAM</h1>
+          <h1 className="text-4xl font-black text-gray-800 mb-3">
+            {blockedNonAdmin ? "Acceso pendiente del ELEAM" : "Activa tu ELEAM"}
+          </h1>
           <p className="text-gray-500 max-w-xl mx-auto text-base">
-            Un precio mensual por establecimiento. Sin cobros por usuario.
-            Todos tus funcionarios acceden incluidos.
+            {blockedNonAdmin
+              ? "Tu cuenta fue creada correctamente, pero la habilitación del establecimiento la gestiona el administrador ELEAM."
+              : "Un precio mensual por establecimiento. Sin cobros por usuario. Todos tus funcionarios acceden incluidos."}
           </p>
         </div>
 
@@ -329,7 +346,7 @@ export default function PaymentPage() {
                             : "bg-[var(--color-primary)] text-white hover:bg-[var(--color-button-hover)]"
                         }`}
                       >
-                        {loadingAction ? "Procesando..." : (user ? "Suscribirme" : "Crear cuenta")}
+                        {loadingAction ? "Procesando..." : (user && !isAdminEleam ? "Solo admin ELEAM" : user ? "Suscribirme" : "Crear cuenta")}
                       </button>
                     )}
                   </div>

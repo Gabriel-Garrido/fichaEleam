@@ -79,6 +79,8 @@ npx supabase link --project-ref <TU_PROJECT_REF>
 
 El schema es idempotente: puede re-ejecutarse. Incluye tablas base, RLS, triggers, seeds, permisos de funcionarios, leads de landing y analytics.
 
+Cuando cambie el flujo de autenticación, re-ejecuta el schema antes de desplegar las Edge Functions. `handle_new_user` depende de `app_metadata` server-side y rechazará registros/OAuth sin invitación válida.
+
 ---
 
 ## Edge Functions
@@ -90,10 +92,10 @@ Funciones deployables en `supabase/functions/`:
 | `mp-create-subscription` | sí | Crea preapproval de MercadoPago para admin ELEAM. |
 | `mp-cancel-subscription` | sí | Cancela suscripción MercadoPago del ELEAM. |
 | `mp-webhook` | no | Webhook público de MercadoPago; valida firma HMAC. |
-| `create-demo-user` | sí | Superadmin aprueba lead y crea o reutiliza admin ELEAM demo. |
-| `create-staff-user` | sí | Admin ELEAM crea funcionario/familiar con contraseña temporal. |
+| `create-demo-user` | sí | Superadmin aprueba lead y crea, reutiliza o repara admin ELEAM demo. |
+| `create-staff-user` | sí | Admin ELEAM crea/repara funcionarios/familiares; funcionario crea/repara familiares vinculados. |
 | `delete-staff-user` | sí | Admin ELEAM elimina usuario staff/familiar. |
-| `invite-funcionario` | sí | Flujo legado de invitación por token. |
+| `invite-funcionario` | sí | Flujo legado de invitación por token; admin invita staff/familiares y funcionario solo familiares. |
 
 `supabase/config.toml` define `verify_jwt`; no uses `--no-verify-jwt` manualmente salvo que cambies la configuración.
 
@@ -141,6 +143,17 @@ Prueba sandbox:
 
 ## Flujos de Acceso
 
+### Regla de cuenta autorizada
+
+No existe auto-registro público. Una sesión solo debe quedar operativa si el usuario cumple una de estas condiciones:
+
+- Superadmin aprobó un lead y `create-demo-user` creó, reutilizó o reparó su cuenta demo.
+- El ELEAM tiene demo o suscripción vigente (`pago_activo`, `activo`, `en_gracia` o cancelado dentro del período pagado).
+- Es funcionario creado por un admin ELEAM activo.
+- Es familiar creado por admin ELEAM o funcionario, siempre vinculado a un residente activo.
+
+Google OAuth no crea cuentas nuevas en FichaEleam. Si alguien intenta entrar con Google sin cuenta habilitada, el trigger `handle_new_user` rechaza el alta y la UI muestra un mensaje de acceso no autorizado.
+
 ### Superadmin
 
 - Ruta: `/superadmin`.
@@ -153,8 +166,11 @@ Prueba sandbox:
 2. Se inserta row en `demo_leads`.
 3. Superadmin presiona `Dar acceso a demo`.
 4. `create-demo-user`:
+   - crea el ELEAM demo antes de crear el usuario Auth;
+   - envía `eleam_id_direct` y `rol_direct=admin_eleam` por `app_metadata` de Admin API;
    - crea un usuario `admin_eleam` con contraseña temporal si el email no existe;
    - reutiliza una cuenta `admin_eleam` existente si el email ya tiene perfil compatible;
+   - repara usuarios huérfanos de Auth creados por intentos OAuth/signUp previos, creando el perfil autorizado y asignando una contraseña temporal nueva;
    - activa el ELEAM por 30 días;
    - marca el lead como `demo_activo`;
    - envía email vía Resend si `RESEND_API_KEY` existe.
@@ -171,11 +187,14 @@ Prueba sandbox:
 
 - Acceso operativo a `/dashboard`, residentes, signos, observaciones y acreditación según `funcionario_permisos`.
 - No paga ni gestiona equipo.
+- Puede crear cuentas familiares vinculadas a residentes activos desde flujos operativos autorizados.
+- Si el ELEAM pierde acceso vigente, queda bloqueado y debe contactar al admin ELEAM.
 
 ### Familiar
 
 - Accede a `/familiar` y `/familiar/visitas`.
 - Solo ve residentes vinculados por `familiar_residentes`.
+- Requiere que el ELEAM tenga demo o suscripción vigente.
 
 ---
 
@@ -216,6 +235,8 @@ Prueba sandbox:
 
 Todas las tablas sensibles tienen RLS. `superadmin` accede vía `public.is_superadmin()`. Staff y familiar quedan aislados por `eleam_id` o vínculo de residente.
 
+El acceso operativo también se filtra con `public.eleam_has_access(eleam_id)`: si el ELEAM no tiene demo/suscripción vigente, staff y familiares no pueden leer ni modificar fichas, registros, acreditación o documentos aunque conserven sesión de Supabase.
+
 ---
 
 ## Permisos de Funcionarios
@@ -249,6 +270,17 @@ Los permisos se aplican en UI con `useAuth().can()` y en RLS con `public.funcion
 npm run lint
 npm run build
 npx supabase functions list
+```
+
+Después de cambios en autenticación/autorización:
+
+1. Re-ejecuta `supabase_schema.sql` completo en SQL Editor.
+2. Despliega Edge Functions actualizadas:
+
+```bash
+npx supabase functions deploy create-demo-user
+npx supabase functions deploy create-staff-user
+npx supabase functions deploy invite-funcionario
 ```
 
 Warnings conocidos:
