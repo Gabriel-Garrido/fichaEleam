@@ -572,6 +572,104 @@ as $$
     and public.eleam_has_access(r.eleam_id);
 $$;
 
+create or replace function public.validate_invitation_token(
+  p_token text,
+  p_email text default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_token text := nullif(trim(coalesce(p_token, '')), '');
+  v_email text := lower(nullif(trim(coalesce(p_email, '')), ''));
+  v_inv record;
+begin
+  if v_token is null then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'Invitacion invalida. Usa el link completo que recibiste por correo.'
+    );
+  end if;
+
+  select
+    i.id,
+    lower(i.email) as email,
+    i.rol,
+    i.expira_en,
+    i.usado,
+    i.eleam_id,
+    i.residente_id,
+    e.nombre as eleam_nombre,
+    r.nombre as residente_nombre,
+    r.apellido as residente_apellido,
+    r.estado as residente_estado
+  into v_inv
+  from public.funcionario_invitaciones i
+  join public.eleams e on e.id = i.eleam_id
+  left join public.residentes r on r.id = i.residente_id
+  where i.token = v_token
+  limit 1;
+
+  if not found then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'Invitacion no encontrada. Pide al administrador que genere una nueva.'
+    );
+  end if;
+
+  if v_inv.usado then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'Esta invitacion ya fue usada. Inicia sesion o solicita una nueva.'
+    );
+  end if;
+
+  if v_inv.expira_en <= now() then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'Esta invitacion expiro. Pide al administrador que genere una nueva.'
+    );
+  end if;
+
+  if v_email is not null and v_email <> v_inv.email then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'Esta invitacion fue emitida para otro correo.'
+    );
+  end if;
+
+  if not public.eleam_has_access(v_inv.eleam_id) then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'El ELEAM asociado a esta invitacion no tiene acceso activo.'
+    );
+  end if;
+
+  if v_inv.rol = 'familiar' and (
+    v_inv.residente_id is null
+    or v_inv.residente_estado is distinct from 'activo'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'El residente asociado a esta invitacion ya no esta activo.'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'email', v_inv.email,
+    'rol', v_inv.rol,
+    'eleam_nombre', v_inv.eleam_nombre,
+    'residente_id', v_inv.residente_id,
+    'residente_nombre', nullif(trim(concat_ws(' ', v_inv.residente_nombre, v_inv.residente_apellido)), ''),
+    'expira_en', v_inv.expira_en
+  );
+end;
+$$;
+
 create or replace function public.funcionario_can(perm text)
 returns boolean
 language plpgsql
@@ -882,6 +980,18 @@ begin
         using errcode = '42501';
     end if;
 
+    if v_rol in ('funcionario', 'familiar') and not public.eleam_has_access(v_eleam_id) then
+      raise exception 'El ELEAM no tiene acceso activo para crear esta cuenta'
+        using errcode = '42501';
+    end if;
+
+    if v_rol = 'admin_eleam'
+       and v_account_source = 'demo_approved'
+       and not public.eleam_has_access(v_eleam_id) then
+      raise exception 'El demo aprobado no tiene acceso activo'
+        using errcode = '42501';
+    end if;
+
     v_residente_id := case
       when new.raw_app_meta_data->>'residente_id_direct' is not null
       then (new.raw_app_meta_data->>'residente_id_direct')::uuid
@@ -942,6 +1052,29 @@ begin
       v_rol := coalesce(v_invitacion.rol, 'funcionario');
       v_residente_id := v_invitacion.residente_id;
       v_invitado_por := v_invitacion.creado_por;
+
+      if not public.eleam_has_access(v_eleam_id) then
+        raise exception 'La invitacion pertenece a un ELEAM sin acceso activo'
+          using errcode = '42501';
+      end if;
+
+      if v_rol = 'familiar' then
+        if v_residente_id is null then
+          raise exception 'Invitacion familiar sin residente asociado'
+            using errcode = '42501';
+        end if;
+
+        if not exists (
+          select 1
+          from public.residentes r
+          where r.id = v_residente_id
+            and r.eleam_id = v_eleam_id
+            and r.estado = 'activo'
+        ) then
+          raise exception 'El residente asociado a la invitacion ya no esta activo'
+            using errcode = '42501';
+        end if;
+      end if;
 
       update public.funcionario_invitaciones
       set usado = true, usado_en = now()
@@ -1227,6 +1360,9 @@ create trigger trg_acred_provision_on_eleam
 -- RPC permissions
 revoke all on function public.ensure_platform_superadmin() from public;
 grant execute on function public.ensure_platform_superadmin() to authenticated;
+
+revoke all on function public.validate_invitation_token(text, text) from public;
+grant execute on function public.validate_invitation_token(text, text) to anon, authenticated;
 
 revoke all on function public.acred_provision_requisitos(uuid) from public;
 grant execute on function public.acred_provision_requisitos(uuid) to authenticated;

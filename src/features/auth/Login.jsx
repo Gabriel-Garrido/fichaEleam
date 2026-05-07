@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
-import { login, loginWithGoogle } from "./authService";
+import { authErrorMessage, login, loginWithGoogle } from "./authService";
 import { useAuth, useLoading } from "../../context/AuthContext";
 import { isSupabaseConfigured, supabaseConfigError } from "../../services/supabaseConfig";
 import Loading from "../../components/Loading";
@@ -65,9 +65,7 @@ export default function Login() {
     const params = new URLSearchParams(hash);
     const oauthError = params.get("error_description") || params.get("error");
     if (oauthError) {
-      setError(
-        "No encontramos una cuenta habilitada para ese correo. Solicita una demo aprobada o pide al administrador de tu ELEAM que cree tu usuario."
-      );
+      setError(authErrorMessage({ message: oauthError }, "No encontramos una cuenta habilitada para ese correo."));
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       setOauthPending(false);
     }
@@ -93,7 +91,7 @@ export default function Login() {
       await login({ email, password });
     } catch (err) {
       console.warn("Error de login:", err);
-      setError("No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente.");
+      setError(authErrorMessage(err, "No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente."));
     } finally {
       setLoading(false);
     }
@@ -106,7 +104,7 @@ export default function Login() {
       await loginWithGoogle();
     } catch (err) {
       console.warn("Error de Google OAuth:", err);
-      setError("Google no respondió como esperábamos. Intenta otra vez en unos segundos.");
+      setError(authErrorMessage(err, "Google no respondió como esperábamos. Intenta otra vez en unos segundos."));
       setGoogleLoading(false);
     }
   };

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabaseConfig";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
+import { authErrorMessage } from "./authService";
 
 function strengthLabel(pw) {
   if (!pw) return null;
@@ -27,10 +28,13 @@ export default function ResetPassword() {
   const [done, setDone]           = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [linkExpired, setLinkExpired]   = useState(false);
+  const [configError] = useState(!supabase);
 
   const strength = strengthLabel(password);
 
   useEffect(() => {
+    if (!supabase) return;
+
     // Supabase inserta access_token en el hash después del reset.
     // El onAuthStateChange lo detecta y establece la sesión.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -62,6 +66,10 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    if (!supabase) {
+      setError("Supabase no está configurado.");
+      return;
+    }
     const pwError = validatePassword();
     if (pwError) { setError(pwError); return; }
 
@@ -69,14 +77,40 @@ export default function ResetPassword() {
     try {
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) {
+        await supabase
+          .from("profiles")
+          .update({ must_reset_password: false })
+          .eq("id", user.id);
+      }
+
       setDone(true);
       setTimeout(() => navigate("/login"), 3000);
     } catch (err) {
-      setError(err.message || "No se pudo actualizar la contraseña.");
+      setError(authErrorMessage(err, err.message || "No se pudo actualizar la contraseña."));
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (configError) {
+    return (
+      <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
+          <h2 className="text-lg font-bold text-gray-800">Supabase no configurado</h2>
+          <p className="text-sm text-gray-500">No es posible restablecer contraseñas hasta configurar las variables de entorno.</p>
+          <button
+            onClick={() => navigate("/login")}
+            className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+          >
+            Volver al inicio de sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!sessionReady) {
     return (

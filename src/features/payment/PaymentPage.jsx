@@ -97,7 +97,8 @@ export default function PaymentPage() {
 
   const handleStart = async (codigo) => {
     if (!user) {
-      navigate(`/register`);
+      toast("Para contratar FichaEleam, solicita una demo y habilitaremos tu cuenta.", "info");
+      navigate("/");
       return;
     }
     if (!isAdminEleam) {
@@ -346,7 +347,7 @@ export default function PaymentPage() {
                             : "bg-[var(--color-primary)] text-white hover:bg-[var(--color-button-hover)]"
                         }`}
                       >
-                        {loadingAction ? "Procesando..." : (user && !isAdminEleam ? "Solo admin ELEAM" : user ? "Suscribirme" : "Crear cuenta")}
+                        {loadingAction ? "Procesando..." : (user && !isAdminEleam ? "Solo admin ELEAM" : user ? "Suscribirme" : "Solicitar demo")}
                       </button>
                     )}
                   </div>

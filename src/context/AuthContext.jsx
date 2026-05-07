@@ -223,6 +223,11 @@ export function AuthProvider({ children }) {
     return permisos[perm] === true;
   }, [isSuperadmin, isAdminEleam, isFuncionario, permisos]);
 
+  const refetchProfile = useCallback(() => {
+    if (!user) return Promise.resolve(null);
+    return fetchProfileAndEleam(user);
+  }, [fetchProfileAndEleam, user]);
+
   // Ruta inicial según rol/estado de suscripción.
   // - superadmin sin ELEAM → /superadmin (operador de la plataforma).
   // - superadmin con ELEAM (cuenta demo) → /dashboard para mostrar la app.
@@ -257,7 +262,7 @@ export function AuthProvider({ children }) {
     authLoading,
     authNotice,
     supabaseError: supabaseError || !isSupabaseConfigured,
-    refetchProfile: () => user && fetchProfileAndEleam(user),
+    refetchProfile,
   };
 
   if (authLoading) return <Loading message="Verificando autenticación..." />;

@@ -1,10 +1,12 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { supabase } from "../../services/supabaseConfig";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
+import Loading from "../../components/Loading";
+import { authErrorMessage } from "../auth/authService";
 
 function strengthLabel(pw) {
   if (!pw) return null;
@@ -21,6 +23,8 @@ function strengthLabel(pw) {
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const linkedGoogle = params.get("linked") === "google";
   const toast = useToast();
   const { user, homePath, refetchProfile } = useAuth();
 
@@ -29,10 +33,50 @@ export default function ChangePasswordPage() {
   const [showPw,   setShowPw]       = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [finalizingGoogle, setFinalizingGoogle] = useState(linkedGoogle);
   const [error,    setError]        = useState(null);
 
   const isGmail = (user?.email || "").toLowerCase().endsWith("@gmail.com");
   const strength = strengthLabel(password);
+
+  useEffect(() => {
+    if (!linkedGoogle || !user?.id) return;
+
+    let cancelled = false;
+    const finishGoogleLink = async () => {
+      setFinalizingGoogle(true);
+      setError(null);
+      try {
+        const hash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+        const oauthParams = new URLSearchParams(hash);
+        const oauthError = oauthParams.get("error_description") || oauthParams.get("error");
+        if (oauthError) {
+          throw new Error(oauthError);
+        }
+
+        const { error: profileErr } = await supabase
+          .from("profiles")
+          .update({ must_reset_password: false })
+          .eq("id", user.id);
+        if (profileErr) throw profileErr;
+
+        await refetchProfile();
+        if (cancelled) return;
+        toast("Google quedó vinculado correctamente", "success");
+        navigate(homePath || "/dashboard", { replace: true });
+      } catch (err) {
+        console.warn("Error al finalizar Google link:", err);
+        if (!cancelled) {
+          setError("No fue posible confirmar la vinculación con Google. Puedes intentarlo otra vez o establecer una contraseña.");
+          setFinalizingGoogle(false);
+          navigate("/cambiar-clave", { replace: true });
+        }
+      }
+    };
+
+    finishGoogleLink();
+    return () => { cancelled = true; };
+  }, [homePath, linkedGoogle, navigate, refetchProfile, toast, user?.id]);
 
   const validatePassword = () => {
     if (password.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
@@ -63,7 +107,7 @@ export default function ChangePasswordPage() {
       toast("Contraseña actualizada correctamente", "success");
       navigate(homePath || "/dashboard", { replace: true });
     } catch (err) {
-      setError(err.message || "No se pudo actualizar la contraseña.");
+      setError(authErrorMessage(err, err.message || "No se pudo actualizar la contraseña."));
     } finally {
       setSubmitting(false);
     }
@@ -73,25 +117,20 @@ export default function ChangePasswordPage() {
     setError(null);
     setGoogleLoading(true);
     try {
-      // Limpiar la bandera antes de vincular: si el usuario ya inició sesión
-      // con email/password y vincula Google, la sesión existente se mantiene.
-      // linkIdentity añade Google como proveedor sin crear una cuenta nueva,
-      // evitando cuentas duplicadas (problema de signInWithOAuth en este contexto).
-      await supabase.from("profiles").update({ must_reset_password: false }).eq("id", user.id);
       const { error: linkErr } = await supabase.auth.linkIdentity({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/login` },
+        options: { redirectTo: `${window.location.origin}/cambiar-clave?linked=google` },
       });
       if (linkErr) throw linkErr;
       // linkIdentity redirige al proveedor; si llega aquí es un entorno sin redirect
     } catch (err) {
       console.warn("Error al vincular Google:", err);
-      setError("No fue posible vincular con Google. Intenta de nuevo.");
-      // Revertir si hubo error antes de redirigir
-      await supabase.from("profiles").update({ must_reset_password: true }).eq("id", user.id).catch(() => {});
+      setError(authErrorMessage(err, "No fue posible vincular con Google. Intenta de nuevo."));
       setGoogleLoading(false);
     }
   };
+
+  if (finalizingGoogle) return <Loading message="Confirmando acceso con Google..." />;
 
   return (
     <div className="min-h-screen bg-[var(--color-background,#f8fafc)] flex items-center justify-center px-4">

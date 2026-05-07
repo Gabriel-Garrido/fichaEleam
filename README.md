@@ -154,6 +154,8 @@ No existe auto-registro público. Una sesión solo debe quedar operativa si el u
 
 Google OAuth no crea cuentas nuevas en FichaEleam. Si alguien intenta entrar con Google sin cuenta habilitada, el trigger `handle_new_user` rechaza el alta y la UI muestra un mensaje de acceso no autorizado.
 
+El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la invitación con la RPC `validate_invitation_token`. El servidor vuelve a validar en `handle_new_user`: la invitación no puede estar vencida/usada, el ELEAM debe mantener acceso activo y, si es familiar, el residente vinculado debe seguir activo.
+
 ### Superadmin
 
 - Ruta: `/superadmin`.

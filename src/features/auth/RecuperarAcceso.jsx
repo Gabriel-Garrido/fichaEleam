@@ -4,6 +4,7 @@ import { supabase } from "../../services/supabaseConfig";
 import { validateEmail } from "../../utils/validators";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
+import { authErrorMessage } from "./authService";
 
 export default function RecuperarAcceso() {
   const navigate = useNavigate();
@@ -20,6 +21,10 @@ export default function RecuperarAcceso() {
       setError("Ingresa un correo electrónico válido.");
       return;
     }
+    if (!supabase) {
+      setError("Supabase no está configurado.");
+      return;
+    }
     setLoading(true);
     try {
       const { error: err } = await supabase.auth.resetPasswordForEmail(clean, {
@@ -29,7 +34,7 @@ export default function RecuperarAcceso() {
       setSubmitted(true);
     } catch (err) {
       console.warn("reset password error:", err);
-      setError("No pudimos enviar el correo. Intenta nuevamente en unos minutos.");
+      setError(authErrorMessage(err, "No pudimos enviar el correo. Intenta nuevamente en unos minutos."));
     } finally {
       setLoading(false);
     }

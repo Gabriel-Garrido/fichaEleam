@@ -4,7 +4,7 @@ import Input from "../../components/Input";
 import Button from "../../components/Button";
 import { useLoading, useAuth } from "../../context/AuthContext";
 import Loading from "../../components/Loading";
-import { register } from "./authService";
+import { authErrorMessage, register, validateInvitationToken } from "./authService";
 import { validateEmail } from "../../utils/validators";
 
 // El registro está restringido a usuarios con invitación válida.
@@ -29,10 +29,44 @@ function Register() {
   });
   const [showPw, setShowPw] = useState(false);
   const [error,  setError]  = useState(null);
+  const [inviteInfo, setInviteInfo] = useState(null);
+  const [inviteError, setInviteError] = useState(null);
+  const [validatingInvite, setValidatingInvite] = useState(Boolean(inviteToken));
+  const [registered, setRegistered] = useState(false);
 
   useEffect(() => {
     if (invitedEmail) setUserData((prev) => ({ ...prev, email: invitedEmail }));
   }, [invitedEmail]);
+
+  useEffect(() => {
+    if (!inviteToken) {
+      setValidatingInvite(false);
+      return;
+    }
+
+    let cancelled = false;
+    setValidatingInvite(true);
+    setInviteError(null);
+
+    validateInvitationToken({ inviteToken, email: invitedEmail })
+      .then((info) => {
+        if (cancelled) return;
+        setInviteInfo(info);
+        if (info?.email) {
+          setUserData((prev) => ({ ...prev, email: info.email }));
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setInviteInfo(null);
+        setInviteError(authErrorMessage(err, err.message || "La invitación no es válida o expiró."));
+      })
+      .finally(() => {
+        if (!cancelled) setValidatingInvite(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [inviteToken, invitedEmail]);
 
   // Sin token de invitación → mostrar pantalla explicativa
   // (solo cuando auth terminó de cargar; durante authLoading el spinner de abajo lo maneja)
@@ -74,6 +108,42 @@ function Register() {
     );
   }
 
+  if (!authLoading && inviteError) {
+    return (
+      <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
+        <div className="mb-6 text-center">
+          <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
+            FichaEleam
+          </button>
+          <p className="text-sm text-gray-500 mt-1">Plataforma para ELEAM</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
+          <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto">
+            <svg className="w-7 h-7 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800">Invitación no disponible</h2>
+          <p className="text-sm text-gray-500">{inviteError}</p>
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={() => navigate("/login")}
+              className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+            >
+              Iniciar sesión
+            </button>
+            <button
+              onClick={() => navigate("/")}
+              className="w-full border border-gray-300 text-gray-600 py-3 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-colors"
+            >
+              Volver al inicio
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setUserData((prev) => ({ ...prev, [name]: value }));
@@ -91,6 +161,10 @@ function Register() {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError(null);
+    if (!userData.nombre.trim()) {
+      setError("Ingresa tu nombre completo.");
+      return;
+    }
     if (!validateEmail(userData.email)) {
       setError("El correo electrónico no es válido.");
       return;
@@ -100,20 +174,54 @@ function Register() {
 
     setLoading(true);
     try {
-      await register({
+      await validateInvitationToken({ inviteToken, email: userData.email });
+      const result = await register({
         nombre: userData.nombre,
         email: userData.email,
         password: userData.password,
         inviteToken,
       });
+      if (!result?.session) setRegistered(true);
     } catch (err) {
-      setError(err.message || "No se pudo completar el registro. Por favor, inténtalo de nuevo.");
+      setError(authErrorMessage(err, err.message || "No se pudo completar el registro. Por favor, inténtalo de nuevo."));
     } finally {
       setLoading(false);
     }
   };
 
-  if (authLoading || loading) return <Loading message="Procesando..." />;
+  if (authLoading || loading || validatingInvite) {
+    return <Loading message={validatingInvite ? "Validando invitación..." : "Procesando..."} />;
+  }
+
+  if (registered) {
+    return (
+      <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
+        <div className="mb-6 text-center">
+          <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
+            FichaEleam
+          </button>
+          <p className="text-sm text-gray-500 mt-1">Plataforma para ELEAM</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
+          <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+            <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800">Cuenta activada</h2>
+          <p className="text-sm text-gray-500">
+            Ya puedes iniciar sesión con <span className="font-medium text-gray-700">{userData.email}</span>.
+          </p>
+          <button
+            onClick={() => navigate("/login")}
+            className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+          >
+            Ir al inicio de sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
@@ -128,11 +236,17 @@ function Register() {
         <div className="mb-5 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
           <p className="text-sm font-semibold text-emerald-800 mb-1">Activando tu cuenta</p>
           <p className="text-sm text-emerald-700">
-            Fuiste invitado a unirte a un ELEAM en FichaEleam.
-            {invitedEmail && (
-              <> Regístrate con <span className="font-semibold">{invitedEmail}</span> para activar tu acceso.</>
+            Fuiste invitado a {inviteInfo?.eleam_nombre || "un ELEAM"} como{" "}
+            <span className="font-semibold">{inviteInfo?.rol === "familiar" ? "familiar" : "funcionario"}</span>.
+            {inviteInfo?.residente_nombre && (
+              <> Acceso vinculado a <span className="font-semibold">{inviteInfo.residente_nombre}</span>.</>
             )}
           </p>
+          {inviteInfo?.email && (
+            <p className="text-xs text-emerald-700 mt-2">
+              Usa el correo <span className="font-semibold">{inviteInfo.email}</span>.
+            </p>
+          )}
         </div>
 
         <h1 className="text-2xl font-bold text-gray-800 mb-5">Crea tu contraseña</h1>
@@ -159,7 +273,7 @@ function Register() {
               placeholder="tu@email.cl"
               value={userData.email}
               onChange={handleChange}
-              readOnly={Boolean(invitedEmail)}
+              readOnly={Boolean(inviteInfo?.email)}
               autoComplete="email"
               required
               className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] read-only:bg-gray-50"

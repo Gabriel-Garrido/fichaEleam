@@ -24,6 +24,20 @@ import {
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
+function eleamHasAccess(eleam: {
+  subscription_status?: string | null;
+  pago_activo?: boolean | null;
+  fecha_vencimiento_suscripcion?: string | null;
+}): boolean {
+  if (eleam.pago_activo === true) return true;
+  if (["activo", "en_gracia"].includes(String(eleam.subscription_status ?? ""))) return true;
+  if (eleam.subscription_status === "cancelado" && eleam.fecha_vencimiento_suscripcion) {
+    const until = new Date(eleam.fecha_vencimiento_suscripcion);
+    return !Number.isNaN(until.valueOf()) && until > new Date();
+  }
+  return false;
+}
+
 // Genera contraseña de 12 chars alfanuméricos sin caracteres ambiguos (0/O/I/l/1)
 function generatePassword(): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -111,13 +125,13 @@ Deno.serve(async (req) => {
     // Verificar estado del ELEAM
     const { data: eleam } = await sb
       .from("eleams")
-      .select("id, subscription_status, plan_id, max_funcionarios, nombre")
+      .select("id, subscription_status, pago_activo, fecha_vencimiento_suscripcion, plan_id, max_funcionarios, nombre")
       .eq("id", profile.eleam_id)
       .maybeSingle();
     if (!eleam) return jsonResponse(req, { error: "ELEAM no encontrado" }, 404);
 
-    if (!["activo", "en_gracia"].includes(eleam.subscription_status)) {
-      return jsonResponse(req, { error: "El ELEAM no tiene suscripción activa" }, 403);
+    if (!eleamHasAccess(eleam)) {
+      return jsonResponse(req, { error: "El ELEAM no tiene acceso activo" }, 403);
     }
 
     // Validar residente para familiar

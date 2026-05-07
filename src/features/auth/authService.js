@@ -7,6 +7,35 @@ function requireSupabase() {
   return supabase;
 }
 
+export function authErrorMessage(error, fallback = "No pudimos completar la operación. Intenta nuevamente.") {
+  const raw = String(error?.message || error?.error_description || error || "");
+  const msg = raw.toLowerCase();
+
+  if (msg.includes("invalid login credentials")) {
+    return "Correo o contraseña incorrectos. Verifica los datos o recupera tu contraseña.";
+  }
+  if (msg.includes("email not confirmed")) {
+    return "Debes confirmar tu correo antes de iniciar sesión.";
+  }
+  if (msg.includes("user already registered") || msg.includes("already been registered")) {
+    return "Este correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.";
+  }
+  if (msg.includes("invitacion")) {
+    return raw;
+  }
+  if (msg.includes("invitation") || msg.includes("invite")) {
+    return "La invitación no es válida, ya fue usada o expiró. Pide al administrador que genere una nueva.";
+  }
+  if (msg.includes("cuenta no autorizada") || msg.includes("no autorizado")) {
+    return "No encontramos una cuenta habilitada para ese correo. Solicita una demo aprobada o pide que creen tu usuario.";
+  }
+  if (msg.includes("network") || msg.includes("failed to fetch")) {
+    return "No pudimos conectar con Supabase. Revisa tu conexión e intenta nuevamente.";
+  }
+
+  return fallback;
+}
+
 export const login = async ({ email, password }) => {
   const client = requireSupabase();
   const { data, error } = await client.auth.signInWithPassword({
@@ -36,9 +65,33 @@ export const loginWithGoogle = async () => {
   return data;
 };
 
+export const validateInvitationToken = async ({ inviteToken, email = "" }) => {
+  const client = requireSupabase();
+  const token = String(inviteToken || "").trim();
+  if (!token) {
+    throw new Error("Invitación inválida. Usa el link completo que recibiste por correo.");
+  }
+
+  const { data, error } = await client.rpc("validate_invitation_token", {
+    p_token: token,
+    p_email: email ? email.trim() : null,
+  });
+
+  if (error) throw error;
+  if (!data?.ok) {
+    throw new Error(data?.error || "La invitación no es válida o expiró.");
+  }
+  return data;
+};
+
 export const register = async ({ nombre, email, password, inviteToken }) => {
   const client = requireSupabase();
   const cleanEmail = email.trim();
+  const cleanInvite = String(inviteToken || "").trim();
+
+  if (!cleanInvite) {
+    throw new Error("Invitación inválida. Usa el link completo que recibiste por correo.");
+  }
 
   // El trigger handle_new_user solo acepta registro con invite_token
   // valido. Las cuentas admin ELEAM se crean desde Edge Functions con
@@ -47,14 +100,15 @@ export const register = async ({ nombre, email, password, inviteToken }) => {
     email: cleanEmail,
     password,
     options: {
+      emailRedirectTo: `${window.location.origin}/login`,
       data: {
-        nombre,
-        ...(inviteToken ? { invite_token: inviteToken } : {}),
+        nombre: String(nombre || "").trim(),
+        invite_token: cleanInvite,
       },
     },
   });
   if (error) throw error;
-  return data.user;
+  return data;
 };
 
 export const logout = async () => {

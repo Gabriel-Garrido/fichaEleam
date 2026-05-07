@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import OnboardingGuide, {
   ADMIN_STEPS,
   FUNCIONARIO_STEPS,
@@ -565,7 +564,6 @@ const PANEL_COMPONENTS = {
 // ── Main shell ────────────────────────────────────────────────
 
 export default function GuidedDemoShell({ token, onProgresoUpdate }) {
-  const navigate = useNavigate();
   const [role, setRole]           = useState("admin");
   const [activePanel, setActivePanel] = useState("dashboard");
   const [guideVisible, setGuideVisible] = useState(true);
@@ -656,10 +654,10 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
             <span className="text-xs text-gray-500">{totalProgress}%</span>
           </div>
           <button
-            onClick={() => navigate("/register")}
+            onClick={() => setShowModal(true)}
             className="bg-teal-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-teal-700 font-semibold hidden sm:block"
           >
-            Crear cuenta
+            Hablar con especialista
           </button>
         </div>
       </header>
@@ -704,10 +702,10 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
           <p className="text-sm text-gray-600 mb-4">¿Listo para activar tu ELEAM?</p>
           <div className="flex gap-2">
             <button
-              onClick={() => navigate("/register")}
+              onClick={() => setShowModal(true)}
               className="flex-1 bg-teal-600 text-white text-sm py-2 rounded-lg font-semibold hover:bg-teal-700"
             >
-              Crear cuenta
+              Hablar con especialista
             </button>
             <button
               onClick={() => setShowModal(true)}
