@@ -1123,6 +1123,12 @@ create trigger trg_seed_funcionario_permisos
   after insert or update of rol on public.profiles
   for each row execute function public.seed_funcionario_permisos();
 
+insert into public.funcionario_permisos (profile_id)
+select id
+from public.profiles
+where rol = 'funcionario'
+on conflict (profile_id) do nothing;
+
 drop trigger if exists trg_residentes_updated_at on public.residentes;
 create trigger trg_residentes_updated_at
   before update on public.residentes
@@ -1984,11 +1990,35 @@ create table if not exists public.demo_leads (
   creado_en                 timestamptz default now() not null
 );
 
--- Añadir demo_user_id si la tabla ya existía antes de esta versión del schema
+-- Añadir columnas si la tabla ya existía antes de esta versión del schema.
 alter table public.demo_leads
+  add column if not exists cargo text,
+  add column if not exists eleam_nombre text,
+  add column if not exists telefono text,
+  add column if not exists num_residentes text,
+  add column if not exists utm_source text,
+  add column if not exists utm_medium text,
+  add column if not exists utm_campaign text,
+  add column if not exists pagina_origen text,
+  add column if not exists referrer text,
+  add column if not exists estado text not null default 'nuevo',
+  add column if not exists notas_admin text,
+  add column if not exists demo_token uuid,
+  add column if not exists demo_access_granted_at timestamptz,
+  add column if not exists demo_expires_at timestamptz,
+  add column if not exists demo_ultimo_ping timestamptz,
+  add column if not exists demo_progreso jsonb default '{}'::jsonb,
+  add column if not exists solicita_contacto boolean default false,
+  add column if not exists solicita_contacto_en timestamptz,
+  add column if not exists solicita_contacto_mensaje text,
   add column if not exists demo_user_id uuid references auth.users(id) on delete set null;
 
 alter table public.demo_leads enable row level security;
+
+drop policy if exists "anon_insert_leads" on public.demo_leads;
+drop policy if exists "superadmin_manage_leads" on public.demo_leads;
+drop policy if exists "token_read_demo" on public.demo_leads;
+drop policy if exists "token_update_demo" on public.demo_leads;
 
 create policy "anon_insert_leads" on public.demo_leads
   for insert to anon, authenticated with check (true);
@@ -2027,6 +2057,9 @@ create table if not exists public.landing_events (
 );
 
 alter table public.landing_events enable row level security;
+
+drop policy if exists "anon_insert_events" on public.landing_events;
+drop policy if exists "superadmin_read_events" on public.landing_events;
 
 create policy "anon_insert_events" on public.landing_events
   for insert to anon, authenticated with check (true);

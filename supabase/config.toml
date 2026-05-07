@@ -17,3 +17,12 @@ verify_jwt = true
 
 [functions.invite-funcionario]
 verify_jwt = true
+
+[functions.create-demo-user]
+verify_jwt = true
+
+[functions.create-staff-user]
+verify_jwt = true
+
+[functions.delete-staff-user]
+verify_jwt = true

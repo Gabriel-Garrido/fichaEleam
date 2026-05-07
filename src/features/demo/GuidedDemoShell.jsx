@@ -365,7 +365,7 @@ function ObservationsPanel({ showForm = false }) {
 }
 
 function AccreditationPanel() {
-  const { pct, cumple, totalRequisitos, pendiente, vencido, observado } = DEMO_ACRED_KPI;
+  const { pct, cumple, pendiente, vencido, observado } = DEMO_ACRED_KPI;
   return (
     <div className="space-y-4">
       <SectionTitle sub="Carpeta DS 14/2017 · 14 ámbitos">Acreditación SEREMI</SectionTitle>
@@ -564,7 +564,7 @@ const PANEL_COMPONENTS = {
 
 // ── Main shell ────────────────────────────────────────────────
 
-export default function GuidedDemoShell({ token, leadId, onProgresoUpdate }) {
+export default function GuidedDemoShell({ token, onProgresoUpdate }) {
   const navigate = useNavigate();
   const [role, setRole]           = useState("admin");
   const [activePanel, setActivePanel] = useState("dashboard");

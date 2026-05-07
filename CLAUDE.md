@@ -10,7 +10,7 @@ Aplicación web SPA para digitalización de registros clínicos, administrativos
 
 - **Frontend**: React 19 + Vite 6 + Tailwind CSS 4 + React Router 7
 - **Backend**: Supabase (PostgreSQL + Auth + Storage)
-- **Tooling**: ESLint 9, Vite
+- **Tooling**: ESLint 9, Vite, Supabase CLI local vía `npx supabase`
 
 **Comandos**:
 ```bash
@@ -18,6 +18,7 @@ npm run dev       # localhost:5173
 npm run build     # /dist
 npm run lint      # ESLint
 npm run preview   # preview del build
+npx supabase functions deploy  # despliega todas las Edge Functions
 ```
 
 **Env**: Copiar `.env.example` → `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
@@ -51,7 +52,7 @@ src/
 │   ├── payment/                # PaymentPage, PaymentReturn (MercadoPago)
 │   ├── team/                   # TeamManagement (crear funcionarios/familiares) + ChangePasswordPage
 │   ├── familiar/               # Portal restringido + registro de visitas
-│   ├── demo/                   # DemoSelector, DemoPage (admin/funcionario), FamiliarDemoPage
+│   ├── demo/                   # Demo guiado por token, datos mock y guía interactiva
 │   ├── superadmin/             # Dashboard CRM + blog editor + gestión de pagos + LeadsPanel
 │   │   └── blog/               # BlogManagement, BlogEditor (solo para superadmin)
 │   └── utils/                  # Markdown renderer, customer health, etc.
@@ -70,6 +71,7 @@ supabase/functions/
 │   └── email.ts                # Resend API helper; sendEmail(), staffWelcomeEmail(), demoWelcomeEmail()
 ├── create-demo-user/           # Crea usuario real cuando superadmin aprueba demo lead
 ├── create-staff-user/          # Crea funcionario/familiar con contraseña temporal
+├── delete-staff-user/          # Elimina staff/familiar desde Auth + cascadas
 ├── invite-funcionario/         # Flujo antiguo (invitación por email con token)
 ├── mp-create-subscription/
 ├── mp-webhook/
@@ -93,7 +95,7 @@ supabase/functions/
 
 **No existe auto-registro público.** La landing solo muestra "Iniciar sesión" y CTA de demo. Los nuevos admins entran vía el flujo de aprobación de demo:
 
-1. **Demo → Admin**: Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba desde `/superadmin` → Edge Function `create-demo-user` crea cuenta `admin_eleam` con contraseña temporal → email con credenciales (vía Resend) + superadmin ve las credenciales en modal UI.
+1. **Demo → Admin**: Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba desde `/superadmin` → Edge Function `create-demo-user` crea o reutiliza cuenta `admin_eleam` compatible → activa ELEAM demo por 30 días → email con credenciales si aplica (vía Resend) + superadmin ve el resultado en modal UI.
 2. **Funcionario/Familiar creado por admin**: Admin crea staff desde `/equipo` → Edge Function `create-staff-user` crea cuenta con contraseña temporal + envía email de bienvenida.
 3. **Primer acceso (cualquier rol)**: Si `must_reset_password=true`, `ProtectedRoute` fuerza redirect a `/cambiar-clave`. Allí puede establecer nueva contraseña o, si tiene Gmail, vincular Google con `supabase.auth.linkIdentity` (no crea cuenta duplicada).
 4. **Recuperación de contraseña**: `/recuperar-acceso` → `supabase.auth.resetPasswordForEmail` → email con link → `/reset-password` → nueva contraseña vía `supabase.auth.updateUser`.
@@ -140,8 +142,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | `/register` | Register | — | Solo con `?invite=TOKEN`; sin token muestra pantalla de bloqueo |
 | `/recuperar-acceso` | RecuperarAcceso | — | Solicita email para reset de contraseña |
 | `/reset-password` | ResetPassword | — | Procesa callback de Supabase; timeout 8s para links expirados |
-| `/demo` | DemoSelector | — | Selector: Admin / Funcionario / Familiar |
-| `/demo/admin`, `/demo/funcionario`, `/demo/familiar` | Demo* | — | Demo offline con localStorage |
+| `/demo/:token` | GuidedDemoPage | — | Demo guiado para lead aprobado; token en `demo_leads` |
 | `/pago` | PaymentPage | `requireActive=false` | Planes MercadoPago |
 | `/pago/return` | PaymentReturn | — | Post-checkout; polling |
 | `/blog` | PublicBlogList | — | Blog público |
@@ -172,7 +173,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 ## Base de Datos
 
-21 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
+23 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
 
 ### Tablas principales
 
@@ -266,7 +267,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 **`familiar_residentes`** — PK (profile_id, residente_id): parentesco, creado_por, creado_en.
 
-**`funcionario_permisos`** — Permisos granulares por funcionario. Columnas dinámicas: `crear_residente`, `editar_residente`, `eliminar_residente`, `crear_signos`, `eliminar_signos`, `crear_observacion`, `eliminar_observacion`, `subir_acreditacion`, `archivar_acreditacion`, etc. (todas bool).
+**`funcionario_permisos`** — Permisos granulares por funcionario. Columnas: `crear_residentes`, `editar_residentes`, `eliminar_residentes`, `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales`, `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones`, `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion`, `registrar_visitas` (todas bool).
 
 **`visitas_familiar`** — Registro de visitas: residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por.
 
@@ -278,7 +279,9 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 **`crm_interactions`** — tipo, canal, resumen, resultado, proxima_accion, creado_por, eleam_id, fecha.
 
-**`demo_leads`** — Leads del formulario de landing: nombre, email, telefono, nombre_eleam, num_residentes, mensaje, estado (nuevo|contactado|demo_activo|convertido|descartado), demo_token (flujo legado), demo_user_id (uuid FK auth.users; vincula al usuario real cuando superadmin aprueba demo), demo_expires_at, creado_en.
+**`demo_leads`** — Leads del formulario de landing: nombre, cargo, eleam_nombre, email, telefono, num_residentes, UTM/referrer, estado (nuevo|contactado|demo_activo|demo_completado|descartado|convertido), demo_token, demo_user_id (uuid FK auth.users; vincula al usuario real cuando superadmin aprueba demo), demo_progreso, solicitudes de contacto y vencimiento.
+
+**`landing_events`** — Eventos anónimos de landing: tipo, página, elemento, valor, session_id, UTM/referrer, creado_en. Solo anon/authenticated insertan; superadmin lee.
 
 ### RLS (Row Level Security)
 
@@ -316,7 +319,7 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 
 ### admin_eleam (Dueño del ELEAM)
 
-1. **Onboarding vía demo**: Prospecto llena formulario en landing → superadmin aprueba en LeadsPanel → Edge Function `create-demo-user` crea cuenta con contraseña temporal → email enviado + credenciales visibles en modal UI. Trigger `handle_new_user` crea el ELEAM automáticamente; suscripción activada con 30 días de prueba.
+1. **Onboarding vía demo**: Prospecto llena formulario en landing → superadmin aprueba en LeadsPanel → Edge Function `create-demo-user` crea cuenta con contraseña temporal o reutiliza una cuenta `admin_eleam` existente → email enviado si aplica + resultado visible en modal UI. Trigger `handle_new_user` crea el ELEAM automáticamente para usuarios nuevos; suscripción activada con 30 días de prueba.
 2. **Primer acceso**: `must_reset_password=true` → forzado a `/cambiar-clave` → establece contraseña personal o vincula Google (si Gmail, usando `linkIdentity`).
 3. **Sin pago**: Redirige a `/pago?sinAcceso=1`. Solo ve "Activar ELEAM", "Demo", "Cerrar sesión".
 4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/equipo` + `/accreditation`.
@@ -423,7 +426,8 @@ Internas (admin levanta) o de fiscalización (SEREMI detecta). Flujo: `abierta` 
 - `mp-cancel-subscription`: Cancela preapproval; solo `admin_eleam`.
 - `invite-funcionario`: Crea invitation token; valida plan y límites (flujo legado).
 - `create-staff-user`: Crea funcionario/familiar con contraseña temporal; envía email via Resend (si configurado). Retorna `{ ok, profile_id, email, temp_password, email_sent }`.
-- `create-demo-user`: Crea admin_eleam para lead aprobado; activa ELEAM 30 días; envía email de bienvenida. Retorna `{ ok, profile_id, eleam_id, email, temp_password, email_sent }`.
+- `delete-staff-user`: Elimina usuario de Auth; cascadas limpian `profiles`, `familiar_residentes` y `funcionario_permisos`.
+- `create-demo-user`: Crea o reutiliza admin_eleam para lead aprobado; activa ELEAM 30 días; envía email de bienvenida cuando genera contraseña. Retorna `{ ok, profile_id, eleam_id, email, temp_password?, email_sent, reused_existing_user?, already_active? }`.
 
 ### Email (Resend — opcional)
 
@@ -434,9 +438,12 @@ Internas (admin levanta) o de fiscalización (SEREMI detecta). Flujo: `abierta` 
 - `MP_ACCESS_TOKEN` — Bearer MP.
 - `MP_WEBHOOK_SECRET` — HMAC secret.
 - `PUBLIC_APP_URL` — URL frontend (para back_url, invite links).
+- `ALLOWED_ORIGINS` — CSV de orígenes permitidos por CORS.
 - `RESEND_API_KEY` — Opcional; si ausente, emails no se envían pero credenciales se retornan en respuesta.
 
 NUNCA exponer como `VITE_*`.
+
+Setear con `npx supabase secrets set NOMBRE=valor`.
 
 ---
 
@@ -444,17 +451,11 @@ NUNCA exponer como `VITE_*`.
 
 ### Demo guiado (flujo principal)
 
-Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba en LeadsPanel (`/superadmin`) → Edge Function `create-demo-user` crea cuenta `admin_eleam` real con 30 días de prueba → email con credenciales (si Resend configurado) → superadmin ve temp_password en modal → prospecto inicia sesión y completa `/cambiar-clave`.
+Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba en LeadsPanel (`/superadmin`) → Edge Function `create-demo-user` crea cuenta `admin_eleam` real con 30 días de prueba o reutiliza una cuenta compatible → email con credenciales si se generó contraseña y Resend está configurado → superadmin ve temp_password solo cuando existe → prospecto inicia sesión y completa `/cambiar-clave`.
 
-### Demo offline (exploración libre)
+Ruta pública: `/demo/:token`. Guarda progreso en `demo_leads.demo_progreso`, actualiza `demo_ultimo_ping` y permite solicitar contacto desde el demo.
 
-Ruta `/demo` abre selector: Admin / Funcionario / Familiar. Cada demo es **offline** con mock data en `localStorage`.
-
-- **Admin** (`/demo/admin`): CRUD residentes, signos, observaciones, acreditación con upload (simulado).
-- **Funcionario** (`/demo/funcionario`): Igual que admin pero sin botón de upload en acreditación.
-- **Familiar** (`/demo/familiar`): 1 residente, últimos signos, observaciones recientes, registro de visitas en estado local.
-
-`DemoBanner` permite cambiar perfil o limpiar localStorage.
+Los datos clínicos del demo viven en `src/features/demo/demoData.js`; no escriben tablas clínicas reales.
 
 ---
 
@@ -484,7 +485,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Ficha 360 del ELEAM**: Contacto, estado, suscripción, riesgo churn, tareas vencidas, interacciones recientes, salud cliente (healthy/warning/risk).
 - **Tareas**: Crear, asignar, marcar completadas, vencimiento, prioridad.
 - **Interacciones**: Registro de contactos (call, email, meeting, etc.); proxima acción; audit trail.
-- **LeadsPanel**: Tabla de `demo_leads` con estado (nuevo/contactado/demo_activo/convertido/descartado). Botón "Dar acceso" invoca `create-demo-user`; muestra modal con email + contraseña temporal + estado de email enviado. Leads con `demo_token` (flujo legado) no muestran el botón de acceso real.
+- **LeadsPanel**: Tabla de `demo_leads` con estado (nuevo/contactado/demo_activo/demo_completado/descartado/convertido). Botón "Dar acceso" invoca `create-demo-user`; muestra modal con email + contraseña temporal si se creó cuenta nueva, o aviso de cuenta existente si se reutilizó. Leads ya vinculados no muestran el botón.
 
 **Salud del cliente** (`utils/customerHealth.js`): Combina pago, vencimiento, último contacto, riesgo, tareas vencidas, estado CRM → `healthy | warning | risk | unknown`.
 
@@ -524,13 +525,13 @@ Tabla `funcionario_permisos` con columnas bool por acción. Verificación en UI 
 
 | Permiso | Nota |
 |---------|------|
-| `crear_residente`, `editar_residente`, `eliminar_residente` | CRUD residentes |
-| `crear_signos`, `eliminar_signos` | Signos vitales |
-| `crear_observacion`, `eliminar_observacion` | Observaciones |
-| `subir_acreditacion`, `archivar_acreditacion` | Acreditación |
-| Otros | Expandibles según necesidad |
+| `crear_residentes`, `editar_residentes`, `eliminar_residentes` | CRUD residentes |
+| `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales` | Signos vitales |
+| `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones` | Observaciones |
+| `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación |
+| `registrar_visitas` | Visitas familiares |
 
-Default: Si no hay row en `funcionario_permisos`, `can()` retorna `true` para crear (NO eliminar), `false` para destructivas.
+Default backend: sin row en `funcionario_permisos`, `public.funcionario_can()` deniega. El schema crea filas para funcionarios nuevos y existentes.
 
 ---
 
@@ -568,6 +569,8 @@ Base consistente. Propagan className + rest para override.
 4. Project Settings → API → copiar URL + anon key.
 5. `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 6. `npm install && npm run dev`.
+7. `npx supabase login && npx supabase link --project-ref <project-ref>`.
+8. `npx supabase functions deploy`.
 
 **Primer superadmin**: SQL en Supabase SQL Editor:
 ```sql
@@ -602,7 +605,7 @@ update public.profiles set rol = 'superadmin' where email = 'tu-email@gmail.com'
 
 ## Archivos de Referencia
 
-- `supabase_schema.sql` — Schema completo (21 tablas, RLS, funciones, triggers).
+- `supabase_schema.sql` — Schema completo (23 tablas, RLS, funciones, triggers).
 - `src/routes/AppRouter.jsx` — Definición de todas las rutas.
 - `src/context/AuthContext.jsx` — useAuth(), helpers, derivados.
 - `src/components/ProtectedRoute.jsx` — Guarding de sesión, pago, rol.

@@ -53,25 +53,84 @@ Deno.serve(async (req) => {
     // Obtener datos del lead
     const { data: lead, error: leadErr } = await sb
       .from("demo_leads")
-      .select("id, nombre, email, eleam_nombre, demo_token")
+      .select("id, nombre, email, eleam_nombre, demo_token, demo_user_id")
       .eq("id", leadId)
       .maybeSingle();
 
     if (leadErr || !lead) {
       return jsonResponse(req, { error: "Lead no encontrado" }, 404);
     }
-    if (!lead.email || !EMAIL_RE.test(lead.email)) {
+    const cleanEmail = String(lead.email ?? "").trim().toLowerCase();
+    if (!cleanEmail || !EMAIL_RE.test(cleanEmail)) {
       return jsonResponse(req, { error: "El lead no tiene email válido" }, 400);
     }
 
-    const tempPassword = generatePassword();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const eleamNombre = lead.eleam_nombre || "Demo ELEAM";
+
+    if (lead.demo_user_id) {
+      return jsonResponse(req, {
+        ok: true,
+        already_active: true,
+        profile_id: lead.demo_user_id,
+        email: cleanEmail,
+        email_sent: false,
+      });
+    }
+
+    // Si el correo ya tiene perfil, no intentamos crear otro usuario Auth.
+    // Para admins ELEAM reutilizamos la cuenta y activamos su ELEAM demo.
+    // Para otros roles bloqueamos para evitar mezclar accesos.
+    const { data: existingProfiles, error: existingErr } = await sb
+      .from("profiles")
+      .select("id, email, rol, eleam_id")
+      .ilike("email", cleanEmail)
+      .limit(2);
+
+    if (existingErr) {
+      console.error("profiles lookup", existingErr);
+      return jsonResponse(req, { error: "No se pudo validar el correo del lead." }, 500);
+    }
+
+    const existingProfile = existingProfiles?.[0] ?? null;
+    if (existingProfile) {
+      if (existingProfile.rol !== "admin_eleam" || !existingProfile.eleam_id) {
+        return jsonResponse(req, {
+          error: "Este correo ya pertenece a otra cuenta de FichaEleam. Usa otro correo para crear el demo.",
+        }, 409);
+      }
+
+      await sb.from("eleams").update({
+        nombre: eleamNombre,
+        subscription_status: "activo",
+        pago_activo: true,
+        fecha_vencimiento_suscripcion: expiresAt,
+      }).eq("id", existingProfile.eleam_id);
+
+      await sb.from("demo_leads").update({
+        demo_user_id: existingProfile.id,
+        demo_access_granted_at: new Date().toISOString(),
+        demo_expires_at: expiresAt,
+        estado: "demo_activo",
+      }).eq("id", leadId);
+
+      return jsonResponse(req, {
+        ok: true,
+        reused_existing_user: true,
+        profile_id: existingProfile.id,
+        eleam_id: existingProfile.eleam_id,
+        email: cleanEmail,
+        email_sent: false,
+      });
+    }
+
+    const tempPassword = generatePassword();
 
     // Crear usuario vía Admin API.
     // Sin eleam_id_direct ni rol_direct → el trigger handle_new_user
     // crea el profile como admin_eleam con un ELEAM nuevo.
     const { data: created, error: createError } = await sb.auth.admin.createUser({
-      email: lead.email,
+      email: cleanEmail,
       password: tempPassword,
       email_confirm: true,
       user_metadata: {
@@ -86,7 +145,9 @@ Deno.serve(async (req) => {
         createError.message?.toLowerCase().includes("already registered") ||
         createError.message?.toLowerCase().includes("duplicate")
       ) {
-        return jsonResponse(req, { error: "Este correo ya tiene una cuenta registrada." }, 409);
+        return jsonResponse(req, {
+          error: "Este correo ya existe en Auth, pero no tiene un perfil asociado. Revisa Auth > Users o usa otro correo.",
+        }, 409);
       }
       return jsonResponse(req, { error: "No se pudo crear el usuario." }, 500);
     }
@@ -119,7 +180,6 @@ Deno.serve(async (req) => {
     }
 
     // Actualizar lead con el profile_id del usuario creado
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await sb.from("demo_leads").update({
       demo_user_id: profileId,
       demo_access_granted_at: new Date().toISOString(),
@@ -146,7 +206,7 @@ Deno.serve(async (req) => {
       ok: true,
       profile_id: profileId,
       eleam_id: eleamId,
-      email: lead.email,
+      email: cleanEmail,
       temp_password: tempPassword,
       email_sent: emailSent,
     });

@@ -141,7 +141,6 @@ export default function OnboardingGuide({
 }) {
   const steps = STEPS_BY_ROLE[role] ?? ADMIN_STEPS;
   const currentIndex = steps.findIndex((s) => s.panel === activePanel);
-  const currentStep  = steps[currentIndex] ?? steps[0];
 
   return (
     <aside className="w-72 shrink-0 bg-white border-r border-gray-100 flex flex-col h-full overflow-y-auto">

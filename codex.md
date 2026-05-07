@@ -8,7 +8,7 @@ Esta es una guía rápida de referencias. Para arquitectura, BD, seguridad y flu
 
 ## Resumen ejecutivo
 
-**FichaEleam** es SPA para digitalización de fichas clínicas, registros de atención y acreditación SEREMI de ELEAM en Chile. Stack: **React 19 + Vite 6 + Tailwind CSS 4 + Supabase (PostgreSQL + Auth + Storage)**.
+**FichaEleam** es SPA para digitalización de fichas clínicas, registros de atención y acreditación SEREMI de ELEAM en Chile. Stack: **React 19 + Vite 6 + Tailwind CSS 4 + Supabase (PostgreSQL + Auth + Storage + Edge Functions)**.
 
 **Roles**: superadmin (operador), admin_eleam (paga), funcionario (staff), familiar (visitante).
 
@@ -17,7 +17,7 @@ Esta es una guía rápida de referencias. Para arquitectura, BD, seguridad y flu
 - Acreditación v9 (14 ámbitos, ~70 requisitos, evidencias versionadas)
 - Suscripción MercadoPago
 - Blog público + CRM superadmin
-- Demo offline
+- Demo guiado para leads aprobados (`/demo/:token`)
 - Permisos granulares funcionario
 
 ---
@@ -28,6 +28,7 @@ Esta es una guía rápida de referencias. Para arquitectura, BD, seguridad y flu
 npm install
 cp .env.example .env          # VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 npm run dev                   # localhost:5173
+npx supabase functions deploy # Edge Functions
 ```
 
 Ver **[README.md](./README.md)** para setup completo de Supabase.
@@ -52,7 +53,7 @@ src/
 │   ├── payment/    # MercadoPago
 │   ├── team/       # Invitar staff
 │   ├── familiar/   # Portal familiar
-│   ├── demo/       # Demo offline
+│   ├── demo/       # Demo guiado, mock data y onboarding interactivo
 │   └── superadmin/ # CRM, blog editor
 ├── routes/         # AppRouter
 ├── services/       # Supabase client
@@ -68,6 +69,7 @@ npm run dev      # Desarrollo
 npm run build    # Build producción (/dist)
 npm run lint     # ESLint
 npm run preview  # Preview build
+npx supabase functions deploy  # Deploy Edge Functions
 ```
 
 ---
@@ -78,7 +80,7 @@ npm run preview  # Preview build
 |------|-------|-----------|
 | `/` | — | LandingPage |
 | `/login`, `/register` | — | Auth (público) |
-| `/demo`, `/demo/admin`, etc. | — | Demo offline |
+| `/demo/:token` | — | Demo guiado por token |
 | `/pago`, `/pago/return` | — | MercadoPago |
 | `/blog`, `/blog/:slug` | — | Blog público |
 | `/dashboard` | STAFF | AdminDashboard |
@@ -136,7 +138,7 @@ Ver **[CLAUDE.md — Autenticación](./CLAUDE.md#autenticación-y-autorización)
 
 ## Base de Datos (Supabase)
 
-21 tablas. Schema en `supabase_schema.sql`.
+23 tablas. Schema en `supabase_schema.sql`.
 
 ### Principales
 
@@ -151,6 +153,8 @@ Ver **[CLAUDE.md — Autenticación](./CLAUDE.md#autenticación-y-autorización)
 | `funcionario_permisos` | Permisos granulares |
 | `blog_posts` | Blog público |
 | `crm_*` | CRM (tareas, interacciones) |
+| `demo_leads` | Leads de landing + demo guiado |
+| `landing_events` | Analytics anónimos de landing |
 
 Todas con **RLS** multi-tenant. Ver **[CLAUDE.md — Base de Datos](./CLAUDE.md#base-de-datos)** para schema completo.
 
@@ -208,14 +212,18 @@ Admin contrata en `/pago` → Edge Function crea preapproval → checkout MP →
 - `mp-webhook` — Valida HMAC, actualiza BD
 - `mp-cancel-subscription` — Cancela
 - `invite-funcionario` — Invita staff
+- `create-demo-user` — Superadmin crea o reutiliza admin ELEAM demo
+- `create-staff-user` — Admin crea funcionario/familiar con contraseña temporal
+- `delete-staff-user` — Admin elimina staff/familiar
 
 ### Secrets (server-only, no VITE_)
 
 ```bash
-supabase secrets set MP_ACCESS_TOKEN=TEST-...
-supabase secrets set MP_WEBHOOK_SECRET=...
-supabase secrets set PUBLIC_APP_URL=http://localhost:5173
-supabase secrets set ALLOWED_ORIGINS="http://localhost:5173"
+npx supabase secrets set MP_ACCESS_TOKEN=TEST-...
+npx supabase secrets set MP_WEBHOOK_SECRET=...
+npx supabase secrets set PUBLIC_APP_URL=http://localhost:5173
+npx supabase secrets set ALLOWED_ORIGINS="http://localhost:5173"
+npx supabase secrets set RESEND_API_KEY=re_... # opcional
 ```
 
 Ver **[README.md — MercadoPago](./README.md#integración-mercadopago-suscripciones)** para setup completo.
@@ -241,13 +249,12 @@ Ver **[README.md — Panel Superadmin](./README.md#panel-superadmin-superadmin)*
 
 ## Demo
 
-Ruta `/demo` — selector offline con localStorage (sin Supabase).
+Ruta `/demo/:token` — demo guiado para leads aprobados.
 
-- Admin: CRUD residentes, signos, observaciones, acreditación (upload simulado)
-- Funcionario: Admin sin botón upload
-- Familiar: Residente asignado, signos, visitas
-
-Banner amarillo indica modo demo. "Cambiar perfil" o "Activar versión real".
+- Datos mock en frontend (`src/features/demo/demoData.js`).
+- Progreso y pings guardados en `demo_leads`.
+- Solicitudes de contacto visibles para superadmin.
+- `create-demo-user` crea una cuenta `admin_eleam` nueva o reutiliza una existente compatible.
 
 ---
 
@@ -282,17 +289,18 @@ Tabla `funcionario_permisos` con columnas bool:
 
 | Permiso | Notas |
 |---------|-------|
-| `crear_residente`, `editar_residente`, `eliminar_residente` | CRUD residentes |
-| `crear_signos`, `eliminar_signos` | Signos vitales |
-| `crear_observacion`, `eliminar_observacion` | Observaciones |
-| `subir_acreditacion`, `archivar_acreditacion` | Acreditación |
+| `crear_residentes`, `editar_residentes`, `eliminar_residentes` | CRUD residentes |
+| `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales` | Signos vitales |
+| `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones` | Observaciones |
+| `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación |
+| `registrar_visitas` | Visitas familiares |
 
-Default: Si no hay row, `can()` retorna `true` para crear, `false` para destructivas.
+Default: el schema crea fila para funcionarios nuevos y existentes. Sin fila, `public.funcionario_can()` deniega en backend.
 
 Verificación en UI + `can()` desde `useAuth()`:
 
 ```javascript
-if (!auth.can('eliminar_residente')) {
+if (!auth.can('eliminar_residentes')) {
   // Botón eliminar oculto/deshabilitado
 }
 ```
@@ -388,7 +396,7 @@ Base consistente. Propagan `className` + rest props.
 
 - **[CLAUDE.md](./CLAUDE.md)** — Documentación técnica completa
 - **[README.md](./README.md)** — Setup, MercadoPago, despliegue
-- **`supabase_schema.sql`** — Schema completo (21 tablas, RLS, triggers)
+- **`supabase_schema.sql`** — Schema completo (23 tablas, RLS, triggers)
 - **`src/context/AuthContext.jsx`** — useAuth(), derivados
 - **`src/components/ProtectedRoute.jsx`** — Guards
 - **`src/features/vitalSigns/vitalRanges.js`** — Rangos clínicos

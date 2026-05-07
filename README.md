@@ -1,294 +1,258 @@
 # FichaEleam
 
-Plataforma SaaS para digitalización de fichas clínicas, registros de atención diaria y documentación de acreditación SEREMI de **ELEAM** (Establecimientos de Larga Estadía para Adultos Mayores) en Chile, según DS 14/2017.
+Plataforma SaaS para digitalizar fichas clínicas, registros operativos, carpeta SEREMI y gestión comercial de ELEAM en Chile.
+
+Stack principal: React 19, Vite 6, Tailwind CSS 4, Supabase (Auth, PostgreSQL, Storage, Edge Functions) y MercadoPago.
 
 ---
 
-## Inicio rápido
+## Inicio Rápido
 
 ```bash
 git clone <url-del-repositorio>
 cd fichaEleam
 npm install
-cp .env.example .env   # Completar con credenciales de Supabase
-npm run dev            # http://localhost:5173
+cp .env.example .env
+npm run dev
 ```
 
----
-
-## Configurar Supabase paso a paso
-
-### 1. Crear el proyecto
-
-1. Entrar a [app.supabase.com](https://app.supabase.com) e iniciar sesión.
-2. Hacer clic en **New project**.
-3. Elegir nombre, contraseña de BD y región (South America — São Paulo recomendado).
-4. Esperar ~2 minutos a que el proyecto se inicialice.
-
-### 2. Ejecutar el schema
-
-1. Ir a **SQL Editor** (ícono `<>` en el menú lateral).
-2. Hacer clic en **New query**.
-3. Pegar el contenido completo de `supabase_schema.sql` y hacer clic en **Run**.
-
-Esto crea todas las tablas (21 en total), políticas RLS, Storage buckets, los **14 ámbitos** de acreditación SEREMI y los **~70 requisitos** del catálogo.
-
-### 3. Obtener las credenciales
-
-1. Ir a **Project Settings → API**.
-2. Copiar **Project URL** → `VITE_SUPABASE_URL`.
-3. Copiar **anon public** → `VITE_SUPABASE_ANON_KEY`.
-4. Agregar a `.env`.
-
-### 4. Crear Storage bucket
-
-1. Ir a **Storage** en el menú lateral.
-2. Hacer clic en **New bucket**.
-3. Nombre: `documentos-acreditacion` (privado).
-
-### 5. Promover el primer superadmin
-
-Ejecuta en **SQL Editor**:
-```sql
-UPDATE public.profiles
-SET rol = 'superadmin'
-WHERE email = 'tu@email.com';
-```
-
-Luego cierra sesión y vuelve a ingresar. Acceso garantizado a `/superadmin`.
-
----
-
-## Variables de entorno
-
-Copiar `.env.example` → `.env`:
-
-```env
-VITE_SUPABASE_URL=https://xxxxxxxxxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-> Si las variables no están configuradas, la aplicación funciona en `/`, `/login` y `/demo`. Las rutas protegidas muestran error controlado.
+La app queda disponible en `http://localhost:5173`.
 
 ---
 
 ## Comandos
 
 ```bash
-npm run dev       # Servidor en localhost:5173 con HMR
-npm run build     # Build en /dist
-npm run lint      # ESLint check
-npm run preview   # Sirve /dist localmente
+npm run dev       # Desarrollo con HMR
+npm run build     # Build de producción en /dist
+npm run lint      # ESLint
+npm run preview   # Preview local del build
 ```
+
+La CLI de Supabase está instalada como dependencia de desarrollo. Usa siempre `npx` desde la raíz del proyecto:
+
+```bash
+npx supabase --version
+npx supabase login
+npx supabase link --project-ref <TU_PROJECT_REF>
+npx supabase functions list
+npx supabase functions deploy
+```
+
+---
+
+## Variables de Entorno
+
+Frontend (`.env`, basado en `.env.example`):
+
+```env
+VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+VITE_SUPABASE_ANON_KEY=tu-anon-public-key
+```
+
+Secrets de Edge Functions (no van en `.env` del frontend):
+
+```bash
+npx supabase secrets set MP_ACCESS_TOKEN=TEST-...
+npx supabase secrets set MP_WEBHOOK_SECRET=<secret-webhook-mp>
+npx supabase secrets set PUBLIC_APP_URL=http://localhost:5173
+npx supabase secrets set ALLOWED_ORIGINS="http://localhost:5173"
+npx supabase secrets set RESEND_API_KEY=re_... # opcional
+```
+
+Supabase provee automáticamente `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` dentro de las Edge Functions del proyecto enlazado.
+
+---
+
+## Configurar Supabase
+
+1. Crea un proyecto en Supabase.
+2. Copia `Project URL` y `anon public key` a `.env`.
+3. Ejecuta `supabase_schema.sql` completo en SQL Editor.
+4. Crea el bucket privado `documentos-acreditacion` si la sección Storage falla por permisos.
+5. Instala y enlaza CLI:
+
+```bash
+npx supabase login
+npx supabase link --project-ref <TU_PROJECT_REF>
+```
+
+El schema es idempotente: puede re-ejecutarse. Incluye tablas base, RLS, triggers, seeds, permisos de funcionarios, leads de landing y analytics.
+
+---
+
+## Edge Functions
+
+Funciones deployables en `supabase/functions/`:
+
+| Function | JWT | Uso |
+|----------|-----|-----|
+| `mp-create-subscription` | sí | Crea preapproval de MercadoPago para admin ELEAM. |
+| `mp-cancel-subscription` | sí | Cancela suscripción MercadoPago del ELEAM. |
+| `mp-webhook` | no | Webhook público de MercadoPago; valida firma HMAC. |
+| `create-demo-user` | sí | Superadmin aprueba lead y crea o reutiliza admin ELEAM demo. |
+| `create-staff-user` | sí | Admin ELEAM crea funcionario/familiar con contraseña temporal. |
+| `delete-staff-user` | sí | Admin ELEAM elimina usuario staff/familiar. |
+| `invite-funcionario` | sí | Flujo legado de invitación por token. |
+
+`supabase/config.toml` define `verify_jwt`; no uses `--no-verify-jwt` manualmente salvo que cambies la configuración.
+
+Desplegar todas:
+
+```bash
+npx supabase functions deploy
+```
+
+Desplegar una:
+
+```bash
+npx supabase functions deploy create-demo-user
+```
+
+---
+
+## MercadoPago
+
+1. Crea aplicación en MercadoPago Developers.
+2. Copia `Access Token` a `MP_ACCESS_TOKEN`.
+3. Configura webhook:
+
+```text
+https://<PROJECT_REF>.supabase.co/functions/v1/mp-webhook
+```
+
+Eventos recomendados:
+
+- `preapproval`
+- `subscription_authorized_payment`
+
+4. Copia el secret del webhook a `MP_WEBHOOK_SECRET`.
+5. Despliega funciones.
+
+Prueba sandbox:
+
+1. Inicia sesión como `admin_eleam`.
+2. Ve a `/pago`.
+3. Selecciona plan.
+4. MercadoPago redirige a checkout.
+5. El webhook actualiza `eleams.subscription_status` y `pago_activo`.
+
+---
+
+## Flujos de Acceso
+
+### Superadmin
+
+- Ruta: `/superadmin`.
+- Gestiona ELEAMs, pagos, CRM, leads, analytics de landing y blog.
+- Puede aprobar leads desde `LeadsPanel`.
+
+### Demo Guiado
+
+1. Prospecto llena formulario de landing.
+2. Se inserta row en `demo_leads`.
+3. Superadmin presiona `Dar acceso a demo`.
+4. `create-demo-user`:
+   - crea un usuario `admin_eleam` con contraseña temporal si el email no existe;
+   - reutiliza una cuenta `admin_eleam` existente si el email ya tiene perfil compatible;
+   - activa el ELEAM por 30 días;
+   - marca el lead como `demo_activo`;
+   - envía email vía Resend si `RESEND_API_KEY` existe.
+5. El usuario entra y completa `/cambiar-clave`.
+6. El demo guiado vive en `/demo/:token`.
+
+### Admin ELEAM
+
+- Administra residentes, signos vitales, observaciones, acreditación y equipo.
+- Paga la suscripción del ELEAM.
+- Crea funcionarios/familiares desde `/equipo`.
+
+### Funcionario
+
+- Acceso operativo a `/dashboard`, residentes, signos, observaciones y acreditación según `funcionario_permisos`.
+- No paga ni gestiona equipo.
+
+### Familiar
+
+- Accede a `/familiar` y `/familiar/visitas`.
+- Solo ve residentes vinculados por `familiar_residentes`.
+
+---
+
+## Rutas Principales
+
+| Ruta | Descripción |
+|------|-------------|
+| `/` | Landing pública con formulario de demo. |
+| `/login` | Inicio de sesión. |
+| `/register` | Registro solo para invitaciones legado. |
+| `/recuperar-acceso` | Solicitar recuperación de contraseña. |
+| `/reset-password` | Definir nueva contraseña desde link de Supabase. |
+| `/demo/:token` | Demo guiado por token. |
+| `/pago`, `/pago/return` | Suscripción MercadoPago. |
+| `/dashboard` | Panel operativo staff. |
+| `/residents*` | Residentes. |
+| `/vital-signs*` | Signos vitales. |
+| `/observations*` | Observaciones diarias. |
+| `/accreditation*` | Carpeta SEREMI. |
+| `/equipo` | Gestión de funcionarios/familiares. |
+| `/familiar*` | Portal familiar. |
+| `/superadmin*` | CRM, leads, métricas y blog. |
+| `/blog*` | Blog público. |
+
+---
+
+## Base de Datos
+
+`supabase_schema.sql` crea 23 tablas:
+
+- Multi-tenant: `profiles`, `eleams`, `planes`.
+- Clínica: `residentes`, `signos_vitales`, `observaciones_diarias`.
+- Equipo: `funcionario_invitaciones`, `funcionario_permisos`, `familiar_residentes`, `visitas_familiar`.
+- Pagos: `pagos`, `mp_webhook_events`.
+- Acreditación: `acred_ambitos`, `acred_requisitos`, `acred_requisitos_eleam`, `acred_documentos`, `acred_observaciones`, `acred_audit`.
+- CRM/blog: `crm_tasks`, `crm_interactions`, `blog_posts`.
+- Landing/demo: `demo_leads`, `landing_events`.
+
+Todas las tablas sensibles tienen RLS. `superadmin` accede vía `public.is_superadmin()`. Staff y familiar quedan aislados por `eleam_id` o vínculo de residente.
+
+---
+
+## Permisos de Funcionarios
+
+Tabla: `funcionario_permisos`.
+
+Permisos actuales:
+
+- `crear_residentes`, `editar_residentes`, `eliminar_residentes`
+- `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales`
+- `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones`
+- `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion`
+- `registrar_visitas`
+
+Los permisos se aplican en UI con `useAuth().can()` y en RLS con `public.funcionario_can()`.
 
 ---
 
 ## Documentación
 
-- **[CLAUDE.md](./CLAUDE.md)** — Documentación técnica completa: arquitectura, rutas, base de datos, flujos por rol, seguridad.
-- **[codex.md](./codex.md)** — Guía de desarrollo (resumen + links a CLAUDE.md).
+- [CLAUDE.md](./CLAUDE.md): documentación técnica extendida.
+- [codex.md](./codex.md): guía rápida de desarrollo.
+- [.env.example](./.env.example): variables locales y secrets esperados.
+- [supabase/config.toml](./supabase/config.toml): configuración de JWT para Edge Functions.
 
 ---
 
-## Integración MercadoPago (Suscripciones)
+## Validación Antes de Push
 
-FichaEleam cobra una suscripción mensual por ELEAM. El admin paga; el staff accede gratis mientras esté activa.
-
-### Setup (Sandbox primero, luego Producción)
-
-1. **Crear cuenta de empresa en [www.mercadopago.cl](https://www.mercadopago.cl)**.
-   - Verificar RUT, datos bancarios, email.
-
-2. **Crear "Aplicación"** en [Dashboard → Tus integraciones → Crear aplicación](https://www.mercadopago.cl/developers/panel).
-   - Modelo: Pagos online
-   - Producto: Suscripciones (Preapproval)
-
-3. **Copiar credenciales** de la aplicación:
-   - **Test/Production Access Token** → `MP_ACCESS_TOKEN`
-   - *(La Public Key no es necesaria.)*
-
-4. **Configurar Webhook** en *Dashboard → Tu aplicación → Webhooks*:
-   - **URL**: `https://<TU_PROYECTO>.functions.supabase.co/mp-webhook`
-   - **Eventos**: Suscripciones (preapproval) + Pagos autorizados (subscription_authorized_payment)
-   - **Secret** → `MP_WEBHOOK_SECRET`
-
-5. **Setear secrets en Supabase**:
-   ```bash
-   supabase login
-   supabase link --project-ref <TU_PROJECT_REF>
-   
-   supabase secrets set MP_ACCESS_TOKEN=TEST-...
-   supabase secrets set MP_WEBHOOK_SECRET=<secret>
-   supabase secrets set PUBLIC_APP_URL=http://localhost:5173
-   supabase secrets set ALLOWED_ORIGINS="http://localhost:5173"
-   ```
-
-6. **Desplegar Edge Functions**:
-   ```bash
-   supabase functions deploy mp-create-subscription
-   supabase functions deploy mp-cancel-subscription
-   supabase functions deploy invite-funcionario
-   supabase functions deploy mp-webhook --no-verify-jwt
-   ```
-
-### Probar la integración
-
-1. Crea comprador/vendedor de prueba en [Cuentas de prueba MP](https://www.mercadopago.cl/developers/panel/test-users).
-2. Inicia sesión en FichaEleam con un admin.
-3. Ve a `/pago` → elige plan → redirige a MP.
-4. Paga con tarjeta sandbox `5031 7557 3453 0604` (Mastercard), CVV `123`, RUT `12.345.678-5`.
-5. Después del pago, FichaEleam recibe el webhook y marca ELEAM como `activo`.
-
----
-
-## Despliegue en producción
-
-1. Cambiar `MP_ACCESS_TOKEN` a Token de Producción.
-2. Desplegar Edge Functions en proyecto Supabase de producción.
-3. Configurar webhook con URL de producción.
-4. Configurar redirect SPA:
-   - **Netlify**: crear `public/_redirects` con `/* /index.html 200`.
-   - **Vercel**: automático con Vite.
-   - **Nginx**: `try_files $uri $uri/ /index.html;`
-
----
-
-## Flujos por rol
-
-### Admin del ELEAM
-
-1. `/register` sin token de invitación → crea ELEAM nuevo con `pago_activo=false`.
-2. Redirige a `/pago?sinAcceso=1`.
-3. Elige plan → checkout MercadoPago → webhook activa suscripción.
-4. Acceso a `/dashboard`, `/equipo` (invitar staff), `/accreditation` (carpeta SEREMI).
-
-### Funcionario
-
-1. Admin invita vía email desde `/equipo`.
-2. Funcionario abre link `/register?invite=TOKEN&email=...`.
-3. Signup valida token → se asigna al ELEAM.
-4. Acceso a `/dashboard`, crear signos/observaciones (sin eliminar, sin admin).
-
-### Familiar
-
-1. Admin invita vía `/equipo` → selecciona residente específico.
-2. Familiar se registra → acceso a `/familiar` (solo ese residente).
-3. Puede registrar visitas en `/familiar/visitas`.
-
-### Superadmin
-
-1. Correo promocionado a `superadmin` vía SQL o automáticamente en signup.
-2. Acceso a `/superadmin` — CRM, métricas, gestión de ELEAMs, pagos, blog.
-
----
-
-## Panel Superadmin (`/superadmin`)
-
-CRM interno de la plataforma. Solo para `rol=superadmin`.
-
-### Funcionalidades
-
-| Sección | Descripción |
-|---------|-------------|
-| **Métricas (KPIs)** | ELEAMs totales, activos, leads, en riesgo, residentes, MRR. |
-| **Tabla de ELEAMs** | Búsqueda, filtro por estado/plan/pago/riesgo. Edición inline. |
-| **Salud del cliente** | Combina pago, vencimiento, contacto, riesgo, tareas → healthy/warning/risk. |
-| **Registrar pago** | Monto, plan, método, período → activa suscripción + interacción CRM. |
-| **Tareas CRM** | Crear, completar, vencimiento, prioridad. |
-| **Interacciones** | Historial de contactos (call, email, meeting, etc.). |
-| **Blog editor** | Crear/editar posts con SEO (meta_title, keywords, JSON-LD Article). |
-
-Ver [CLAUDE.md — CRM Superadmin](./CLAUDE.md#crm-superadmin) para detalles completos.
-
----
-
-## Demo
-
-Ruta `/demo` — selector offline con localStorage, sin Supabase.
-
-| Perfil | Ruta | Permite |
-|--------|------|---------|
-| Admin | `/demo/admin` | CRUD residentes, signos, observaciones, acreditación (upload simulado). |
-| Funcionario | `/demo/funcionario` | Igual que admin sin botón de upload. |
-| Familiar | `/demo/familiar` | Ver residente asignado, últimos signos, visitas. |
-
-Datos precargados en localStorage. Banner amarillo permanente indica modo demo.
-
----
-
-## Blog público y SEO
-
-### Blog
-
-- `/blog` — listado público.
-- `/blog/:slug` — post individual con JSON-LD Article + Breadcrumb.
-- Markdown renderer propio (sin deps), soporta tablas, código, listas, blockquotes.
-- Meta tags: Open Graph, Twitter cards, canonical.
-
-### Gestión
-
-- `/superadmin/blog` — listado.
-- `/superadmin/blog/new` y `/superadmin/blog/:id/edit` — editor con preview.
-- RLS: solo `superadmin` crea/publica. Público ve `estado=publicado`.
-
-### SEO global
-
-- `robots.txt` permite explícitamente GPTBot, ClaudeBot, PerplexityBot.
-- `sitemap.xml` con URLs públicas.
-- `useSEO()` hook inyecta meta tags + JSON-LD por ruta (sin react-helmet).
-- `FAQPage` JSON-LD en landing + demo selector.
-
----
-
-## Estructura del proyecto
-
-```
-src/
-├── components/           # UI base: Button, Input, Modal, Toast, Loading, etc.
-├── context/AuthContext   # useAuth(), useLoading() — estado global
-├── features/
-│   ├── auth/             # Login, Register
-│   ├── landing/          # LandingPage (público)
-│   ├── blog/             # Blog público + utilidades
-│   ├── dashboard/        # AdminDashboard (índice operativo)
-│   ├── residents/        # CRUD residentes + detalles
-│   ├── vitalSigns/       # Signos vitales + rangos clínicos
-│   ├── observations/     # Observaciones diarias (12 tipos)
-│   ├── accreditation/    # Carpeta SEREMI DS 14/2017
-│   ├── payment/          # MercadoPago integration
-│   ├── team/             # Invitar staff + cambio de clave
-│   ├── familiar/         # Portal de familiar + visitas
-│   ├── demo/             # Demo offline
-│   └── superadmin/       # CRM, blog editor, pagos
-├── routes/AppRouter      # Rutas con guards
-├── services/             # Supabase client + servicios
-└── utils/                # Validators, dateUtils, SEO
+```bash
+npm run lint
+npm run build
+npx supabase functions list
 ```
 
----
+Warnings conocidos:
 
-## Seguridad
-
-- **RLS multi-tenant**: Cada ELEAM aislado. `eleam_id` en BD enforza acceso.
-- **Permisos granulares**: Funcionarios con permisos específicos vía `funcionario_permisos`.
-- **Storage scoped**: Documentos en `acreditacion/{eleamId}/...`, RLS filtra por tenant.
-- **HMAC webhook**: MercadoPago webhook validado con firma HMAC SHA-256.
-- **Invitaciones**: Token de 7 días, un solo uso, email validado.
-- **Triggers anti-escalada**: No se puede cambiar `rol` ni `eleam_id` por sí mismo.
-
----
-
-## Archivos clave
-
-- **`supabase_schema.sql`** — Schema completo (21 tablas, RLS, triggers, funciones).
-- **`CLAUDE.md`** — Documentación técnica detallada.
-- **`src/context/AuthContext.jsx`** — `useAuth()` con helpers de rol/permisos.
-- **`src/components/ProtectedRoute.jsx`** — Guard de sesión, pago, rol.
-- **`src/features/vitalSigns/vitalRanges.js`** — Rangos clínicos para adultos mayores.
-- **`src/utils/seo.js`** — Hook SEO + builders JSON-LD.
-
----
-
-## Support
-
-Consulta **[CLAUDE.md](./CLAUDE.md)** para documentación completa (rutas, BD, flujos, RLS, componentes).
+- `react-refresh/only-export-components` en algunos archivos que exportan helpers.
+- `react-hooks/exhaustive-deps` en `LeadsPanel` por carga inicial controlada.
+- Warning de tamaño de chunk en Vite.

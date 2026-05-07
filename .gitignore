@@ -48,3 +48,4 @@ sketch
 
 # Supabase
 serviceAccountKey.json
+supabase/.temp/

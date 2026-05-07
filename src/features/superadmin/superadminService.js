@@ -287,7 +287,13 @@ export async function grantDemoAccess(leadId) {
   if (leadErr) throw leadErr;
 
   // Adjuntar credenciales al objeto retornado (no se persisten en BD)
-  return { ...lead, _temp_password: data.temp_password, _email_sent: data.email_sent };
+  return {
+    ...lead,
+    _temp_password: data.temp_password,
+    _email_sent: data.email_sent,
+    _reused_existing_user: data.reused_existing_user === true,
+    _already_active: data.already_active === true,
+  };
 }
 
 export async function getActiveInDemo() {

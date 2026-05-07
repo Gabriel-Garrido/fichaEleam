@@ -85,9 +85,16 @@ export default function LeadsPanel({
         email: updated.email ?? lead.email,
         temp_password: updated._temp_password,
         email_sent: updated._email_sent,
+        reused_existing_user: updated._reused_existing_user,
+        already_active: updated._already_active,
         nombre: lead.nombre,
       });
-      toast("Usuario demo creado correctamente", "success");
+      toast(
+        updated._reused_existing_user || updated._already_active
+          ? "Demo activado para una cuenta existente"
+          : "Usuario demo creado correctamente",
+        "success",
+      );
     } catch (e) {
       toast(e.message || "Error otorgando acceso", "error");
     }
@@ -116,42 +123,65 @@ export default function LeadsPanel({
     <div className="space-y-4">
       {/* Modal de credenciales del usuario demo recién creado */}
       {credenciales && (
-        <Modal isOpen={true} onClose={() => setCredenciales(null)} title="Usuario demo creado">
+        <Modal
+          isOpen={true}
+          onClose={() => setCredenciales(null)}
+          title={credenciales.temp_password ? "Usuario demo creado" : "Demo activado"}
+        >
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Se creó una cuenta para <strong>{credenciales.nombre}</strong>.
-              {credenciales.email_sent
-                ? " Le enviamos las credenciales por correo."
-                : " Comparte estas credenciales manualmente."}
+              {credenciales.temp_password ? (
+                <>
+                  Se creó una cuenta para <strong>{credenciales.nombre}</strong>.
+                  {credenciales.email_sent
+                    ? " Le enviamos las credenciales por correo."
+                    : " Comparte estas credenciales manualmente."}
+                </>
+              ) : (
+                <>
+                  El demo quedó activo para <strong>{credenciales.nombre}</strong> usando una cuenta existente.
+                  No se generó una contraseña temporal nueva.
+                </>
+              )}
             </p>
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
               <p className="text-sm text-gray-700"><strong>Correo:</strong> {credenciales.email}</p>
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-gray-700">
-                  <strong>Contraseña temporal:</strong>{" "}
-                  <span className="font-mono bg-white border border-slate-200 rounded px-2 py-0.5 text-base">
-                    {credenciales.temp_password}
-                  </span>
-                </p>
-                <button
-                  onClick={() => { copyToClipboard(credenciales.temp_password); toast("Copiada", "success"); }}
-                  className="text-xs text-slate-500 hover:text-slate-700 border border-slate-300 rounded px-2 py-1"
-                >
-                  Copiar
-                </button>
-              </div>
+              {credenciales.temp_password && (
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-700">
+                    <strong>Contraseña temporal:</strong>{" "}
+                    <span className="font-mono bg-white border border-slate-200 rounded px-2 py-0.5 text-base">
+                      {credenciales.temp_password}
+                    </span>
+                  </p>
+                  <button
+                    onClick={() => { copyToClipboard(credenciales.temp_password); toast("Copiada", "success"); }}
+                    className="text-xs text-slate-500 hover:text-slate-700 border border-slate-300 rounded px-2 py-1"
+                  >
+                    Copiar
+                  </button>
+                </div>
+              )}
             </div>
-            <p className="text-xs text-gray-400">
-              El usuario deberá cambiar esta contraseña en su primer acceso.
-              Si tiene correo Gmail, podrá optar por usar Google como método de inicio de sesión.
-            </p>
+            {credenciales.temp_password ? (
+              <p className="text-xs text-gray-400">
+                El usuario deberá cambiar esta contraseña en su primer acceso.
+                Si tiene correo Gmail, podrá optar por usar Google como método de inicio de sesión.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400">
+                El usuario debe ingresar con su contraseña actual o con Google si ya tenía ese método configurado.
+              </p>
+            )}
             <div className="flex justify-end gap-2">
-              <button
-                onClick={() => { copyToClipboard(`Correo: ${credenciales.email}\nContraseña temporal: ${credenciales.temp_password}`); toast("Credenciales copiadas", "success"); }}
-                className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
-              >
-                Copiar todo
-              </button>
+              {credenciales.temp_password && (
+                <button
+                  onClick={() => { copyToClipboard(`Correo: ${credenciales.email}\nContraseña temporal: ${credenciales.temp_password}`); toast("Credenciales copiadas", "success"); }}
+                  className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+                >
+                  Copiar todo
+                </button>
+              )}
               <button
                 onClick={() => setCredenciales(null)}
                 className="bg-[var(--color-primary,#2563eb)] text-white px-4 py-2 rounded-lg text-sm hover:opacity-90"
