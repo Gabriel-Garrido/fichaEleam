@@ -67,7 +67,7 @@ export async function getEleamFamiliares(eleamId) {
   // Traemos los vínculos cuyas residentes pertenecen al ELEAM.
   const { data, error } = await sb
     .from("familiar_residentes")
-    .select("profile_id, residente_id, parentesco, residentes(eleam_id, nombre, apellido), profiles(id, nombre, email, rol)")
+    .select("profile_id, residente_id, parentesco, residentes(eleam_id, nombre, apellido), profiles!familiar_residentes_profile_id_fkey(id, nombre, email, rol)")
     .order("creado_en", { ascending: false });
   if (error) throw error;
   return (data ?? []).filter((row) => row.residentes?.eleam_id === eleamId);

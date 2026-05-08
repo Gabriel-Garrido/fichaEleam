@@ -127,7 +127,7 @@ export async function getRequisitosEleam() {
         vigencia_dias_sugerida, orden,
         ambito:acred_ambitos!inner(id, codigo, nombre, icono, orden)
       ),
-      responsable:profiles(id, nombre, email, rol)
+      responsable:profiles!acred_requisitos_eleam_responsable_id_fkey(id, nombre, email, rol)
     `)
     .order("creado_en", { ascending: true });
   if (error) throw error;
@@ -148,7 +148,7 @@ export async function getRequisitoEleam(reId) {
         vigencia_dias_sugerida, orden,
         ambito:acred_ambitos!inner(id, codigo, nombre, icono, orden)
       ),
-      responsable:profiles(id, nombre, email, rol)
+      responsable:profiles!acred_requisitos_eleam_responsable_id_fkey(id, nombre, email, rol)
     `)
     .eq("id", reId)
     .maybeSingle();
@@ -234,7 +234,7 @@ export async function asignarResponsable(reId, profileId) {
 export async function getDocumentos(reId, { incluirHistoria = false } = {}) {
   let q = supabase
     .from("acred_documentos")
-    .select("id, version, vigente, storage_path, archivo_nombre, archivo_tipo, archivo_tamanio, fecha_emision, fecha_vencimiento, notas, reemplazado_por_id, reemplazado_en, creado_en, subido_por:profiles(id, nombre, email)")
+    .select("id, version, vigente, storage_path, archivo_nombre, archivo_tipo, archivo_tamanio, fecha_emision, fecha_vencimiento, notas, reemplazado_por_id, reemplazado_en, creado_en, subido_por:profiles!acred_documentos_subido_por_fkey(id, nombre, email)")
     .eq("requisito_eleam_id", reId)
     .order("version", { ascending: false });
   if (!incluirHistoria) q = q.eq("vigente", true);
@@ -473,7 +473,7 @@ export async function cerrarObservacion(id, nota) {
 export async function getAuditTrail({ entidad = null, entidadId = null, limit = 50 } = {}) {
   let q = supabase
     .from("acred_audit")
-    .select("id, entidad, entidad_id, accion, detalle, realizado_en, realizado_por:profiles(id, nombre, email)")
+    .select("id, entidad, entidad_id, accion, detalle, realizado_en, realizado_por:profiles!acred_audit_realizado_por_fkey(id, nombre, email)")
     .order("realizado_en", { ascending: false })
     .limit(limit);
   if (entidad) q = q.eq("entidad", entidad);

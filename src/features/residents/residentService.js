@@ -75,7 +75,7 @@ export const getFamiliarForResidente = async (residenteId) => {
   if (!isValidUUID(residenteId)) return null;
   const { data, error } = await supabase
     .from("familiar_residentes")
-    .select("parentesco, profile_id, profiles(id, nombre, email)")
+    .select("parentesco, profile_id, profiles!familiar_residentes_profile_id_fkey(id, nombre, email)")
     .eq("residente_id", residenteId)
     .maybeSingle();
   if (error) throw error;

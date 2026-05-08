@@ -74,6 +74,58 @@ function RequisitoRow({ re, onClick }) {
   );
 }
 
+function requisitoPriorityScore(re) {
+  const estadoScore = {
+    vencido: 100,
+    observado: 70,
+    no_cumple: 65,
+    pendiente: 40,
+    cumple: 0,
+    no_aplica: 0,
+  }[re.estado] ?? 0;
+  const d = diasHasta(re.fecha_vencimiento);
+  const vencScore = d == null ? 0 : d < 0 ? 120 : d <= 30 ? 45 : 0;
+  return estadoScore + vencScore;
+}
+
+function FocusRequirement({ requisito, onOpen }) {
+  if (!requisito) {
+    return (
+      <section className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        Este ámbito no tiene pendientes críticos. Puedes revisar requisitos cumplidos o volver a la carpeta.
+      </section>
+    );
+  }
+  const r = requisito.requisito;
+  const m = estadoMeta(requisito.estado);
+  return (
+    <section className="rounded-2xl border border-teal-100 bg-white shadow-sm p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wide text-teal-700 font-semibold">Siguiente requisito recomendado</p>
+          <h2 className="text-base font-bold text-gray-900 mt-1 truncate">
+            {r.codigo} · {r.nombre}
+          </h2>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className={`text-xs font-semibold rounded-full px-2 py-0.5 border ${m.cls}`}>
+              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${m.dot}`} />
+              {m.label}
+            </span>
+            <VencimientoChip fecha={requisito.fecha_vencimiento} />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="w-full sm:w-auto rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-button-hover)]"
+        >
+          Abrir requisito
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export default function AccreditationAmbito() {
   const { codigo } = useParams();
   const navigate = useNavigate();
@@ -109,6 +161,16 @@ export default function AccreditationAmbito() {
     const c = { all: requisitos.length };
     for (const r of requisitos) c[r.estado] = (c[r.estado] ?? 0) + 1;
     return c;
+  }, [requisitos]);
+
+  const nextRequisito = useMemo(() => {
+    return [...requisitos]
+      .map((r) => ({ ...r, priorityScore: requisitoPriorityScore(r) }))
+      .filter((r) => r.priorityScore > 0)
+      .sort((a, b) =>
+        b.priorityScore - a.priorityScore ||
+        (a.requisito?.orden ?? 0) - (b.requisito?.orden ?? 0)
+      )[0] ?? null;
   }, [requisitos]);
 
   if (loading) return <Loading message="Cargando ámbito..." />;
@@ -149,6 +211,11 @@ export default function AccreditationAmbito() {
           </div>
         </div>
       </header>
+
+      <FocusRequirement
+        requisito={nextRequisito}
+        onOpen={() => navigate(`/accreditation/requisito/${nextRequisito.id}`)}
+      />
 
       {/* Filtros */}
       <div className="flex gap-2 overflow-x-auto pb-1">

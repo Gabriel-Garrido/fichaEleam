@@ -13,23 +13,6 @@ import {
   diasHasta,
 } from "./accreditationService";
 
-function StatCard({ label, value, sub, tone = "primary" }) {
-  const tones = {
-    primary: "text-[var(--color-primary)]",
-    emerald: "text-emerald-600",
-    amber:   "text-amber-600",
-    rose:    "text-rose-600",
-    slate:   "text-slate-600",
-  };
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">{label}</p>
-      <p className={`text-3xl font-black tabular-nums mt-1 ${tones[tone]}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
 function Bar({ pct, tone = "emerald" }) {
   const colorClass =
     tone === "emerald" ? "from-emerald-400 to-emerald-600" :
@@ -209,6 +192,65 @@ function AccreditationNextStep({ resumen, observaciones, navigate }) {
   );
 }
 
+function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
+  const pendienteTotal = resumen.pendientes;
+  return (
+    <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-5 lg:items-center">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Avance de acreditación</p>
+          <div className="mt-2 flex items-end gap-3">
+            <p className="text-5xl font-black text-[var(--color-primary)] tabular-nums">{resumen.porcentaje}%</p>
+            <p className="pb-2 text-sm text-gray-500">
+              {resumen.cumple} de {resumen.total - resumen.noAplica} requisitos al día
+            </p>
+          </div>
+          <div className="mt-4">
+            <Bar pct={resumen.porcentaje} tone={tone} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/accreditation")}
+            className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3 text-left"
+          >
+            <p className="text-2xl font-black text-amber-700 tabular-nums">{pendienteTotal}</p>
+            <p className="text-[11px] font-semibold text-amber-800">Pendientes</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/accreditation")}
+            className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3 text-left"
+          >
+            <p className="text-2xl font-black text-rose-700 tabular-nums">{resumen.vencidos.length}</p>
+            <p className="text-[11px] font-semibold text-rose-800">Vencidos</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/accreditation/observaciones")}
+            className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-3 text-left"
+          >
+            <p className="text-2xl font-black text-orange-700 tabular-nums">{observacionesCount}</p>
+            <p className="text-[11px] font-semibold text-orange-800">Observ.</p>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ambitoPriorityScore(ambito) {
+  return (
+    (ambito.vencido ?? 0) * 100 +
+    (ambito.observado ?? 0) * 40 +
+    (ambito.no_cumple ?? 0) * 35 +
+    (ambito.pendiente ?? 0) * 10 +
+    Math.max(0, 100 - (ambito.porcentaje ?? 0))
+  );
+}
+
 export default function AccreditationDashboard() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -241,6 +283,13 @@ export default function AccreditationDashboard() {
   }, [toast, sinEleam]);
 
   const resumen = useMemo(() => buildResumen(requisitos), [requisitos]);
+  const priorityAmbitos = useMemo(() => {
+    return [...(resumen.ambitos ?? [])]
+      .map((a) => ({ ...a, priorityScore: ambitoPriorityScore(a) }))
+      .filter((a) => a.priorityScore > 0)
+      .sort((a, b) => b.priorityScore - a.priorityScore || a.codigo.localeCompare(b.codigo))
+      .slice(0, 4);
+  }, [resumen.ambitos]);
 
   if (loading) return <Loading message="Cargando carpeta SEREMI..." />;
 
@@ -292,28 +341,12 @@ export default function AccreditationDashboard() {
 
       <AccreditationNextStep resumen={resumen} observaciones={observaciones} navigate={navigate} />
 
-      {/* Cumplimiento global */}
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <div className="flex items-end justify-between flex-wrap gap-3 mb-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Cumplimiento global</p>
-            <p className="text-sm text-gray-600">
-              {resumen.cumple} de {resumen.total - resumen.noAplica} requisitos al día
-              {resumen.noAplica > 0 ? <> · {resumen.noAplica} marcados como no aplica</> : null}
-            </p>
-          </div>
-          <p className="text-5xl font-black text-[var(--color-primary)] tabular-nums">{resumen.porcentaje}%</p>
-        </div>
-        <Bar pct={resumen.porcentaje} tone={cumplimientoTone} />
-      </section>
-
-      {/* KPIs */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total requisitos" value={resumen.total} />
-        <StatCard label="Cumple" value={resumen.cumple} tone="emerald" />
-        <StatCard label="Pendientes/Observados" value={resumen.pendientes} tone="amber" />
-        <StatCard label="Vencidos" value={resumen.vencidos.length} tone="rose" />
-      </section>
+      <ComplianceOverview
+        resumen={resumen}
+        observacionesCount={observaciones.length}
+        tone={cumplimientoTone}
+        navigate={navigate}
+      />
 
       {/* Alertas */}
       {(resumen.vencidos.length > 0 || resumen.porVencer.length > 0 || observaciones.length > 0) && (
@@ -390,11 +423,11 @@ export default function AccreditationDashboard() {
 
       {/* Ámbitos */}
       <section>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
           <h2 className="font-bold text-gray-800 inline-flex items-center gap-2">
-            Ámbitos
+            Ámbitos prioritarios
             <HelpTooltip label="Ayuda sobre ámbitos SEREMI">
-              Cada ámbito agrupa requisitos. Entra al ámbito con menor porcentaje o con estados vencidos/observados para ordenar la carpeta.
+              Se muestran primero los ámbitos con vencidos, observados, no cumple o más pendientes. El listado completo queda debajo.
             </HelpTooltip>
           </h2>
           {isAdminEleam && (
@@ -406,7 +439,33 @@ export default function AccreditationDashboard() {
             </button>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {priorityAmbitos.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {priorityAmbitos.map((a) => (
+              <AmbitoCard
+                key={a.codigo}
+                ambito={a}
+                onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            No hay ámbitos con alertas. Mantén la carpeta al día revisando vencimientos próximos.
+          </div>
+        )}
+      </section>
+
+      <details className="group rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
+          <div>
+            <h2 className="text-sm font-bold text-gray-800">Todos los ámbitos</h2>
+            <p className="text-xs text-gray-500">{resumen.ambitos.length} secciones SEREMI ordenadas por código.</p>
+          </div>
+          <span className="text-xs font-semibold text-[var(--color-primary)] group-open:hidden">Ver listado</span>
+          <span className="hidden text-xs font-semibold text-gray-500 group-open:inline">Ocultar</span>
+        </summary>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-gray-100 p-4 sm:p-5">
           {resumen.ambitos.map((a) => (
             <AmbitoCard
               key={a.codigo}
@@ -415,7 +474,7 @@ export default function AccreditationDashboard() {
             />
           ))}
         </div>
-      </section>
+      </details>
 
       {/* Leyenda */}
       <details className="group bg-slate-50 border border-slate-200 rounded-2xl">

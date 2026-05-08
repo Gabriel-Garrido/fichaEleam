@@ -54,7 +54,7 @@ export async function getVisits(residenteId, limit = 50) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("visitas_familiar")
-    .select("*, profiles(nombre)")
+    .select("*, profiles!visitas_familiar_profile_id_fkey(nombre)")
     .eq("residente_id", residenteId)
     .order("fecha_hora", { ascending: false })
     .limit(limit);
