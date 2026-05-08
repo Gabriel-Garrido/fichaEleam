@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
+import HelpTooltip from "../../components/HelpTooltip";
 
 const ESTADO_CONFIG = {
   activo:        { label: "Activo",        badge: "bg-emerald-100 text-emerald-800 border-emerald-200", dot: "bg-emerald-500" },
@@ -98,7 +99,12 @@ export default function ResidentList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-[var(--color-primary)]">Residentes</h1>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)] inline-flex items-center gap-2">
+            Residentes
+            <HelpTooltip label="Ayuda sobre residentes">
+              Aquí está la ficha base de cada residente. Empieza por mantener estado, habitación, dependencia y contacto familiar al día.
+            </HelpTooltip>
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
             {stats.total} residente{stats.total !== 1 ? "s" : ""} registrado
             {stats.total !== 1 ? "s" : ""}
@@ -108,7 +114,7 @@ export default function ResidentList() {
         {canCreate && (
           <Button
             onClick={() => navigate("/residents/new")}
-            className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] transition-all font-medium shadow-sm"
+            className="w-full sm:w-auto bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] transition-all font-medium shadow-sm"
           >
             + Agregar Residente
           </Button>
@@ -162,7 +168,7 @@ export default function ResidentList() {
       </div>
 
       {/* Toolbar: búsqueda + selector vista */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-5 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-5 flex flex-col md:flex-row gap-3 items-stretch md:items-center">
         <div className="relative flex-1">
           <span className="absolute inset-y-0 left-3 flex items-center text-gray-400 pointer-events-none">
             🔍
@@ -175,10 +181,11 @@ export default function ResidentList() {
             className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
           />
         </div>
-        <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden self-start sm:self-auto">
+        <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden self-stretch md:self-auto">
           <button
             onClick={() => setView("grid")}
-            className={`px-3 py-1.5 text-xs font-medium ${
+            aria-pressed={view === "grid"}
+            className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium ${
               view === "grid"
                 ? "bg-[var(--color-primary)] text-white"
                 : "bg-white text-gray-600 hover:bg-gray-50"
@@ -188,7 +195,8 @@ export default function ResidentList() {
           </button>
           <button
             onClick={() => setView("list")}
-            className={`px-3 py-1.5 text-xs font-medium border-l border-gray-200 ${
+            aria-pressed={view === "list"}
+            className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium border-l border-gray-200 ${
               view === "list"
                 ? "bg-[var(--color-primary)] text-white"
                 : "bg-white text-gray-600 hover:bg-gray-50"
@@ -427,7 +435,7 @@ function ResidentRow({ resident: r, onView, onEdit, onDelete }) {
         </div>
       </div>
 
-      <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+      <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:shrink-0" onClick={(e) => e.stopPropagation()}>
         <Button
           onClick={onView}
           className="text-sm bg-[var(--color-primary)] text-white px-4 py-1.5 rounded-lg hover:bg-[var(--color-button-hover)] transition-all"
@@ -443,7 +451,7 @@ function ResidentRow({ resident: r, onView, onEdit, onDelete }) {
         {onDelete && (
           <Button
             onClick={onDelete}
-            className="text-sm bg-white text-red-500 border border-red-200 px-4 py-1.5 rounded-lg hover:bg-red-50 transition-all"
+            className="col-span-2 sm:col-span-1 text-sm bg-white text-red-500 border border-red-200 px-4 py-1.5 rounded-lg hover:bg-red-50 transition-all"
           >
             Eliminar
           </Button>

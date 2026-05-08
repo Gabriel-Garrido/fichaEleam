@@ -16,11 +16,13 @@ const STYLES = {
   info: "bg-blue-600",
 };
 
+let _toastCounter = 0;
+
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
   const toast = useCallback((message, type = "info", duration = 3500) => {
-    const id = Date.now();
+    const id = ++_toastCounter;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));

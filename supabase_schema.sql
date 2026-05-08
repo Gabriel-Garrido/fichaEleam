@@ -1086,6 +1086,71 @@ begin
   end if;
 
   if v_token is null or v_token = '' then
+    -- Flujo Google OAuth: aceptar si el email coincide con una invitacion vigente.
+    -- Permite que usuarios Gmail creados via create-staff-user ingresen con Google
+    -- sin necesidad de contrasena temporal ni vinculacion manual.
+    if new.raw_app_meta_data->>'provider' = 'google'
+       or (new.raw_app_meta_data->'providers') @> '["google"]'::jsonb then
+
+      select i.id, lower(i.email) as email, i.rol, i.expira_en, i.usado, i.eleam_id, i.residente_id, i.creado_por
+      into v_invitacion
+      from public.funcionario_invitaciones i
+      where lower(i.email) = v_email
+        and i.usado = false
+        and i.expira_en > now()
+      order by i.creado_en desc
+      limit 1;
+
+      if found then
+        v_eleam_id     := v_invitacion.eleam_id;
+        v_rol          := coalesce(v_invitacion.rol, 'funcionario');
+        v_residente_id := v_invitacion.residente_id;
+        v_invitado_por := v_invitacion.creado_por;
+
+        if not public.eleam_has_access(v_eleam_id) then
+          raise exception 'La invitacion pertenece a un ELEAM sin acceso activo'
+            using errcode = '42501';
+        end if;
+
+        if v_rol = 'familiar' then
+          if v_residente_id is null then
+            raise exception 'Invitacion familiar sin residente asociado'
+              using errcode = '42501';
+          end if;
+          if not exists (
+            select 1 from public.residentes r
+            where r.id = v_residente_id
+              and r.eleam_id = v_eleam_id
+              and r.estado = 'activo'
+          ) then
+            raise exception 'El residente asociado a la invitacion ya no esta activo'
+              using errcode = '42501';
+          end if;
+        end if;
+
+        update public.funcionario_invitaciones
+        set usado = true, usado_en = now()
+        where id = v_invitacion.id;
+
+        insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
+        values (new.id, v_nombre, new.email, v_rol, v_eleam_id, false)
+        on conflict (id) do update set
+          nombre              = excluded.nombre,
+          email               = excluded.email,
+          rol                 = excluded.rol,
+          eleam_id            = excluded.eleam_id,
+          must_reset_password = false;
+
+        if v_rol = 'familiar' and v_residente_id is not null then
+          insert into public.familiar_residentes (profile_id, residente_id, creado_por)
+          values (new.id, v_residente_id, v_invitado_por)
+          on conflict do nothing;
+        end if;
+
+        return new;
+      end if;
+    end if;
+
     raise exception 'Cuenta no autorizada. Debe ser aprobada por superadmin o creada por un ELEAM activo.'
       using errcode = '42501';
   end if;
@@ -1097,7 +1162,7 @@ begin
     email    = excluded.email,
     rol      = excluded.rol,
     eleam_id = excluded.eleam_id;
-    -- must_reset_password no se toca aquí para preservar el estado si ya existía
+    -- must_reset_password no se toca aqui para preservar el estado si ya existia
 
   if v_rol = 'familiar' and v_residente_id is not null then
     insert into public.familiar_residentes (profile_id, residente_id, creado_por)

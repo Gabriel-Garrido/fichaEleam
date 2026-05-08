@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
+import HelpTooltip from "../../components/HelpTooltip";
 
 const TIPO_BADGE = {
   caida:                      "bg-red-100 text-red-700",
@@ -112,7 +113,18 @@ function ObservationList() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-[var(--color-primary)]">Observaciones Diarias</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)] inline-flex items-center gap-2">
+            Observaciones Diarias
+            <HelpTooltip label="Ayuda sobre observaciones">
+              Registra cambios del turno, incidentes, curaciones y acciones tomadas. Marca seguimiento cuando otra persona debe revisar el caso después.
+            </HelpTooltip>
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {records.length} registro{records.length === 1 ? "" : "s"} en el período seleccionado
+            {soloSeguimiento ? " · solo seguimientos" : ""}
+          </p>
+        </div>
         {canCreate && (
           <Button
             onClick={() =>
@@ -122,7 +134,7 @@ function ObservationList() {
                   : "/observations/new"
               )
             }
-            className="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
+            className="w-full sm:w-auto bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
           >
             + Nueva Observación
           </Button>
@@ -137,66 +149,87 @@ function ObservationList() {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Residente</label>
-          <select
-            value={filtroResidente}
-            onChange={(e) => setFiltroResidente(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
-          >
-            <option value="">Todos los residentes</option>
-            {residents.map((r) => (
-              <option key={r.id} value={r.id}>{r.apellido}, {r.nombre}</option>
-            ))}
-          </select>
+      <details className="group bg-white rounded-xl border border-gray-100 shadow-sm mb-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Filtros</p>
+            <p className="text-xs text-gray-500">
+              {filtroResidente || filtroTipo || soloSeguimiento
+                ? "Hay filtros activos"
+                : "Mes actual por defecto"}
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-[var(--color-primary)] group-open:hidden">Ajustar</span>
+          <span className="hidden text-xs font-semibold text-gray-500 group-open:inline">Cerrar</span>
+        </summary>
+        <div className="border-t border-gray-100 p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Residente</label>
+              <select
+                value={filtroResidente}
+                onChange={(e) => setFiltroResidente(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              >
+                <option value="">Todos los residentes</option>
+                {residents.map((r) => (
+                  <option key={r.id} value={r.id}>{r.apellido}, {r.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Tipo</label>
+              <select
+                value={filtroTipo}
+                onChange={(e) => setFiltroTipo(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              >
+                {TIPOS.map(([val, lbl]) => (
+                  <option key={val} value={val}>{lbl}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Desde</label>
+              <input
+                type="date"
+                value={filtroDesde}
+                onChange={(e) => setFiltroDesde(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Hasta</label>
+              <input
+                type="date"
+                value={filtroHasta}
+                onChange={(e) => setFiltroHasta(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-gray-200 px-3 py-2">
+              <input
+                type="checkbox"
+                checked={soloSeguimiento}
+                onChange={(e) => setSoloSeguimiento(e.target.checked)}
+                className="w-4 h-4 accent-[var(--color-primary)]"
+              />
+              <span className="text-sm text-gray-600 whitespace-nowrap">Solo seguimientos</span>
+            </label>
+          </div>
+          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-xs text-gray-500">
+              Usa "Solo seguimientos" para preparar la entrega de turno.
+            </p>
+            <button
+              onClick={clearFilters}
+              className="self-start text-sm text-gray-500 hover:text-gray-700 underline"
+            >
+              Limpiar filtros
+            </button>
+          </div>
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Tipo</label>
-          <select
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
-          >
-            {TIPOS.map(([val, lbl]) => (
-              <option key={val} value={val}>{lbl}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Desde</label>
-          <input
-            type="date"
-            value={filtroDesde}
-            onChange={(e) => setFiltroDesde(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Hasta</label>
-          <input
-            type="date"
-            value={filtroHasta}
-            onChange={(e) => setFiltroHasta(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
-          />
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer py-2">
-          <input
-            type="checkbox"
-            checked={soloSeguimiento}
-            onChange={(e) => setSoloSeguimiento(e.target.checked)}
-            className="w-4 h-4 accent-[var(--color-primary)]"
-          />
-          <span className="text-sm text-gray-600 whitespace-nowrap">Solo seguimientos</span>
-        </label>
-        <button
-          onClick={clearFilters}
-          className="text-sm text-gray-500 hover:text-gray-700 underline py-2"
-        >
-          Limpiar
-        </button>
-      </div>
+      </details>
 
       {records.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
@@ -236,7 +269,7 @@ function ObservationList() {
                     </p>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
                   <span className="text-xs text-gray-400">
                     {new Date(r.fecha_hora).toLocaleString("es-CL", {
                       dateStyle: "short",

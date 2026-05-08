@@ -2,27 +2,31 @@
 //
 // Body: { nombre: string, email: string, rol?: 'funcionario' | 'familiar', residente_id?: uuid }
 //
-// Crea un usuario directamente con contraseña temporal generada aquí.
+// Para correos Gmail (@gmail.com): crea una invitación en funcionario_invitaciones
+// y el usuario puede ingresar directamente con Google OAuth. No necesita contraseña.
+//
+// Para otros correos: crea el usuario con contraseña temporal generada aquí.
 // El trigger handle_new_user crea el profile automáticamente usando app_metadata
 // firmado por Admin API. Nunca confiar en user_metadata para eleam_id/rol.
-// Al iniciar sesión por primera vez, el usuario es redirigido a /cambiar-clave.
 //
 // Reglas:
 //   • Admin ELEAM con suscripción activa/en_gracia puede crear funcionarios y familiares.
 //   • Funcionario del ELEAM puede crear familiares vinculados a residentes activos.
 //   • Si rol='familiar' → residente_id obligatorio y debe pertenecer al ELEAM.
 //   • Si rol='funcionario' → respeta max_funcionarios del plan.
-//   • La contraseña temporal se devuelve una sola vez en la respuesta.
+//   • La contraseña temporal (solo correos no-Gmail) se devuelve una sola vez en la respuesta.
+//   • Si Resend no está configurado o falla, retorna email_sent=false y email_error.
 
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
-import { sendEmail, staffWelcomeEmail } from "../_shared/email.ts";
+import { sendEmail, staffWelcomeEmail, gmailStaffWelcomeEmail } from "../_shared/email.ts";
 import {
   findAuthUserByEmail,
   isDuplicateAuthUserError,
 } from "../_shared/authUsers.ts";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const GMAIL_RE = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i;
 
 function eleamHasAccess(eleam: {
   subscription_status?: string | null;
@@ -49,6 +53,11 @@ function generatePassword(): string {
     .join("");
 }
 
+function getAppUrl(): string {
+  const rawAppUrl = Deno.env.get("PUBLIC_APP_URL")?.trim() || "https://fichaeleam.cl";
+  return rawAppUrl.replace(/\/+$/, "");
+}
+
 async function sendStaffCredentials({
   email,
   nombre,
@@ -62,7 +71,6 @@ async function sendStaffCredentials({
   eleamNombre: string;
   rol: string;
 }) {
-  const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://fichaeleam.cl";
   return await sendEmail({
     to: email,
     subject: `Tu acceso a FichaEleam — ${eleamNombre}`,
@@ -72,7 +80,31 @@ async function sendStaffCredentials({
       tempPassword,
       eleamNombre,
       rol,
-      loginUrl: `${appUrl}/login`,
+      loginUrl: `${getAppUrl()}/login`,
+    }),
+  });
+}
+
+async function sendGmailInvite({
+  email,
+  nombre,
+  eleamNombre,
+  rol,
+}: {
+  email: string;
+  nombre: string;
+  eleamNombre: string;
+  rol: string;
+}) {
+  return await sendEmail({
+    to: email,
+    subject: `Tu acceso a FichaEleam — ${eleamNombre}`,
+    html: gmailStaffWelcomeEmail({
+      nombre,
+      email,
+      eleamNombre,
+      rol,
+      loginUrl: `${getAppUrl()}/login`,
     }),
   });
 }
@@ -163,7 +195,6 @@ Deno.serve(async (req) => {
           .eq("eleam_id", eleam.id)
           .eq("rol", "funcionario");
 
-        // Sumar invitaciones pendientes para evitar superar el límite del plan
         const { count: pendingInvites } = await sb
           .from("funcionario_invitaciones")
           .select("id", { head: true, count: "exact" })
@@ -198,6 +229,121 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
+    const isGmail = GMAIL_RE.test(cleanEmail);
+
+    // ── Flujo Gmail: invitación para login con Google ────────────────────────
+    if (isGmail) {
+      const { user: existingAuthUser, error: authLookupErr } = await findAuthUserByEmail(sb, cleanEmail);
+      if (authLookupErr) {
+        console.error("gmail auth user lookup", authLookupErr);
+        return jsonResponse(req, { error: "No se pudo validar si el correo ya existe en Auth." }, 500);
+      }
+
+      if (existingAuthUser) {
+        // Verificar si ya usa Google OAuth
+        const identities = (existingAuthUser as { identities?: Array<{ provider?: string }> }).identities ?? [];
+        const hasGoogle = identities.some((i) => i.provider === "google");
+
+        if (!hasGoogle) {
+          return jsonResponse(req, {
+            error: "Este correo ya tiene una cuenta con contraseña. El usuario debe usar su correo y contraseña para ingresar.",
+          }, 409);
+        }
+
+        // Usuario Google existente sin perfil: insertar perfil directamente
+        const { error: profileInsertErr } = await sb.from("profiles").insert({
+          id: existingAuthUser.id,
+          nombre,
+          email: cleanEmail,
+          rol,
+          eleam_id: profile.eleam_id,
+          must_reset_password: false,
+        });
+
+        if (profileInsertErr) {
+          console.error("gmail profile insert for existing google user", profileInsertErr);
+          return jsonResponse(req, {
+            error: "No se pudo crear el perfil para el usuario de Google existente.",
+          }, 500);
+        }
+
+        if (rol === "familiar" && residenteId) {
+          await sb.from("familiar_residentes").insert({
+            profile_id: existingAuthUser.id,
+            residente_id: residenteId,
+            creado_por: user.id,
+          }).then(({ error: linkErr }) => {
+            if (linkErr) console.error("gmail familiar link for existing user", linkErr);
+          });
+        }
+
+        const currentAppMeta =
+          existingAuthUser.app_metadata && typeof existingAuthUser.app_metadata === "object"
+            ? existingAuthUser.app_metadata
+            : {};
+
+        await sb.auth.admin.updateUserById(existingAuthUser.id, {
+          app_metadata: {
+            ...currentAppMeta,
+            fichaeleam_account_source: "admin_created_google",
+            eleam_id_direct: profile.eleam_id,
+            rol_direct: rol,
+            ...(rol === "familiar" && residenteId ? { residente_id_direct: residenteId } : {}),
+          },
+        });
+
+        const emailResult = await sendGmailInvite({ email: cleanEmail, nombre, eleamNombre: eleam.nombre, rol });
+
+        return jsonResponse(req, {
+          ok: true,
+          is_gmail: true,
+          google_only: true,
+          existing_google_user: true,
+          profile_id: existingAuthUser.id,
+          email: cleanEmail,
+          rol,
+          email_sent: emailResult.sent,
+          email_skipped: emailResult.skipped === true,
+          ...(emailResult.error ? { email_error: emailResult.error } : {}),
+        });
+      }
+
+      // No hay cuenta en Auth: crear invitación para que el usuario entre con Google
+      // El token es requerido por la tabla pero no se usa en el flujo Google OAuth
+      const invToken = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 días
+
+      const { error: invError } = await sb.from("funcionario_invitaciones").insert({
+        eleam_id: profile.eleam_id,
+        email: cleanEmail,
+        token: invToken,
+        expira_en: expiresAt,
+        rol,
+        residente_id: residenteId || null,
+        creado_por: user.id,
+      });
+
+      if (invError) {
+        console.error("gmail invitation insert", invError);
+        return jsonResponse(req, { error: "No se pudo preparar el acceso de Google." }, 500);
+      }
+
+      const emailResult = await sendGmailInvite({ email: cleanEmail, nombre, eleamNombre: eleam.nombre, rol });
+
+      return jsonResponse(req, {
+        ok: true,
+        is_gmail: true,
+        google_only: true,
+        profile_id: null,
+        email: cleanEmail,
+        rol,
+        email_sent: emailResult.sent,
+        email_skipped: emailResult.skipped === true,
+        ...(emailResult.error ? { email_error: emailResult.error } : {}),
+      });
+    }
+
+    // ── Flujo estándar: contraseña temporal ──────────────────────────────────
     const { user: existingAuthUser, error: authLookupErr } = await findAuthUserByEmail(sb, cleanEmail);
     if (authLookupErr) {
       console.error("staff auth user lookup", authLookupErr);
@@ -273,7 +419,7 @@ Deno.serve(async (req) => {
         }, 500);
       }
 
-      const emailSent = await sendStaffCredentials({
+      const emailResult = await sendStaffCredentials({
         email: cleanEmail,
         nombre,
         tempPassword,
@@ -288,7 +434,9 @@ Deno.serve(async (req) => {
         profile_id: existingAuthUser.id,
         email: cleanEmail,
         rol,
-        email_sent: emailSent,
+        email_sent: emailResult.sent,
+        email_skipped: emailResult.skipped === true,
+        ...(emailResult.error ? { email_error: emailResult.error } : {}),
       });
     }
 
@@ -319,7 +467,7 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "No se pudo crear el usuario." }, 500);
     }
 
-    const emailSent = await sendStaffCredentials({
+    const emailResult = await sendStaffCredentials({
       email: cleanEmail,
       nombre,
       tempPassword,
@@ -333,7 +481,9 @@ Deno.serve(async (req) => {
       profile_id: created.user.id,
       email: cleanEmail,
       rol,
-      email_sent: emailSent,
+      email_sent: emailResult.sent,
+      email_skipped: emailResult.skipped === true,
+      ...(emailResult.error ? { email_error: emailResult.error } : {}),
     });
   } catch (e) {
     console.error("create-staff-user", e);

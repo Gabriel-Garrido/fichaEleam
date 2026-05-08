@@ -95,7 +95,8 @@ export async function revokeInvitation(id) {
 }
 
 // Crea un funcionario o familiar directamente con contraseña temporal.
-// Retorna { ok, temp_password, profile_id, email, rol } — la contraseña solo viene una vez.
+// Retorna { ok, temp_password, profile_id, email, rol, email_sent, email_error? }.
+// La contraseña solo viene una vez.
 export async function createStaffUser({ nombre, email, rol, residenteId = null }) {
   const sb = ensureSupabase();
   const { data, error } = await sb.functions.invoke("create-staff-user", {

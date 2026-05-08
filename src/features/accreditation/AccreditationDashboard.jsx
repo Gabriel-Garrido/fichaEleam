@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Loading from "../../components/Loading";
+import HelpTooltip from "../../components/HelpTooltip";
 import {
   getRequisitosEleam,
   getObservaciones,
@@ -149,6 +150,65 @@ function ObservacionItem({ obs }) {
   );
 }
 
+function AccreditationNextStep({ resumen, observaciones, navigate }) {
+  const step = resumen.vencidos.length > 0
+    ? {
+        tone: "rose",
+        title: "Renueva documentos vencidos",
+        text: `${resumen.vencidos.length} requisito${resumen.vencidos.length === 1 ? "" : "s"} vencido${resumen.vencidos.length === 1 ? "" : "s"}. Priorízalos antes de generar la carpeta.`,
+        action: "Ver vencidos",
+        path: "/accreditation",
+      }
+    : resumen.porVencer.length > 0
+      ? {
+          tone: "amber",
+          title: "Planifica vencimientos próximos",
+          text: `${resumen.porVencer.length} documento${resumen.porVencer.length === 1 ? "" : "s"} vence${resumen.porVencer.length === 1 ? "" : "n"} durante los próximos 30 días.`,
+          action: "Revisar fechas",
+          path: "/accreditation",
+        }
+      : observaciones.length > 0
+        ? {
+            tone: "amber",
+            title: "Cierra observaciones abiertas",
+            text: `${observaciones.length} observación${observaciones.length === 1 ? "" : "es"} pendiente${observaciones.length === 1 ? "" : "s"} de subsanación.`,
+            action: "Ver observaciones",
+            path: "/accreditation/observaciones",
+          }
+        : {
+            tone: "emerald",
+            title: "Carpeta ordenada",
+            text: "No hay vencimientos urgentes ni observaciones abiertas. Mantén la carpeta descargable actualizada.",
+            action: "Generar carpeta",
+            path: "/accreditation/carpeta",
+          };
+
+  const toneClass = {
+    rose: "bg-rose-50 border-rose-200 text-rose-800",
+    amber: "bg-amber-50 border-amber-200 text-amber-800",
+    emerald: "bg-emerald-50 border-emerald-200 text-emerald-800",
+  }[step.tone];
+
+  return (
+    <section className={`rounded-2xl border p-4 sm:p-5 ${toneClass}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide font-semibold opacity-70">Siguiente paso recomendado</p>
+          <h2 className="text-lg font-bold mt-1">{step.title}</h2>
+          <p className="text-sm mt-1 opacity-90">{step.text}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate(step.path)}
+          className="w-full sm:w-auto rounded-lg bg-white/80 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-white"
+        >
+          {step.action}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export default function AccreditationDashboard() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -203,13 +263,18 @@ export default function AccreditationDashboard() {
       {/* Header */}
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-black text-[var(--color-primary)]">Carpeta SEREMI</h1>
+          <h1 className="text-3xl font-black text-[var(--color-primary)] inline-flex items-center gap-2">
+            Carpeta SEREMI
+            <HelpTooltip label="Ayuda sobre carpeta SEREMI">
+              Revisa primero vencidos y observaciones. Después completa cada ámbito y genera la carpeta cuando todo esté listo para fiscalización.
+            </HelpTooltip>
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Documentación, requisitos y observaciones para fiscalización (DS 14/2017).
+            Prioriza vencidos, observaciones y requisitos pendientes.
             {eleam?.nombre ? <> · <span className="font-semibold">{eleam.nombre}</span></> : null}
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="grid grid-cols-1 sm:flex gap-2 w-full sm:w-auto">
           <button
             onClick={() => navigate("/accreditation/observaciones")}
             className="border border-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
@@ -224,6 +289,8 @@ export default function AccreditationDashboard() {
           </button>
         </div>
       </header>
+
+      <AccreditationNextStep resumen={resumen} observaciones={observaciones} navigate={navigate} />
 
       {/* Cumplimiento global */}
       <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -250,69 +317,86 @@ export default function AccreditationDashboard() {
 
       {/* Alertas */}
       {(resumen.vencidos.length > 0 || resumen.porVencer.length > 0 || observaciones.length > 0) && (
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {resumen.vencidos.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-bold text-gray-800">Vencidos</h2>
-                <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold">
-                  {resumen.vencidos.length}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {resumen.vencidos.slice(0, 5).map((r) => (
-                  <AlertItem key={r.id} requisito_eleam={r} kind="vencido" />
-                ))}
-              </div>
+        <details className="group bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
+            <div>
+              <h2 className="text-sm font-bold text-gray-800">Alertas de carpeta</h2>
+              <p className="text-xs text-gray-500">
+                {resumen.vencidos.length} vencidos · {resumen.porVencer.length} por vencer · {observaciones.length} observaciones
+              </p>
             </div>
-          )}
+            <span className="text-xs font-semibold text-[var(--color-primary)] group-open:hidden">Ver detalle</span>
+            <span className="hidden text-xs font-semibold text-gray-500 group-open:inline">Ocultar</span>
+          </summary>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 border-t border-gray-100 p-4 sm:p-5">
+            {resumen.vencidos.length > 0 && (
+              <div className="rounded-2xl border border-rose-100 bg-rose-50/40 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-bold text-gray-800">Vencidos</h2>
+                  <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold">
+                    {resumen.vencidos.length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {resumen.vencidos.slice(0, 5).map((r) => (
+                    <AlertItem key={r.id} requisito_eleam={r} kind="vencido" />
+                  ))}
+                </div>
+              </div>
+            )}
 
-          {resumen.porVencer.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-bold text-gray-800">Por vencer (30 días)</h2>
-                <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">
-                  {resumen.porVencer.length}
-                </span>
+            {resumen.porVencer.length > 0 && (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-bold text-gray-800">Por vencer</h2>
+                  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">
+                    {resumen.porVencer.length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {resumen.porVencer.slice(0, 5).map((r) => (
+                    <AlertItem key={r.id} requisito_eleam={r} kind="por_vencer" />
+                  ))}
+                </div>
               </div>
-              <div className="space-y-2">
-                {resumen.porVencer.slice(0, 5).map((r) => (
-                  <AlertItem key={r.id} requisito_eleam={r} kind="por_vencer" />
-                ))}
-              </div>
-            </div>
-          )}
+            )}
 
-          {observaciones.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-bold text-gray-800">Observaciones abiertas</h2>
-                <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
-                  {observaciones.length}
-                </span>
+            {observaciones.length > 0 && (
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-bold text-gray-800">Observaciones</h2>
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
+                    {observaciones.length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {observaciones.slice(0, 5).map((o) => (
+                    <ObservacionItem key={o.id} obs={o} />
+                  ))}
+                  {observaciones.length > 5 && (
+                    <button
+                      onClick={() => navigate("/accreditation/observaciones")}
+                      className="text-xs text-[var(--color-primary)] hover:underline"
+                    >
+                      Ver todas →
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="space-y-2">
-                {observaciones.slice(0, 5).map((o) => (
-                  <ObservacionItem key={o.id} obs={o} />
-                ))}
-                {observaciones.length > 5 && (
-                  <button
-                    onClick={() => navigate("/accreditation/observaciones")}
-                    className="text-xs text-[var(--color-primary)] hover:underline"
-                  >
-                    Ver todas →
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
+            )}
+          </div>
+        </details>
       )}
 
       {/* Ámbitos */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-gray-800">Ámbitos</h2>
+          <h2 className="font-bold text-gray-800 inline-flex items-center gap-2">
+            Ámbitos
+            <HelpTooltip label="Ayuda sobre ámbitos SEREMI">
+              Cada ámbito agrupa requisitos. Entra al ámbito con menor porcentaje o con estados vencidos/observados para ordenar la carpeta.
+            </HelpTooltip>
+          </h2>
           {isAdminEleam && (
             <button
               onClick={() => navigate("/accreditation/observaciones?nuevo=1")}
@@ -334,9 +418,13 @@ export default function AccreditationDashboard() {
       </section>
 
       {/* Leyenda */}
-      <section className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-        <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">Leyenda de estados</p>
-        <div className="flex flex-wrap gap-2">
+      <details className="group bg-slate-50 border border-slate-200 rounded-2xl">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Leyenda de estados</p>
+          <span className="text-xs text-slate-500 group-open:hidden">Ver</span>
+          <span className="hidden text-xs text-slate-500 group-open:inline">Ocultar</span>
+        </summary>
+        <div className="flex flex-wrap gap-2 border-t border-slate-200 px-4 py-3">
           {["cumple", "pendiente", "observado", "vencido", "no_cumple", "no_aplica"].map((estado) => {
             const m = estadoMeta(estado);
             return (
@@ -347,7 +435,7 @@ export default function AccreditationDashboard() {
             );
           })}
         </div>
-      </section>
+      </details>
     </div>
   );
 }

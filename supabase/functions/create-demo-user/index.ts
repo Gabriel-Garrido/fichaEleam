@@ -8,6 +8,8 @@
 // cuentas admin ELEAM si vienen por este canal server-side.
 // Activa el ELEAM en modo demo (subscription_status = 'activo').
 // Envía email de bienvenida vía Resend si RESEND_API_KEY está configurado.
+// Si falta configuración o Resend falla, la respuesta incluye email_sent=false
+// y email_error para que la UI pueda mostrar el motivo.
 //
 // Solo superadmin puede llamar esta función.
 
@@ -42,7 +44,8 @@ async function sendDemoCredentials({
   tempPassword: string;
   eleamNombre: string;
 }) {
-  const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? "https://fichaeleam.cl";
+  const rawAppUrl = Deno.env.get("PUBLIC_APP_URL")?.trim() || "https://fichaeleam.cl";
+  const appUrl = rawAppUrl.replace(/\/+$/, "");
   return await sendEmail({
     to: email,
     subject: `Tu demo de FichaEleam está lista, ${nombre}`,
@@ -258,7 +261,7 @@ Deno.serve(async (req) => {
         estado: "demo_activo",
       }).eq("id", leadId);
 
-      const emailSent = await sendDemoCredentials({
+      const emailResult = await sendDemoCredentials({
         email: cleanEmail,
         nombre: lead.nombre,
         tempPassword,
@@ -272,7 +275,9 @@ Deno.serve(async (req) => {
         eleam_id: demoEleam.id,
         email: cleanEmail,
         temp_password: tempPassword,
-        email_sent: emailSent,
+        email_sent: emailResult.sent,
+        email_skipped: emailResult.skipped === true,
+        ...(emailResult.error ? { email_error: emailResult.error } : {}),
       });
     }
 
@@ -333,7 +338,7 @@ Deno.serve(async (req) => {
       estado: "demo_activo",
     }).eq("id", leadId);
 
-    const emailSent = await sendDemoCredentials({
+    const emailResult = await sendDemoCredentials({
       email: cleanEmail,
       nombre: lead.nombre,
       tempPassword,
@@ -346,7 +351,9 @@ Deno.serve(async (req) => {
       eleam_id: eleamId,
       email: cleanEmail,
       temp_password: tempPassword,
-      email_sent: emailSent,
+      email_sent: emailResult.sent,
+      email_skipped: emailResult.skipped === true,
+      ...(emailResult.error ? { email_error: emailResult.error } : {}),
     });
   } catch (e) {
     console.error("create-demo-user", e);

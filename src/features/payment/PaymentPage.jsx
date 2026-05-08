@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import HelpTooltip from "../../components/HelpTooltip";
 import { logout } from "../auth/authService";
 import { useSEO } from "../../utils/seo";
 import {
@@ -283,6 +284,11 @@ export default function PaymentPage() {
         <div className="text-center mb-10">
           <h1 className="text-4xl font-black text-gray-800 mb-3">
             {blockedNonAdmin ? "Acceso pendiente del ELEAM" : "Activa tu ELEAM"}
+            {!blockedNonAdmin && (
+              <HelpTooltip className="ml-2" label="Ayuda sobre activación">
+                Elige el plan según residentes activos. El pago lo procesa MercadoPago y el acceso se habilita automáticamente cuando el webhook confirma el cobro.
+              </HelpTooltip>
+            )}
           </h1>
           <p className="text-gray-500 max-w-xl mx-auto text-base">
             {blockedNonAdmin

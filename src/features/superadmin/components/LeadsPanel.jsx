@@ -57,7 +57,7 @@ export default function LeadsPanel({
   const [filterEstado, setFilter] = useState("");
   const [expanded, setExpanded]   = useState(null);
   const [editNotes, setEditNotes] = useState({});
-  const [credenciales, setCredenciales] = useState(null); // { email, temp_password, email_sent }
+  const [credenciales, setCredenciales] = useState(null); // { email, temp_password, email_sent, email_error }
 
   useEffect(() => { onLoadLeads({ estado: filterEstado || undefined, search }); }, []);
 
@@ -85,6 +85,8 @@ export default function LeadsPanel({
         email: updated.email ?? lead.email,
         temp_password: updated._temp_password,
         email_sent: updated._email_sent,
+        email_error: updated._email_error,
+        email_skipped: updated._email_skipped,
         reused_existing_user: updated._reused_existing_user,
         already_active: updated._already_active,
         repaired_existing_auth_user: updated._repaired_existing_auth_user,
@@ -181,10 +183,20 @@ export default function LeadsPanel({
                 </div>
               )}
             </div>
+            {credenciales.temp_password && !credenciales.email_sent && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-xs font-semibold text-amber-800">Correo no enviado automáticamente</p>
+                <p className="mt-1 text-xs text-amber-700">
+                  {credenciales.email_error
+                    ? `Motivo: ${credenciales.email_error}`
+                    : "Comparte las credenciales manualmente y revisa la configuración de Resend."}
+                </p>
+              </div>
+            )}
             {credenciales.temp_password ? (
               <p className="text-xs text-gray-400">
                 El usuario deberá cambiar esta contraseña en su primer acceso.
-                Si tiene correo Gmail, podrá optar por usar Google como método de inicio de sesión.
+                Si tiene correo Gmail, podrá vincular Google después de entrar con esta contraseña temporal.
               </p>
             ) : (
               <p className="text-xs text-gray-400">

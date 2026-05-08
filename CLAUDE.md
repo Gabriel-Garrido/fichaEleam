@@ -428,13 +428,13 @@ Internas (admin levanta) o de fiscalización (SEREMI detecta). Flujo: `abierta` 
 - `mp-webhook`: Público; valida HMAC SHA-256; deduplica con `mp_request_id`; actualiza estado.
 - `mp-cancel-subscription`: Cancela preapproval; solo `admin_eleam`.
 - `invite-funcionario`: Crea invitation token; valida plan y límites (flujo legado). Admin invita funcionarios/familiares; funcionario solo familiares.
-- `create-staff-user`: Crea funcionario/familiar con contraseña temporal usando `app_metadata` server-side; admin crea staff/familiares y funcionario solo familiar vinculado. Si el email existe en Auth pero no tiene `profiles`, repara/adopta esa cuenta para el ELEAM autorizado y asigna contraseña temporal nueva. Envía email via Resend (si configurado). Retorna `{ ok, profile_id, email, temp_password, email_sent, repaired_existing_auth_user? }`.
+- `create-staff-user`: Crea funcionario/familiar con contraseña temporal usando `app_metadata` server-side; admin crea staff/familiares y funcionario solo familiar vinculado. Si el email existe en Auth pero no tiene `profiles`, repara/adopta esa cuenta para el ELEAM autorizado y asigna contraseña temporal nueva. Envía email via Resend (si configurado). Retorna `{ ok, profile_id, email, temp_password, email_sent, email_error?, repaired_existing_auth_user? }`.
 - `delete-staff-user`: Elimina usuario de Auth; cascadas limpian `profiles`, `familiar_residentes` y `funcionario_permisos`.
-- `create-demo-user`: Crea ELEAM demo + admin_eleam para lead aprobado usando `app_metadata` server-side, reutiliza admin compatible o repara un usuario Auth huérfano del mismo email; activa ELEAM 30 días; envía email de bienvenida cuando genera contraseña. Retorna `{ ok, profile_id, eleam_id, email, temp_password?, email_sent, reused_existing_user?, repaired_existing_auth_user?, already_active? }`.
+- `create-demo-user`: Crea ELEAM demo + admin_eleam para lead aprobado usando `app_metadata` server-side, reutiliza admin compatible o repara un usuario Auth huérfano del mismo email; activa ELEAM 30 días; envía email de bienvenida cuando genera contraseña. Retorna `{ ok, profile_id, eleam_id, email, temp_password?, email_sent, email_error?, reused_existing_user?, repaired_existing_auth_user?, already_active? }`.
 
 ### Email (Resend — opcional)
 
-`supabase/functions/_shared/email.ts` centraliza el envío. Si `RESEND_API_KEY` no está configurado, `sendEmail()` retorna `false` (no-op) y el sistema sigue funcionando — las credenciales se muestran directamente en la UI al superadmin/admin.
+`supabase/functions/_shared/email.ts` centraliza el envío. Si `RESEND_API_KEY` no está configurado o Resend falla, `sendEmail()` retorna `{ sent: false, error }` y el sistema sigue funcionando — las credenciales se muestran directamente en la UI al superadmin/admin.
 
 ### Env vars (server-only, Edge Function secrets)
 

@@ -58,9 +58,50 @@ npx supabase secrets set MP_WEBHOOK_SECRET=<secret-webhook-mp>
 npx supabase secrets set PUBLIC_APP_URL=http://localhost:5173
 npx supabase secrets set ALLOWED_ORIGINS="http://localhost:5173"
 npx supabase secrets set RESEND_API_KEY=re_... # opcional
+npx supabase secrets set RESEND_FROM_EMAIL="FichaEleam <no-reply@fichaeleam.cl>" # opcional
 ```
 
 Supabase provee automáticamente `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` dentro de las Edge Functions del proyecto enlazado.
+
+---
+
+## Correos Automáticos
+
+El sistema no envía correos desde SQL ni desde triggers de base de datos. Los correos automáticos salen desde Edge Functions usando Resend:
+
+- `create-demo-user`: cuando el superadmin activa un demo y se genera una contraseña temporal.
+- `create-staff-user`: cuando un admin ELEAM crea o repara un funcionario/familiar y se genera una contraseña temporal.
+- `invite-funcionario`: flujo legado; genera link de invitación, pero no envía email automático.
+
+Para habilitarlos en producción:
+
+1. Crea una cuenta en Resend y genera una API key.
+2. Verifica el dominio remitente en Resend, por ejemplo `fichaeleam.cl`.
+3. Agrega en tu proveedor DNS los registros que Resend solicite para SPF/DKIM/DMARC.
+4. Configura los secrets del proyecto Supabase:
+
+```bash
+npx supabase secrets set RESEND_API_KEY=re_xxxxxxxxx
+npx supabase secrets set RESEND_FROM_EMAIL="FichaEleam <no-reply@fichaeleam.cl>"
+npx supabase secrets set PUBLIC_APP_URL=https://fichaeleam.cl
+```
+
+5. Despliega las funciones que envían correos:
+
+```bash
+npx supabase functions deploy create-demo-user
+npx supabase functions deploy create-staff-user
+```
+
+6. Verifica la configuración:
+
+```bash
+npx supabase secrets list
+```
+
+Después crea un demo o un usuario de equipo desde la UI. La respuesta de la función debe traer `email_sent: true`. Si viene `email_sent: false`, la UI muestra `email_error`; revisa ese mensaje y los logs de la Edge Function. Si falta `RESEND_API_KEY`, el sistema sigue creando el usuario y muestra la contraseña temporal para compartirla manualmente.
+
+Los correos de recuperación de contraseña, confirmación de email o magic links pertenecen a Supabase Auth. Si quieres que también salgan con dominio propio, configúralos aparte en Supabase Dashboard > Authentication > SMTP y Templates.
 
 ---
 

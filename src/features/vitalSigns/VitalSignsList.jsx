@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
+import HelpTooltip from "../../components/HelpTooltip";
 import VitalCard from "./VitalCard";
 import {
   VITAL_DEFS,
@@ -108,7 +109,12 @@ export default function VitalSignsList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-[var(--color-primary)]">Signos Vitales</h1>
+          <h1 className="text-3xl font-bold text-[var(--color-primary)] inline-flex items-center gap-2">
+            Signos Vitales
+            <HelpTooltip label="Ayuda sobre signos vitales">
+              Los colores se calculan con rangos clínicos. Filtra por Crítico o Atención para priorizar residentes que necesitan revisión.
+            </HelpTooltip>
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
             {stats.total} registro{stats.total !== 1 ? "s" : ""} en el período seleccionado
           </p>
@@ -122,7 +128,7 @@ export default function VitalSignsList() {
                   : "/vital-signs/new"
               )
             }
-            className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] font-medium shadow-sm"
+            className="w-full sm:w-auto bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] font-medium shadow-sm"
           >
             + Nuevo Registro
           </Button>
@@ -171,70 +177,90 @@ export default function VitalSignsList() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Residente</label>
-          <select
-            value={filtroResidente}
-            onChange={(e) => setFiltroResidente(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
-          >
-            <option value="">Todos los residentes</option>
-            {residents.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.apellido}, {r.nombre}
-              </option>
-            ))}
-          </select>
+      <details className="group bg-white rounded-xl border border-gray-100 shadow-sm mb-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Filtros y vista</p>
+            <p className="text-xs text-gray-500">
+              {filtroResidente ? "Filtrando por residente" : "Mes actual por defecto"}
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-[var(--color-primary)] group-open:hidden">Ajustar</span>
+          <span className="hidden text-xs font-semibold text-gray-500 group-open:inline">Cerrar</span>
+        </summary>
+        <div className="border-t border-gray-100 p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Residente</label>
+              <select
+                value={filtroResidente}
+                onChange={(e) => setFiltroResidente(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              >
+                <option value="">Todos los residentes</option>
+                {residents.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.apellido}, {r.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Desde</label>
+              <input
+                type="date"
+                value={filtroDesde}
+                onChange={(e) => setFiltroDesde(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Hasta</label>
+              <input
+                type="date"
+                value={filtroHasta}
+                onChange={(e) => setFiltroHasta(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              />
+            </div>
+            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden self-stretch">
+              <button
+                onClick={() => setView("cards")}
+                aria-pressed={view === "cards"}
+                className={`flex-1 px-3 py-2 text-xs font-medium ${
+                  view === "cards"
+                    ? "bg-[var(--color-primary)] text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Tarjetas
+              </button>
+              <button
+                onClick={() => setView("table")}
+                aria-pressed={view === "table"}
+                className={`flex-1 px-3 py-2 text-xs font-medium border-l border-gray-200 ${
+                  view === "table"
+                    ? "bg-[var(--color-primary)] text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Tabla
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-xs text-gray-500">
+              Tarjetas es la vista recomendada en móvil; tabla queda para revisión compacta.
+            </p>
+            <button
+              onClick={clearFilters}
+              className="self-start text-sm text-gray-500 hover:text-gray-700 underline"
+            >
+              Limpiar filtros
+            </button>
+          </div>
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Desde</label>
-          <input
-            type="date"
-            value={filtroDesde}
-            onChange={(e) => setFiltroDesde(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Hasta</label>
-          <input
-            type="date"
-            value={filtroHasta}
-            onChange={(e) => setFiltroHasta(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
-          />
-        </div>
-        <button
-          onClick={clearFilters}
-          className="text-sm text-gray-500 hover:text-gray-700 underline py-2"
-        >
-          Limpiar filtros
-        </button>
-
-        <div className="ml-auto inline-flex rounded-lg border border-gray-200 overflow-hidden">
-          <button
-            onClick={() => setView("cards")}
-            className={`px-3 py-1.5 text-xs font-medium ${
-              view === "cards"
-                ? "bg-[var(--color-primary)] text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Tarjetas
-          </button>
-          <button
-            onClick={() => setView("table")}
-            className={`px-3 py-1.5 text-xs font-medium border-l border-gray-200 ${
-              view === "table"
-                ? "bg-[var(--color-primary)] text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Tabla
-          </button>
-        </div>
-      </div>
+      </details>
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-500 bg-white rounded-xl border border-gray-100">

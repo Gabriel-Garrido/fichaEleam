@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import HelpTooltip from "../../components/HelpTooltip";
 import { loadDashboard } from "./dashboardService";
 import {
   STATUS,
@@ -170,9 +171,7 @@ export default function AdminDashboard() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
       {/* Hero header */}
-      <header className="relative overflow-hidden bg-gradient-to-br from-[var(--color-primary)] via-[var(--color-accent)] to-[var(--color-primary)] rounded-3xl p-6 sm:p-8 text-white shadow-lg">
-        <div className="absolute -top-16 -right-16 w-56 h-56 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-12 w-72 h-72 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+      <header className="relative overflow-hidden bg-gradient-to-br from-[var(--color-primary)] via-[var(--color-accent)] to-[var(--color-primary)] rounded-3xl p-5 sm:p-8 text-white shadow-lg">
         <div className="relative">
           <div className="text-xs uppercase tracking-wider text-white/70 font-medium">
             {todayDateLong()} · Turno actual: <span className="capitalize">{turno}</span>
@@ -214,6 +213,7 @@ export default function AdminDashboard() {
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             title="Residentes activos"
+            help="Residentes que hoy forman parte de la operación del ELEAM. Los egresados y fallecidos quedan en historial."
             value={loading ? "…" : stats?.activos ?? 0}
             sub={
               stats
@@ -226,6 +226,7 @@ export default function AdminDashboard() {
           />
           <KpiCard
             title="Estado clínico"
+            help="Cuenta residentes cuyo último control vital está fuera de rango. Entra aquí para priorizar controles."
             value={loading ? "…" : (clinicalSummary.critical + clinicalSummary.warning) || 0}
             sub={
               loading
@@ -248,6 +249,7 @@ export default function AdminDashboard() {
           />
           <KpiCard
             title="Cobertura signos hoy"
+            help="Porcentaje de residentes activos con al menos un registro de signos vitales durante el día actual."
             value={cobertura ? `${cobertura.pct}%` : "—"}
             sub={
               cobertura
@@ -268,6 +270,7 @@ export default function AdminDashboard() {
           />
           <KpiCard
             title="Cumplimiento SEREMI"
+            help="Avance de requisitos de acreditación marcados como cumple, sin contar los que no aplican."
             value={loading ? "…" : `${acreditacion.porcentaje}%`}
             sub={`${acreditacion.cumple} de ${acreditacion.total} requisitos al día${
               acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""
@@ -294,70 +297,91 @@ export default function AdminDashboard() {
         navigate={navigate}
       />
 
-      {/* Two-column split: clinical board + side panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <section className="lg:col-span-2">
-          <ClinicalBoard
-            list={data?.latestVitalsByResident ?? []}
-            loading={loading}
-            error={errors.latestVitals}
-            navigate={navigate}
-          />
-        </section>
+      <ClinicalBoard
+        list={data?.latestVitalsByResident ?? []}
+        loading={loading}
+        error={errors.latestVitals}
+        navigate={navigate}
+      />
 
-        <aside className="space-y-6">
-          <RiskMatrix
-            clinicalSummary={clinicalSummary}
-            highDependency={management.highDependency}
-            staleCount={management.stale.length}
-            followUpCount={(data?.pendingFollowUps ?? []).length}
-          />
-          <DependencyChart dist={stats?.dependencia} total={stats?.activos ?? 0} />
-          <ShiftActivity activity={data?.activityByShift} turno={turno} />
-        </aside>
-      </div>
+      <details className="group bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
+          <div>
+            <h2 className="text-sm font-bold text-gray-800">Contexto adicional</h2>
+            <p className="text-xs text-gray-500">Indicadores para revisar después de resolver las prioridades del turno.</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 group-open:hidden">
+            Ver
+          </span>
+          <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 group-open:inline-flex">
+            Ocultar
+          </span>
+        </summary>
+        <div className="space-y-6 border-t border-gray-100 p-4 sm:p-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <RiskMatrix
+              clinicalSummary={clinicalSummary}
+              highDependency={management.highDependency}
+              staleCount={management.stale.length}
+              followUpCount={(data?.pendingFollowUps ?? []).length}
+            />
+            <DependencyChart dist={stats?.dependencia} total={stats?.activos ?? 0} />
+            <ShiftActivity activity={data?.activityByShift} turno={turno} />
+          </div>
 
-      {/* Bottom row: follow-ups, incidents, expiring */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <FollowUpsCard
-          items={data?.pendingFollowUps ?? []}
-          navigate={navigate}
-        />
-        <IncidentsCard
-          items={data?.recentIncidents ?? []}
-          navigate={navigate}
-        />
-        <ExpiringDocsCard
-          items={data?.expiringDocuments ?? []}
-          navigate={navigate}
-        />
-      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <FollowUpsCard
+              items={data?.pendingFollowUps ?? []}
+              navigate={navigate}
+            />
+            <IncidentsCard
+              items={data?.recentIncidents ?? []}
+              navigate={navigate}
+            />
+            <ExpiringDocsCard
+              items={data?.expiringDocuments ?? []}
+              navigate={navigate}
+            />
+          </div>
 
-      {/* Demographics + accreditation progress */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Demographics stats={stats} />
-        <AccreditationCard
-          acreditacion={acreditacion}
-          navigate={navigate}
-          loading={loading}
-        />
-      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Demographics stats={stats} />
+            <AccreditationCard
+              acreditacion={acreditacion}
+              navigate={navigate}
+              loading={loading}
+            />
+          </div>
+        </div>
+      </details>
 
       {/* Quick actions */}
       <section>
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Acciones rápidas
+          Acciones principales
+          <HelpTooltip className="ml-2" label="Ayuda sobre acciones rápidas">
+            Mantén visibles solo las tareas más repetidas del turno. Las consultas secundarias quedan agrupadas abajo.
+          </HelpTooltip>
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <QuickAction icon="👴" label="Agregar residente"        onClick={() => navigate("/residents/new")} />
           <QuickAction icon="📊" label="Registrar signos vitales" onClick={() => navigate("/vital-signs/new")} />
           <QuickAction icon="📋" label="Nueva observación"        onClick={() => navigate("/observations/new")} />
           <QuickAction icon="📁" label="Carpeta SEREMI"           onClick={() => navigate("/accreditation/carpeta")} />
-          <QuickAction icon="👥" label="Ver residentes"           onClick={() => navigate("/residents")} />
-          <QuickAction icon="💓" label="Historial signos"         onClick={() => navigate("/vital-signs")} />
-          <QuickAction icon="📝" label="Ver observaciones"        onClick={() => navigate("/observations")} />
-          <QuickAction icon="🏥" label="Panel acreditación"       onClick={() => navigate("/accreditation")} />
         </div>
+        <details className="group mt-3 rounded-xl border border-gray-100 bg-white">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-gray-700">
+            <span>Más accesos</span>
+            <span className="text-xs text-gray-400 group-open:hidden">Ver</span>
+            <span className="hidden text-xs text-gray-400 group-open:inline">Ocultar</span>
+          </summary>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-gray-100 p-3">
+            <QuickAction icon="👥" label="Ver residentes"           onClick={() => navigate("/residents")} />
+            <QuickAction icon="💓" label="Historial signos"         onClick={() => navigate("/vital-signs")} />
+            <QuickAction icon="📝" label="Ver observaciones"        onClick={() => navigate("/observations")} />
+            <QuickAction icon="🏥" label="Panel acreditación"       onClick={() => navigate("/accreditation")} />
+          </div>
+        </details>
       </section>
     </div>
   );
@@ -373,25 +397,30 @@ const KPI_TONE = {
   gray:    { bg: "bg-white",        accent: "text-gray-700",               chip: "bg-gray-100 text-gray-600" },
 };
 
-function KpiCard({ title, value, sub, icon, tone = "primary", onClick }) {
+function KpiCard({ title, value, sub, icon, tone = "primary", onClick, help }) {
   const t = KPI_TONE[tone];
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <article
       className={`group text-left ${t.bg} rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all`}
     >
       <div className="flex items-start justify-between">
-        <span className="text-xs uppercase tracking-wide text-gray-400 font-medium">
-          {title}
+        <span className="text-xs uppercase tracking-wide text-gray-400 font-medium inline-flex items-center gap-1.5">
+          <span>{title}</span>
+          {help && (
+            <HelpTooltip label={`Ayuda: ${title}`}>
+              {help}
+            </HelpTooltip>
+          )}
         </span>
         <span className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm ${t.chip}`}>
           {icon}
         </span>
       </div>
-      <div className={`text-3xl font-bold tabular-nums mt-2 ${t.accent}`}>{value}</div>
-      <div className="text-xs text-gray-500 mt-1 line-clamp-1">{sub}</div>
-    </button>
+      <button type="button" onClick={onClick} className="mt-2 block w-full text-left">
+        <div className={`text-3xl font-bold tabular-nums ${t.accent}`}>{value}</div>
+        <div className="text-xs text-gray-500 mt-1 line-clamp-1">{sub}</div>
+      </button>
+    </article>
   );
 }
 

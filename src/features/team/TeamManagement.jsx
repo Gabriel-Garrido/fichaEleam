@@ -6,6 +6,7 @@ import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
 import Loading from "../../components/Loading";
+import HelpTooltip from "../../components/HelpTooltip";
 import {
   getTeamMembers,
   getPendingInvitations,
@@ -134,6 +135,36 @@ function RoleBadge({ rol }) {
   );
 }
 
+function TeamFlowHint({ residentesActivos, limiteAlcanzado, maxFunc }) {
+  const main = limiteAlcanzado
+    ? `Plan al límite: ${maxFunc} funcionarios. Puedes editar permisos o subir de plan.`
+    : "Crea la cuenta, define permisos por cargo y entrega el primer acceso.";
+
+  return (
+    <section className="rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p className="text-sm font-semibold text-gray-800">{main}</p>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
+            Permisos por cargo
+          </span>
+          <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+            Familiares vinculados
+          </span>
+          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+            Primer acceso seguro
+          </span>
+        </div>
+      </div>
+      {residentesActivos === 0 && (
+        <p className="mt-2 text-xs text-amber-700">
+          Para familiares necesitas crear primero un residente activo.
+        </p>
+      )}
+    </section>
+  );
+}
+
 // ─── Componente principal ──────────────────────────────────────────────────
 
 export default function TeamManagement() {
@@ -229,6 +260,7 @@ export default function TeamManagement() {
   const maxFunc         = plan?.max_funcionarios ?? eleam?.max_funcionarios ?? null;
   const limiteAlcanzado = maxFunc !== null && funcionarios.length >= maxFunc;
   const deleteTargetName = deleteConfirm?.nombre || "este usuario";
+  const residentesActivos = residentes.filter(r => r.estado === "activo").length;
 
   // ─── Handlers: creación ──────────────────────────────────────────────────
 
@@ -342,9 +374,14 @@ export default function TeamManagement() {
       {/* Header */}
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-black text-gray-800">Equipo del ELEAM</h1>
+          <h1 className="text-2xl font-black text-gray-800 inline-flex items-center gap-2">
+            Equipo del ELEAM
+            <HelpTooltip label="Ayuda sobre equipo">
+              El admin crea cuentas directas con contraseña temporal. Los funcionarios pueden registrar datos; los familiares solo ven su residente vinculado.
+            </HelpTooltip>
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Crea y gestiona funcionarios y familiares. Los funcionarios tienen acceso clínico; los familiares solo ven a su residente vinculado.
+            Gestiona funcionarios, familiares y permisos sin salir del ELEAM.
           </p>
         </div>
         <div className="text-sm text-gray-600 bg-white border rounded-xl px-4 py-2 shrink-0">
@@ -355,8 +392,14 @@ export default function TeamManagement() {
         </div>
       </header>
 
+      <TeamFlowHint
+        residentesActivos={residentesActivos}
+        limiteAlcanzado={limiteAlcanzado}
+        maxFunc={maxFunc}
+      />
+
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
+      <div className="flex gap-2 overflow-x-auto border-b border-gray-200">
         {[
           { key: "funcionarios", label: `Funcionarios (${funcionarios.length})` },
           { key: "familiares",   label: `Familiares (${familiares.length})` },
@@ -380,12 +423,12 @@ export default function TeamManagement() {
         <>
           {/* Lista de miembros */}
           <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="font-bold text-gray-800">Equipo del ELEAM</h2>
               <Button
                 disabled={limiteAlcanzado}
                 onClick={() => { setCreateForm(f => ({ ...f, rol: "funcionario" })); setCreateModal(true); }}
-                className="bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+                className="w-full sm:w-auto bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
               >
                 + Nuevo funcionario
               </Button>
@@ -469,18 +512,18 @@ export default function TeamManagement() {
       {tab === "familiares" && (
         <>
           <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="font-bold text-gray-800">Familiares vinculados</h2>
               <Button
-                disabled={residentes.filter(r => r.estado === "activo").length === 0}
+                disabled={residentesActivos === 0}
                 onClick={() => { setCreateForm(f => ({ ...f, rol: "familiar" })); setCreateModal(true); }}
-                className="bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+                className="w-full sm:w-auto bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
               >
                 + Nuevo familiar
               </Button>
             </div>
 
-            {residentes.filter(r => r.estado === "activo").length === 0 && (
+            {residentesActivos === 0 && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
                 Necesitas al menos un residente activo para agregar familiares.
               </p>
@@ -563,35 +606,77 @@ export default function TeamManagement() {
                 {createForm.rol === "familiar" ? "Nuevo familiar" : "Nuevo funcionario"}
               </h2>
               <p className="text-sm text-gray-500 mt-1">
-                Se generará una contraseña temporal que deberás compartir.
-                El usuario la cambiará al iniciar sesión por primera vez. Google solo podrá usarse si queda vinculado a este mismo correo.
+                {createForm.email.toLowerCase().endsWith("@gmail.com")
+                  ? "Correo Gmail detectado: el usuario podrá iniciar sesión directamente con Google, sin necesidad de contraseña."
+                  : "Se generará una contraseña temporal y se intentará enviarla por correo. El usuario la cambiará al iniciar sesión por primera vez."}
               </p>
             </div>
 
-            {/* Muestra la contraseña generada (solo una vez) */}
+            {/* Resultado de creación */}
             {createdUser ? (
               <div className="space-y-4">
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="text-sm font-semibold text-amber-800 mb-2">
-                    Guarda esta contraseña temporal — no se mostrará de nuevo
-                  </p>
-                  <div className="flex gap-2 items-center bg-white border border-amber-200 rounded-lg p-2">
-                    <code className="flex-1 font-mono text-xl tracking-widest text-gray-800 select-all">
-                      {createdUser.temp_password}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => copyText(createdUser.temp_password)}
-                      className="text-[var(--color-primary)] font-semibold text-xs hover:underline shrink-0"
-                    >
-                      Copiar
-                    </button>
+                {createdUser.google_only ? (
+                  /* ── Gmail/Google: sin contraseña ── */
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <p className="text-sm font-semibold text-emerald-800">
+                        Acceso con Google habilitado
+                      </p>
+                    </div>
+                    <p className="text-xs text-emerald-700">
+                      <strong>{createdUser.email}</strong> puede iniciar sesión directamente con Google.
+                      No necesita contraseña temporal.
+                    </p>
+                    {createdUser.email_sent ? (
+                      <p className="text-xs text-emerald-600">
+                        Se envió un correo de bienvenida con las instrucciones.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                        No se pudo enviar el correo automáticamente. Informa al usuario que puede entrar en{" "}
+                        <strong>fichaeleam.cl/login</strong> usando el botón de Google con su correo.
+                      </p>
+                    )}
                   </div>
-                  <p className="text-xs text-amber-700 mt-2">
-                    Comparte esta contraseña con <strong>{createdUser.email}</strong>.
-                    Al iniciar sesión deberá establecer una nueva.
-                  </p>
-                </div>
+                ) : (
+                  /* ── Correo estándar: contraseña temporal ── */
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-amber-800 mb-2">
+                      Guarda esta contraseña temporal — no se mostrará de nuevo
+                    </p>
+                    <div className="flex gap-2 items-center bg-white border border-amber-200 rounded-lg p-2">
+                      <code className="flex-1 font-mono text-xl tracking-widest text-gray-800 select-all">
+                        {createdUser.temp_password}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText(createdUser.temp_password)}
+                        className="text-[var(--color-primary)] font-semibold text-xs hover:underline shrink-0"
+                      >
+                        Copiar
+                      </button>
+                    </div>
+                    <p className="text-xs text-amber-700 mt-2">
+                      {createdUser.email_sent
+                        ? `También enviamos estas credenciales a ${createdUser.email}.`
+                        : `Comparte esta contraseña con ${createdUser.email}.`}
+                      Al iniciar sesión deberá establecer una nueva.
+                    </p>
+                    {!createdUser.email_sent && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mt-2">
+                        <p className="text-xs font-semibold text-amber-800">Correo no enviado automáticamente</p>
+                        <p className="mt-1 text-xs text-amber-700">
+                          {createdUser.email_error
+                            ? `Motivo: ${createdUser.email_error}`
+                            : "Comparte las credenciales manualmente y revisa la configuración de Resend."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <Button
                   onClick={closeCreateModal}
                   className="w-full bg-[var(--color-primary)] text-white py-2.5 rounded-xl font-semibold"

@@ -291,7 +291,9 @@ export async function grantDemoAccess(leadId) {
   return {
     ...lead,
     _temp_password: data.temp_password,
-    _email_sent: data.email_sent,
+    _email_sent: data.email_sent === true,
+    _email_error: data.email_error || null,
+    _email_skipped: data.email_skipped === true,
     _reused_existing_user: data.reused_existing_user === true,
     _already_active: data.already_active === true,
     _repaired_existing_auth_user: data.repaired_existing_auth_user === true,

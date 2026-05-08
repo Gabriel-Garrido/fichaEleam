@@ -228,6 +228,7 @@ npx supabase secrets set MP_WEBHOOK_SECRET=...
 npx supabase secrets set PUBLIC_APP_URL=http://localhost:5173
 npx supabase secrets set ALLOWED_ORIGINS="http://localhost:5173"
 npx supabase secrets set RESEND_API_KEY=re_... # opcional
+npx supabase secrets set RESEND_FROM_EMAIL="FichaEleam <no-reply@fichaeleam.cl>" # opcional
 ```
 
 Ver **[README.md — MercadoPago](./README.md#integración-mercadopago-suscripciones)** para setup completo.
