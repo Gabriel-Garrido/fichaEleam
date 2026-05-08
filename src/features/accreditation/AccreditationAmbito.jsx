@@ -33,6 +33,7 @@ function VencimientoChip({ fecha }) {
 function RequisitoRow({ re, onClick }) {
   const m = estadoMeta(re.estado);
   const r = re.requisito;
+  const hasEvidence = (re.documentos ?? []).some((d) => d.vigente);
   return (
     <button
       onClick={onClick}
@@ -49,6 +50,11 @@ function RequisitoRow({ re, onClick }) {
               {m.label}
             </span>
             <VencimientoChip fecha={re.fecha_vencimiento} />
+            {!hasEvidence && re.estado !== "no_aplica" && (
+              <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 bg-slate-100 text-slate-700">
+                Sin evidencia
+              </span>
+            )}
           </div>
           <h3 className="font-semibold text-gray-800 leading-tight">{r.nombre}</h3>
           {r.descripcion && (
@@ -85,7 +91,8 @@ function requisitoPriorityScore(re) {
   }[re.estado] ?? 0;
   const d = diasHasta(re.fecha_vencimiento);
   const vencScore = d == null ? 0 : d < 0 ? 120 : d <= 30 ? 45 : 0;
-  return estadoScore + vencScore;
+  const evidenceScore = re.estado !== "no_aplica" && !(re.documentos ?? []).some((d) => d.vigente) ? 35 : 0;
+  return estadoScore + vencScore + evidenceScore;
 }
 
 function FocusRequirement({ requisito, onOpen }) {
@@ -98,6 +105,7 @@ function FocusRequirement({ requisito, onOpen }) {
   }
   const r = requisito.requisito;
   const m = estadoMeta(requisito.estado);
+  const hasEvidence = (requisito.documentos ?? []).some((d) => d.vigente);
   return (
     <section className="rounded-2xl border border-teal-100 bg-white shadow-sm p-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -112,6 +120,11 @@ function FocusRequirement({ requisito, onOpen }) {
               {m.label}
             </span>
             <VencimientoChip fecha={requisito.fecha_vencimiento} />
+            {!hasEvidence && requisito.estado !== "no_aplica" && (
+              <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-slate-100 text-slate-700">
+                Sin evidencia
+              </span>
+            )}
           </div>
         </div>
         <button

@@ -94,6 +94,11 @@ export default function AccreditationCarpeta() {
         {/* Resumen */}
         <section>
           <h2 className="text-lg font-bold border-b border-gray-200 pb-1 mb-3">Resumen general</h2>
+          {(resumen.evidenciasVigentes === 0 || resumen.pendientes > 0) && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 print:border-gray-300 print:bg-white">
+              Carpeta en preparación: {resumen.evidenciasVigentes} evidencia{resumen.evidenciasVigentes === 1 ? "" : "s"} vigente{resumen.evidenciasVigentes === 1 ? "" : "s"} y {resumen.pendientes} requisito{resumen.pendientes === 1 ? "" : "s"} pendiente{resumen.pendientes === 1 ? "" : "s"} de revisión.
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <p className="text-xs uppercase text-gray-500 font-semibold">Cumplimiento global</p>
@@ -108,8 +113,8 @@ export default function AccreditationCarpeta() {
               <p className="text-3xl font-black">{resumen.pendientes}</p>
             </div>
             <div>
-              <p className="text-xs uppercase text-gray-500 font-semibold">Vencidos</p>
-              <p className="text-3xl font-black">{resumen.vencidos.length}</p>
+              <p className="text-xs uppercase text-gray-500 font-semibold">Evidencias vigentes</p>
+              <p className="text-3xl font-black">{resumen.evidenciasVigentes}</p>
             </div>
           </div>
         </section>

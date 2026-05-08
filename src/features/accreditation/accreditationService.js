@@ -109,12 +109,14 @@ export async function getAmbitoByCodigo(codigo) {
 // Trae todos los requisitos del ELEAM con su estado (a través de
 // la vista combinada). Útil para el dashboard global.
 export async function getRequisitosEleam() {
+  const { eleamId } = await getMyContext();
+
   // Asegurar provisionamiento (idempotente). Algunos ELEAMs antiguos
   // pueden no tener filas en acred_requisitos_eleam todavía.
-  await ensureProvision();
+  await ensureProvision(eleamId);
 
   // Marcamos vencidos antes de leer (server function).
-  await markExpired();
+  await markExpired(eleamId);
 
   const { data, error } = await supabase
     .from("acred_requisitos_eleam")
@@ -127,8 +129,10 @@ export async function getRequisitosEleam() {
         vigencia_dias_sugerida, orden,
         ambito:acred_ambitos!inner(id, codigo, nombre, icono, orden)
       ),
-      responsable:profiles!acred_requisitos_eleam_responsable_id_fkey(id, nombre, email, rol)
+      responsable:profiles!acred_requisitos_eleam_responsable_id_fkey(id, nombre, email, rol),
+      documentos:acred_documentos!acred_documentos_requisito_eleam_id_fkey(id, vigente, fecha_vencimiento)
     `)
+    .eq("eleam_id", eleamId)
     .order("creado_en", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -156,19 +160,19 @@ export async function getRequisitoEleam(reId) {
   return data;
 }
 
-async function ensureProvision() {
+async function ensureProvision(eleamIdOverride = null) {
   // RPC seguro (security definer) — idempotente.
   try {
-    const { eleamId } = await getMyContext();
+    const eleamId = eleamIdOverride ?? (await getMyContext()).eleamId;
     await supabase.rpc("acred_provision_requisitos", { p_eleam_id: eleamId });
   } catch {
     // Sin contexto (e.g. superadmin sin ELEAM): no-op
   }
 }
 
-async function markExpired() {
+async function markExpired(eleamIdOverride = null) {
   try {
-    const { eleamId } = await getMyContext();
+    const eleamId = eleamIdOverride ?? (await getMyContext()).eleamId;
     await supabase.rpc("acred_marcar_vencidos", { p_eleam_id: eleamId });
   } catch {
     // no-op
@@ -499,7 +503,19 @@ export function buildResumen(requisitosEleam) {
   const porcentaje = denominador > 0 ? Math.round((cumple / denominador) * 100) : 100;
 
   const porEstado = {};
-  for (const r of all) porEstado[r.estado] = (porEstado[r.estado] ?? 0) + 1;
+  const porEstadoList = {};
+  for (const r of all) {
+    porEstado[r.estado] = (porEstado[r.estado] ?? 0) + 1;
+    if (!porEstadoList[r.estado]) porEstadoList[r.estado] = [];
+    porEstadoList[r.estado].push(r);
+  }
+
+  const hasVigenteDoc = (r) => (r.documentos ?? []).some((d) => d.vigente);
+  const evidenciasVigentes = all.reduce((count, r) => (
+    count + (r.documentos ?? []).filter((d) => d.vigente).length
+  ), 0);
+  const requisitosConEvidencia = all.filter(hasVigenteDoc).length;
+  const sinEvidencia = all.filter((r) => r.estado !== "no_aplica" && !hasVigenteDoc(r));
 
   // Por ámbito
   const porAmbito = {};
@@ -510,12 +526,14 @@ export function buildResumen(requisitosEleam) {
       porAmbito[a.codigo] = {
         codigo: a.codigo, nombre: a.nombre, icono: a.icono ?? null,
         total: 0, cumple: 0, no_aplica: 0, vencido: 0, observado: 0,
-        no_cumple: 0, pendiente: 0,
+        no_cumple: 0, pendiente: 0, evidencias: 0, sin_evidencia: 0,
       };
     }
     const slot = porAmbito[a.codigo];
     slot.total += 1;
     slot[r.estado] = (slot[r.estado] ?? 0) + 1;
+    if (hasVigenteDoc(r)) slot.evidencias += 1;
+    else if (r.estado !== "no_aplica") slot.sin_evidencia += 1;
   }
   const ambitos = Object.values(porAmbito)
     .map((a) => {
@@ -543,6 +561,7 @@ export function buildResumen(requisitosEleam) {
   return {
     total: all.length,
     porEstado,
+    porEstadoList,
     porcentaje,
     ambitos,
     pendientes: (porEstado.pendiente ?? 0) + (porEstado.observado ?? 0) + (porEstado.no_cumple ?? 0) + (porEstado.vencido ?? 0),
@@ -550,6 +569,9 @@ export function buildResumen(requisitosEleam) {
     porVencer,
     cumple,
     noAplica,
+    evidenciasVigentes,
+    requisitosConEvidencia,
+    sinEvidencia,
   };
 }
 

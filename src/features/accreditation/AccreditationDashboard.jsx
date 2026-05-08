@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
-import Loading from "../../components/Loading";
 import HelpTooltip from "../../components/HelpTooltip";
 import {
   getRequisitosEleam,
@@ -66,6 +65,12 @@ function AmbitoCard({ ambito, onClick }) {
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 bg-rose-500 rounded-full" />
             {ambito.vencido} vencido{ambito.vencido !== 1 ? "s" : ""}
+          </span>
+        )}
+        {(ambito.sin_evidencia ?? 0) > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-slate-400 rounded-full" />
+            {ambito.sin_evidencia} sin evidencia
           </span>
         )}
       </div>
@@ -133,38 +138,74 @@ function ObservacionItem({ obs }) {
   );
 }
 
+function firstRequirementPath(items) {
+  const item = items?.[0];
+  return item?.id ? `/accreditation/requisito/${item.id}` : "/accreditation";
+}
+
 function AccreditationNextStep({ resumen, observaciones, navigate }) {
-  const step = resumen.vencidos.length > 0
+  const firstPending = [
+    ...(resumen.sinEvidencia ?? []),
+    ...(resumen.porEstadoList?.pendiente ?? []),
+    ...(resumen.porEstadoList?.observado ?? []),
+    ...(resumen.porEstadoList?.no_cumple ?? []),
+  ];
+
+  const step = resumen.total === 0
+    ? {
+        tone: "amber",
+        title: "Preparando requisitos",
+        text: "La carpeta aún no tiene requisitos provisionados. Recarga en unos segundos o revisa la configuración inicial.",
+        action: "Recargar",
+        path: "/accreditation",
+      }
+    : resumen.vencidos.length > 0
     ? {
         tone: "rose",
         title: "Renueva documentos vencidos",
         text: `${resumen.vencidos.length} requisito${resumen.vencidos.length === 1 ? "" : "s"} vencido${resumen.vencidos.length === 1 ? "" : "s"}. Priorízalos antes de generar la carpeta.`,
-        action: "Ver vencidos",
-        path: "/accreditation",
+        action: "Abrir primero",
+        path: firstRequirementPath(resumen.vencidos),
       }
-    : resumen.porVencer.length > 0
+    : observaciones.length > 0
       ? {
           tone: "amber",
-          title: "Planifica vencimientos próximos",
-          text: `${resumen.porVencer.length} documento${resumen.porVencer.length === 1 ? "" : "s"} vence${resumen.porVencer.length === 1 ? "" : "n"} durante los próximos 30 días.`,
-          action: "Revisar fechas",
-          path: "/accreditation",
+          title: "Cierra observaciones abiertas",
+          text: `${observaciones.length} observación${observaciones.length === 1 ? "" : "es"} pendiente${observaciones.length === 1 ? "" : "s"} de subsanación.`,
+          action: "Ver observaciones",
+          path: "/accreditation/observaciones",
         }
-      : observaciones.length > 0
+      : resumen.evidenciasVigentes === 0
         ? {
             tone: "amber",
-            title: "Cierra observaciones abiertas",
-            text: `${observaciones.length} observación${observaciones.length === 1 ? "" : "es"} pendiente${observaciones.length === 1 ? "" : "s"} de subsanación.`,
-            action: "Ver observaciones",
-            path: "/accreditation/observaciones",
+            title: "Sube tu primera evidencia",
+            text: "La carpeta aún no tiene documentos cargados. Empieza por el primer requisito pendiente para construir una carpeta útil.",
+            action: "Subir evidencia",
+            path: firstRequirementPath(firstPending),
           }
-        : {
-            tone: "emerald",
-            title: "Carpeta ordenada",
-            text: "No hay vencimientos urgentes ni observaciones abiertas. Mantén la carpeta descargable actualizada.",
-            action: "Generar carpeta",
-            path: "/accreditation/carpeta",
-          };
+        : resumen.pendientes > 0
+          ? {
+              tone: "amber",
+              title: "Completa requisitos pendientes",
+              text: `${resumen.pendientes} requisito${resumen.pendientes === 1 ? "" : "s"} aún necesita${resumen.pendientes === 1 ? "" : "n"} revisión, evidencia o decisión.`,
+              action: "Abrir pendiente",
+              path: firstRequirementPath(firstPending),
+            }
+          : resumen.porVencer.length > 0
+            ? {
+                tone: "amber",
+                title: "Planifica vencimientos próximos",
+                text: `${resumen.porVencer.length} documento${resumen.porVencer.length === 1 ? "" : "s"} vence${resumen.porVencer.length === 1 ? "" : "n"} durante los próximos 30 días.`,
+                action: "Revisar fechas",
+                path: firstRequirementPath(resumen.porVencer),
+              }
+            : {
+                tone: "emerald",
+                title: "Carpeta ordenada",
+                text: "Los requisitos están al día, con evidencia cargada y sin observaciones abiertas.",
+                action: "Generar carpeta",
+                path: "/accreditation/carpeta",
+              };
 
   const toneClass = {
     rose: "bg-rose-50 border-rose-200 text-rose-800",
@@ -210,7 +251,15 @@ function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <button
+            type="button"
+            onClick={() => navigate(firstRequirementPath(resumen.sinEvidencia))}
+            className="rounded-xl border border-teal-100 bg-teal-50 px-3 py-3 text-left"
+          >
+            <p className="text-2xl font-black text-teal-700 tabular-nums">{resumen.evidenciasVigentes}</p>
+            <p className="text-[11px] font-semibold text-teal-800">Evidencias</p>
+          </button>
           <button
             type="button"
             onClick={() => navigate("/accreditation")}
@@ -241,11 +290,46 @@ function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
   );
 }
 
+function AccreditationLoading() {
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-10">
+      <section className="rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-teal-700 font-semibold">
+              Carpeta SEREMI
+            </p>
+            <h1 className="mt-1 text-xl font-bold text-gray-900">Preparando el panel</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Provisionando requisitos, revisando vencimientos y cargando observaciones.
+            </p>
+          </div>
+          <span className="hidden sm:inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
+            Cargando
+          </span>
+        </div>
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-gray-100">
+          <div className="h-full w-2/3 animate-pulse rounded-full bg-gradient-to-r from-teal-300 via-[var(--color-primary)] to-teal-300" />
+        </div>
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {["Requisitos", "Evidencias", "Observaciones"].map((label) => (
+            <div key={label} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <div className="h-3 w-24 rounded bg-gray-200 animate-pulse" />
+              <div className="mt-3 h-8 w-16 rounded bg-gray-200 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ambitoPriorityScore(ambito) {
   return (
     (ambito.vencido ?? 0) * 100 +
     (ambito.observado ?? 0) * 40 +
     (ambito.no_cumple ?? 0) * 35 +
+    (ambito.sin_evidencia ?? 0) * 12 +
     (ambito.pendiente ?? 0) * 10 +
     Math.max(0, 100 - (ambito.porcentaje ?? 0))
   );
@@ -291,7 +375,7 @@ export default function AccreditationDashboard() {
       .slice(0, 4);
   }, [resumen.ambitos]);
 
-  if (loading) return <Loading message="Cargando carpeta SEREMI..." />;
+  if (loading) return <AccreditationLoading />;
 
   if (sinEleam) {
     return (
