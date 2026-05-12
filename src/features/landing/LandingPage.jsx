@@ -12,6 +12,13 @@ function Icon({ d, className = "w-6 h-6" }) {
   );
 }
 
+function CheckIcon({ className = "w-4 h-4 text-teal-500 shrink-0" }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
 
 const PLAN_FEATURES = [
   "Carpeta SEREMI · 14 ámbitos DS 14/2017",
@@ -24,48 +31,223 @@ const PLAN_FEATURES = [
 ];
 
 const PAINS = [
-  { icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z", text: "Fiscalización SEREMI y no encuentras la mitad de los documentos requeridos." },
-  { icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4", text: "Registros en papel que se pierden, mojan o simplemente no aparecen cuando más los necesitas." },
-  { icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z", text: "El turno siguiente no sabe qué pasó: falta información, hay errores y el equipo pierde tiempo." },
-  { icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2", text: "Imposible rastrear quién hizo qué cambio y cuándo. Sin trazabilidad, sin defensa ante fiscalización." },
-  { icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z", text: "Cada visita de la SEREMI genera caos: hay que correr a ordenar carpetas que deberían estar siempre listas." },
+  {
+    icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+    text: "Fiscalización SEREMI y no encuentras la mitad de los documentos requeridos.",
+  },
+  {
+    icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+    text: "Registros en papel que se pierden, mojan o simplemente no aparecen cuando más los necesitas.",
+  },
+  {
+    icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+    text: "El turno siguiente no sabe qué pasó: falta información, hay errores y el equipo pierde tiempo.",
+  },
+  {
+    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2",
+    text: "Imposible rastrear quién hizo qué cambio y cuándo. Sin trazabilidad, sin defensa ante fiscalización.",
+  },
+  {
+    icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
+    text: "Cada visita de la SEREMI genera caos: hay que correr a ordenar carpetas que deberían estar siempre listas.",
+  },
+];
+
+const COMPARISON_ROWS = [
+  {
+    antes: "Buscar un documento entre carpetas físicas consume horas del equipo",
+    despues: "Toda la documentación digital, accesible por nombre, fecha o ámbito en segundos",
+  },
+  {
+    antes: "El turno siguiente llega sin saber qué ocurrió con cada residente",
+    despues: "Signos vitales y observaciones del turno anterior visibles al instante",
+  },
+  {
+    antes: "Nadie sabe quién modificó un registro ni cuándo — sin trazabilidad",
+    despues: "Auditoría completa: acción, usuario, fecha y hora de cada cambio",
+  },
+  {
+    antes: "Una visita SEREMI implica correr a ordenar lo que debería estar siempre listo",
+    despues: "70+ requisitos organizados con estado y alertas automáticas de vencimiento",
+  },
+  {
+    antes: "Las familias llaman para saber cómo está su ser querido",
+    despues: "Portal propio por familia: estado actualizado, historial y registro de visitas",
+  },
 ];
 
 const BENEFITS = [
-  { icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", title: "Carpeta SEREMI siempre lista", metric: "14 ámbitos DS 14/2017", text: "Todos los requisitos pre-cargados con estados, evidencias versionadas y alertas de vencimiento. La fiscalización no te sorprende." },
-  { icon: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z", title: "Signos vitales con alertas", metric: "Alertas automáticas en tiempo real", text: "Rangos clínicos para adultos mayores. Si un valor está fuera del rango, el equipo lo ve de inmediato." },
-  { icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", title: "Ficha clínica digital completa", metric: "Historial 100% trazable", text: "Diagnóstico, alergias, índice Barthel, observaciones y signos. Todo con fecha y responsable." },
-  { icon: "M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z", title: "Observaciones por turno", metric: "12 tipos de observaciones", text: "Cada turno registra en su portal. El turno siguiente llega informado: qué pasó, quién lo registró y cuándo." },
-  { icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197", title: "Portal para familias", metric: "Comunicación transparente", text: "Cada familiar tiene su propio portal para ver el estado de su ser querido, historial de visitas y observaciones." },
-  { icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z", title: "Seguridad y privacidad", metric: "Datos aislados por establecimiento", text: "Cada ELEAM ve solo sus datos. Roles y permisos granulares para cada miembro del equipo." },
+  {
+    icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+    title: "Carpeta SEREMI siempre organizada",
+    metric: "14 ámbitos · 70+ requisitos DS 14/2017",
+    text: "Todos los requisitos pre-cargados con estados, evidencias versionadas y alertas de vencimiento.",
+  },
+  {
+    icon: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z",
+    title: "Signos vitales con alertas automáticas",
+    metric: "Rangos clínicos para adultos mayores",
+    text: "Si un valor está fuera del rango seguro, el equipo lo ve de inmediato, turno a turno.",
+  },
+  {
+    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
+    title: "Ficha clínica digital completa",
+    metric: "Historial 100% trazable",
+    text: "Diagnóstico, alergias, índice Barthel, observaciones y signos. Todo con fecha y responsable.",
+  },
+  {
+    icon: "M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z",
+    title: "Observaciones por turno",
+    metric: "12 tipos de observación disponibles",
+    text: "Cada turno registra en su portal. El siguiente llega informado: qué pasó, quién lo registró y cuándo.",
+  },
+  {
+    icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197",
+    title: "Portal para familias",
+    metric: "Comunicación transparente, sin llamadas",
+    text: "Cada familiar consulta el estado de su ser querido, historial de visitas y observaciones recientes.",
+  },
+  {
+    icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
+    title: "Seguridad y privacidad",
+    metric: "Datos aislados por establecimiento",
+    text: "Cada ELEAM ve solo sus datos. Roles y permisos granulares para cada miembro del equipo.",
+  },
+];
+
+const TRUST_SIGNALS = [
+  {
+    icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+    title: "DS 14/2017 completo",
+    text: "14 ámbitos y 70+ requisitos pre-cargados. Diseñado sobre la normativa oficial SEREMI.",
+  },
+  {
+    icon: "M13 10V3L4 14h7v7l9-11h-7z",
+    title: "Operativo en menos de 10 minutos",
+    text: "Sin instalaciones ni configuración técnica. El equipo accede desde el primer día.",
+  },
+  {
+    icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
+    title: "Soporte en español",
+    text: "Especialistas que entienden la operación diaria de los ELEAM en Chile.",
+  },
+  {
+    icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
+    title: "Datos aislados por ELEAM",
+    text: "Seguridad de nivel fila: cada establecimiento accede solo a su información.",
+  },
 ];
 
 const HOW_IT_WORKS = [
-  { step: "1", title: "Solicita tu demo", text: "Completa el formulario y en menos de 24 horas te enviamos tu enlace personal de acceso al demo guiado." },
-  { step: "2", title: "Explora la plataforma", text: "Ve las vistas del administrador, del funcionario y del familiar. Un especialista te guía si lo necesitas." },
-  { step: "3", title: "Activa tu ELEAM", text: "Elige tu plan, paga con MercadoPago y el equipo te ayuda a migrar los datos de tus residentes." },
+  {
+    step: "1",
+    title: "Solicita tu demo",
+    text: "Completa el formulario. En menos de 24 horas te enviamos tu enlace de acceso personalizado.",
+  },
+  {
+    step: "2",
+    title: "Explora sin límites",
+    text: "Ve las vistas de administrador, funcionario y familiar con datos de ejemplo. Un especialista te acompaña si lo necesitas.",
+  },
+  {
+    step: "3",
+    title: "Activa y digitaliza",
+    text: "Elige tu plan, activa con MercadoPago y el equipo te ayuda a cargar los datos iniciales sin costo adicional.",
+  },
 ];
 
 const FAQ_ITEMS = [
-  { q: "¿Qué es FichaEleam?", a: "FichaEleam es el único software diseñado exclusivamente para ELEAM en Chile que cubre los 14 ámbitos del DS 14/2017. Incluye ficha clínica digital, signos vitales con alertas, observaciones de turno, Carpeta SEREMI y portal para familias." },
-  { q: "¿FichaEleam cumple con el DS 14/2017?", a: "Sí. La sección Carpeta SEREMI implementa los 14 ámbitos exigidos por la SEREMI con más de 70 requisitos pre-cargados, evidencias versionadas, estados de cumplimiento y alertas de documentos vencidos." },
-  { q: "¿Cuánto cuesta?", a: "La suscripción es mensual por establecimiento, sin cobros por usuario. Los planes parten desde $50.000 CLP/mes para hasta 14 residentes. Todos tus funcionarios y familiares acceden incluidos." },
-  { q: "¿Cómo funciona el demo?", a: "Solicitas el demo, un especialista te envía un enlace personalizado en menos de 24 horas. Puedes explorar la plataforma completa (vistas de admin, funcionario y familiar) con datos de ejemplo." },
-  { q: "¿Qué pasa si tengo una fiscalización próxima?", a: "Nuestros especialistas pueden ayudarte a organizar tu Carpeta SEREMI en 24 horas. Contáctanos directamente y te asignamos prioridad." },
-  { q: "¿Los datos quedan en Chile?", a: "Sí. Usamos Supabase con servidores en la región de São Paulo (AWS), que cumple con las regulaciones de datos de América Latina. Los datos de cada ELEAM están aislados por seguridad de nivel fila (RLS)." },
-  { q: "¿Puedo cancelar cuando quiera?", a: "Sí. Puedes cancelar tu suscripción en cualquier momento desde el panel. Mantendrás el acceso hasta el final del período pagado, sin penalidades." },
-  { q: "¿Cuánto tarda la implementación?", a: "La plataforma está operativa en menos de 10 minutos. Si tienes datos en Excel o fichas en papel, nuestro equipo te ayuda con la migración inicial sin costo adicional." },
+  {
+    q: "¿Qué es FichaEleam?",
+    a: "FichaEleam es un software diseñado exclusivamente para ELEAM en Chile que cubre los 14 ámbitos del DS 14/2017. Incluye ficha clínica digital, signos vitales con alertas, observaciones de turno, Carpeta SEREMI y portal para familias — todo en una sola plataforma.",
+  },
+  {
+    q: "¿FichaEleam cumple con el DS 14/2017?",
+    a: "Sí. La sección Carpeta SEREMI implementa los 14 ámbitos exigidos por la SEREMI con más de 70 requisitos pre-cargados, evidencias versionadas, estados de cumplimiento y alertas de documentos vencidos.",
+  },
+  {
+    q: "¿Cuánto cuesta?",
+    a: "La suscripción es mensual por establecimiento, sin cobros por usuario. Los planes parten desde $50.000 CLP/mes para hasta 14 residentes. Todos tus funcionarios y familiares acceden incluidos.",
+  },
+  {
+    q: "¿Cómo funciona el demo?",
+    a: "Solicitas el demo, un especialista te envía un enlace personalizado en menos de 24 horas. Puedes explorar la plataforma completa (vistas de admin, funcionario y familiar) con datos de ejemplo, sin compromiso.",
+  },
+  {
+    q: "¿Cuánto tiempo tarda el equipo en aprender a usarla?",
+    a: "La interfaz está diseñada para equipos sin experiencia técnica previa. Cada rol (admin, funcionario, familiar) accede solo a lo que le corresponde, lo que simplifica el aprendizaje. La mayoría de los equipos opera con fluidez desde el primer día.",
+  },
+  {
+    q: "¿Qué pasa si tengo datos en papel o Excel?",
+    a: "Te acompañamos en la migración inicial sin costo adicional. Cargamos los datos básicos de tus residentes para que el equipo parta con la plataforma al día desde el primer momento.",
+  },
+  {
+    q: "¿Puedo exportar mis datos si decido salir?",
+    a: "Sí. Tus datos son tuyos. Puedes exportar fichas de residentes, registros clínicos y documentación en cualquier momento desde el panel, sin depender de nuestro equipo.",
+  },
+  {
+    q: "¿Qué pasa si tengo una fiscalización próxima?",
+    a: "Nuestros especialistas pueden ayudarte a organizar tu documentación con prioridad. Contáctanos directamente y te asignamos atención preferente.",
+  },
+  {
+    q: "¿Los datos quedan en Chile?",
+    a: "Usamos Supabase con servidores en la región de São Paulo (AWS), que cumple con las regulaciones de datos de América Latina. Los datos de cada ELEAM están aislados por seguridad de nivel fila (RLS).",
+  },
+  {
+    q: "¿Puedo cancelar cuando quiera?",
+    a: "Sí. Puedes cancelar tu suscripción en cualquier momento desde el panel. Mantendrás el acceso hasta el final del período pagado, sin penalidades.",
+  },
+  {
+    q: "¿Cuánto tarda la implementación?",
+    a: "La plataforma está operativa en menos de 10 minutos. Si tienes datos en Excel o fichas en papel, nuestro equipo te ayuda con la migración inicial sin costo adicional.",
+  },
 ];
 
 const PLANS = [
-  { residentes: "Hasta 14",  precio: "$50.000",    tag: null,          sub: "menos de $1.700/día" },
-  { residentes: "15 a 24",   precio: "$80.000",    tag: "Más elegido", sub: "menos de $2.700/día" },
-  { residentes: "25 a 34",   precio: "$120.000",   tag: null,          sub: "menos de $4.000/día" },
+  { residentes: "Hasta 14",  precio: "$50.000",  tag: null,          sub: "menos de $1.700/día" },
+  { residentes: "15 a 24",   precio: "$80.000",  tag: "Más elegido", sub: "menos de $2.700/día" },
+  { residentes: "25 a 34",   precio: "$120.000", tag: null,          sub: "menos de $4.000/día" },
+];
+
+const DEMO_STEPS = [
+  { n: "01", text: "Completas el formulario con los datos de tu ELEAM" },
+  { n: "02", text: "Un especialista te contacta en menos de 24 horas" },
+  { n: "03", text: "Exploras la plataforma completa, sin compromiso" },
+];
+
+const PERSONAS = [
+  {
+    rol: "Director/a o Administrador/a",
+    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2",
+    wins: [
+      "Gestiona residentes, equipo y documentación desde un panel",
+      "Carpeta SEREMI organizada sin depender del equipo clínico",
+      "Control de pagos y suscripción integrado",
+    ],
+  },
+  {
+    rol: "Equipo clínico (enfermeros, cuidadores)",
+    icon: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z",
+    wins: [
+      "Registra signos y observaciones en segundos por turno",
+      "Alertas automáticas si un valor está fuera de rango",
+      "Ve el historial completo del residente en un vistazo",
+    ],
+  },
+  {
+    rol: "Familia del residente",
+    icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197",
+    wins: [
+      "Portal propio con el estado actualizado de su familiar",
+      "Historial de visitas y observaciones recientes",
+      "Comunicación transparente con el establecimiento",
+    ],
+  },
 ];
 
 export default function LandingPage() {
-  const navigate   = useNavigate();
-  const [modal, setModal] = useState(false);
+  const navigate    = useNavigate();
+  const [modal, setModal]   = useState(false);
   const [modalCta, setModalCta] = useState(null);
 
   const painRef     = useRef(null);
@@ -90,7 +272,7 @@ export default function LandingPage() {
   useSEO({
     title: "FichaEleam · Software para ELEAM en Chile | DS 14/2017",
     description:
-      "FichaEleam es el único software diseñado exclusivamente para ELEAM en Chile. Carpeta SEREMI con los 14 ámbitos del DS 14/2017, ficha clínica digital, signos vitales con alertas y portal para familias. Solicita tu demo gratuito.",
+      "FichaEleam es el software diseñado para ELEAM en Chile. Carpeta SEREMI con los 14 ámbitos del DS 14/2017, ficha clínica digital, signos vitales con alertas y portal para familias. 30 días de prueba gratuita.",
     path: "/",
     keywords: [
       "software ELEAM Chile", "DS 14/2017", "fiscalización SEREMI",
@@ -144,14 +326,14 @@ export default function LandingPage() {
         <div className="relative max-w-6xl mx-auto">
           <div className="max-w-2xl mx-auto lg:mx-0 text-center lg:text-left">
             <span className="inline-block bg-white/20 text-white text-xs font-semibold px-4 py-1.5 rounded-full mb-6 tracking-wide uppercase">
-              El software diseñado exclusivamente para ELEAM en Chile
+              Diseñado exclusivamente para ELEAM en Chile
             </span>
             <h1 className="text-4xl sm:text-5xl font-black leading-tight mb-6">
-              Digitaliza tu ELEAM y gestiona la documentación{" "}
-              <span className="text-[var(--color-secondary)]">SEREMI con orden</span>
+              Digitaliza tu ELEAM y lleva la documentación{" "}
+              <span className="text-[var(--color-secondary)]">DS 14/2017 siempre al día</span>
             </h1>
             <p className="text-lg text-teal-100 mb-8 leading-relaxed">
-              Carpeta DS 14/2017 completa, fichas clínicas digitales y gestión de equipo — todo en una plataforma pensada para Establecimientos de Larga Estadía.
+              70+ requisitos pre-cargados, fichas clínicas digitales, alertas clínicas automáticas y portal para familias — todo en una plataforma construida sobre la normativa SEREMI.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
               <button
@@ -171,14 +353,14 @@ export default function LandingPage() {
               </button>
             </div>
             <p className="mt-5 text-sm text-teal-200 text-center lg:text-left">
-              Acceso personalizado · Sin compromiso · Respuesta en menos de 24 horas
+              Sin tarjeta de crédito · 30 días gratis · Respuesta en menos de 24 horas
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3 justify-center lg:justify-start">
               {[
-                "Cumple DS 14/2017 · 14 ámbitos",
+                "14 ámbitos DS 14/2017 pre-cargados",
                 "Soporte en español",
-                "30 días de prueba gratuita",
+                "Operativo en menos de 10 minutos",
               ].map((t) => (
                 <span key={t} className="inline-flex items-center gap-1.5 text-sm text-teal-100/90">
                   <svg className="w-4 h-4 text-emerald-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,8 +380,8 @@ export default function LandingPage() {
 
         <div className="mt-10 max-w-6xl mx-auto flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs sm:text-sm text-teal-100/90 lg:hidden">
           {[
-            "Cumple DS 14/2017 · 14 ámbitos",
-            "Datos en Chile",
+            "14 ámbitos DS 14/2017",
+            "Datos en América Latina",
             "Soporte en español",
             "Funcionarios y familias incluidos",
           ].map((t) => (
@@ -232,6 +414,18 @@ export default function LandingPage() {
               </li>
             ))}
           </ul>
+
+          {/* Consecuencia / costo de no actuar */}
+          <div className="mt-6 bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3">
+            <Icon
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              className="w-5 h-5 text-red-500 shrink-0 mt-0.5"
+            />
+            <p className="text-sm text-red-800 leading-relaxed">
+              Una observación SEREMI no resuelta puede escalar a una objeción formal. La documentación dispersa no solo genera incomodidad — compromete la acreditación y la continuidad del establecimiento.
+            </p>
+          </div>
+
           <div className="mt-8 text-center">
             <button
               onClick={() => openModal("pain_section_cta")}
@@ -239,6 +433,58 @@ export default function LandingPage() {
             >
               ¿Te suena familiar? Agenda tu demo gratuito →
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── ANTES VS. AHORA ──────────────────────────────── */}
+      <section className="py-16 px-4 bg-white">
+        <div className="max-w-4xl mx-auto">
+          <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3 text-center">
+            La diferencia en la práctica
+          </p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-2">
+            Sin FichaEleam vs. Con FichaEleam
+          </h2>
+          <p className="text-center text-gray-500 text-sm mb-10">
+            La misma situación, dos resultados completamente distintos.
+          </p>
+
+          <div className="rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* Encabezados de columna */}
+            <div className="grid grid-cols-2">
+              <div className="bg-gray-100 px-5 py-3 text-sm font-bold text-gray-500 border-b border-gray-200 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-black">✕</span>
+                Sin FichaEleam
+              </div>
+              <div className="bg-teal-600 px-5 py-3 text-sm font-bold text-white border-b border-teal-500 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-teal-400 flex items-center justify-center text-white text-xs font-black">✓</span>
+                Con FichaEleam
+              </div>
+            </div>
+
+            {COMPARISON_ROWS.map(({ antes, despues }, i) => (
+              <div key={i} className="grid grid-cols-2">
+                <div className={`flex items-start gap-3 px-5 py-4 text-sm text-gray-600 leading-relaxed border-b border-gray-100 last:border-0 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}`}>
+                  <span className="text-red-400 shrink-0 mt-0.5 font-bold">✕</span>
+                  {antes}
+                </div>
+                <div className={`flex items-start gap-3 px-5 py-4 text-sm text-teal-800 leading-relaxed border-b border-teal-100 last:border-0 ${i % 2 === 0 ? "bg-teal-50/30" : "bg-teal-50/60"}`}>
+                  <span className="text-teal-500 shrink-0 mt-0.5 font-bold">✓</span>
+                  {despues}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 text-center">
+            <button
+              onClick={() => openModal("comparison_cta")}
+              className="bg-teal-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-teal-700 transition-all shadow-sm"
+            >
+              Quiero ver el demo
+            </button>
+            <p className="text-xs text-gray-400 mt-2">Sin tarjeta de crédito · 30 días gratis</p>
           </div>
         </div>
       </section>
@@ -273,8 +519,8 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold text-center text-gray-800 mb-4">
             Todo lo que tu ELEAM necesita, en un solo lugar
           </h2>
-          <p className="text-center text-gray-500 text-sm mb-12">
-            Diseñado por personas que conocen la realidad de los ELEAM en Chile.
+          <p className="text-center text-gray-500 text-sm mb-12 max-w-xl mx-auto">
+            Construido sobre la normativa DS 14/2017. Sin adaptaciones genéricas — cada módulo refleja la operación real de un establecimiento de larga estadía.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {BENEFITS.map(({ icon, title, metric, text }, i) => (
@@ -293,9 +539,54 @@ export default function LandingPage() {
               onClick={() => openModal("benefits_cta")}
               className="bg-teal-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-teal-700 transition-all shadow-sm"
             >
-              Quiero una demo personalizada
+              Ver demo personalizado
             </button>
           </div>
+        </div>
+      </section>
+
+      {/* ── PARA QUIÉN ES ────────────────────────────────── */}
+      <section className="py-16 px-4 bg-gray-50">
+        <div className="max-w-5xl mx-auto">
+          <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3 text-center">
+            Para cada rol del ELEAM
+          </p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-10">
+            Una plataforma que sirve a todo el equipo
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            {PERSONAS.map(({ rol, icon, wins }) => (
+              <div key={rol} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+                <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center mb-3">
+                  <Icon d={icon} className="w-5 h-5 text-teal-600" />
+                </div>
+                <h3 className="font-bold text-gray-800 mb-3 text-sm">{rol}</h3>
+                <ul className="space-y-2">
+                  {wins.map((w) => (
+                    <li key={w} className="flex items-start gap-2 text-sm text-gray-600">
+                      <CheckIcon className="w-4 h-4 text-teal-500 shrink-0 mt-0.5" />
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── SEÑALES DE CONFIANZA ─────────────────────────── */}
+      <section className="py-12 px-4 bg-white border-y border-gray-100">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6">
+          {TRUST_SIGNALS.map(({ icon, title, text }) => (
+            <div key={title} className="text-center">
+              <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center mx-auto mb-2">
+                <Icon d={icon} className="w-5 h-5 text-teal-600" />
+              </div>
+              <p className="font-bold text-gray-800 text-sm mb-1">{title}</p>
+              <p className="text-xs text-gray-500 leading-relaxed">{text}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -349,7 +640,7 @@ export default function LandingPage() {
             Un precio mensual por tu ELEAM
           </h2>
           <p className="text-center text-gray-500 mb-10 text-sm">
-            Sin cobros por usuario. Todos tus funcionarios y familiares incluidos.
+            Sin cobros por usuario. Todos tus funcionarios y familiares incluidos en cualquier plan.
           </p>
 
           {/* Features incluidas en todos los planes */}
@@ -358,9 +649,7 @@ export default function LandingPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {PLAN_FEATURES.map((f) => (
                 <div key={f} className="flex items-center gap-2 text-sm text-gray-700">
-                  <svg className="w-4 h-4 text-teal-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                  </svg>
+                  <CheckIcon />
                   {f}
                 </div>
               ))}
@@ -421,13 +710,14 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Banner 30 días gratis */}
-          <div className="bg-teal-600 rounded-2xl p-5 max-w-2xl mx-auto text-center text-white">
+          {/* Banner 30 días gratis + garantía */}
+          <div className="bg-teal-600 rounded-2xl p-6 max-w-2xl mx-auto text-center text-white">
             <p className="font-bold text-base mb-1">30 días de prueba gratuita en todos los planes</p>
-            <p className="text-sm text-teal-100">Sin tarjeta de crédito. Sin compromiso. Cancela cuando quieras.</p>
+            <p className="text-sm text-teal-100 mb-1">Sin tarjeta de crédito. Sin compromiso.</p>
+            <p className="text-xs text-teal-200 mb-4">Si en 30 días no es para tu ELEAM, cancelas sin preguntas.</p>
             <button
               onClick={() => openModal("pricing_trial_banner")}
-              className="mt-4 bg-white text-teal-700 font-semibold text-sm px-6 py-2 rounded-xl hover:bg-teal-50 transition-all"
+              className="bg-white text-teal-700 font-semibold text-sm px-6 py-2 rounded-xl hover:bg-teal-50 transition-all"
             >
               Empezar prueba gratuita
             </button>
@@ -468,7 +758,7 @@ export default function LandingPage() {
             Tu ELEAM, con la documentación siempre organizada.
           </h2>
           <p className="text-teal-100 mb-2 text-base">
-            Acceso personalizado. Sin compromiso. Respuesta en menos de 24 horas.
+            30 días gratis. Sin tarjeta de crédito. Sin compromiso.
           </p>
           <p className="text-teal-200 text-sm mb-8">
             Un especialista te envía tu enlace de demo y te acompaña durante la exploración.
@@ -479,7 +769,18 @@ export default function LandingPage() {
           >
             Solicitar Demo Gratuito
           </button>
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-sm text-teal-200">
+
+          {/* Pasos del demo */}
+          <div className="mt-10 grid sm:grid-cols-3 gap-4 text-left max-w-lg mx-auto">
+            {DEMO_STEPS.map(({ n, text }) => (
+              <div key={n} className="flex gap-3 items-start">
+                <span className="text-2xl font-black text-white/30 leading-none">{n}</span>
+                <p className="text-sm text-teal-100 leading-relaxed">{text}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 text-sm text-teal-200">
             <span>¿Prefiere contacto directo?</span>
             <a
               href="mailto:contacto@fichaeleam.cl"
@@ -565,9 +866,9 @@ function AppMockup() {
         {/* KPIs */}
         <div className="grid grid-cols-2 gap-2 mb-3">
           {[
-            { label: "Alertas críticas", value: "2", tone: "bg-rose-500" },
-            { label: "Cobertura hoy",    value: "87%", tone: "bg-emerald-500" },
-            { label: "Sin control",      value: "3",   tone: "bg-amber-500" },
+            { label: "Alertas críticas",    value: "2",   tone: "bg-rose-500" },
+            { label: "Cobertura hoy",       value: "87%", tone: "bg-emerald-500" },
+            { label: "Sin control",         value: "3",   tone: "bg-amber-500" },
             { label: "Cumplimiento SEREMI", value: "91%", tone: "bg-teal-400" },
           ].map(({ label, value, tone }) => (
             <div key={label} className="bg-white/10 rounded-xl p-3">
@@ -583,7 +884,7 @@ function AppMockup() {
         <div className="bg-white/10 rounded-xl p-3">
           <p className="text-[10px] text-white/50 uppercase tracking-wide mb-2">Residentes · estado clínico</p>
           {[
-            { name: "Residente A", estado: "Normal", color: "bg-emerald-400" },
+            { name: "Residente A", estado: "Normal",   color: "bg-emerald-400" },
             { name: "Residente B", estado: "Atención", color: "bg-amber-400" },
             { name: "Residente C", estado: "Crítico",  color: "bg-rose-400" },
           ].map(({ name, estado, color }) => (
