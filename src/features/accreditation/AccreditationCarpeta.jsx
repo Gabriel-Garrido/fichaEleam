@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Loading from "../../components/Loading";
+import { friendlyError } from "../../utils/errorMessages";
 import {
   getRequisitosEleam,
   getObservaciones,
@@ -30,7 +31,7 @@ export default function AccreditationCarpeta() {
         setRequisitos(r);
         setObservaciones(o);
       })
-      .catch((e) => mounted && toast(e.message || "Error", "error"))
+      .catch((e) => mounted && toast(friendlyError(e, "No se pudo cargar la carpeta SEREMI. Recarga la página."), "error"))
       .finally(() => mounted && setLoading(false));
     return () => { mounted = false; };
   }, [toast]);

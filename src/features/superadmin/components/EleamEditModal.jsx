@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Modal from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
 import { CRM_STATES, RIESGO_CHURN } from "../utils/superadminFormatters";
+import { friendlyError } from "../../../utils/errorMessages";
 
 const initialFromEleam = (e) => ({
   pago_activo:                   e.pago_activo ?? false,
@@ -41,7 +42,7 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
       toast("ELEAM actualizado.", "success");
       onClose();
     } catch (e) {
-      toast(e.message || "No se pudo actualizar el ELEAM.", "error");
+      toast(friendlyError(e, "No se pudo actualizar el ELEAM. Verifica los datos e intenta de nuevo."), "error");
     } finally {
       setSaving(false);
     }

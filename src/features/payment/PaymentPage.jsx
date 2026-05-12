@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import HelpTooltip from "../../components/HelpTooltip";
+import { friendlyError } from "../../utils/errorMessages";
 import { logout } from "../auth/authService";
 import { useSEO } from "../../utils/seo";
 import {
@@ -119,7 +120,7 @@ export default function PaymentPage() {
       }
       window.location.href = res.init_point;
     } catch (e) {
-      toast(e.message || "Error al iniciar el pago", "error");
+      toast(friendlyError(e, "No se pudo iniciar el proceso de pago. Intenta de nuevo o contacta soporte."), "error");
     } finally {
       setLoadingAction(false);
     }
@@ -137,7 +138,7 @@ export default function PaymentPage() {
       // Refresca al volver
       window.setTimeout(() => navigate(0), 800);
     } catch (e) {
-      toast(e.message || "No se pudo cancelar", "error");
+      toast(friendlyError(e, "No se pudo cancelar la suscripción. Intenta de nuevo o contacta soporte."), "error");
     } finally {
       setLoadingAction(false);
     }

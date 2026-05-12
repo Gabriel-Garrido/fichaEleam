@@ -6,6 +6,7 @@ import {
 } from "./residentService";
 import { createStaffUser } from "../team/teamService";
 import { validateRut, formatRut, isValidUUID, validateEmail } from "../../utils/validators";
+import { friendlyError } from "../../utils/errorMessages";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
@@ -239,7 +240,7 @@ export default function ResidentForm() {
       setFamiliarErrors({});
       await loadFamiliar();
     } catch (err) {
-      toast(err.message || "No se pudo crear el familiar.", "error");
+      toast(friendlyError(err, "No se pudo crear el familiar. Verifica los datos e intenta de nuevo."), "error");
     } finally {
       setSavingFamiliar(false);
     }
@@ -253,7 +254,7 @@ export default function ResidentForm() {
       setFamiliarActual(null);
       toast("Familiar desvinculado.", "success");
     } catch (err) {
-      toast(err.message || "No se pudo desvincular.", "error");
+      toast(friendlyError(err, "No se pudo desvincular el familiar. Intenta de nuevo."), "error");
     } finally {
       setSavingFamiliar(false);
     }

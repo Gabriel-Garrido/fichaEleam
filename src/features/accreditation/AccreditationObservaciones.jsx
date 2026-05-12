@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
+import { friendlyError } from "../../utils/errorMessages";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
 import {
@@ -46,7 +47,7 @@ function NuevaForm({ onCreated, onCancel, isAdmin }) {
       toast("Observación registrada", "success");
       onCreated?.();
     } catch (err) {
-      toast(err.message || "Error", "error");
+      toast(friendlyError(err, "No se pudo registrar la observación. Intenta de nuevo."), "error");
     } finally {
       setBusy(false);
     }
@@ -226,7 +227,7 @@ export default function AccreditationObservaciones() {
       const data = await getObservaciones();
       setList(data);
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudieron cargar las observaciones. Recarga la página."), "error");
     } finally {
       setLoading(false);
     }
@@ -248,7 +249,7 @@ export default function AccreditationObservaciones() {
       await cerrarObservacion(id, nota);
       toast("Observación cerrada", "success");
       await load();
-    } catch (e) { toast(e.message || "Error", "error"); }
+    } catch (e) { toast(friendlyError(e, "No se pudo cerrar la observación. Intenta de nuevo."), "error"); }
   };
 
   if (loading) return <Loading message="Cargando observaciones..." />;

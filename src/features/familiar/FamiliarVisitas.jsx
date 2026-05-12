@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../components/Toast";
+import { friendlyError } from "../../utils/errorMessages";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
@@ -47,7 +48,7 @@ export default function FamiliarVisitas() {
       const v = await getVisits(id, 100);
       setVisitas(v);
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudieron cargar las visitas. Intenta de nuevo."), "error");
     }
   }, [toast]);
 
@@ -62,7 +63,7 @@ export default function FamiliarVisitas() {
         setActiveId(id);
         if (id) await loadVisits(id);
       })
-      .catch((e) => mounted && toast(e.message || "Error", "error"))
+      .catch((e) => mounted && toast(friendlyError(e, "No se pudo cargar la información. Recarga la página."), "error"))
       .finally(() => mounted && setLoading(false));
     return () => { mounted = false; };
   }, [loadVisits, toast]);
@@ -82,7 +83,7 @@ export default function FamiliarVisitas() {
       setForm({ fecha_hora: localNowForInput(), duracion_min: "", notas: "" });
       await loadVisits(activeId);
     } catch (err) {
-      toast(err.message || "No se pudo guardar", "error");
+      toast(friendlyError(err, "No se pudo guardar la visita. Intenta de nuevo."), "error");
     } finally {
       setSaving(false);
     }

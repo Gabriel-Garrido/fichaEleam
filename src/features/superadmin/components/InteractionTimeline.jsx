@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useToast } from "../../../components/Toast";
 import { formatDateTime } from "../utils/superadminFormatters";
+import { friendlyError } from "../../../utils/errorMessages";
 
 const TIPOS = [
   { key: "nota",     label: "Nota" },
@@ -54,7 +55,7 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
       setForm(empty);
       setCreating(false);
     } catch (err) {
-      toast(err.message || "Error", "error");
+      toast(friendlyError(err, "No se pudo registrar la interacción. Intenta de nuevo."), "error");
     } finally {
       setBusy(false);
     }

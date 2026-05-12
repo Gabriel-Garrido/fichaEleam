@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useToast } from "../../../components/Toast";
 import Loading from "../../../components/Loading";
+import { friendlyError } from "../../../utils/errorMessages";
 import {
   getPostById, createPost, updatePost,
   slugify, estimateReadingMinutes,
@@ -49,7 +50,7 @@ export default function BlogEditor() {
         meta_description: p.meta_description ?? "",
       });
     } catch (e) {
-      toast(e.message ?? "Error al cargar", "error");
+      toast(friendlyError(e, "No se pudo cargar el artículo. Recarga la página."), "error");
       navigate("/superadmin/blog");
     } finally {
       setLoading(false);
@@ -104,7 +105,7 @@ export default function BlogEditor() {
       toast(publishNow ? "Post publicado." : "Cambios guardados.", "success");
       navigate(`/superadmin/blog/${result.id}/edit`);
     } catch (e) {
-      toast(e.message ?? "Error al guardar.", "error");
+      toast(friendlyError(e, "No se pudo guardar el artículo. Verifica los datos e intenta de nuevo."), "error");
     } finally {
       setSaving(false);
     }

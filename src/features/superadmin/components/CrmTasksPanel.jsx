@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useToast } from "../../../components/Toast";
 import { formatDate, daysUntil } from "../utils/superadminFormatters";
+import { friendlyError } from "../../../utils/errorMessages";
 
 const TIPOS = ["general", "llamada", "correo", "reunion", "demo", "seguimiento", "onboarding", "renovacion", "otro"];
 const PRIORIDADES = [
@@ -38,7 +39,7 @@ function NewTaskForm({ defaultEleamId = null, eleams = [], onCreate, onCancel })
       toast("Tarea creada.", "success");
       onCancel();
     } catch (err) {
-      toast(err.message || "Error", "error");
+      toast(friendlyError(err, "No se pudo crear la tarea. Intenta de nuevo."), "error");
     } finally {
       setBusy(false);
     }
