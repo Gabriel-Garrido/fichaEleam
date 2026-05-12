@@ -12,17 +12,21 @@ function Icon({ d, className = "w-6 h-6" }) {
   );
 }
 
-function StarRating() {
-  return (
-    <div className="flex gap-0.5">
-      {[...Array(5)].map((_, i) => (
-        <svg key={i} className="w-4 h-4 text-yellow-400 fill-current" viewBox="0 0 20 20">
-          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
-      ))}
-    </div>
-  );
-}
+const TRUST_STATS = [
+  { value: "+40",     label: "ELEAM en Chile" },
+  { value: "+800",    label: "residentes gestionados" },
+  { value: "30 días", label: "prueba gratuita" },
+];
+
+const PLAN_FEATURES = [
+  "Carpeta SEREMI · 14 ámbitos DS 14/2017",
+  "Fichas clínicas digitales ilimitadas",
+  "Signos vitales con alertas clínicas",
+  "Observaciones por turno (12 tipos)",
+  "Portal para familias",
+  "Funcionarios y usuarios ilimitados",
+  "Soporte en español incluido",
+];
 
 const PAINS = [
   { icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z", text: "Fiscalización SEREMI y no encuentras la mitad de los documentos requeridos." },
@@ -35,7 +39,7 @@ const PAINS = [
 const BENEFITS = [
   { icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", title: "Carpeta SEREMI siempre lista", metric: "14 ámbitos DS 14/2017", text: "Todos los requisitos pre-cargados con estados, evidencias versionadas y alertas de vencimiento. La fiscalización no te sorprende." },
   { icon: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z", title: "Signos vitales con alertas", metric: "Alertas automáticas en tiempo real", text: "Rangos clínicos para adultos mayores. Si un valor está fuera del rango, el equipo lo ve de inmediato." },
-  { icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", title: "Ficha clínica digital completa", metric: "Historial 100% trazable", text: "Diagnóstico, alergias, índice Barthel, observaciones y signos. Todo con firma digital, fecha y responsable." },
+  { icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", title: "Ficha clínica digital completa", metric: "Historial 100% trazable", text: "Diagnóstico, alergias, índice Barthel, observaciones y signos. Todo con fecha y responsable." },
   { icon: "M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z", title: "Observaciones por turno", metric: "12 tipos de observaciones", text: "Cada turno registra en su portal. El turno siguiente llega informado: qué pasó, quién lo registró y cuándo." },
   { icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197", title: "Portal para familias", metric: "Comunicación transparente", text: "Cada familiar tiene su propio portal para ver el estado de su ser querido, historial de visitas y observaciones." },
   { icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z", title: "Seguridad y privacidad", metric: "Datos aislados por establecimiento", text: "Cada ELEAM ve solo sus datos. Roles y permisos granulares para cada miembro del equipo." },
@@ -45,24 +49,6 @@ const HOW_IT_WORKS = [
   { step: "1", title: "Solicita tu demo", text: "Completa el formulario y en menos de 24 horas te enviamos tu enlace personal de acceso al demo guiado." },
   { step: "2", title: "Explora la plataforma", text: "Ve las vistas del administrador, del funcionario y del familiar. Un especialista te guía si lo necesitas." },
   { step: "3", title: "Activa tu ELEAM", text: "Elige tu plan, paga con MercadoPago y el equipo te ayuda a migrar los datos de tus residentes." },
-];
-
-const TESTIMONIALS = [
-  {
-    name: "Verónica R.",
-    role: "Directora, ELEAM Los Aromos — La Serena",
-    text: "Antes de FichaEleam teníamos carpetas por todos lados. Hoy la fiscalizadora llega y en dos minutos le muestro todo en pantalla. La diferencia es brutal.",
-  },
-  {
-    name: "Carlos M.",
-    role: "Enfermero Jefe, Residencia El Mirador — Concepción",
-    text: "Ya no pierdo tiempo buscando quién registró qué. Todo está con nombre, fecha y hora. Y el turno siguiente sabe exactamente qué pasó con cada residente.",
-  },
-  {
-    name: "Patricia L.",
-    role: "Administradora, Residencia Santa Lucía — Santiago",
-    text: "El módulo de acreditación es increíble. Tengo los 14 ámbitos con semáforo de estado. Cuando vino la SEREMI, no tuve que buscar nada: todo estaba en un clic.",
-  },
 ];
 
 const FAQ_ITEMS = [
@@ -77,10 +63,9 @@ const FAQ_ITEMS = [
 ];
 
 const PLANS = [
-  { residentes: "Hasta 14", precio: "$50.000", tag: null },
-  { residentes: "15 a 24",  precio: "$80.000", tag: "Más elegido" },
-  { residentes: "25 a 34",  precio: "$120.000", tag: null },
-  { residentes: "35 o más", precio: "A consultar", tag: null },
+  { residentes: "Hasta 14",  precio: "$50.000",    tag: null,          sub: "menos de $1.700/día" },
+  { residentes: "15 a 24",   precio: "$80.000",    tag: "Más elegido", sub: "menos de $2.700/día" },
+  { residentes: "25 a 34",   precio: "$120.000",   tag: null,          sub: "menos de $4.000/día" },
 ];
 
 export default function LandingPage() {
@@ -88,12 +73,11 @@ export default function LandingPage() {
   const [modal, setModal] = useState(false);
   const [modalCta, setModalCta] = useState(null);
 
-  const painRef       = useRef(null);
-  const benefitsRef   = useRef(null);
-  const howRef        = useRef(null);
-  const testimRef     = useRef(null);
-  const pricingRef    = useRef(null);
-  const faqRef        = useRef(null);
+  const painRef     = useRef(null);
+  const benefitsRef = useRef(null);
+  const howRef      = useRef(null);
+  const pricingRef  = useRef(null);
+  const faqRef      = useRef(null);
 
   useScrollDepth();
   useSectionView(painRef,     "pain_points");
@@ -161,54 +145,71 @@ export default function LandingPage() {
       </nav>
 
       {/* ── HERO ─────────────────────────────────────────── */}
-      <section className="relative bg-gradient-to-br from-[var(--color-primary)] via-[var(--color-accent)] to-teal-900 text-white pt-24 pb-28 px-4 overflow-hidden">
-        <div className="relative max-w-4xl mx-auto text-center">
-          <span className="inline-block bg-white/20 text-white text-xs font-semibold px-4 py-1.5 rounded-full mb-6 tracking-wide uppercase">
-            El software diseñado exclusivamente para ELEAM en Chile
-          </span>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black leading-tight mb-6">
-            Digitaliza tu ELEAM y pasa la fiscalización{" "}
-            <span className="text-[var(--color-secondary)]">SEREMI sin estrés</span>
-          </h1>
-          <p className="text-lg sm:text-xl text-teal-100 max-w-2xl mx-auto mb-8 leading-relaxed">
-            Carpeta DS 14/2017 completa, fichas clínicas digitales y gestión de equipo — todo en una plataforma pensada para Establecimientos de Larga Estadía.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => openModal("hero_primary")}
-              className="bg-white text-[var(--color-primary)] font-bold py-3.5 px-8 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all text-base"
-            >
-              Solicitar Demo Gratuito
-            </button>
-            <button
-              onClick={() => {
-                document.getElementById("precios")?.scrollIntoView({ behavior: "smooth" });
-                trackEvent("cta_click", "hero_secondary_pricing");
-              }}
-              className="border-2 border-white/60 text-white font-semibold py-3.5 px-8 rounded-xl hover:bg-white/10 transition-all text-base"
-            >
-              Ver Planes
-            </button>
-          </div>
-          <p className="mt-5 text-sm text-teal-200">
-            Acceso personalizado · Sin compromiso · Respuesta en menos de 24 horas
-          </p>
+      <section className="relative bg-gradient-to-br from-[var(--color-primary)] via-[var(--color-accent)] to-teal-900 text-white pt-20 pb-16 px-4 overflow-hidden">
+        <div className="relative max-w-6xl mx-auto">
+          <div className="max-w-2xl mx-auto lg:mx-0 text-center lg:text-left">
+            <span className="inline-block bg-white/20 text-white text-xs font-semibold px-4 py-1.5 rounded-full mb-6 tracking-wide uppercase">
+              El software diseñado exclusivamente para ELEAM en Chile
+            </span>
+            <h1 className="text-4xl sm:text-5xl font-black leading-tight mb-6">
+              Digitaliza tu ELEAM y pasa la fiscalización{" "}
+              <span className="text-[var(--color-secondary)]">SEREMI sin estrés</span>
+            </h1>
+            <p className="text-lg text-teal-100 mb-8 leading-relaxed">
+              Carpeta DS 14/2017 completa, fichas clínicas digitales y gestión de equipo — todo en una plataforma pensada para Establecimientos de Larga Estadía.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+              <button
+                onClick={() => openModal("hero_primary")}
+                className="bg-white text-[var(--color-primary)] font-bold py-3.5 px-8 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all text-base"
+              >
+                Solicitar Demo Gratuito
+              </button>
+              <button
+                onClick={() => {
+                  document.getElementById("como-funciona")?.scrollIntoView({ behavior: "smooth" });
+                  trackEvent("cta_click", "hero_secondary_how");
+                }}
+                className="border-2 border-white/60 text-white font-semibold py-3.5 px-8 rounded-xl hover:bg-white/10 transition-all text-base"
+              >
+                Ver cómo funciona
+              </button>
+            </div>
+            <p className="mt-5 text-sm text-teal-200 text-center lg:text-left">
+              Acceso personalizado · Sin compromiso · Respuesta en menos de 24 horas
+            </p>
 
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs sm:text-sm text-teal-100/90">
-            {[
-              "Cumple DS 14/2017 · 14 ámbitos",
-              "Datos en Chile",
-              "Soporte en español",
-              "Funcionarios y familias incluidos",
-            ].map((t) => (
-              <span key={t} className="inline-flex items-center gap-1.5">
-                <svg className="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-                {t}
-              </span>
-            ))}
+            {/* Trust stats */}
+            <div className="mt-8 flex flex-wrap gap-6 justify-center lg:justify-start">
+              {TRUST_STATS.map(({ value, label }) => (
+                <div key={label} className="text-center lg:text-left">
+                  <div className="text-2xl font-black text-white">{value}</div>
+                  <div className="text-xs text-teal-200">{label}</div>
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* App mockup */}
+          <div className="hidden lg:block absolute right-0 top-0 w-[480px] xl:w-[540px]">
+            <AppMockup />
+          </div>
+        </div>
+
+        <div className="mt-10 max-w-6xl mx-auto flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs sm:text-sm text-teal-100/90 lg:hidden">
+          {[
+            "Cumple DS 14/2017 · 14 ámbitos",
+            "Datos en Chile",
+            "Soporte en español",
+            "Funcionarios y familias incluidos",
+          ].map((t) => (
+            <span key={t} className="inline-flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              {t}
+            </span>
+          ))}
         </div>
       </section>
 
@@ -239,6 +240,27 @@ export default function LandingPage() {
               ¿Te suena familiar? Agenda tu demo gratuito →
             </button>
           </div>
+        </div>
+      </section>
+
+      {/* ── URGENCIA SEREMI ──────────────────────────────── */}
+      <section className="py-6 px-4 bg-amber-50 border-y border-amber-200">
+        <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+              <Icon d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" className="w-5 h-5 text-amber-600" />
+            </span>
+            <p className="text-sm font-semibold text-amber-900">
+              ¿Tienes una fiscalización SEREMI próxima?{" "}
+              <span className="font-normal text-amber-800">Podemos tener tu Carpeta lista en 24 horas.</span>
+            </p>
+          </div>
+          <button
+            onClick={() => openModal("urgencia_seremi")}
+            className="shrink-0 bg-amber-600 text-white text-sm font-semibold px-5 py-2 rounded-xl hover:bg-amber-700 transition-all whitespace-nowrap"
+          >
+            Hablar con un especialista
+          </button>
         </div>
       </section>
 
@@ -278,7 +300,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── CÓMO FUNCIONA ────────────────────────────────── */}
-      <section ref={howRef} className="py-20 px-4 bg-gradient-to-br from-teal-50 to-white">
+      <section id="como-funciona" ref={howRef} className="py-20 px-4 bg-gradient-to-br from-teal-50 to-white">
         <div className="max-w-5xl mx-auto">
           <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3 text-center">
             Simple y rápido
@@ -317,32 +339,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── TESTIMONIOS ──────────────────────────────────── */}
-      <section ref={testimRef} className="py-20 px-4 bg-gray-50">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3 text-center">
-            Testimonios
-          </p>
-          <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
-            Lo que dicen quienes ya lo usan
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {TESTIMONIALS.map(({ name, role, text }, i) => (
-              <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <StarRating />
-                <p className="text-gray-700 text-sm leading-relaxed italic my-4">"{text}"</p>
-                <div>
-                  <p className="font-bold text-gray-800 text-sm">{name}</p>
-                  <p className="text-xs text-gray-400">{role}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── PRECIOS ──────────────────────────────────────── */}
-      <section id="precios" ref={pricingRef} className="py-20 px-4">
+      <section id="precios" ref={pricingRef} className="py-20 px-4 bg-gray-50">
         <div className="max-w-5xl mx-auto">
           <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3 text-center">
             Precios
@@ -350,11 +348,27 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold text-center text-gray-800 mb-4">
             Un precio mensual por tu ELEAM
           </h2>
-          <p className="text-center text-gray-500 mb-12 text-sm">
+          <p className="text-center text-gray-500 mb-10 text-sm">
             Sin cobros por usuario. Todos tus funcionarios y familiares incluidos.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-            {PLANS.map(({ residentes, precio, tag }, i) => (
+
+          {/* Features incluidas en todos los planes */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-6 mb-8 shadow-sm max-w-3xl mx-auto">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 text-center">Todos los planes incluyen</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {PLAN_FEATURES.map((f) => (
+                <div key={f} className="flex items-center gap-2 text-sm text-gray-700">
+                  <svg className="w-4 h-4 text-teal-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {f}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+            {PLANS.map(({ residentes, precio, tag, sub }, i) => (
               <div
                 key={i}
                 className={`rounded-2xl p-6 border-2 text-center relative flex flex-col ${
@@ -374,40 +388,55 @@ export default function LandingPage() {
                 <p className={`text-2xl font-black mb-0.5 ${tag ? "text-white" : "text-gray-800"}`}>
                   {precio}
                 </p>
-                {precio !== "A consultar" && (
-                  <p className={`text-xs mb-4 ${tag ? "text-teal-200" : "text-gray-400"}`}>CLP / mes</p>
-                )}
+                <p className={`text-xs mb-1 ${tag ? "text-teal-200" : "text-gray-400"}`}>CLP / mes</p>
+                <p className={`text-[11px] mb-4 ${tag ? "text-teal-300" : "text-gray-400"}`}>{sub}</p>
                 <div className="mt-auto">
                   <button
                     onClick={() => openModal(`pricing_cta_plan${i + 1}`)}
-                    className={`w-full font-semibold py-2 rounded-xl text-sm mt-3 transition-all ${
+                    className={`w-full font-semibold py-2 rounded-xl text-sm mt-1 transition-all ${
                       tag
                         ? "bg-white text-teal-700 hover:bg-gray-100"
                         : "border border-teal-600 text-teal-700 hover:bg-teal-50"
                     }`}
                   >
-                    Hablar con especialista
+                    Comenzar demo
                   </button>
                 </div>
               </div>
             ))}
+
+            {/* Plan institucional */}
+            <div className="rounded-2xl p-6 border-2 border-gray-200 bg-white text-center flex flex-col">
+              <p className="text-xs font-semibold text-gray-400 mb-2">35 o más residentes</p>
+              <p className="text-xl font-black text-gray-800 mb-0.5">Plan Institucional</p>
+              <p className="text-xs text-gray-400 mb-4">Cotización a medida</p>
+              <div className="mt-auto">
+                <button
+                  onClick={() => openModal("pricing_institucional")}
+                  className="w-full font-semibold py-2 rounded-xl text-sm border border-teal-600 text-teal-700 hover:bg-teal-50 transition-all"
+                >
+                  Solicitar cotización
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 max-w-xl mx-auto text-center">
-            <p className="text-sm text-teal-800">
-              ¿Tienes más de 34 residentes o necesitas implementación urgente?{" "}
-              <button
-                onClick={() => openModal("pricing_custom")}
-                className="font-semibold underline hover:no-underline"
-              >
-                Habla con nosotros
-              </button>
-            </p>
+
+          {/* Banner 30 días gratis */}
+          <div className="bg-teal-600 rounded-2xl p-5 max-w-2xl mx-auto text-center text-white">
+            <p className="font-bold text-base mb-1">30 días de prueba gratuita en todos los planes</p>
+            <p className="text-sm text-teal-100">Sin tarjeta de crédito. Sin compromiso. Cancela cuando quieras.</p>
+            <button
+              onClick={() => openModal("pricing_trial_banner")}
+              className="mt-4 bg-white text-teal-700 font-semibold text-sm px-6 py-2 rounded-xl hover:bg-teal-50 transition-all"
+            >
+              Empezar prueba gratuita
+            </button>
           </div>
         </div>
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────── */}
-      <section ref={faqRef} className="py-20 px-4 bg-gray-50">
+      <section ref={faqRef} className="py-20 px-4">
         <div className="max-w-3xl mx-auto">
           <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-widest mb-3 text-center">
             Preguntas frecuentes
@@ -450,6 +479,16 @@ export default function LandingPage() {
           >
             Solicitar Demo Gratuito
           </button>
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-sm text-teal-200">
+            <span>¿Prefiere contacto directo?</span>
+            <a
+              href="mailto:contacto@fichaeleam.cl"
+              className="text-white font-semibold hover:text-teal-100 transition-colors"
+              onClick={() => trackEvent("cta_click", "final_email")}
+            >
+              contacto@fichaeleam.cl
+            </a>
+          </div>
         </div>
       </section>
 
@@ -508,6 +547,64 @@ function FaqItem({ q, a }) {
           <p className="text-sm text-gray-600 leading-relaxed">{a}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function AppMockup() {
+  return (
+    <div className="relative">
+      <div className="bg-white/10 backdrop-blur rounded-2xl border border-white/20 p-4 shadow-2xl">
+        {/* Barra de título */}
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className="w-2.5 h-2.5 rounded-full bg-white/30" />
+          <span className="w-2.5 h-2.5 rounded-full bg-white/30" />
+          <span className="w-2.5 h-2.5 rounded-full bg-white/30" />
+          <span className="ml-2 text-xs text-white/50 font-mono">FichaEleam · Dashboard</span>
+        </div>
+        {/* KPIs */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {[
+            { label: "Alertas críticas", value: "2", tone: "bg-rose-500" },
+            { label: "Cobertura hoy",    value: "87%", tone: "bg-emerald-500" },
+            { label: "Sin control",      value: "3",   tone: "bg-amber-500" },
+            { label: "Cumplimiento SEREMI", value: "91%", tone: "bg-teal-400" },
+          ].map(({ label, value, tone }) => (
+            <div key={label} className="bg-white/10 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className={`w-2 h-2 rounded-full ${tone}`} />
+                <span className="text-[10px] text-white/60 uppercase tracking-wide">{label}</span>
+              </div>
+              <span className="text-xl font-black text-white">{value}</span>
+            </div>
+          ))}
+        </div>
+        {/* Lista de residentes */}
+        <div className="bg-white/10 rounded-xl p-3">
+          <p className="text-[10px] text-white/50 uppercase tracking-wide mb-2">Residentes · estado clínico</p>
+          {[
+            { name: "María González", estado: "Normal", color: "bg-emerald-400" },
+            { name: "Jorge Fuentes",  estado: "Atención", color: "bg-amber-400" },
+            { name: "Carmen López",   estado: "Crítico",  color: "bg-rose-400" },
+          ].map(({ name, estado, color }) => (
+            <div key={name} className="flex items-center justify-between py-1.5 border-b border-white/10 last:border-0">
+              <span className="text-xs text-white/80">{name}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full text-white font-semibold ${color}`}>{estado}</span>
+            </div>
+          ))}
+        </div>
+        {/* Barra de acreditación */}
+        <div className="mt-3 bg-white/10 rounded-xl p-3">
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="text-[10px] text-white/50 uppercase tracking-wide">Carpeta SEREMI</span>
+            <span className="text-xs font-bold text-white">91%</span>
+          </div>
+          <div className="w-full bg-white/20 rounded-full h-1.5">
+            <div className="bg-teal-300 h-1.5 rounded-full" style={{ width: "91%" }} />
+          </div>
+          <p className="text-[10px] text-white/40 mt-1">64 de 70 requisitos al día</p>
+        </div>
+      </div>
     </div>
   );
 }
