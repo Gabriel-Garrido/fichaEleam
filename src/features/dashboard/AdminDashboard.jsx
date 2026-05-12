@@ -544,6 +544,12 @@ function ManagementBrief({ loading, score, scoreTone, stale, followUps, expiring
   }
 
   const currentActivity = activity?.[turno] ?? { signos: 0, observaciones: 0 };
+  const turnoStatus = score >= 80
+    ? "Controlado"
+    : score >= 55
+      ? "Revisar"
+      : "Prioritario";
+  const turnoStatusDetail = `${score}/100 según controles pendientes, seguimientos abiertos y documentos urgentes.`;
   const nextAction = stale.length
     ? { label: "Tomar controles pendientes", hint: `${stale.length} residente${stale.length === 1 ? "" : "s"} sin control hoy`, path: "/vital-signs/new", tone: "rose" }
     : followUps.length
@@ -584,9 +590,9 @@ function ManagementBrief({ loading, score, scoreTone, stale, followUps, expiring
       </button>
 
       <BriefMetric
-        label="Índice operativo"
-        value={`${score}%`}
-        sub={score >= 80 ? "Turno controlado" : score >= 55 ? "Requiere seguimiento" : "Riesgo operativo alto"}
+        label="Estado del turno"
+        value={turnoStatus}
+        sub={turnoStatusDetail}
         tone={scoreTone}
       />
       <BriefMetric
