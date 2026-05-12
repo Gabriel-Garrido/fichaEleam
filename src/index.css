@@ -69,6 +69,75 @@ button:disabled {
   animation: slide-in 0.2s ease-out;
 }
 
+/* ── Tooltip system ───────────────────────────────────────── */
+@keyframes tooltip-in-below {
+  from { opacity: 0; transform: scale(0.94) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+@keyframes tooltip-in-above {
+  from { opacity: 0; transform: scale(0.94) translateY(4px);  }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+.tooltip-popup {
+  border-radius: 12px;
+  will-change: transform, opacity;
+}
+
+.tooltip-open[data-placement="below"] {
+  animation: tooltip-in-below 140ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.tooltip-open[data-placement="above"] {
+  animation: tooltip-in-above 140ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tooltip-dark {
+  background: #0d1424;
+  color: #f1f5f9;
+  padding: 10px 14px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06) inset,
+    0 4px 6px rgba(0,0,0,0.25),
+    0 12px 30px rgba(0,0,0,0.45);
+}
+
+.tooltip-light {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 14px 16px;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.03),
+    0 4px 8px rgba(0,0,0,0.06),
+    0 16px 40px rgba(0,0,0,0.10);
+}
+
+/* Arrow */
+.tooltip-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* Arrow pointing up (tooltip opens below trigger) */
+.tooltip-arrow-below { top: -6px; }
+/* Arrow pointing down (tooltip opens above trigger) */
+.tooltip-arrow-above { bottom: -6px; }
+
+.tooltip-arrow-dark { background: #0d1424; }
+
+.tooltip-arrow-light { background: #ffffff; }
+.tooltip-arrow-light.tooltip-arrow-below {
+  border-top: 1px solid #e2e8f0;
+  border-left: 1px solid #e2e8f0;
+}
+.tooltip-arrow-light.tooltip-arrow-above {
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+}
+
 /* Estilos para artículos del blog (renderMarkdown) */
 .prose-clean {
   font-size: 1rem;

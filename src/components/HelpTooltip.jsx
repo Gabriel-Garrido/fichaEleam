@@ -1,82 +1,24 @@
-import { useState, useEffect, useRef } from "react";
-
-const TIP_W = 288;
-const MARGIN = 8;
-
-function calcCoords(btn) {
-  const r = btn.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const w = Math.min(TIP_W, vw - MARGIN * 2);
-
-  let left = r.right - w;
-  if (left < MARGIN) left = MARGIN;
-  if (left + w > vw - MARGIN) left = vw - w - MARGIN;
-
-  const spaceBelow = vh - r.bottom - 6;
-  const flipUp = spaceBelow < 160;
-  const top = flipUp ? r.top - 6 : r.bottom + 6;
-
-  return { top, left, w, flipUp };
-}
+import Tooltip from "./Tooltip";
 
 export default function HelpTooltip({ label = "Ayuda", children, className = "" }) {
-  const [coords, setCoords] = useState(null);
-  const wrapRef = useRef(null);
-  const btnRef = useRef(null);
-
-  const toggle = () => {
-    if (coords) { setCoords(null); return; }
-    setCoords(calcCoords(btnRef.current));
-  };
-
-  useEffect(() => {
-    if (!coords) return;
-    const close = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setCoords(null);
-    };
-    const esc = (e) => { if (e.key === "Escape") setCoords(null); };
-    document.addEventListener("mousedown", close, true);
-    document.addEventListener("touchstart", close, true);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", close, true);
-      document.removeEventListener("touchstart", close, true);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [coords]);
-
   return (
-    <span ref={wrapRef} className={`relative inline-flex align-middle ${className}`}>
+    <Tooltip
+      content={
+        <p className="whitespace-pre-line text-[11.5px] leading-relaxed text-white/90">
+          {children}
+        </p>
+      }
+      variant="dark"
+      maxWidth={280}
+      wrapperClass={`align-middle ${className}`}
+    >
       <button
-        ref={btnRef}
         type="button"
         aria-label={label}
-        aria-expanded={!!coords}
-        onClick={toggle}
-        className={`inline-flex h-5 w-5 items-center justify-center rounded-full border bg-white text-[11px] font-bold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500/30 ${
-          coords
-            ? "border-teal-500 text-teal-700"
-            : "border-slate-300 text-slate-500 hover:border-teal-400 hover:text-teal-700"
-        }`}
+        className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-[10px] font-bold text-slate-400 transition-colors hover:border-teal-500 hover:text-teal-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
       >
         ?
       </button>
-      {coords && (
-        <span
-          role="tooltip"
-          style={{
-            position: "fixed",
-            top: coords.top,
-            left: coords.left,
-            width: coords.w,
-            transform: coords.flipUp ? "translateY(calc(-100% - 12px))" : undefined,
-          }}
-          className="z-[9999] rounded-lg bg-slate-900 px-3 py-2.5 text-left text-xs font-normal leading-relaxed text-white shadow-xl whitespace-pre-line"
-        >
-          {children}
-        </span>
-      )}
-    </span>
+    </Tooltip>
   );
 }
