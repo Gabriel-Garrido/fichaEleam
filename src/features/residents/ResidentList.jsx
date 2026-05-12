@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
-import HelpTooltip from "../../components/HelpTooltip";
+import PageLayout from "../../layout/PageLayout";
 
 const ESTADO_CONFIG = {
   activo:        { label: "Activo",        badge: "bg-emerald-100 text-emerald-800 border-emerald-200", dot: "bg-emerald-500" },
@@ -95,31 +95,21 @@ export default function ResidentList() {
   if (loading) return <Loading message="Cargando residentes..." />;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--color-primary)] inline-flex items-center gap-2">
-            Residentes
-            <HelpTooltip label="Ayuda sobre residentes">
-              Aquí está la ficha base de cada residente. Empieza por mantener estado, habitación, dependencia y contacto familiar al día.
-            </HelpTooltip>
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {stats.total} residente{stats.total !== 1 ? "s" : ""} registrado
-            {stats.total !== 1 ? "s" : ""}
-            {filtroEstado && ` · filtrando por ${ESTADO_CONFIG[filtroEstado]?.label.toLowerCase() ?? filtroEstado}`}
-          </p>
-        </div>
-        {canCreate && (
+    <PageLayout
+      title="Residentes"
+      eyebrow="Operación clínica"
+      description={`${stats.total} residente${stats.total !== 1 ? "s" : ""} registrado${stats.total !== 1 ? "s" : ""}${filtroEstado ? ` · filtrando por ${ESTADO_CONFIG[filtroEstado]?.label.toLowerCase() ?? filtroEstado}` : ""}`}
+      actions={
+        canCreate ? (
           <Button
             onClick={() => navigate("/residents/new")}
             className="w-full sm:w-auto bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] transition-all font-medium shadow-sm"
           >
             + Agregar Residente
           </Button>
-        )}
-      </div>
+        ) : null
+      }
+    >
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex justify-between">
@@ -250,7 +240,7 @@ export default function ResidentList() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }
 

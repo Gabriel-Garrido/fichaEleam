@@ -144,10 +144,12 @@ export default function PaymentPage() {
   const expectedSuperadminPending =
     accountEmail.toLowerCase() === "gabrielgarrido89@gmail.com" &&
     profile?.rol !== "superadmin";
+  const showPublicNav = !user;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={showPublicNav ? "min-h-screen bg-gray-50" : ""}>
       {/* Nav mínima */}
+      {showPublicNav && (
       <nav className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
@@ -174,8 +176,9 @@ export default function PaymentPage() {
           </div>
         </div>
       </nav>
+      )}
 
-      <div className="max-w-5xl mx-auto px-4 py-12">
+      <div className={`${showPublicNav ? "max-w-5xl py-12" : "max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8"} mx-auto px-4`}>
         {sinAcceso && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
             <div className="text-amber-500 text-2xl shrink-0">!</div>
@@ -281,8 +284,11 @@ export default function PaymentPage() {
           </div>
         )}
 
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-black text-gray-800 mb-3">
+        <div className="mb-8 max-w-3xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
+            Suscripción
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-gray-950 sm:text-3xl">
             {blockedNonAdmin ? "Acceso pendiente del ELEAM" : "Activa tu ELEAM"}
             {!blockedNonAdmin && (
               <HelpTooltip className="ml-2" label="Ayuda sobre activación">
@@ -290,7 +296,7 @@ export default function PaymentPage() {
               </HelpTooltip>
             )}
           </h1>
-          <p className="text-gray-500 max-w-xl mx-auto text-base">
+          <p className="mt-2 text-sm leading-6 text-gray-600">
             {blockedNonAdmin
               ? "Tu cuenta fue creada correctamente, pero la habilitación del establecimiento la gestiona el administrador ELEAM."
               : "Un precio mensual por establecimiento. Sin cobros por usuario. Todos tus funcionarios acceden incluidos."}

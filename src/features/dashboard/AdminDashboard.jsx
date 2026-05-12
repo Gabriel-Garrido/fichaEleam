@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import HelpTooltip from "../../components/HelpTooltip";
+import PageLayout from "../../layout/PageLayout";
 import { loadDashboard } from "./dashboardService";
 import {
   STATUS,
@@ -169,28 +170,30 @@ export default function AdminDashboard() {
   }, [data, clinicalSummary]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-      {/* Hero header */}
-      <header className="relative overflow-hidden bg-gradient-to-br from-[var(--color-primary)] via-[var(--color-accent)] to-[var(--color-primary)] rounded-3xl p-5 sm:p-8 text-white shadow-lg">
-        <div className="relative">
-          <div className="text-xs uppercase tracking-wider text-white/70 font-medium">
-            {todayDateLong()} · Turno actual: <span className="capitalize">{turno}</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold mt-1">
-            {profile?.nombre ? `Hola, ${profile.nombre}` : "Hola"}
-          </h1>
-          {eleam?.nombre && (
-            <p className="text-white/85 text-sm font-medium">{eleam.nombre}</p>
-          )}
-          <div className="flex flex-wrap gap-x-6 gap-y-1 mt-4 text-sm text-white/90">
-            <span>📊 <strong className="text-white">{loading ? "…" : data?.signosHoy ?? 0}</strong> signos vitales hoy</span>
-            <span>📋 <strong className="text-white">{loading ? "…" : data?.observacionesHoy ?? 0}</strong> observaciones hoy</span>
-            {cobertura && (
-              <span>🩺 <strong className="text-white">{cobertura.pct}%</strong> de residentes con control hoy</span>
-            )}
-          </div>
+    <PageLayout
+      title={profile?.nombre ? `Hola, ${profile.nombre}` : "Inicio"}
+      eyebrow={`${todayDateLong()} · turno ${turno}`}
+      description={`${eleam?.nombre ? `${eleam.nombre}. ` : ""}${loading ? "Cargando actividad del día..." : `${data?.signosHoy ?? 0} signos vitales y ${data?.observacionesHoy ?? 0} observaciones registradas hoy${cobertura ? ` · ${cobertura.pct}% de cobertura` : ""}.`}`}
+      actions={
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+          <button
+            type="button"
+            onClick={() => navigate("/turnos/nueva")}
+            className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
+          >
+            Entrega de turno
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/vital-signs/new")}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Registrar control
+          </button>
         </div>
-      </header>
+      }
+      className="space-y-6"
+    >
 
       {!loading && (stats?.total ?? 0) === 0 && (
         <FirstRunPanel navigate={navigate} />
@@ -364,7 +367,7 @@ export default function AdminDashboard() {
           </HelpTooltip>
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction icon="👴" label="Agregar residente"        onClick={() => navigate("/residents/new")} />
+          <QuickAction icon="⇄" label="Entrega de turno"          onClick={() => navigate("/turnos/nueva")} />
           <QuickAction icon="📊" label="Registrar signos vitales" onClick={() => navigate("/vital-signs/new")} />
           <QuickAction icon="📋" label="Nueva observación"        onClick={() => navigate("/observations/new")} />
           <QuickAction icon="📁" label="Carpeta SEREMI"           onClick={() => navigate("/accreditation/carpeta")} />
@@ -376,6 +379,7 @@ export default function AdminDashboard() {
             <span className="hidden text-xs text-gray-400 group-open:inline">Ocultar</span>
           </summary>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-gray-100 p-3">
+            <QuickAction icon="👴" label="Agregar residente"        onClick={() => navigate("/residents/new")} />
             <QuickAction icon="👥" label="Ver residentes"           onClick={() => navigate("/residents")} />
             <QuickAction icon="💓" label="Historial signos"         onClick={() => navigate("/vital-signs")} />
             <QuickAction icon="📝" label="Ver observaciones"        onClick={() => navigate("/observations")} />
@@ -383,7 +387,7 @@ export default function AdminDashboard() {
           </div>
         </details>
       </section>
-    </div>
+    </PageLayout>
   );
 }
 

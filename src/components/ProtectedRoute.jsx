@@ -19,11 +19,12 @@ function ProtectedRoute({
   children,
   requireActive = true,
   allowedRoles = null,
+  requiredFeature = null,
 }) {
   const location = useLocation();
   const {
     user, profile, authLoading, profileLoading, pagoActivo,
-    supabaseError, homePath, isSuperadmin, isFamiliar, mustResetPassword,
+    supabaseError, homePath, isSuperadmin, isFamiliar, mustResetPassword, canFeature,
   } = useAuth();
 
   if (authLoading || profileLoading) return <Loading message="Verificando sesión..." />;
@@ -62,6 +63,20 @@ function ProtectedRoute({
     return <Navigate to={homePath} replace />;
   }
 
+  if (requiredFeature && !canFeature(requiredFeature)) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-semibold text-slate-950">Sin acceso a esta feature</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Tu cuenta no tiene habilitado este módulo. Pide al administrador que revise los permisos.
+          </p>
+          <NavigateButton to={homePath} />
+        </div>
+      </div>
+    );
+  }
+
   // El familiar nunca debe entrar a rutas operativas del staff: si la
   // ruta no lo declara explícitamente, lo devolvemos a su portal.
   if (isFamiliar && !allowedRoles?.includes("familiar")) {
@@ -72,3 +87,14 @@ function ProtectedRoute({
 }
 
 export default ProtectedRoute;
+
+function NavigateButton({ to }) {
+  return (
+    <a
+      href={to || "/"}
+      className="mt-6 inline-flex rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+    >
+      Volver
+    </a>
+  );
+}

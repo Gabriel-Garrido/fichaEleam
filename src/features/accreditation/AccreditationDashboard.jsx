@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import HelpTooltip from "../../components/HelpTooltip";
+import PageLayout from "../../layout/PageLayout";
 import {
   getRequisitosEleam,
   getObservaciones,
@@ -379,35 +380,29 @@ export default function AccreditationDashboard() {
 
   if (sinEleam) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">Carpeta SEREMI</h1>
-        <p className="text-gray-500">
+      <PageLayout
+        title="Carpeta SEREMI"
+        eyebrow="Acreditación"
+        description="Esta vista funciona dentro del contexto de un ELEAM."
+        size="lg"
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
           Esta vista funciona dentro del contexto de un ELEAM. Tu cuenta no
           tiene uno asociado.
-        </p>
-      </div>
+        </div>
+      </PageLayout>
     );
   }
 
   const cumplimientoTone = resumen.porcentaje >= 80 ? "emerald" : resumen.porcentaje >= 50 ? "amber" : "rose";
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-      {/* Header */}
-      <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-black text-[var(--color-primary)] inline-flex items-center gap-2">
-            Carpeta SEREMI
-            <HelpTooltip label="Ayuda sobre carpeta SEREMI">
-              Revisa primero vencidos y observaciones. Después completa cada ámbito y genera la carpeta cuando todo esté listo para fiscalización.
-            </HelpTooltip>
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Prioriza vencidos, observaciones y requisitos pendientes.
-            {eleam?.nombre ? <> · <span className="font-semibold">{eleam.nombre}</span></> : null}
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:flex gap-2 w-full sm:w-auto">
+    <PageLayout
+      title="Carpeta SEREMI"
+      eyebrow="Acreditación"
+      description={`Prioriza vencidos, observaciones y requisitos sin evidencia${eleam?.nombre ? ` · ${eleam.nombre}` : ""}.`}
+      actions={
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto">
           <button
             onClick={() => navigate("/accreditation/observaciones")}
             className="border border-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
@@ -421,7 +416,9 @@ export default function AccreditationDashboard() {
             Generar Carpeta SEREMI
           </button>
         </div>
-      </header>
+      }
+      className="space-y-6"
+    >
 
       <AccreditationNextStep resumen={resumen} observaciones={observaciones} navigate={navigate} />
 
@@ -579,6 +576,6 @@ export default function AccreditationDashboard() {
           })}
         </div>
       </details>
-    </div>
+    </PageLayout>
   );
 }

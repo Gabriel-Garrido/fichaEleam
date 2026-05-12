@@ -176,6 +176,25 @@ create index if not exists idx_observaciones_seguimiento
   on public.observaciones_diarias(residente_id, fecha_hora desc)
   where requiere_seguimiento = true;
 
+create table if not exists public.turno_entregas (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  turno           text not null check (turno in ('mañana','tarde','noche')),
+  fecha           date not null default current_date,
+  resumen_json    jsonb not null default '{}'::jsonb,
+  notas           text,
+  pendientes      text,
+  creado_por      uuid references auth.users(id) on delete set null,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now(),
+  unique (eleam_id, fecha, turno)
+);
+
+create index if not exists idx_turno_entregas_eleam_fecha
+  on public.turno_entregas(eleam_id, fecha desc, turno);
+create index if not exists idx_turno_entregas_creado_por
+  on public.turno_entregas(creado_por);
+
 -- ============================================================
 -- 3. Invitaciones y portal familiar
 -- ============================================================
@@ -228,6 +247,33 @@ create table if not exists public.funcionario_permisos (
 );
 
 create index if not exists idx_func_permisos_profile on public.funcionario_permisos(profile_id);
+
+create table if not exists public.eleam_feature_permissions (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  rol             text not null check (rol in ('admin_eleam','funcionario','familiar')),
+  feature_id      text not null,
+  enabled         boolean not null default true,
+  actualizado_por uuid references public.profiles(id) on delete set null,
+  actualizado_en  timestamptz not null default now(),
+  unique (eleam_id, rol, feature_id)
+);
+
+create index if not exists idx_eleam_feature_permissions_eleam
+  on public.eleam_feature_permissions(eleam_id, rol);
+
+create table if not exists public.profile_feature_permissions (
+  id              uuid primary key default gen_random_uuid(),
+  profile_id      uuid not null references public.profiles(id) on delete cascade,
+  feature_id      text not null,
+  enabled         boolean not null default true,
+  actualizado_por uuid references public.profiles(id) on delete set null,
+  actualizado_en  timestamptz not null default now(),
+  unique (profile_id, feature_id)
+);
+
+create index if not exists idx_profile_feature_permissions_profile
+  on public.profile_feature_permissions(profile_id);
 
 create table if not exists public.visitas_familiar (
   id              uuid primary key default gen_random_uuid(),
@@ -518,6 +564,64 @@ as $$
   select rol from public.profiles where id = (select auth.uid());
 $$;
 
+create or replace function public.can_access_feature(p_feature_id text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_eleam_id uuid;
+  v_rol text;
+  v_eleam_enabled boolean;
+  v_profile_enabled boolean;
+begin
+  if v_uid is null then
+    return false;
+  end if;
+
+  select eleam_id, rol
+  into v_eleam_id, v_rol
+  from public.profiles
+  where id = v_uid;
+
+  if v_rol = 'superadmin' then
+    return true;
+  end if;
+
+  if v_eleam_id is null then
+    return false;
+  end if;
+
+  select enabled
+  into v_eleam_enabled
+  from public.eleam_feature_permissions
+  where eleam_id = v_eleam_id
+    and rol = v_rol
+    and feature_id = p_feature_id
+  limit 1;
+
+  if coalesce(v_eleam_enabled, true) = false then
+    return false;
+  end if;
+
+  if v_rol in ('funcionario','familiar') then
+    select enabled
+    into v_profile_enabled
+    from public.profile_feature_permissions
+    where profile_id = v_uid
+      and feature_id = p_feature_id
+    limit 1;
+
+    return coalesce(v_profile_enabled, true);
+  end if;
+
+  return true;
+end;
+$$;
+
 create or replace function public.eleam_has_access(p_eleam_id uuid)
 returns boolean
 language sql
@@ -720,6 +824,9 @@ $$;
 
 revoke all on function public.funcionario_can(text) from public;
 grant execute on function public.funcionario_can(text) to authenticated;
+
+revoke all on function public.can_access_feature(text) from public;
+grant execute on function public.can_access_feature(text) to authenticated;
 
 create or replace function public.seed_funcionario_permisos()
 returns trigger
@@ -1387,6 +1494,16 @@ from public.profiles
 where rol = 'funcionario'
 on conflict (profile_id) do nothing;
 
+drop trigger if exists trg_eleam_feature_permissions_updated_at on public.eleam_feature_permissions;
+create trigger trg_eleam_feature_permissions_updated_at
+  before update on public.eleam_feature_permissions
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_profile_feature_permissions_updated_at on public.profile_feature_permissions;
+create trigger trg_profile_feature_permissions_updated_at
+  before update on public.profile_feature_permissions
+  for each row execute function public.set_updated_at();
+
 drop trigger if exists trg_residentes_updated_at on public.residentes;
 create trigger trg_residentes_updated_at
   before update on public.residentes
@@ -1395,6 +1512,11 @@ create trigger trg_residentes_updated_at
 drop trigger if exists trg_observaciones_updated_at on public.observaciones_diarias;
 create trigger trg_observaciones_updated_at
   before update on public.observaciones_diarias
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_turno_entregas_updated_at on public.turno_entregas;
+create trigger trg_turno_entregas_updated_at
+  before update on public.turno_entregas
   for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_acred_re_updated_at on public.acred_requisitos_eleam;
@@ -1451,9 +1573,12 @@ alter table public.eleams enable row level security;
 alter table public.residentes enable row level security;
 alter table public.signos_vitales enable row level security;
 alter table public.observaciones_diarias enable row level security;
+alter table public.turno_entregas enable row level security;
 alter table public.funcionario_invitaciones enable row level security;
 alter table public.familiar_residentes enable row level security;
 alter table public.visitas_familiar enable row level security;
+alter table public.eleam_feature_permissions enable row level security;
+alter table public.profile_feature_permissions enable row level security;
 alter table public.pagos enable row level security;
 alter table public.mp_webhook_events enable row level security;
 alter table public.acred_ambitos enable row level security;
@@ -1681,6 +1806,70 @@ create policy "obs_delete" on public.observaciones_diarias
     )
   );
 
+-- Entrega de turno
+drop policy if exists "te_select" on public.turno_entregas;
+drop policy if exists "te_insert" on public.turno_entregas;
+drop policy if exists "te_update" on public.turno_entregas;
+drop policy if exists "te_delete" on public.turno_entregas;
+
+create policy "te_select" on public.turno_entregas
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "te_insert" on public.turno_entregas
+  for insert with check (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and creado_por = (select auth.uid())
+  );
+
+create policy "te_update" on public.turno_entregas
+  for update using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+    or (
+      public.my_rol() = 'funcionario'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and creado_por = (select auth.uid())
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+    or (
+      public.my_rol() = 'funcionario'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and creado_por = (select auth.uid())
+    )
+  );
+
+create policy "te_delete" on public.turno_entregas
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
 -- Invitaciones y familiares
 drop policy if exists "inv_admin_select" on public.funcionario_invitaciones;
 drop policy if exists "inv_admin_insert" on public.funcionario_invitaciones;
@@ -1781,6 +1970,81 @@ create policy "fp_admin_all" on public.funcionario_permisos
 
 create policy "fp_self_select" on public.funcionario_permisos
   for select using (profile_id = (select auth.uid()));
+
+-- Permisos por feature (sidebar/rutas)
+drop policy if exists "efp_select" on public.eleam_feature_permissions;
+drop policy if exists "efp_superadmin_all" on public.eleam_feature_permissions;
+drop policy if exists "pfp_select" on public.profile_feature_permissions;
+drop policy if exists "pfp_admin_all" on public.profile_feature_permissions;
+
+create policy "efp_select" on public.eleam_feature_permissions
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+    or (
+      eleam_id = public.my_eleam_id()
+      and rol = public.my_rol()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "efp_superadmin_all" on public.eleam_feature_permissions
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+create policy "pfp_select" on public.profile_feature_permissions
+  for select using (
+    public.is_superadmin()
+    or profile_id = (select auth.uid())
+    or (
+      public.my_rol() = 'admin_eleam'
+      and profile_id in (
+        select id from public.profiles
+        where eleam_id = public.my_eleam_id()
+          and rol in ('funcionario','familiar')
+      )
+    )
+  );
+
+create policy "pfp_admin_all" on public.profile_feature_permissions
+  for all using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and profile_id in (
+        select id from public.profiles
+        where eleam_id = public.my_eleam_id()
+          and rol in ('funcionario','familiar')
+      )
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and profile_id in (
+        select id from public.profiles
+        where eleam_id = public.my_eleam_id()
+          and rol in ('funcionario','familiar')
+      )
+      and (
+        enabled = false
+        or not exists (
+          select 1
+          from public.eleam_feature_permissions efp
+          join public.profiles p on p.id = profile_feature_permissions.profile_id
+          where efp.eleam_id = p.eleam_id
+            and efp.rol = p.rol
+            and efp.feature_id = profile_feature_permissions.feature_id
+            and efp.enabled = false
+        )
+      )
+    )
+  );
 
 drop policy if exists "vf_select" on public.visitas_familiar;
 drop policy if exists "vf_insert" on public.visitas_familiar;

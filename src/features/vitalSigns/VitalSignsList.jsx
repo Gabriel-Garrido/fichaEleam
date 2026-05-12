@@ -6,8 +6,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
-import HelpTooltip from "../../components/HelpTooltip";
 import VitalCard from "./VitalCard";
+import PageLayout from "../../layout/PageLayout";
 import {
   VITAL_DEFS,
   STATUS,
@@ -105,21 +105,12 @@ export default function VitalSignsList() {
   if (loading) return <Loading message="Cargando registros..." />;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--color-primary)] inline-flex items-center gap-2">
-            Signos Vitales
-            <HelpTooltip label="Ayuda sobre signos vitales">
-              Los colores se calculan con rangos clínicos. Filtra por Crítico o Atención para priorizar residentes que necesitan revisión.
-            </HelpTooltip>
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {stats.total} registro{stats.total !== 1 ? "s" : ""} en el período seleccionado
-          </p>
-        </div>
-        {canCreate && (
+    <PageLayout
+      title="Signos vitales"
+      eyebrow="Cuidado diario"
+      description={`${stats.total} registro${stats.total !== 1 ? "s" : ""} en el período seleccionado. Prioriza críticos y residentes en atención.`}
+      actions={
+        canCreate ? (
           <Button
             onClick={() =>
               navigate(
@@ -132,8 +123,9 @@ export default function VitalSignsList() {
           >
             + Nuevo Registro
           </Button>
-        )}
-      </div>
+        ) : null
+      }
+    >
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex justify-between items-center">
@@ -280,7 +272,7 @@ export default function VitalSignsList() {
       ) : (
         <VitalRecordsTable records={filtered} onDelete={canDelete ? handleDelete : null} />
       )}
-    </div>
+    </PageLayout>
   );
 }
 

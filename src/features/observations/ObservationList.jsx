@@ -6,7 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
-import HelpTooltip from "../../components/HelpTooltip";
+import PageLayout from "../../layout/PageLayout";
 
 const TIPO_BADGE = {
   caida:                      "bg-red-100 text-red-700",
@@ -111,21 +111,12 @@ function ObservationList() {
   if (loading) return <Loading message="Cargando observaciones..." />;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--color-primary)] inline-flex items-center gap-2">
-            Observaciones Diarias
-            <HelpTooltip label="Ayuda sobre observaciones">
-              Registra cambios del turno, incidentes, curaciones y acciones tomadas. Marca seguimiento cuando otra persona debe revisar el caso después.
-            </HelpTooltip>
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {records.length} registro{records.length === 1 ? "" : "s"} en el período seleccionado
-            {soloSeguimiento ? " · solo seguimientos" : ""}
-          </p>
-        </div>
-        {canCreate && (
+    <PageLayout
+      title="Observaciones"
+      eyebrow="Cuidado diario"
+      description={`${records.length} registro${records.length === 1 ? "" : "s"} en el período seleccionado${soloSeguimiento ? " · solo seguimientos" : ""}. Usa seguimiento para dejar pendientes claros al próximo turno.`}
+      actions={
+        canCreate ? (
           <Button
             onClick={() =>
               navigate(
@@ -138,8 +129,9 @@ function ObservationList() {
           >
             + Nueva Observación
           </Button>
-        )}
-      </div>
+        ) : null
+      }
+    >
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex justify-between items-center">
@@ -290,7 +282,7 @@ function ObservationList() {
           ))}
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }
 

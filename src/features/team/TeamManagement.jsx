@@ -6,7 +6,14 @@ import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
 import Loading from "../../components/Loading";
-import HelpTooltip from "../../components/HelpTooltip";
+import PageLayout from "../../layout/PageLayout";
+import FeaturePermissionMatrix from "../permissions/FeaturePermissionMatrix";
+import { featureDefaultMap } from "../permissions/featureCatalog";
+import {
+  getEleamFeaturePermissions,
+  getProfileFeaturePermissions,
+  saveProfileFeaturePermissions,
+} from "../permissions/featurePermissionsService";
 import {
   getTeamMembers,
   getPendingInvitations,
@@ -191,12 +198,16 @@ export default function TeamManagement() {
 
   // Permisos (modal edición existente)
   const [editedPerms, setEditedPerms] = useState({});
+  const [editedFeaturePerms, setEditedFeaturePerms] = useState({});
+  const [roleFeatureLimits, setRoleFeatureLimits] = useState({});
+  const [permRole, setPermRole] = useState("funcionario");
   const [loadingPerms, setLoadingPerms] = useState(false);
   const [savingPerms,  setSavingPerms]  = useState(false);
 
   // Permisos en modal de creación
   const [selectedCargo,   setSelectedCargo]   = useState(null);
   const [createPerms,     setCreatePerms]     = useState({ ...DEFAULT_PERMS });
+  const [createFeaturePerms, setCreateFeaturePerms] = useState(featureDefaultMap("funcionario"));
   const [showPermSection, setShowPermSection] = useState(false);
 
   // Eliminación
@@ -214,6 +225,14 @@ export default function TeamManagement() {
         getEleamResidentes(eleam.id),
         getEleamFamiliares(eleam.id),
       ]);
+      try {
+        setRoleFeatureLimits(await getEleamFeaturePermissions(eleam.id));
+      } catch {
+        setRoleFeatureLimits({
+          funcionario: featureDefaultMap("funcionario"),
+          familiar: featureDefaultMap("familiar"),
+        });
+      }
       setMembers(m);
       setInvites(inv);
       setResidentes(res);
@@ -279,6 +298,10 @@ export default function TeamManagement() {
         try { await updateFuncionarioPermisos(result.profile_id, createPerms); }
         catch { /* no bloquear: los permisos se pueden editar después */ }
       }
+      if ((createForm.rol === "funcionario" || createForm.rol === "familiar") && result.profile_id) {
+        try { await saveProfileFeaturePermissions(result.profile_id, createForm.rol, createFeaturePerms); }
+        catch { /* no bloquear: se puede editar después */ }
+      }
       setCreatedUser(result);
       toast("Usuario creado correctamente", "success");
       await refresh();
@@ -295,6 +318,7 @@ export default function TeamManagement() {
     setCreateForm({ nombre: "", email: "", rol: "funcionario", residenteId: "" });
     setSelectedCargo(null);
     setCreatePerms({ ...DEFAULT_PERMS });
+    setCreateFeaturePerms(featureDefaultMap("funcionario", roleFeatureLimits.funcionario));
     setShowPermSection(false);
   };
 
@@ -306,14 +330,22 @@ export default function TeamManagement() {
 
   // ─── Handlers: permisos ──────────────────────────────────────────────────
 
-  const openPermModal = async (profileId) => {
+  const openPermModal = async (profileId, role = "funcionario") => {
     setLoadingPerms(true);
     setPermModal(profileId);
+    setPermRole(role);
     try {
-      const perms = await getFuncionarioPermisos(profileId);
-      setEditedPerms(perms ? { ...DEFAULT_PERMS, ...perms } : { ...DEFAULT_PERMS });
+      if (role === "funcionario") {
+        const perms = await getFuncionarioPermisos(profileId);
+        setEditedPerms(perms ? { ...DEFAULT_PERMS, ...perms } : { ...DEFAULT_PERMS });
+      } else {
+        setEditedPerms({});
+      }
+      const roleDefaults = roleFeatureLimits[role] ?? featureDefaultMap(role);
+      setEditedFeaturePerms(await getProfileFeaturePermissions(profileId, role, roleDefaults));
     } catch {
       setEditedPerms({ ...DEFAULT_PERMS });
+      setEditedFeaturePerms(featureDefaultMap(role, roleFeatureLimits[role]));
     } finally {
       setLoadingPerms(false);
     }
@@ -323,7 +355,10 @@ export default function TeamManagement() {
     if (!permModal) return;
     setSavingPerms(true);
     try {
-      await updateFuncionarioPermisos(permModal, editedPerms);
+      if (permRole === "funcionario") {
+        await updateFuncionarioPermisos(permModal, editedPerms);
+      }
+      await saveProfileFeaturePermissions(permModal, permRole, editedFeaturePerms);
       toast("Permisos actualizados", "success");
       setPermModal(null);
     } catch (err) {
@@ -369,28 +404,21 @@ export default function TeamManagement() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-
-      {/* Header */}
-      <header className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-black text-gray-800 inline-flex items-center gap-2">
-            Equipo del ELEAM
-            <HelpTooltip label="Ayuda sobre equipo">
-              El admin crea cuentas directas con contraseña temporal. Los funcionarios pueden registrar datos; los familiares solo ven su residente vinculado.
-            </HelpTooltip>
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Gestiona funcionarios, familiares y permisos sin salir del ELEAM.
-          </p>
-        </div>
+    <PageLayout
+      title="Equipo y permisos"
+      eyebrow="Gestión del ELEAM"
+      description="Crea usuarios, vincula familiares y define qué módulos verá cada persona."
+      size="lg"
+      actions={
         <div className="text-sm text-gray-600 bg-white border rounded-xl px-4 py-2 shrink-0">
           Funcionarios: <span className="font-bold">{funcionarios.length}</span>
           {maxFunc !== null && <span className="text-gray-400"> / {maxFunc}</span>}
           {" · "}
           Familiares: <span className="font-bold">{familiares.length}</span>
         </div>
-      </header>
+      }
+      className="space-y-6"
+    >
 
       <TeamFlowHint
         residentesActivos={residentesActivos}
@@ -427,7 +455,11 @@ export default function TeamManagement() {
               <h2 className="font-bold text-gray-800">Equipo del ELEAM</h2>
               <Button
                 disabled={limiteAlcanzado}
-                onClick={() => { setCreateForm(f => ({ ...f, rol: "funcionario" })); setCreateModal(true); }}
+                onClick={() => {
+                  setCreateForm(f => ({ ...f, rol: "funcionario" }));
+                  setCreateFeaturePerms(featureDefaultMap("funcionario", roleFeatureLimits.funcionario));
+                  setCreateModal(true);
+                }}
                 className="w-full sm:w-auto bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
               >
                 + Nuevo funcionario
@@ -468,7 +500,7 @@ export default function TeamManagement() {
                     {m.rol === "funcionario" && (
                       <div className="flex gap-3 items-center shrink-0">
                         <button
-                          onClick={() => openPermModal(m.id)}
+                          onClick={() => openPermModal(m.id, "funcionario")}
                           className="text-sm text-[var(--color-primary)] hover:underline font-medium"
                         >
                           Permisos
@@ -516,7 +548,11 @@ export default function TeamManagement() {
               <h2 className="font-bold text-gray-800">Familiares vinculados</h2>
               <Button
                 disabled={residentesActivos === 0}
-                onClick={() => { setCreateForm(f => ({ ...f, rol: "familiar" })); setCreateModal(true); }}
+                onClick={() => {
+                  setCreateForm(f => ({ ...f, rol: "familiar" }));
+                  setCreateFeaturePerms(featureDefaultMap("familiar", roleFeatureLimits.familiar));
+                  setCreateModal(true);
+                }}
                 className="w-full sm:w-auto bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
               >
                 + Nuevo familiar
@@ -556,6 +592,12 @@ export default function TeamManagement() {
                       </p>
                     </div>
                     <div className="flex gap-3 items-center shrink-0">
+                      <button
+                        onClick={() => openPermModal(row.profile_id, "familiar")}
+                        className="text-sm text-[var(--color-primary)] hover:underline font-medium"
+                      >
+                        Permisos
+                      </button>
                       <button
                         onClick={() => setDeleteConfirm({ id: row.profile_id, nombre: row.profiles?.nombre || row.profiles?.email || "este familiar" })}
                         className="text-rose-600 text-sm hover:underline"
@@ -695,6 +737,7 @@ export default function TeamManagement() {
                       setCreateForm(f => ({ ...f, rol: e.target.value, residenteId: "" }));
                       setSelectedCargo(null);
                       setCreatePerms({ ...DEFAULT_PERMS });
+                      setCreateFeaturePerms(featureDefaultMap(e.target.value, roleFeatureLimits[e.target.value]));
                       setShowPermSection(false);
                     }}
                     className="w-full rounded-lg border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
@@ -729,6 +772,18 @@ export default function TeamManagement() {
                     disabled={creating}
                   />
                 </div>
+
+                {/* Cargo y permisos (solo funcionario) */}
+                {(createForm.rol === "funcionario" || createForm.rol === "familiar") && (
+                  <FeaturePermissionMatrix
+                    role={createForm.rol}
+                    value={createFeaturePerms}
+                    onChange={setCreateFeaturePerms}
+                    lockedByRole={roleFeatureLimits[createForm.rol] ?? featureDefaultMap(createForm.rol)}
+                    title="Features visibles al iniciar"
+                    description="Solo aparecen features permitidas por superadmin para este ELEAM."
+                  />
+                )}
 
                 {/* Cargo y permisos (solo funcionario) */}
                 {createForm.rol === "funcionario" && (
@@ -854,9 +909,11 @@ export default function TeamManagement() {
       <Modal isOpen={!!permModal} onClose={() => setPermModal(null)}>
         <div className="space-y-5">
             <div>
-              <h2 className="text-xl font-bold text-gray-800">Permisos del funcionario</h2>
+              <h2 className="text-xl font-bold text-gray-800">
+                Permisos del {permRole === "familiar" ? "familiar" : "funcionario"}
+              </h2>
               <p className="text-sm text-gray-500 mt-1">
-                Define qué acciones puede realizar este funcionario. Los cambios se aplican en la próxima sesión del usuario.
+                Define qué módulos verá en el sidebar. Los cambios se aplican en la próxima sesión del usuario.
               </p>
             </div>
 
@@ -864,29 +921,47 @@ export default function TeamManagement() {
               <Loading message="Cargando permisos..." />
             ) : (
               <div className="space-y-4">
-                {PERM_GROUPS.map((group) => (
-                  <div key={group.label} className="bg-gray-50 rounded-xl p-4">
-                    <p className="text-xs uppercase font-bold text-gray-500 mb-3">{group.label}</p>
-                    <div className="space-y-2">
-                      {group.perms.map(({ key, label }) => (
-                        <label key={key} className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editedPerms[key] ?? DEFAULT_PERMS[key]}
-                            onChange={(e) => setEditedPerms(p => ({ ...p, [key]: e.target.checked }))}
-                            className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-200"
-                          />
-                          <span className="text-sm text-gray-700">{label}</span>
-                          {(key.startsWith("eliminar_") || key === "archivar_acreditacion") && (
-                            <span className="text-xs text-rose-500 bg-rose-50 border border-rose-200 rounded px-1.5">
-                              acción destructiva
-                            </span>
-                          )}
-                        </label>
+                <FeaturePermissionMatrix
+                  role={permRole}
+                  value={editedFeaturePerms}
+                  onChange={setEditedFeaturePerms}
+                  lockedByRole={roleFeatureLimits[permRole] ?? featureDefaultMap(permRole)}
+                  title="Features del sidebar"
+                  description="Si una feature está bloqueada por superadmin, no puede habilitarse desde el ELEAM."
+                />
+
+                {permRole === "funcionario" && (
+                  <details className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                    <summary className="cursor-pointer text-sm font-semibold text-gray-700">
+                      Permisos avanzados de acciones
+                    </summary>
+                    <div className="mt-4 space-y-4">
+                      {PERM_GROUPS.map((group) => (
+                        <div key={group.label} className="bg-white rounded-xl p-4">
+                          <p className="text-xs uppercase font-bold text-gray-500 mb-3">{group.label}</p>
+                          <div className="space-y-2">
+                            {group.perms.map(({ key, label }) => (
+                              <label key={key} className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editedPerms[key] ?? DEFAULT_PERMS[key]}
+                                  onChange={(e) => setEditedPerms(p => ({ ...p, [key]: e.target.checked }))}
+                                  className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-200"
+                                />
+                                <span className="text-sm text-gray-700">{label}</span>
+                                {(key.startsWith("eliminar_") || key === "archivar_acreditacion") && (
+                                  <span className="text-xs text-rose-500 bg-rose-50 border border-rose-200 rounded px-1.5">
+                                    acción destructiva
+                                  </span>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                ))}
+                  </details>
+                )}
               </div>
             )}
 
@@ -940,6 +1015,6 @@ export default function TeamManagement() {
           </div>
         )}
       </Modal>
-    </div>
+    </PageLayout>
   );
 }

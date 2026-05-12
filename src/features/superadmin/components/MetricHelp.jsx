@@ -1,5 +1,6 @@
 import React from "react";
 
+// Tooltip de ayuda para métricas. Acepta texto libre con \n para saltos de línea.
 export default function MetricHelp({ title, description, source, action }) {
   return (
     <span className="relative inline-flex group">
@@ -12,21 +13,21 @@ export default function MetricHelp({ title, description, source, action }) {
       </button>
       <span
         role="tooltip"
-        className="pointer-events-none absolute right-0 top-7 z-30 w-64 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 sm:w-72"
+        className="pointer-events-none absolute right-0 top-7 z-30 w-72 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
       >
         <span className="block text-xs font-semibold text-slate-800">{title}</span>
         {description && (
-          <span className="mt-1 block text-xs leading-relaxed text-slate-600">
+          <span className="mt-1 block text-xs leading-relaxed text-slate-600 whitespace-pre-line">
             {description}
           </span>
         )}
         {source && (
-          <span className="mt-2 block text-[11px] leading-relaxed text-slate-500">
+          <span className="mt-2 block text-[11px] leading-relaxed text-slate-500 whitespace-pre-line">
             <span className="font-semibold text-slate-600">Fuente:</span> {source}
           </span>
         )}
         {action && (
-          <span className="mt-1 block text-[11px] leading-relaxed text-slate-500">
+          <span className="mt-1 block text-[11px] leading-relaxed text-slate-500 whitespace-pre-line">
             <span className="font-semibold text-slate-600">Uso:</span> {action}
           </span>
         )}

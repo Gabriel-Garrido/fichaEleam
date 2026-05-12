@@ -118,7 +118,7 @@ npx supabase login
 npx supabase link --project-ref <TU_PROJECT_REF>
 ```
 
-El schema es idempotente: puede re-ejecutarse. Incluye tablas base, RLS, triggers, seeds, permisos de funcionarios, leads de landing y analytics.
+El schema es idempotente: puede re-ejecutarse. Incluye tablas base, RLS, triggers, seeds, permisos de funcionarios, permisos por feature, leads de landing y analytics.
 
 Cuando cambie el flujo de autenticación, re-ejecuta el schema antes de desplegar las Edge Functions. `handle_new_user` depende de `app_metadata` server-side y rechazará registros/OAuth sin invitación válida.
 
@@ -199,8 +199,9 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 
 ### Superadmin
 
-- Ruta: `/superadmin`.
-- Gestiona ELEAMs, pagos, CRM, leads, analytics de landing y blog.
+- Ruta base: `/superadmin`.
+- Secciones: resumen, clientes, leads, pagos, tareas, permisos por feature y blog.
+- Gestiona ELEAMs, pagos, CRM, leads, analytics de landing, habilitación de módulos y blog.
 - Puede aprobar leads desde `LeadsPanel`.
 
 ### Demo Guiado
@@ -225,10 +226,13 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 - Administra residentes, signos vitales, observaciones, acreditación y equipo.
 - Paga la suscripción del ELEAM.
 - Crea funcionarios/familiares desde `/equipo`.
+- Ajusta features visibles para funcionarios y familiares solo dentro de lo habilitado por superadmin.
+- Usa un `AppShell` operacional: sidebar desktop abierto por defecto, colapsable a icon rail con preview por hover/focus en 0,3 segundos, y bottom nav en mobile.
+- Las pantallas admin deben usar `PageLayout`/`PageHeader`, una acción primaria visible, filtros compactos y detalles secundarios en `details`, drawers o secciones avanzadas.
 
 ### Funcionario
 
-- Acceso operativo a `/dashboard`, residentes, signos, observaciones y acreditación según `funcionario_permisos`.
+- Acceso operativo a `/dashboard`, turnos, residentes, signos, observaciones y acreditación según permisos por feature y `funcionario_permisos`.
 - No paga ni gestiona equipo.
 - Puede crear cuentas familiares vinculadas a residentes activos desde flujos operativos autorizados.
 - Si el ELEAM pierde acceso vigente, queda bloqueado y debe contactar al admin ELEAM.
@@ -238,6 +242,7 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 - Accede a `/familiar` y `/familiar/visitas`.
 - Solo ve residentes vinculados por `familiar_residentes`.
 - Requiere que el ELEAM tenga demo o suscripción vigente.
+- Sus features visibles también pueden restringirse por superadmin/admin ELEAM.
 
 ---
 
@@ -253,24 +258,42 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 | `/demo/:token` | Demo guiado por token. |
 | `/pago`, `/pago/return` | Suscripción MercadoPago. |
 | `/dashboard` | Panel operativo staff. |
+| `/turnos*` | Entrega de turno. |
 | `/residents*` | Residentes. |
 | `/vital-signs*` | Signos vitales. |
 | `/observations*` | Observaciones diarias. |
 | `/accreditation*` | Carpeta SEREMI. |
 | `/equipo` | Gestión de funcionarios/familiares. |
 | `/familiar*` | Portal familiar. |
-| `/superadmin*` | CRM, leads, métricas y blog. |
+| `/superadmin` | Resumen ejecutivo plataforma. |
+| `/superadmin/clientes` | Cartera ELEAM y salud comercial. |
+| `/superadmin/leads` | Leads, demo guiado y métricas landing. |
+| `/superadmin/pagos` | Pagos y activaciones. |
+| `/superadmin/tareas` | Tareas CRM. |
+| `/superadmin/permisos` | Features por ELEAM y rol. |
+| `/superadmin/blog*` | Gestión de blog. |
 | `/blog*` | Blog público. |
+
+---
+
+## UX Autenticada
+
+- `AppShell` centraliza navegación autenticada para admin ELEAM, funcionario, familiar y superadmin.
+- `DesktopSidebar` inicia abierto en desktop para reducir fricción diaria; si se contrae, queda como icon rail y se abre temporalmente al posar el mouse o enfocar por teclado durante 0,3 segundos.
+- El botón del sidebar solo se muestra cuando el menú está abierto y sirve para contraerlo. No hay botón de expandir en el rail; la apertura temporal ocurre por hover/focus.
+- `MobileBottomNav` mantiene los accesos frecuentes y el menú "Más" agrupa módulos secundarios, cuenta y cierre de sesión.
+- Las vistas admin ELEAM priorizan foco operacional: siguiente acción, alertas, métricas mínimas y filtros compactos. La información secundaria debe quedar plegada o en secciones de apoyo para evitar sobrecarga.
+- `/pago` se renderiza como página pública cuando no hay sesión y como pantalla interna cuando el usuario está dentro del shell.
 
 ---
 
 ## Base de Datos
 
-`supabase_schema.sql` crea 23 tablas:
+`supabase_schema.sql` crea 26 tablas:
 
 - Multi-tenant: `profiles`, `eleams`, `planes`.
-- Clínica: `residentes`, `signos_vitales`, `observaciones_diarias`.
-- Equipo: `funcionario_invitaciones`, `funcionario_permisos`, `familiar_residentes`, `visitas_familiar`.
+- Clínica: `residentes`, `signos_vitales`, `observaciones_diarias`, `turno_entregas`.
+- Equipo: `funcionario_invitaciones`, `funcionario_permisos`, `eleam_feature_permissions`, `profile_feature_permissions`, `familiar_residentes`, `visitas_familiar`.
 - Pagos: `pagos`, `mp_webhook_events`.
 - Acreditación: `acred_ambitos`, `acred_requisitos`, `acred_requisitos_eleam`, `acred_documentos`, `acred_observaciones`, `acred_audit`.
 - CRM/blog: `crm_tasks`, `crm_interactions`, `blog_posts`.
@@ -295,6 +318,20 @@ Permisos actuales:
 - `registrar_visitas`
 
 Los permisos se aplican en UI con `useAuth().can()` y en RLS con `public.funcionario_can()`.
+
+## Permisos por Feature
+
+Tablas:
+
+- `eleam_feature_permissions`: superadmin habilita o bloquea features por ELEAM + rol.
+- `profile_feature_permissions`: admin ELEAM ajusta features por usuario para funcionarios y familiares.
+
+Reglas:
+
+- Si no existe una fila, la feature queda habilitada por defecto para conservar compatibilidad.
+- Si superadmin bloquea una feature para un rol del ELEAM, el admin ELEAM no puede habilitarla en usuarios.
+- La navegación usa `useAuth().canFeature(featureId)` y las rutas usan `ProtectedRoute requiredFeature`.
+- La función SQL `public.can_access_feature(feature_id)` queda disponible para políticas RLS específicas cuando una feature requiera validación server-side adicional.
 
 ---
 

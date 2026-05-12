@@ -2,9 +2,8 @@ import { supabase } from "../../services/supabaseConfig";
 import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
 
 // Patrón:
-//  • Toda la I/O contra Supabase pasa por aquí; los componentes se
-//    comunican vía useSuperAdminData o llamando funciones de este
-//    archivo directamente.
+//  • Toda la I/O contra Supabase pasa por aquí; las páginas superadmin
+//    cargan solo los datos de su sección.
 //  • Las RLS validan que solo superadmin pueda leer/escribir CRM.
 //  • registerPayment usa la RPC transaccional registrar_pago_y_activar_eleam
 //    para garantizar consistencia (pago + activación + interacción).

@@ -4,16 +4,53 @@ import {
   formatDate, daysUntil,
 } from "../utils/superadminFormatters";
 import CustomerHealthBadge from "./CustomerHealthBadge";
+import HelpTooltip from "../../../components/HelpTooltip";
+
+// Tooltips de columna: solo en campos que no son auto-evidentes.
+// Cada texto especifica la columna exacta en BD y cómo interpretarla.
+const COL_TIPS = {
+  crmEstado:
+    "eleams.crm_estado — Etapa del ciclo comercial, editable desde 'Editar ELEAM'.\nPipeline: Lead → Contactado → Demo agendada → Demo realizada → En prueba → Pago pendiente → Cliente activo → En riesgo → Perdido.",
+  plan:
+    "eleams.plan — Plan contratado: demo | mensual | anual. Se actualiza al registrar un pago manual o vía MercadoPago.",
+  pago:
+    "eleams.pago_activo — Calculado automáticamente por el trigger sync_pago_activo. Activo cuando subscription_status es 'activo' o 'en_gracia' y la fecha de vencimiento no ha pasado.",
+  riesgo:
+    "eleams.riesgo_churn — Evaluación manual: bajo | medio | alto | desconocido. Se edita en 'Editar ELEAM'. Alto = requiere atención inmediata para retener.",
+  salud:
+    "Indicador calculado en el cliente combinando:\n• eleams.pago_activo y subscription_status\n• Días hasta eleams.fecha_vencimiento_suscripcion (≤14d = alerta)\n• Días desde eleams.ultimo_contacto (>60d sin contacto = alerta)\n• eleams.riesgo_churn\n• Tareas CRM vencidas (crm_tasks con fecha_vencimiento pasada)\nPasa el cursor sobre el badge para ver los motivos detallados.",
+  vencimiento:
+    "eleams.fecha_vencimiento_suscripcion — Fecha límite del acceso.\n🟢 Verde: vigente · 🟡 Ámbar: vence en ≤14 días · 🔴 Rojo: ya venció.",
+  ultimoContacto:
+    "eleams.ultimo_contacto — Se actualiza automáticamente al crear una interacción CRM. Sin contacto en más de 60 días hace que 'Salud' baje a 'Atención'. 'Sin contacto' en rojo = nunca hubo interacción registrada.",
+  proxAccion:
+    "eleams.proxima_accion_fecha — Fecha programada para el próximo seguimiento comercial. Se define manualmente en 'Editar ELEAM'.",
+};
+
+function ThTip({ children, tip, center, className = "" }) {
+  return (
+    <th className={`px-3 py-2.5 text-left ${center ? "text-center" : ""} ${className}`}>
+      <span className={`inline-flex items-center gap-1 ${center ? "justify-center" : ""}`}>
+        {children}
+        {tip && <HelpTooltip label={String(children)}>{tip}</HelpTooltip>}
+      </span>
+    </th>
+  );
+}
 
 function VencimientoCell({ fecha, pagoActivo }) {
   const d = daysUntil(fecha);
-  if (!fecha) return <span className="text-xs text-gray-400">—</span>;
+  if (!fecha) return <span className="text-xs text-slate-400">—</span>;
   let cls = "bg-emerald-50 text-emerald-700";
-  if (d != null && d < 0)       cls = "bg-rose-100 text-rose-700";
+  if (d != null && d < 0)        cls = "bg-rose-100 text-rose-700";
   else if (d != null && d <= 14) cls = "bg-amber-100 text-amber-800";
-  if (!pagoActivo) cls = "bg-slate-100 text-slate-500";
+  if (!pagoActivo)               cls = "bg-slate-100 text-slate-500";
+  const title = d == null ? "" : d < 0
+    ? `Venció hace ${Math.abs(d)} días`
+    : d === 0 ? "Vence hoy"
+    : `Vence en ${d} días`;
   return (
-    <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${cls}`}>
+    <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${cls}`} title={title}>
       {formatDate(fecha)}
     </span>
   );
@@ -21,90 +58,103 @@ function VencimientoCell({ fecha, pagoActivo }) {
 
 export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = {} }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 uppercase text-[10px]">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden w-full">
+      <div className="overflow-x-auto w-full">
+        <table className="w-full min-w-[900px] text-sm">
+          <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-100">
             <tr>
-              <th className="px-3 py-2 text-left">ELEAM</th>
-              <th className="px-3 py-2 text-left">Email admin</th>
-              <th className="px-3 py-2 text-center">Estado CRM</th>
-              <th className="px-3 py-2 text-center">Plan</th>
-              <th className="px-3 py-2 text-center">Pago</th>
-              <th className="px-3 py-2 text-center">Riesgo</th>
-              <th className="px-3 py-2 text-center">Salud</th>
-              <th className="px-3 py-2 text-center">Vencimiento</th>
-              <th className="px-3 py-2 text-center">Último contacto</th>
-              <th className="px-3 py-2 text-center">Próx. acción</th>
-              <th className="px-3 py-2"></th>
+              <ThTip className="font-bold w-40">ELEAM</ThTip>
+              <ThTip className="font-bold">Email admin</ThTip>
+              <ThTip tip={COL_TIPS.crmEstado} center className="font-bold">Estado CRM</ThTip>
+              <ThTip tip={COL_TIPS.plan} center className="font-bold">Plan</ThTip>
+              <ThTip tip={COL_TIPS.pago} center className="font-bold">Pago</ThTip>
+              <ThTip tip={COL_TIPS.riesgo} center className="font-bold">Riesgo</ThTip>
+              <ThTip tip={COL_TIPS.salud} center className="font-bold">Salud</ThTip>
+              <ThTip tip={COL_TIPS.vencimiento} center className="font-bold">Vencimiento</ThTip>
+              <ThTip tip={COL_TIPS.ultimoContacto} center className="font-bold whitespace-nowrap">Último contacto</ThTip>
+              <ThTip tip={COL_TIPS.proxAccion} center className="font-bold whitespace-nowrap">Próx. acción</ThTip>
+              <th className="px-3 py-2.5" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-slate-50">
             {eleams.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-gray-400">
+                <td colSpan={11} className="px-4 py-10 text-center text-slate-400 text-sm">
                   No hay ELEAMs que coincidan con el filtro.
                 </td>
               </tr>
             ) : eleams.map((e) => {
-              const crm = CRM_STATE_MAP[e.crm_estado] ?? CRM_STATE_MAP.lead;
+              const crm    = CRM_STATE_MAP[e.crm_estado] ?? CRM_STATE_MAP.lead;
               const riesgo = RIESGO_MAP[e.riesgo_churn] ?? RIESGO_MAP.desconocido;
               const overdue = taskCountByEleam[e.id] ?? 0;
               return (
-                <tr key={e.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-gray-800">
-                    <button onClick={() => onOpen(e)} className="hover:underline text-left">
+                <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-3 py-2.5 font-semibold text-slate-800 w-40">
+                    <button
+                      onClick={() => onOpen(e)}
+                      className="hover:underline text-left hover:text-teal-700 transition-colors leading-tight"
+                    >
                       {e.nombre}
                     </button>
+                    {overdue > 0 && (
+                      <span
+                        className="ml-1.5 text-[10px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded-full font-bold"
+                        title={`${overdue} tarea(s) CRM vencida(s)`}
+                      >
+                        {overdue}⚠
+                      </span>
+                    )}
                   </td>
-                  <td className="px-3 py-2 text-gray-500 text-xs truncate max-w-[180px]">
+                  <td className="px-3 py-2.5 text-slate-500 text-xs truncate max-w-[180px]">
                     {e.email_admin ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-3 py-2.5 text-center">
                     <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${crm.color}`}>
                       <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle ${crm.dot}`} />
                       {crm.label}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full ${PLAN_BADGE[e.plan] ?? "bg-gray-100 text-gray-600"}`}>
+                  <td className="px-3 py-2.5 text-center">
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full ${PLAN_BADGE[e.plan] ?? "bg-slate-100 text-slate-600"}`}>
                       {PLAN_LABEL[e.plan] ?? e.plan ?? "—"}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-3 py-2.5 text-center">
                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
                       e.pago_activo ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"
                     }`}>
                       {e.pago_activo ? "Activo" : "Inactivo"}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-3 py-2.5 text-center">
                     <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border ${riesgo.color}`}>
                       {riesgo.label}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-3 py-2.5 text-center">
                     <CustomerHealthBadge eleam={e} tasksOverdue={overdue} />
                   </td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-3 py-2.5 text-center">
                     <VencimientoCell fecha={e.fecha_vencimiento_suscripcion} pagoActivo={e.pago_activo} />
                   </td>
-                  <td className="px-3 py-2 text-center text-gray-500 text-xs">
-                    {e.ultimo_contacto ? formatDate(e.ultimo_contacto) : <span className="text-rose-500">Sin contacto</span>}
+                  <td className="px-3 py-2.5 text-center text-xs whitespace-nowrap">
+                    {e.ultimo_contacto
+                      ? <span className="text-slate-500">{formatDate(e.ultimo_contacto)}</span>
+                      : <span className="text-rose-500 font-medium">Sin contacto</span>}
                   </td>
-                  <td className="px-3 py-2 text-center text-gray-500 text-xs">
+                  <td className="px-3 py-2.5 text-center text-slate-500 text-xs whitespace-nowrap">
                     {e.proxima_accion_fecha ? formatDate(e.proxima_accion_fecha) : "—"}
                   </td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     <button
                       onClick={() => onOpen(e)}
-                      className="text-slate-700 hover:underline text-xs mr-3"
+                      className="text-teal-700 hover:underline text-xs mr-3 font-medium"
                     >
                       Ficha
                     </button>
                     <button
                       onClick={() => onEdit(e)}
-                      className="text-slate-600 hover:underline text-xs"
+                      className="text-slate-500 hover:underline text-xs"
                     >
                       Editar
                     </button>

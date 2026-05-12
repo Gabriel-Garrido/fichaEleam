@@ -28,6 +28,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile]         = useState(null);
   const [eleam, setEleam]             = useState(null);
   const [permisos, setPermisos]       = useState(null);
+  const [featurePermissions, setFeaturePermissions] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [supabaseError, setSupabaseError]   = useState(false);
@@ -102,6 +103,7 @@ export function AuthProvider({ children }) {
         setProfile(null);
         setEleam(null);
         setPermisos(null);
+        setFeaturePermissions(null);
         await supabase.auth.signOut();
         return;
       }
@@ -135,6 +137,41 @@ export function AuthProvider({ children }) {
         setPermisos(perms ?? null);
       } else {
         setPermisos(null);
+      }
+
+      // Permisos por feature: controlan sidebar y acceso directo a rutas.
+      // Fallan abierto para no bloquear usuarios antes de ejecutar la migración.
+      try {
+        if (data.eleam_id && data.rol !== "superadmin") {
+          const profileFeatureQuery = data.rol === "funcionario" || data.rol === "familiar"
+            ? supabase
+                .from("profile_feature_permissions")
+                .select("feature_id, enabled")
+                .eq("profile_id", data.id)
+            : Promise.resolve({ data: [], error: null });
+
+          const [eleamFeatures, profileFeatures] = await Promise.all([
+            supabase
+              .from("eleam_feature_permissions")
+              .select("feature_id, enabled")
+              .eq("eleam_id", data.eleam_id)
+              .eq("rol", data.rol),
+            profileFeatureQuery,
+          ]);
+
+          if (eleamFeatures.error) throw eleamFeatures.error;
+          if (profileFeatures.error) throw profileFeatures.error;
+
+          const featureMap = {};
+          for (const row of eleamFeatures.data ?? []) featureMap[row.feature_id] = row.enabled !== false;
+          for (const row of profileFeatures.data ?? []) featureMap[row.feature_id] = row.enabled !== false;
+          setFeaturePermissions(featureMap);
+        } else {
+          setFeaturePermissions({});
+        }
+      } catch (featureError) {
+        console.warn("No se pudieron cargar permisos por feature:", featureError);
+        setFeaturePermissions({});
       }
     } catch (error) {
       console.warn("No se pudo cargar el perfil:", error);
@@ -171,6 +208,7 @@ export function AuthProvider({ children }) {
           setProfile(null);
           setEleam(null);
           setPermisos(null);
+          setFeaturePermissions(null);
           setAuthNotice(takeStoredAuthNotice());
         }
       }
@@ -223,6 +261,13 @@ export function AuthProvider({ children }) {
     return permisos[perm] === true;
   }, [isSuperadmin, isAdminEleam, isFuncionario, permisos]);
 
+  const canFeature = useCallback((featureId) => {
+    if (!featureId) return true;
+    if (isSuperadmin) return true;
+    if (!featurePermissions) return true;
+    return featurePermissions[featureId] !== false;
+  }, [featurePermissions, isSuperadmin]);
+
   const refetchProfile = useCallback(() => {
     if (!user) return Promise.resolve(null);
     return fetchProfileAndEleam(user);
@@ -256,7 +301,9 @@ export function AuthProvider({ children }) {
     isStaff,
     homePath,
     permisos,
+    featurePermissions,
     can,
+    canFeature,
     mustResetPassword,
     profileLoading,
     authLoading,
