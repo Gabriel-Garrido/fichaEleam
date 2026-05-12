@@ -549,31 +549,41 @@ function ManagementBrief({ loading, score, scoreTone, stale, followUps, expiring
     : score >= 55
       ? "Revisar"
       : "Prioritario";
-  const turnoStatusDetail = `${score}/100 según controles pendientes, seguimientos abiertos y documentos urgentes.`;
+  const turnoStatusDetail = score >= 80
+    ? "Sin bloqueos urgentes"
+    : score >= 55
+      ? "Hay pendientes por cerrar"
+      : "Resolver alertas primero";
+  const turnoHealthHelp = "Mide qué tan despejado está el turno. Parte en 100% y baja si hay residentes sin control de signos hoy, signos fuera de rango, seguimientos abiertos o documentos SEREMI urgentes. Sirve para priorizar el trabajo, no reemplaza una evaluación clínica.";
+  const nextActionHelp = "Se calcula con la alerta más accionable del momento: controles pendientes, seguimientos abiertos o documentos próximos a vencer.";
+  const activityHelp = "Cuenta signos vitales y observaciones registrados durante el turno actual. Ayuda a confirmar si el equipo está dejando trazabilidad del trabajo.";
   const nextAction = stale.length
     ? { label: "Tomar controles pendientes", hint: `${stale.length} residente${stale.length === 1 ? "" : "s"} sin control hoy`, path: "/vital-signs/new", tone: "rose" }
     : followUps.length
       ? { label: "Cerrar seguimientos", hint: `${followUps.length} observaci${followUps.length === 1 ? "ón" : "ones"} por revisar`, path: "/observations", tone: "amber" }
       : expiring7
         ? { label: "Renovar documentos", hint: `${expiring7} vencen en 7 días o menos`, path: "/accreditation", tone: "amber" }
-        : { label: "Revisar panel clínico", hint: "Turno sin bloqueos urgentes", path: "/vital-signs", tone: "emerald" };
+        : { label: "Mantener seguimiento", hint: "Sin bloqueos urgentes; revisa el panel clínico si necesitas detalle", path: "/vital-signs", tone: "emerald" };
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-      <button
-        type="button"
-        onClick={() => navigate(nextAction.path)}
-        className="lg:col-span-2 text-left bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all"
-      >
+      <div className="lg:col-span-2 bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Prioridad del turno</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Siguiente acción</p>
+              <HelpTooltip label="Ayuda: siguiente acción">{nextActionHelp}</HelpTooltip>
+            </div>
             <h2 className="text-lg font-bold text-gray-900 mt-1">{nextAction.label}</h2>
             <p className="text-sm text-gray-500 mt-1">{nextAction.hint}</p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${nextAction.tone === "rose" ? "bg-rose-100 text-rose-700" : nextAction.tone === "amber" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>
+          <button
+            type="button"
+            onClick={() => navigate(nextAction.path)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 ${nextAction.tone === "rose" ? "bg-rose-100 text-rose-700 focus:ring-rose-200" : nextAction.tone === "amber" ? "bg-amber-100 text-amber-800 focus:ring-amber-200" : "bg-emerald-100 text-emerald-700 focus:ring-emerald-200"}`}
+          >
             Abrir
-          </span>
+          </button>
         </div>
         {stale.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -587,38 +597,67 @@ function ManagementBrief({ loading, score, scoreTone, stale, followUps, expiring
             ))}
           </div>
         )}
-      </button>
+      </div>
 
       <BriefMetric
-        label="Estado del turno"
-        value={turnoStatus}
+        label="Salud del turno"
+        value={`${score}%`}
+        status={turnoStatus}
         sub={turnoStatusDetail}
         tone={scoreTone}
+        help={turnoHealthHelp}
       />
       <BriefMetric
-        label="Actividad turno actual"
+        label="Registros del turno"
         value={currentActivity.signos + currentActivity.observaciones}
         sub={`${currentActivity.signos} signos · ${currentActivity.observaciones} observaciones`}
         tone={(currentActivity.signos + currentActivity.observaciones) > 0 ? "primary" : "gray"}
+        help={activityHelp}
       />
     </section>
   );
 }
 
-function BriefMetric({ label, value, sub, tone }) {
+function BriefMetric({ label, value, status, sub, tone, help }) {
   const toneClass = {
-    primary: "text-[var(--color-primary)] bg-teal-50",
-    emerald: "text-emerald-700 bg-emerald-50",
-    amber: "text-amber-800 bg-amber-50",
-    rose: "text-rose-700 bg-rose-50",
-    gray: "text-gray-600 bg-gray-50",
-  }[tone] ?? "text-gray-700 bg-gray-50";
+    primary: {
+      value: "text-[var(--color-primary)] bg-teal-50",
+      status: "bg-teal-50 text-teal-700 border-teal-100",
+    },
+    emerald: {
+      value: "text-emerald-700 bg-emerald-50",
+      status: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    },
+    amber: {
+      value: "text-amber-800 bg-amber-50",
+      status: "bg-amber-50 text-amber-800 border-amber-100",
+    },
+    rose: {
+      value: "text-rose-700 bg-rose-50",
+      status: "bg-rose-50 text-rose-700 border-rose-100",
+    },
+    gray: {
+      value: "text-gray-600 bg-gray-50",
+      status: "bg-gray-50 text-gray-600 border-gray-100",
+    },
+  }[tone] ?? {
+    value: "text-gray-700 bg-gray-50",
+    status: "bg-gray-50 text-gray-600 border-gray-100",
+  };
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-      <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">{label}</p>
-      <div className={`inline-flex mt-2 rounded-xl px-3 py-1 text-3xl font-bold tabular-nums ${toneClass}`}>
+      <div className="flex items-center gap-1.5">
+        <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">{label}</p>
+        {help && <HelpTooltip label={`Ayuda: ${label}`}>{help}</HelpTooltip>}
+      </div>
+      <div className={`inline-flex mt-2 rounded-xl px-3 py-1 text-3xl font-bold tabular-nums ${toneClass.value}`}>
         {value}
       </div>
+      {status && (
+        <span className={`ml-2 inline-flex align-middle rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClass.status}`}>
+          {status}
+        </span>
+      )}
       <p className="text-xs text-gray-500 mt-2">{sub}</p>
     </div>
   );
