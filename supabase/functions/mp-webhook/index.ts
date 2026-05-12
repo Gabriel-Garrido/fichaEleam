@@ -71,14 +71,19 @@ Deno.serve(async (req) => {
     (typeof body?.type === "string" ? (body.type as string) : "") ??
     "";
 
-  // 1. Verificar firma. Si falta MP_WEBHOOK_SECRET o falla → 401.
+  // 1. Verificar firma antes de tocar la BD. Si falta MP_WEBHOOK_SECRET → 401.
   const sig = await verifyWebhookSignature({
     signature: xSignature,
     requestId: xRequestId,
     dataId,
   });
 
-  // 2. Audit log idempotente
+  if (!sig.ok) {
+    console.warn("mp-webhook signature invalid", sig.reason);
+    return jsonOk({ error: "invalid-signature", reason: sig.reason }, 401);
+  }
+
+  // 2. Audit log idempotente (solo para peticiones con firma válida)
   const sb = adminClient();
   const eventInsert = await sb
     .from("mp_webhook_events")
@@ -88,7 +93,7 @@ Deno.serve(async (req) => {
       data_id: dataId,
       action: typeof body?.action === "string" ? body.action : null,
       payload: body,
-      signature_ok: sig.ok,
+      signature_ok: true,
     })
     .select("id")
     .maybeSingle();
@@ -96,11 +101,6 @@ Deno.serve(async (req) => {
   // Si el insert duplicó por unique(mp_request_id) significa retry → ya procesado.
   if (eventInsert.error && /duplicate|unique/i.test(eventInsert.error.message)) {
     return jsonOk({ ok: true, deduped: true });
-  }
-
-  if (!sig.ok) {
-    console.warn("mp-webhook signature invalid", sig.reason);
-    return jsonOk({ error: "invalid-signature", reason: sig.reason }, 401);
   }
 
   // Si no hay data.id útil, simplemente acusamos recibo.

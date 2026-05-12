@@ -61,9 +61,12 @@ function calcAge(fechaNacimiento) {
 
 function daysSince(date) {
   if (!date) return null;
-  const d = new Date(date);
-  if (isNaN(d)) return null;
-  return Math.floor((Date.now() - d.getTime()) / 86400000);
+  // Parse "YYYY-MM-DD" as local midnight to avoid off-by-one for UTC-negative timezones.
+  const [y, m, d] = String(date).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const local = new Date(y, m - 1, d);
+  if (isNaN(local)) return null;
+  return Math.floor((Date.now() - local.getTime()) / 86400000);
 }
 
 function ResidentDetails() {
@@ -320,7 +323,7 @@ function InfoTab({ resident }) {
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <InfoRow
                 label="Fecha de egreso"
-                value={new Date(resident.fecha_egreso).toLocaleDateString("es-CL")}
+                value={new Date(resident.fecha_egreso + "T12:00:00").toLocaleDateString("es-CL")}
               />
               <InfoRow label="Motivo de egreso" value={resident.motivo_egreso} />
             </dl>
