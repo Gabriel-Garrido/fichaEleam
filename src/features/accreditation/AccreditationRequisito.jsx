@@ -776,7 +776,7 @@ export default function AccreditationRequisito() {
                   onView={handleViewDoc}
                   onArchive={handleArchive}
                   isAdmin={can("archivar_acreditacion")}
-                  isVigente
+                  isVigente={d.vigente}
                 />
               ))}
             </div>

@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Loading from "./Loading";
 import SupabaseError from "./SupabaseError";
@@ -90,11 +90,11 @@ export default ProtectedRoute;
 
 function NavigateButton({ to }) {
   return (
-    <a
-      href={to || "/"}
+    <Link
+      to={to || "/"}
       className="mt-6 inline-flex rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
     >
       Volver
-    </a>
+    </Link>
   );
 }

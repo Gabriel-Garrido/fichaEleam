@@ -140,6 +140,8 @@ export async function getRequisitosEleam() {
 
 // Para una sola requisito_eleam (con todo su detalle).
 export async function getRequisitoEleam(reId) {
+  // Fetch eleamId to scope the query explicitly — defense-in-depth alongside RLS.
+  const { eleamId } = await getMyContext();
   const { data, error } = await supabase
     .from("acred_requisitos_eleam")
     .select(`
@@ -155,6 +157,7 @@ export async function getRequisitoEleam(reId) {
       responsable:profiles!acred_requisitos_eleam_responsable_id_fkey(id, nombre, email, rol)
     `)
     .eq("id", reId)
+    .eq("eleam_id", eleamId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -236,10 +239,12 @@ export async function asignarResponsable(reId, profileId) {
 // ─────────────────────────────────────────────────────────────
 
 export async function getDocumentos(reId, { incluirHistoria = false } = {}) {
+  const { eleamId } = await getMyContext();
   let q = supabase
     .from("acred_documentos")
     .select("id, version, vigente, storage_path, archivo_nombre, archivo_tipo, archivo_tamanio, fecha_emision, fecha_vencimiento, notas, reemplazado_por_id, reemplazado_en, creado_en, subido_por:profiles!acred_documentos_subido_por_fkey(id, nombre, email)")
     .eq("requisito_eleam_id", reId)
+    .eq("eleam_id", eleamId)
     .order("version", { ascending: false });
   if (!incluirHistoria) q = q.eq("vigente", true);
   const { data, error } = await q;
@@ -364,6 +369,7 @@ export async function archiveDocumento(docId) {
 // ─────────────────────────────────────────────────────────────
 
 export async function getObservaciones({ requisitoEleamId = null, soloAbiertas = false } = {}) {
+  const { eleamId } = await getMyContext();
   let q = supabase
     .from("acred_observaciones")
     .select(`
@@ -376,6 +382,7 @@ export async function getObservaciones({ requisitoEleamId = null, soloAbiertas =
         requisito:acred_requisitos(codigo, nombre, ambito:acred_ambitos(codigo, nombre))
       )
     `)
+    .eq("eleam_id", eleamId)
     .order("creado_en", { ascending: false });
   if (requisitoEleamId) q = q.eq("requisito_eleam_id", requisitoEleamId);
   if (soloAbiertas) q = q.in("estado", ["abierta", "en_proceso"]);
@@ -475,9 +482,11 @@ export async function cerrarObservacion(id, nota) {
 // ─────────────────────────────────────────────────────────────
 
 export async function getAuditTrail({ entidad = null, entidadId = null, limit = 50 } = {}) {
+  const { eleamId } = await getMyContext();
   let q = supabase
     .from("acred_audit")
     .select("id, entidad, entidad_id, accion, detalle, realizado_en, realizado_por:profiles!acred_audit_realizado_por_fkey(id, nombre, email)")
+    .eq("eleam_id", eleamId)
     .order("realizado_en", { ascending: false })
     .limit(limit);
   if (entidad) q = q.eq("entidad", entidad);

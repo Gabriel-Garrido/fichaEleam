@@ -11,8 +11,10 @@ export const getObservations = async (
     .limit(limit);
 
   if (residenteId)    query = query.eq("residente_id", residenteId);
-  if (desde)          query = query.gte("fecha_hora", desde + "T00:00:00");
-  if (hasta)          query = query.lte("fecha_hora", hasta + "T23:59:59");
+  // Convert local date boundaries to UTC ISO strings so timestamptz comparisons
+  // respect the browser's timezone (e.g. UTC-3 Chile).
+  if (desde)          query = query.gte("fecha_hora", new Date(desde + "T00:00:00").toISOString());
+  if (hasta)          query = query.lte("fecha_hora", new Date(hasta + "T23:59:59").toISOString());
   if (tipo)           query = query.eq("tipo", tipo);
   if (soloSeguimiento) query = query.eq("requiere_seguimiento", true);
 

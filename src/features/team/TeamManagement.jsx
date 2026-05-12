@@ -294,16 +294,21 @@ export default function TeamManagement() {
         residenteId: createForm.rol === "familiar" ? createForm.residenteId || null : null,
       });
       // Aplicar permisos personalizados si es funcionario
+      const permWarnings = [];
       if (createForm.rol === "funcionario" && result.profile_id) {
         try { await updateFuncionarioPermisos(result.profile_id, createPerms); }
-        catch { /* no bloquear: los permisos se pueden editar después */ }
+        catch { permWarnings.push("permisos de módulo"); }
       }
       if ((createForm.rol === "funcionario" || createForm.rol === "familiar") && result.profile_id) {
         try { await saveProfileFeaturePermissions(result.profile_id, createForm.rol, createFeaturePerms); }
-        catch { /* no bloquear: se puede editar después */ }
+        catch { permWarnings.push("permisos de funcionalidad"); }
       }
       setCreatedUser(result);
-      toast("Usuario creado correctamente", "success");
+      if (permWarnings.length > 0) {
+        toast(`Usuario creado. Algunos ${permWarnings.join(" y ")} no se aplicaron; puedes editarlos desde el panel de permisos.`, "warning");
+      } else {
+        toast("Usuario creado correctamente", "success");
+      }
       await refresh();
     } catch (err) {
       toast(err.message || "No se pudo crear el usuario", "error");

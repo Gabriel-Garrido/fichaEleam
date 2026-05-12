@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useCallback } from "react";
+import React, { createContext, useState, useEffect, useContext, useCallback, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../services/supabaseConfig";
 import Loading from "../components/Loading";
 
@@ -286,7 +286,9 @@ export function AuthProvider({ children }) {
     else                         homePath = "/pago?sinAcceso=1";
   }
 
-  const value = {
+  // Memoize the context value to prevent all consumers from re-rendering on
+  // every AuthProvider render that doesn't change auth state.
+  const value = useMemo(() => ({
     user,
     profile,
     eleam,
@@ -310,7 +312,13 @@ export function AuthProvider({ children }) {
     authNotice,
     supabaseError: supabaseError || !isSupabaseConfigured,
     refetchProfile,
-  };
+  }), [ // eslint-disable-line react-hooks/exhaustive-deps
+    user, profile, eleam, plan, subscriptionStatus, pagoActivo, rol,
+    isAdminEleam, isFuncionario, isFamiliar, isSuperadmin, isStaff,
+    homePath, permisos, featurePermissions, can, canFeature,
+    mustResetPassword, profileLoading, authLoading, authNotice,
+    supabaseError, refetchProfile,
+  ]);
 
   if (authLoading) return <Loading message="Verificando autenticación..." />;
 
