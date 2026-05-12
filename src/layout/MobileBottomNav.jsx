@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import MobileMoreDrawer from "./MobileMoreDrawer";
+import NavIcon from "../components/NavIcon";
 
 function isActive(path, pathname) {
   if (!path) return false;
@@ -42,8 +43,8 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
                   onClick={() => go(item.path)}
                   className="rounded-2xl border border-slate-200 p-3 text-left hover:bg-slate-50"
                 >
-                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-teal-50 text-base font-semibold text-teal-800">
-                    {item.icon}
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-teal-50 text-teal-800">
+                    <NavIcon id={item.icon} className="h-5 w-5" />
                   </span>
                   <span className="mt-2 block text-sm font-semibold text-slate-950">{item.label}</span>
                   <span className="mt-0.5 block text-xs leading-4 text-slate-500">{item.description}</span>
@@ -119,7 +120,7 @@ function NavButton({ item, active, onClick }) {
       <span className={`mx-auto mb-0.5 grid h-6 w-6 place-items-center rounded-lg ${
         active ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-slate-600"
       }`}>
-        {item.icon}
+        <NavIcon id={item.icon} className="h-3.5 w-3.5" />
       </span>
       <span className="block truncate">{item.label}</span>
     </button>

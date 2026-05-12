@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { ROLE_LABELS } from "../navigation/navigationConfig";
+import NavIcon from "../components/NavIcon";
 
 function active(path, pathname) {
   if (!path) return false;
@@ -63,8 +64,8 @@ export default function MobileMoreDrawer({
                   onClick={() => go(item.path)}
                   className="rounded-2xl border border-slate-200 p-3 text-left hover:bg-slate-50"
                 >
-                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-50 font-semibold text-teal-800">
-                    {item.icon}
+                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-50 text-teal-800">
+                    <NavIcon id={item.icon} className="h-4 w-4" />
                   </span>
                   <span className="mt-2 block text-sm font-semibold text-slate-950">{item.label}</span>
                   <span className="mt-0.5 block text-xs leading-4 text-slate-500">{item.description}</span>
@@ -95,8 +96,8 @@ export default function MobileMoreDrawer({
                       : "text-slate-700 hover:bg-slate-50"
                   }`}
                 >
-                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-white ring-1 ring-slate-200">
-                    {item.icon}
+                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-white ring-1 ring-slate-200 text-slate-600">
+                    <NavIcon id={item.icon} className="h-4 w-4" />
                   </span>
                   <span>
                     <span className="block">{item.label}</span>

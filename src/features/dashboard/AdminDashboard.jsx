@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import HelpTooltip from "../../components/HelpTooltip";
+import NavIcon from "../../components/NavIcon";
 import PageLayout from "../../layout/PageLayout";
 import { loadDashboard } from "./dashboardService";
 import {
@@ -81,7 +82,7 @@ function isSameDay(date) {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { profile, eleam } = useAuth();
+  const { profile, eleam, rol } = useAuth();
 
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -211,83 +212,106 @@ export default function AdminDashboard() {
         navigate={navigate}
       />
 
-      {/* Top KPIs */}
+      {/* Top KPIs — orden según rol */}
       {!errors.residentStats && (
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard
-            title="Residentes activos"
-            help="Residentes que hoy forman parte de la operación del ELEAM. Los egresados y fallecidos quedan en historial."
-            value={loading ? "…" : stats?.activos ?? 0}
-            sub={
-              stats
-                ? `${stats.hospitalizados} hospitalizados · ${stats.total} totales`
-                : "—"
-            }
-            icon="👴"
-            tone="primary"
-            onClick={() => navigate("/residents")}
-          />
-          <KpiCard
-            title="Estado clínico"
-            help="Cuenta residentes cuyo último control vital está fuera de rango. Entra aquí para priorizar controles."
-            value={loading ? "…" : (clinicalSummary.critical + clinicalSummary.warning) || 0}
-            sub={
-              loading
-                ? "—"
-                : clinicalSummary.critical > 0
-                  ? `${clinicalSummary.critical} crítico${clinicalSummary.critical === 1 ? "" : "s"} · ${clinicalSummary.warning} en atención`
-                  : clinicalSummary.warning > 0
-                    ? `${clinicalSummary.warning} requieren atención`
-                    : "Todos en rango normal"
-            }
-            icon="❤️"
-            tone={
-              clinicalSummary.critical > 0
-                ? "rose"
-                : clinicalSummary.warning > 0
-                  ? "amber"
-                  : "emerald"
-            }
-            onClick={() => navigate("/vital-signs")}
-          />
-          <KpiCard
-            title="Cobertura signos hoy"
-            help="Porcentaje de residentes activos con al menos un registro de signos vitales durante el día actual."
-            value={cobertura ? `${cobertura.pct}%` : "—"}
-            sub={
-              cobertura
-                ? `${cobertura.hoy} de ${cobertura.total} residentes`
-                : "Sin residentes activos"
-            }
-            icon="📈"
-            tone={
-              !cobertura
-                ? "gray"
-                : cobertura.pct >= 80
-                  ? "emerald"
-                  : cobertura.pct >= 40
-                    ? "amber"
-                    : "rose"
-            }
-            onClick={() => navigate("/vital-signs/new")}
-          />
-          <KpiCard
-            title="Cumplimiento SEREMI"
-            help="Avance de requisitos de acreditación marcados como cumple, sin contar los que no aplican."
-            value={loading ? "…" : `${acreditacion.porcentaje}%`}
-            sub={`${acreditacion.cumple} de ${acreditacion.total} requisitos al día${
-              acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""
-            }`}
-            icon="🏥"
-            tone={
-              acreditacion.porcentaje >= 80
-                ? "emerald"
-                : acreditacion.porcentaje >= 40
-                  ? "amber"
-                  : "rose"
-            }
-            onClick={() => navigate("/accreditation")}
-          />
+          {rol === "funcionario" ? (
+            <>
+              <KpiCard
+                title="Alertas críticas"
+                help="Residentes con signos vitales en rango crítico en su último control. Atender primero."
+                value={loading ? "…" : clinicalSummary.critical || 0}
+                sub={
+                  loading ? "—"
+                  : clinicalSummary.critical > 0
+                    ? `+ ${clinicalSummary.warning} en atención`
+                    : clinicalSummary.warning > 0
+                      ? `${clinicalSummary.warning} requieren atención`
+                      : "Todos en rango normal"
+                }
+                icon="vitals"
+                tone={clinicalSummary.critical > 0 ? "rose" : clinicalSummary.warning > 0 ? "amber" : "emerald"}
+                onClick={() => navigate("/vital-signs")}
+              />
+              <KpiCard
+                title="Sin control hoy"
+                help="Residentes activos sin ningún signo vital registrado durante el día de hoy."
+                value={loading ? "…" : management.stale.length}
+                sub={
+                  cobertura
+                    ? `${cobertura.hoy} de ${cobertura.total} con cobertura (${cobertura.pct}%)`
+                    : "Sin residentes activos"
+                }
+                icon="observations"
+                tone={management.stale.length > 0 ? "amber" : "emerald"}
+                onClick={() => navigate("/vital-signs/new")}
+              />
+              <KpiCard
+                title="Residentes activos"
+                help="Residentes que hoy forman parte de la operación del ELEAM."
+                value={loading ? "…" : stats?.activos ?? 0}
+                sub={stats ? `${stats.hospitalizados} hospitalizados · ${stats.total} totales` : "—"}
+                icon="residents"
+                tone="primary"
+                onClick={() => navigate("/residents")}
+              />
+              <KpiCard
+                title="Cumplimiento SEREMI"
+                help="Avance de requisitos de acreditación marcados como cumple."
+                value={loading ? "…" : `${acreditacion.porcentaje}%`}
+                sub={`${acreditacion.cumple} de ${acreditacion.total} requisitos${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
+                icon="accreditation"
+                tone={acreditacion.porcentaje >= 80 ? "emerald" : acreditacion.porcentaje >= 40 ? "amber" : "rose"}
+                onClick={() => navigate("/accreditation")}
+              />
+            </>
+          ) : (
+            <>
+              <KpiCard
+                title="Residentes activos"
+                help="Residentes que hoy forman parte de la operación del ELEAM. Los egresados y fallecidos quedan en historial."
+                value={loading ? "…" : stats?.activos ?? 0}
+                sub={stats ? `${stats.hospitalizados} hospitalizados · ${stats.total} totales` : "—"}
+                icon="residents"
+                tone="primary"
+                onClick={() => navigate("/residents")}
+              />
+              <KpiCard
+                title="Estado clínico"
+                help="Cuenta residentes cuyo último control vital está fuera de rango. Entra aquí para priorizar controles."
+                value={loading ? "…" : (clinicalSummary.critical + clinicalSummary.warning) || 0}
+                sub={
+                  loading ? "—"
+                  : clinicalSummary.critical > 0
+                    ? `${clinicalSummary.critical} crítico${clinicalSummary.critical === 1 ? "" : "s"} · ${clinicalSummary.warning} en atención`
+                    : clinicalSummary.warning > 0
+                      ? `${clinicalSummary.warning} requieren atención`
+                      : "Todos en rango normal"
+                }
+                icon="vitals"
+                tone={clinicalSummary.critical > 0 ? "rose" : clinicalSummary.warning > 0 ? "amber" : "emerald"}
+                onClick={() => navigate("/vital-signs")}
+              />
+              <KpiCard
+                title="Cobertura signos hoy"
+                help="Porcentaje de residentes activos con al menos un registro de signos vitales durante el día actual."
+                value={cobertura ? `${cobertura.pct}%` : "—"}
+                sub={cobertura ? `${cobertura.hoy} de ${cobertura.total} residentes` : "Sin residentes activos"}
+                icon="observations"
+                tone={!cobertura ? "gray" : cobertura.pct >= 80 ? "emerald" : cobertura.pct >= 40 ? "amber" : "rose"}
+                onClick={() => navigate("/vital-signs/new")}
+              />
+              <KpiCard
+                title="Cumplimiento SEREMI"
+                help="Avance de requisitos de acreditación marcados como cumple, sin contar los que no aplican."
+                value={loading ? "…" : `${acreditacion.porcentaje}%`}
+                sub={`${acreditacion.cumple} de ${acreditacion.total} requisitos al día${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
+                icon="accreditation"
+                tone={acreditacion.porcentaje >= 80 ? "emerald" : acreditacion.porcentaje >= 40 ? "amber" : "rose"}
+                onClick={() => navigate("/accreditation")}
+              />
+            </>
+          )}
         </section>
       )}
 
@@ -358,19 +382,24 @@ export default function AdminDashboard() {
         </div>
       </details>
 
-      {/* Quick actions */}
+      {/* Quick actions — rol-specific */}
       <section>
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
           Acciones principales
           <HelpTooltip className="ml-2" label="Ayuda sobre acciones rápidas">
-            Mantén visibles solo las tareas más repetidas del turno. Las consultas secundarias quedan agrupadas abajo.
+            Tareas más repetidas del turno. Las consultas secundarias quedan agrupadas abajo.
           </HelpTooltip>
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction icon="⇄" label="Entrega de turno"          onClick={() => navigate("/turnos/nueva")} />
-          <QuickAction icon="📊" label="Registrar signos vitales" onClick={() => navigate("/vital-signs/new")} />
-          <QuickAction icon="📋" label="Nueva observación"        onClick={() => navigate("/observations/new")} />
-          <QuickAction icon="📁" label="Carpeta SEREMI"           onClick={() => navigate("/accreditation/carpeta")} />
+          <QuickAction iconId="shift"        label="Entrega de turno"         onClick={() => navigate("/turnos/nueva")} />
+          <QuickAction iconId="vitals"       label="Registrar signos vitales" onClick={() => navigate("/vital-signs/new")} />
+          <QuickAction iconId="observations" label="Nueva observación"        onClick={() => navigate("/observations/new")} />
+          {rol !== "funcionario" && (
+            <QuickAction iconId="accreditation" label="Carpeta SEREMI" onClick={() => navigate("/accreditation/carpeta")} />
+          )}
+          {rol === "funcionario" && (
+            <QuickAction iconId="residents" label="Ver residentes" onClick={() => navigate("/residents")} />
+          )}
         </div>
         <details className="group mt-3 rounded-xl border border-gray-100 bg-white">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-gray-700">
@@ -379,11 +408,14 @@ export default function AdminDashboard() {
             <span className="hidden text-xs text-gray-400 group-open:inline">Ocultar</span>
           </summary>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-gray-100 p-3">
-            <QuickAction icon="👴" label="Agregar residente"        onClick={() => navigate("/residents/new")} />
-            <QuickAction icon="👥" label="Ver residentes"           onClick={() => navigate("/residents")} />
-            <QuickAction icon="💓" label="Historial signos"         onClick={() => navigate("/vital-signs")} />
-            <QuickAction icon="📝" label="Ver observaciones"        onClick={() => navigate("/observations")} />
-            <QuickAction icon="🏥" label="Panel acreditación"       onClick={() => navigate("/accreditation")} />
+            <QuickAction iconId="residents"    label="Agregar residente"  onClick={() => navigate("/residents/new")} />
+            <QuickAction iconId="residents"    label="Ver residentes"     onClick={() => navigate("/residents")} />
+            <QuickAction iconId="vitals"       label="Historial signos"   onClick={() => navigate("/vital-signs")} />
+            <QuickAction iconId="observations" label="Ver observaciones"  onClick={() => navigate("/observations")} />
+            <QuickAction iconId="accreditation" label="Panel acreditación" onClick={() => navigate("/accreditation")} />
+            {rol !== "funcionario" && (
+              <QuickAction iconId="team" label="Gestionar equipo" onClick={() => navigate("/equipo")} />
+            )}
           </div>
         </details>
       </section>
@@ -416,8 +448,8 @@ function KpiCard({ title, value, sub, icon, tone = "primary", onClick, help }) {
             </HelpTooltip>
           )}
         </span>
-        <span className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm ${t.chip}`}>
-          {icon}
+        <span className={`h-8 w-8 rounded-lg flex items-center justify-center ${t.chip}`}>
+          <NavIcon id={icon} className="h-4 w-4" />
         </span>
       </div>
       <button type="button" onClick={onClick} className="mt-2 block w-full text-left">
@@ -1308,13 +1340,15 @@ function Card({ title, subtitle, action, icon, tone = "default", children }) {
   );
 }
 
-function QuickAction({ icon, label, onClick }) {
+function QuickAction({ iconId, label, onClick }) {
   return (
     <button
       onClick={onClick}
       className="flex flex-col items-center gap-2 bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md hover:border-[var(--color-secondary)] hover:-translate-y-0.5 transition-all"
     >
-      <span className="text-2xl">{icon}</span>
+      <span className="grid h-9 w-9 place-items-center rounded-xl bg-teal-50 text-teal-700">
+        <NavIcon id={iconId} className="h-5 w-5" />
+      </span>
       <span className="text-xs text-gray-700 text-center leading-tight font-medium">
         {label}
       </span>

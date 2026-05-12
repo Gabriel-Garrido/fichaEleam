@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { ROLE_LABELS } from "../navigation/navigationConfig";
+import NavIcon from "../components/NavIcon";
 
 const HOVER_PREVIEW_DELAY_MS = 300;
 
@@ -121,7 +122,9 @@ export default function DesktopSidebar({
                   return (
                     <div key={item.id} className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800" title={item.description}>
                       <span className="inline-flex items-center gap-3">
-                        <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/70 font-semibold">{item.icon}</span>
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/70">
+                          <NavIcon id={item.icon} className="h-4 w-4" />
+                        </span>
                         {expanded && <span>{item.label}</span>}
                       </span>
                     </div>
@@ -136,17 +139,12 @@ export default function DesktopSidebar({
                     className={common}
                     title={expanded ? item.description : `${item.label}: ${item.description ?? ""}`}
                   >
-                    <span className={`grid h-7 w-7 place-items-center rounded-lg text-sm ${active ? "bg-white text-teal-800" : "bg-slate-100 text-slate-600"}`}>
-                      {item.icon}
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${active ? "bg-white text-teal-800" : "bg-slate-100 text-slate-600"}`}>
+                      <NavIcon id={item.icon} className="h-4 w-4" />
                     </span>
                     {expanded && (
                       <span className="min-w-0 text-left">
                         <span className="block truncate">{item.label}</span>
-                        {item.description && (
-                          <span className="block truncate text-xs font-normal text-slate-400">
-                            {item.description}
-                          </span>
-                        )}
                       </span>
                     )}
                   </button>

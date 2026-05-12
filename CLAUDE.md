@@ -36,6 +36,8 @@ src/
 │   ├── Button.jsx, Input.jsx   # Base UI consistente
 │   ├── Modal.jsx               # Accesible: Escape, backdrop, role=dialog
 │   ├── Toast.jsx, Loading.jsx  # Notificaciones y spinners
+│   ├── NavIcon.jsx             # Mapa de SVGs para nav (Heroicons outline). IDs usados en navigationConfig.js
+│   ├── HelpTooltip.jsx         # Tooltip de ayuda con ? botón
 │   ├── ErrorBoundary.jsx       # Stack trace solo en DEV
 │   └── SupabaseError.jsx       # Manejo de error de conexión
 ├── context/
@@ -44,7 +46,7 @@ src/
 │   ├── auth/                   # Login, Register, RecuperarAcceso, ResetPassword, authService
 │   ├── landing/                # LandingPage (CTA demo, sin auto-registro público)
 │   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService
-│   ├── dashboard/              # AdminDashboard + summaries clínicas
+│   ├── dashboard/              # AdminDashboard (rol-aware: admin_eleam muestra gestión, funcionario muestra clínica)
 │   ├── residents/              # CRUD residentes + detalles
 │   ├── vitalSigns/             # Formulario + lista + rangos clínicos
 │   ├── observations/           # 12 tipos de observaciones diarias
@@ -150,7 +152,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | `/blog` | PublicBlogList | — | Blog público |
 | `/blog/:slug` | PublicBlogPost | — | Post público |
 | `/cambiar-clave` | ChangePasswordPage | `requireActive=false` | Forzado si `mustResetPassword=true`; opción Google para Gmail |
-| `/dashboard` | AdminDashboard | `allowedRoles=[admin_eleam, funcionario]` | Índice operativo |
+| `/dashboard` | AdminDashboard | `allowedRoles=[admin_eleam, funcionario]` | Índice operativo. KPIs reordenados por rol: funcionario ve alertas clínicas primero, admin_eleam ve gestión |
 | `/residents`, `/residents/new`, `/residents/:id`, `/residents/:id/edit` | Resident* | STAFF | CRUD residentes |
 | `/vital-signs`, `/vital-signs/new` | VitalSigns* | STAFF | CRUD + rangos visuales |
 | `/observations`, `/observations/new` | Observation* | STAFF | 12 tipos de observaciones |
