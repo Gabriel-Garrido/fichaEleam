@@ -1,8 +1,9 @@
-export const ONBOARDING_STORAGE_PREFIX = 'fichaeleam_onboarding_v1_';
+export const ONBOARDING_STORAGE_PREFIX = 'fichaeleam_onboarding_v2_';
 
-// Step definitions and welcome content per role.
-// autoCompleteAfter (ms): how long the user must stay on a matching route
-// before the step is automatically marked done.
+// Each step may declare:
+//   requiredPermission  → result of can(perm) must be true  (funcionario only)
+//   requiredFeature     → result of canFeature(id) must be true
+// Steps without either field are always visible for the role.
 export const ROLE_CONFIG = {
   admin_eleam: {
     color: 'teal',
@@ -44,7 +45,7 @@ export const ROLE_CONFIG = {
         route: '/equipo',
         matchRoutes: ['/equipo'],
         autoCompleteAfter: 6000,
-        tip: 'Define permisos granulares por funcionario: qué puede ver y qué puede registrar.',
+        tip: 'Define permisos granulares por funcionario: qué puede ver y registrar.',
       },
       {
         id: 'ver_acreditacion',
@@ -63,11 +64,25 @@ export const ROLE_CONFIG = {
     color: 'rose',
     welcomeEmoji: '🩺',
     welcomeTagline: 'Tu espacio de trabajo clínico.',
-    welcomeBody: 'Registra signos vitales y observaciones desde cualquier dispositivo, en segundos.',
+    welcomeBody: 'Accede solo a los módulos que te asignó el administrador del establecimiento.',
+    // Highlights are also permission-gated so the modal reflects what this
+    // specific funcionario can actually do.
     welcomeHighlights: [
-      { icon: 'vitals', text: 'Signos vitales con validación en vivo' },
-      { icon: 'observations', text: '12 tipos de observaciones diarias' },
-      { icon: 'residents', text: 'Historial completo de cada residente' },
+      {
+        icon: 'vitals',
+        text: 'Signos vitales con validación en vivo',
+        requiredPermission: 'crear_signos_vitales',
+      },
+      {
+        icon: 'observations',
+        text: '12 tipos de observaciones diarias',
+        requiredPermission: 'crear_observaciones',
+      },
+      {
+        icon: 'accreditation',
+        text: 'Documentos de acreditación SEREMI',
+        requiredPermission: 'subir_acreditacion',
+      },
     ],
     welcomeCta: 'Empezar',
     steps: [
@@ -80,6 +95,7 @@ export const ROLE_CONFIG = {
         matchRoutes: ['/dashboard'],
         autoCompleteAfter: 6000,
         tip: 'Verás alertas clínicas activas y residentes que requieren atención hoy.',
+        // No requiredPermission — dashboard siempre disponible
       },
       {
         id: 'registrar_signo',
@@ -90,6 +106,7 @@ export const ROLE_CONFIG = {
         matchRoutes: ['/vital-signs'],
         autoCompleteAfter: 6000,
         tip: 'Si un valor está fuera del rango, la alerta aparece de inmediato.',
+        requiredPermission: 'crear_signos_vitales',
       },
       {
         id: 'escribir_observacion',
@@ -100,6 +117,18 @@ export const ROLE_CONFIG = {
         matchRoutes: ['/observations'],
         autoCompleteAfter: 6000,
         tip: 'Selecciona el tipo, escribe tu nota y queda registrada con timestamp y tu firma.',
+        requiredPermission: 'crear_observaciones',
+      },
+      {
+        id: 'subir_documento',
+        label: 'Sube un documento SEREMI',
+        description: 'Evidencias para la carpeta de acreditación.',
+        icon: 'accreditation',
+        route: '/accreditation',
+        matchRoutes: ['/accreditation'],
+        autoCompleteAfter: 8000,
+        tip: 'Sube PDF, imágenes o Word como evidencia de los requisitos SEREMI.',
+        requiredPermission: 'subir_acreditacion',
       },
     ],
   },
@@ -135,6 +164,7 @@ export const ROLE_CONFIG = {
         matchRoutes: ['/familiar/visitas'],
         autoCompleteAfter: 6000,
         tip: 'Registra duración, notas y queda en el historial del establecimiento.',
+        // Familiares always have this right — no per-profile permission gate needed
       },
     ],
   },
@@ -175,53 +205,45 @@ export const ROLE_CONFIG = {
   },
 };
 
-// Tailwind class sets per color token.
+// Tailwind class tokens per color — all classes are static so Tailwind includes them.
 export const COLOR_CLASSES = {
   teal: {
     bg: 'bg-teal-50',
-    bgMedium: 'bg-teal-100',
     bgStrong: 'bg-teal-600',
     text: 'text-teal-700',
     textStrong: 'text-teal-900',
     border: 'border-teal-200',
     btn: 'bg-teal-600 hover:bg-teal-700 focus:ring-teal-500',
-    ringColor: '#14b8a6',
     progressColor: '#0d9488',
     pill: 'bg-teal-600',
   },
   rose: {
     bg: 'bg-rose-50',
-    bgMedium: 'bg-rose-100',
     bgStrong: 'bg-rose-600',
     text: 'text-rose-700',
     textStrong: 'text-rose-900',
     border: 'border-rose-200',
     btn: 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-500',
-    ringColor: '#f43f5e',
     progressColor: '#e11d48',
     pill: 'bg-rose-600',
   },
   blue: {
     bg: 'bg-blue-50',
-    bgMedium: 'bg-blue-100',
     bgStrong: 'bg-blue-600',
     text: 'text-blue-700',
     textStrong: 'text-blue-900',
     border: 'border-blue-200',
     btn: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500',
-    ringColor: '#3b82f6',
     progressColor: '#2563eb',
     pill: 'bg-blue-600',
   },
   slate: {
     bg: 'bg-slate-100',
-    bgMedium: 'bg-slate-200',
     bgStrong: 'bg-slate-700',
     text: 'text-slate-700',
     textStrong: 'text-slate-900',
     border: 'border-slate-300',
     btn: 'bg-slate-700 hover:bg-slate-800 focus:ring-slate-500',
-    ringColor: '#64748b',
     progressColor: '#475569',
     pill: 'bg-slate-700',
   },
