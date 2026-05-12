@@ -12,11 +12,6 @@ function Icon({ d, className = "w-6 h-6" }) {
   );
 }
 
-const TRUST_STATS = [
-  { value: "+40",     label: "ELEAM en Chile" },
-  { value: "+800",    label: "residentes gestionados" },
-  { value: "30 días", label: "prueba gratuita" },
-];
 
 const PLAN_FEATURES = [
   "Carpeta SEREMI · 14 ámbitos DS 14/2017",
@@ -152,8 +147,8 @@ export default function LandingPage() {
               El software diseñado exclusivamente para ELEAM en Chile
             </span>
             <h1 className="text-4xl sm:text-5xl font-black leading-tight mb-6">
-              Digitaliza tu ELEAM y pasa la fiscalización{" "}
-              <span className="text-[var(--color-secondary)]">SEREMI sin estrés</span>
+              Digitaliza tu ELEAM y gestiona la documentación{" "}
+              <span className="text-[var(--color-secondary)]">SEREMI con orden</span>
             </h1>
             <p className="text-lg text-teal-100 mb-8 leading-relaxed">
               Carpeta DS 14/2017 completa, fichas clínicas digitales y gestión de equipo — todo en una plataforma pensada para Establecimientos de Larga Estadía.
@@ -179,13 +174,18 @@ export default function LandingPage() {
               Acceso personalizado · Sin compromiso · Respuesta en menos de 24 horas
             </p>
 
-            {/* Trust stats */}
-            <div className="mt-8 flex flex-wrap gap-6 justify-center lg:justify-start">
-              {TRUST_STATS.map(({ value, label }) => (
-                <div key={label} className="text-center lg:text-left">
-                  <div className="text-2xl font-black text-white">{value}</div>
-                  <div className="text-xs text-teal-200">{label}</div>
-                </div>
+            <div className="mt-8 flex flex-wrap gap-3 justify-center lg:justify-start">
+              {[
+                "Cumple DS 14/2017 · 14 ámbitos",
+                "Soporte en español",
+                "30 días de prueba gratuita",
+              ].map((t) => (
+                <span key={t} className="inline-flex items-center gap-1.5 text-sm text-teal-100/90">
+                  <svg className="w-4 h-4 text-emerald-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {t}
+                </span>
               ))}
             </div>
           </div>
@@ -252,7 +252,7 @@ export default function LandingPage() {
             </span>
             <p className="text-sm font-semibold text-amber-900">
               ¿Tienes una fiscalización SEREMI próxima?{" "}
-              <span className="font-normal text-amber-800">Podemos tener tu Carpeta lista en 24 horas.</span>
+              <span className="font-normal text-amber-800">Te ayudamos a organizar tu documentación con prioridad.</span>
             </p>
           </div>
           <button
@@ -465,7 +465,7 @@ export default function LandingPage() {
       <section className="py-24 px-4 bg-gradient-to-r from-[var(--color-primary)] to-teal-700 text-white text-center">
         <div className="max-w-2xl mx-auto">
           <h2 className="text-3xl sm:text-4xl font-black mb-4">
-            Tu próxima fiscalización puede ser tranquila.
+            Tu ELEAM, con la documentación siempre organizada.
           </h2>
           <p className="text-teal-100 mb-2 text-base">
             Acceso personalizado. Sin compromiso. Respuesta en menos de 24 horas.
@@ -583,9 +583,9 @@ function AppMockup() {
         <div className="bg-white/10 rounded-xl p-3">
           <p className="text-[10px] text-white/50 uppercase tracking-wide mb-2">Residentes · estado clínico</p>
           {[
-            { name: "María González", estado: "Normal", color: "bg-emerald-400" },
-            { name: "Jorge Fuentes",  estado: "Atención", color: "bg-amber-400" },
-            { name: "Carmen López",   estado: "Crítico",  color: "bg-rose-400" },
+            { name: "Residente A", estado: "Normal", color: "bg-emerald-400" },
+            { name: "Residente B", estado: "Atención", color: "bg-amber-400" },
+            { name: "Residente C", estado: "Crítico",  color: "bg-rose-400" },
           ].map(({ name, estado, color }) => (
             <div key={name} className="flex items-center justify-between py-1.5 border-b border-white/10 last:border-0">
               <span className="text-xs text-white/80">{name}</span>
