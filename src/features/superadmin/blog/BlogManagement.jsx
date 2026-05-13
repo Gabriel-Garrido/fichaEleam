@@ -75,7 +75,7 @@ export default function BlogManagement() {
         </div>
         <button type="button"
           onClick={() => navigate("/superadmin/blog/new")}
-          className="bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg hover:bg-slate-800 text-sm"
+          className="bg-slate-700 text-white font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 text-sm"
         >
           + Nuevo post
         </button>
@@ -87,7 +87,7 @@ export default function BlogManagement() {
           placeholder="Buscar por título, slug o keyword…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[220px] border border-slate-300 rounded-lg px-3 py-2 text-sm"
+          className="flex-1 min-w-[220px] border border-slate-300 rounded-xl px-3 py-2 text-sm"
         />
         <div className="flex gap-1">
           {["todos","publicado","borrador","archivado"].map((f) => (

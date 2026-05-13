@@ -97,8 +97,6 @@ export default function TurnosDashboard() {
             <div className="divide-y divide-slate-100">
               {items.map((item) => (
                 <button
-                  type="button"
-
                   key={item.id}
                   type="button"
                   onClick={() => navigate(`/turnos/${item.id}`)}

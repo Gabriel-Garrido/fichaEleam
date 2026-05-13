@@ -37,8 +37,6 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
             <div className="grid grid-cols-2 gap-2">
               {quickActions.map((item) => (
                 <button
-                  type="button"
-
                   key={item.id}
                   type="button"
                   onClick={() => go(item.path)}

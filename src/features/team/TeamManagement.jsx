@@ -709,8 +709,6 @@ export default function TeamManagement() {
                       <div className="flex flex-wrap gap-2">
                         {Object.keys(PLANTILLAS_CARGO).map((cargo) => (
                           <button
-                            type="button"
-
                             key={cargo}
                             type="button"
                             onClick={() => {

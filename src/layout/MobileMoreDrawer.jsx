@@ -58,8 +58,6 @@ export default function MobileMoreDrawer({
             <div className="grid grid-cols-2 gap-2">
               {quickActions.map((item) => (
                 <button
-                  type="button"
-
                   key={item.id}
                   type="button"
                   onClick={() => go(item.path)}
@@ -88,8 +86,6 @@ export default function MobileMoreDrawer({
                 </div>
               ) : (
                 <button
-                  type="button"
-
                   key={item.id}
                   type="button"
                   onClick={() => go(item.path)}

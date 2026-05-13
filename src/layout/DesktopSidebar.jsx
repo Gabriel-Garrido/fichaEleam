@@ -131,8 +131,6 @@ export default function DesktopSidebar({
 
                 return (
                   <button
-                    type="button"
-
                     key={item.id}
                     type="button"
                     onClick={() => navigate(item.path)}

@@ -129,21 +129,21 @@ export default function BlogEditor() {
         <div className="flex gap-2 flex-wrap">
           <button type="button"
             onClick={() => setPreview((s) => !s)}
-            className="border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm hover:bg-slate-50"
+            className="border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm hover:bg-slate-50"
           >
             {previewing ? "Editor" : "Vista previa"}
           </button>
           <button type="button"
             onClick={() => save(false)}
             disabled={saving}
-            className="bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+            className="bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 disabled:opacity-50"
           >
             {saving ? "Guardando…" : "Guardar borrador"}
           </button>
           <button type="button"
             onClick={() => save(true)}
             disabled={saving}
-            className="bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+            className="bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-emerald-700 disabled:opacity-50"
           >
             Publicar
           </button>
@@ -170,7 +170,7 @@ export default function BlogEditor() {
                 onChange={(e) => set({ titulo: e.target.value })}
                 onBlur={handleSlugFromTitle}
                 placeholder="Ej. DS 14/2017 explicado: qué exige la SEREMI..."
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-base"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-base"
                 maxLength={200}
               />
               <p className="text-[11px] text-slate-400 mt-1">{form.titulo.length}/200</p>
@@ -183,7 +183,7 @@ export default function BlogEditor() {
                   value={form.slug}
                   onChange={(e) => set({ slug: slugify(e.target.value) })}
                   placeholder="ds-14-2017-fiscalizacion-seremi"
-                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"
+                  className="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono"
                 />
               </div>
             </Section>
@@ -193,7 +193,7 @@ export default function BlogEditor() {
                 onChange={(e) => set({ resumen: e.target.value })}
                 rows={3}
                 maxLength={500}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
               />
               <p className="text-[11px] text-slate-400 mt-1">{form.resumen.length}/500</p>
             </Section>
@@ -203,7 +203,7 @@ export default function BlogEditor() {
                 onChange={(e) => set({ contenido_md: e.target.value })}
                 rows={20}
                 placeholder={"## Subtítulo\n\nPárrafo con **negritas** y [link](https://...).\n\n- Lista\n- Otro ítem\n\n```\ncódigo\n```"}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono"
               />
               <p className="text-[11px] text-slate-400 mt-1">
                 Soporta # H1, ## H2, ### H3, **bold**, *italic*, listas, [links](url),
@@ -217,7 +217,7 @@ export default function BlogEditor() {
               <select
                 value={form.estado}
                 onChange={(e) => set({ estado: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
               >
                 <option value="borrador">Borrador</option>
                 <option value="publicado">Publicado</option>
@@ -243,10 +243,10 @@ export default function BlogEditor() {
                 value={form.cover_url}
                 onChange={(e) => set({ cover_url: e.target.value })}
                 placeholder="https://…"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
               />
               {form.cover_url && (
-                <img src={form.cover_url} alt="" className="mt-2 rounded-lg max-h-32 border border-slate-100" />
+                <img src={form.cover_url} alt="" className="mt-2 rounded-xl max-h-32 border border-slate-100" />
               )}
             </Section>
             <Section label="Texto alt de la portada (accesibilidad)">
@@ -254,7 +254,7 @@ export default function BlogEditor() {
                 type="text"
                 value={form.cover_alt}
                 onChange={(e) => set({ cover_alt: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
               />
             </Section>
 
@@ -263,7 +263,7 @@ export default function BlogEditor() {
                 type="text"
                 value={form.autor_nombre}
                 onChange={(e) => set({ autor_nombre: e.target.value })}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
               />
             </Section>
 
@@ -278,7 +278,7 @@ export default function BlogEditor() {
                     value={form.meta_title}
                     onChange={(e) => set({ meta_title: e.target.value })}
                     maxLength={70}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
                     {(form.meta_title?.length ?? 0)}/70
@@ -290,7 +290,7 @@ export default function BlogEditor() {
                     onChange={(e) => set({ meta_description: e.target.value })}
                     rows={2}
                     maxLength={170}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
                     {(form.meta_description?.length ?? 0)}/170
@@ -302,7 +302,7 @@ export default function BlogEditor() {
                     value={form.keywords}
                     onChange={(e) => set({ keywords: e.target.value })}
                     placeholder="ELEAM, DS 14/2017, fiscalización SEREMI"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
                   />
                 </Section>
               </div>

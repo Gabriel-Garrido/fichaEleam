@@ -502,8 +502,6 @@ function ActivityModal({ modal, saving, onClose, onSubmit }) {
             <div className="flex flex-wrap gap-2">
               {WEEK_DAYS.map(([day, label]) => (
                 <button
-                  type="button"
-
                   key={day}
                   type="button"
                   onClick={() => toggleDay(day)}

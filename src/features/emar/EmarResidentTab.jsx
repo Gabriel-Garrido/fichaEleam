@@ -313,8 +313,6 @@ export default function EmarResidentTab({ resident }) {
               <div className="mt-3 space-y-2">
                 {pendingReconciliations.slice(0, 3).map((item) => (
                   <button
-                    type="button"
-
                     key={item.id}
                     type="button"
                     disabled={!canValidate}
@@ -581,8 +579,6 @@ function ScheduleFields({ schedule, setSchedule, saving }) {
           <div className="flex flex-wrap gap-2">
             {WEEK_DAYS.map(([day, label]) => (
               <button
-                type="button"
-
                 key={day}
                 type="button"
                 onClick={() => toggleDay(day)}
