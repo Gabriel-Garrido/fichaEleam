@@ -230,7 +230,7 @@ export default function OnboardingChecklist() {
             ) : null}
             <button
               onClick={dismiss}
-              className="w-full text-xs text-slate-400 hover:text-slate-600 text-center py-1.5 transition-colors rounded-lg hover:bg-slate-50"
+              className="w-full text-xs text-slate-400 hover:text-slate-600 text-center py-1.5 transition-colors rounded-xl hover:bg-slate-50"
             >
               {isComplete ? 'Cerrar guía' : 'Omitir guía de inicio'}
             </button>

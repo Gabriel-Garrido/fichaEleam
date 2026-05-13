@@ -53,21 +53,21 @@ function NewTaskForm({ defaultEleamId = null, eleams = [], onCreate, onCancel })
         placeholder="Título de la tarea *"
         value={form.titulo}
         onChange={(e) => setForm((p) => ({ ...p, titulo: e.target.value }))}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
       />
       <textarea
         rows={2}
         placeholder="Descripción (opcional)"
         value={form.descripcion}
         onChange={(e) => setForm((p) => ({ ...p, descripcion: e.target.value }))}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
       />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {!defaultEleamId && (
           <select
             value={form.eleam_id}
             onChange={(e) => setForm((p) => ({ ...p, eleam_id: e.target.value }))}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
           >
             <option value="">Sin ELEAM (tarea general)</option>
             {eleams.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
@@ -76,14 +76,14 @@ function NewTaskForm({ defaultEleamId = null, eleams = [], onCreate, onCancel })
         <select
           value={form.tipo}
           onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
         >
           {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
         <select
           value={form.prioridad}
           onChange={(e) => setForm((p) => ({ ...p, prioridad: e.target.value }))}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
         >
           {PRIORIDADES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
         </select>
@@ -91,17 +91,17 @@ function NewTaskForm({ defaultEleamId = null, eleams = [], onCreate, onCancel })
           type="date"
           value={form.fecha_vencimiento}
           onChange={(e) => setForm((p) => ({ ...p, fecha_vencimiento: e.target.value }))}
-          className={`border border-gray-300 rounded-lg px-3 py-2 text-sm ${defaultEleamId ? "" : "sm:col-span-3"}`}
+          className={`border border-slate-300 rounded-xl px-3 py-2 text-sm ${defaultEleamId ? "" : "sm:col-span-3"}`}
         />
       </div>
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="text-sm text-gray-500 hover:underline">
+        <button type="button" onClick={onCancel} className="text-sm text-slate-500 hover:underline">
           Cancelar
         </button>
         <button
           type="submit"
           disabled={busy}
-          className="bg-slate-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+          className="bg-slate-700 text-white text-sm px-4 py-2 rounded-xl hover:bg-slate-800 disabled:opacity-50"
         >
           {busy ? "Creando…" : "Crear tarea"}
         </button>
@@ -119,7 +119,7 @@ function TaskRow({ task, onComplete }) {
   return (
     <div className={`border rounded-xl p-3 flex items-start justify-between gap-3 ${
       overdue ? "border-rose-200 bg-rose-50" :
-      isPendiente ? "border-gray-200 bg-white" :
+      isPendiente ? "border-slate-200 bg-white" :
                     "border-emerald-200 bg-emerald-50/40"
     }`}>
       <div className="min-w-0 flex-1">
@@ -127,7 +127,7 @@ function TaskRow({ task, onComplete }) {
           <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${prio.cls}`}>
             {prio.label}
           </span>
-          <span className="text-[10px] uppercase font-semibold text-gray-400">{task.tipo}</span>
+          <span className="text-[10px] uppercase font-semibold text-slate-400">{task.tipo}</span>
           {task.eleam?.nombre && (
             <span className="text-[10px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
               {task.eleam.nombre}
@@ -139,13 +139,13 @@ function TaskRow({ task, onComplete }) {
             </span>
           )}
         </div>
-        <p className={`text-sm font-semibold ${task.estado === "completada" ? "text-emerald-700 line-through" : "text-gray-800"}`}>
+        <p className={`text-sm font-semibold ${task.estado === "completada" ? "text-emerald-700 line-through" : "text-slate-800"}`}>
           {task.titulo}
         </p>
         {task.descripcion && (
-          <p className="text-xs text-gray-500 mt-0.5">{task.descripcion}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{task.descripcion}</p>
         )}
-        <p className="text-[11px] text-gray-400 mt-1">
+        <p className="text-[11px] text-slate-400 mt-1">
           {task.fecha_vencimiento ? <>Vence {formatDate(task.fecha_vencimiento)}</> : "Sin vencimiento"}
           {task.autor?.nombre ? <> · creada por {task.autor.nombre}</> : null}
           {task.estado === "completada" && task.cierre?.nombre
@@ -156,7 +156,7 @@ function TaskRow({ task, onComplete }) {
       {isPendiente && (
         <button
           onClick={() => onComplete(task.id)}
-          className="shrink-0 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700"
+          className="shrink-0 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-xl hover:bg-emerald-700"
         >
           Completar
         </button>
@@ -189,13 +189,13 @@ export default function CrmTasksPanel({
   }, [tasks, filtro, defaultEleamId]);
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 ${compact ? "" : "p-4"}`}>
-      <div className={`flex items-center justify-between flex-wrap gap-2 ${compact ? "p-3 border-b border-gray-100" : "mb-3"}`}>
-        <h2 className="font-semibold text-gray-700">{title}</h2>
+    <div className={`bg-white rounded-xl shadow-sm border border-slate-100 ${compact ? "" : "p-4"}`}>
+      <div className={`flex items-center justify-between flex-wrap gap-2 ${compact ? "p-3 border-b border-slate-100" : "mb-3"}`}>
+        <h2 className="font-semibold text-slate-700">{title}</h2>
         {showCreate && (
           <button
             onClick={() => setCreating((s) => !s)}
-            className="text-xs bg-slate-700 text-white px-3 py-1.5 rounded-lg hover:bg-slate-800"
+            className="text-xs bg-slate-700 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800"
           >
             {creating ? "Cerrar" : "+ Nueva tarea"}
           </button>
@@ -225,7 +225,7 @@ export default function CrmTasksPanel({
               className={`text-[11px] px-3 py-1 rounded-full border whitespace-nowrap ${
                 filtro === f.key
                   ? "bg-slate-700 text-white border-slate-700"
-                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
               }`}
             >
               {f.label}
@@ -234,7 +234,7 @@ export default function CrmTasksPanel({
         </div>
 
         {list.length === 0 ? (
-          <div className="py-8 text-center text-gray-400 text-sm">
+          <div className="py-8 text-center text-slate-400 text-sm">
             No hay tareas con ese filtro.
           </div>
         ) : (

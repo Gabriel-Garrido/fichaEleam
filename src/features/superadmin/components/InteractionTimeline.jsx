@@ -64,10 +64,10 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-gray-700">Historial de interacciones</h3>
+        <h3 className="font-semibold text-slate-700">Historial de interacciones</h3>
         <button
           onClick={() => setCreating((s) => !s)}
-          className="text-xs bg-slate-700 text-white px-3 py-1.5 rounded-lg hover:bg-slate-800"
+          className="text-xs bg-slate-700 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800"
         >
           {creating ? "Cerrar" : "+ Registrar contacto"}
         </button>
@@ -79,14 +79,14 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
             <select
               value={form.tipo}
               onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
             >
               {TIPOS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
             <select
               value={form.canal}
               onChange={(e) => setForm((p) => ({ ...p, canal: e.target.value }))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
             >
               <option value="">Canal (opcional)</option>
               {CANALES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
@@ -98,12 +98,12 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
             required
             value={form.resumen}
             onChange={(e) => setForm((p) => ({ ...p, resumen: e.target.value }))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
           />
           <select
             value={form.resultado}
             onChange={(e) => setForm((p) => ({ ...p, resultado: e.target.value }))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
           >
             <option value="">Resultado (opcional)</option>
             {RESULTADOS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
@@ -113,15 +113,15 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
             placeholder="Próxima acción (opcional)"
             value={form.proxima_accion}
             onChange={(e) => setForm((p) => ({ ...p, proxima_accion: e.target.value }))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
           />
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => { setCreating(false); setForm(empty); }} className="text-sm text-gray-500 hover:underline">
+            <button type="button" onClick={() => { setCreating(false); setForm(empty); }} className="text-sm text-slate-500 hover:underline">
               Cancelar
             </button>
             <button
               type="submit" disabled={busy}
-              className="bg-slate-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+              className="bg-slate-700 text-white text-sm px-4 py-2 rounded-xl hover:bg-slate-800 disabled:opacity-50"
             >
               {busy ? "Guardando…" : "Guardar"}
             </button>
@@ -130,17 +130,17 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
       )}
 
       {interactions.length === 0 ? (
-        <div className="text-sm text-gray-400 py-6 text-center">Sin interacciones registradas todavía.</div>
+        <div className="text-sm text-slate-400 py-6 text-center">Sin interacciones registradas todavía.</div>
       ) : (
-        <ol className="relative border-l-2 border-gray-100 ml-2 space-y-3">
+        <ol className="relative border-l-2 border-slate-100 ml-2 space-y-3">
           {interactions.map((i) => {
             const res = RESULTADOS.find((r) => r.key === i.resultado);
             return (
               <li key={i.id} className="ml-4 pb-1">
                 <span className="absolute -left-[7px] mt-1 w-3 h-3 rounded-full bg-slate-400" />
-                <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                <div className="bg-white border border-slate-100 rounded-xl p-3 shadow-sm">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-[10px] uppercase font-bold tracking-wide text-gray-500">{i.tipo}</span>
+                    <span className="text-[10px] uppercase font-bold tracking-wide text-slate-500">{i.tipo}</span>
                     {i.canal && (
                       <span className="text-[10px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{i.canal}</span>
                     )}
@@ -149,16 +149,16 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
                         {res.label}
                       </span>
                     )}
-                    <span className="text-[11px] text-gray-400">{formatDateTime(i.creado_en)}</span>
+                    <span className="text-[11px] text-slate-400">{formatDateTime(i.creado_en)}</span>
                   </div>
-                  <p className="text-sm text-gray-800 whitespace-pre-line">{i.resumen}</p>
+                  <p className="text-sm text-slate-800 whitespace-pre-line">{i.resumen}</p>
                   {i.proxima_accion && (
                     <p className="text-xs text-slate-700 mt-1">
                       <strong>Próxima acción:</strong> {i.proxima_accion}
                     </p>
                   )}
                   {i.autor?.nombre && (
-                    <p className="text-[11px] text-gray-400 mt-1">por {i.autor.nombre}</p>
+                    <p className="text-[11px] text-slate-400 mt-1">por {i.autor.nombre}</p>
                   )}
                 </div>
               </li>

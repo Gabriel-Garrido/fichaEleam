@@ -119,17 +119,17 @@ export default function BlogEditor() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       <header className="flex items-end justify-between gap-3 mb-6 flex-wrap">
         <div>
-          <button onClick={() => navigate("/superadmin/blog")} className="text-sm text-gray-500 hover:underline">
+          <button onClick={() => navigate("/superadmin/blog")} className="text-sm text-slate-500 hover:underline">
             ← Volver al listado
           </button>
-          <h1 className="text-2xl font-black text-gray-800 mt-2">
+          <h1 className="text-2xl font-black text-slate-800 mt-2">
             {isEditing ? "Editar post" : "Nuevo post"}
           </h1>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setPreview((s) => !s)}
-            className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+            className="border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm hover:bg-slate-50"
           >
             {previewing ? "Editor" : "Vista previa"}
           </button>
@@ -151,10 +151,10 @@ export default function BlogEditor() {
       </header>
 
       {previewing ? (
-        <article className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
-          <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">{form.keywords}</p>
-          <h1 className="text-4xl font-black text-gray-900 mb-4">{form.titulo}</h1>
-          <p className="text-lg text-gray-500 mb-6">{form.resumen}</p>
+        <article className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8">
+          <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">{form.keywords}</p>
+          <h1 className="text-4xl font-black text-slate-900 mb-4">{form.titulo}</h1>
+          <p className="text-lg text-slate-500 mb-6">{form.resumen}</p>
           {form.cover_url && (
             <img src={form.cover_url} alt={form.cover_alt} className="rounded-xl mb-8" />
           )}
@@ -170,20 +170,20 @@ export default function BlogEditor() {
                 onChange={(e) => set({ titulo: e.target.value })}
                 onBlur={handleSlugFromTitle}
                 placeholder="Ej. DS 14/2017 explicado: qué exige la SEREMI..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-base"
                 maxLength={200}
               />
-              <p className="text-[11px] text-gray-400 mt-1">{form.titulo.length}/200</p>
+              <p className="text-[11px] text-slate-400 mt-1">{form.titulo.length}/200</p>
             </Section>
             <Section label="Slug (URL)">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">/blog/</span>
+                <span className="text-xs text-slate-400">/blog/</span>
                 <input
                   type="text"
                   value={form.slug}
                   onChange={(e) => set({ slug: slugify(e.target.value) })}
                   placeholder="ds-14-2017-fiscalizacion-seremi"
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"
                 />
               </div>
             </Section>
@@ -193,9 +193,9 @@ export default function BlogEditor() {
                 onChange={(e) => set({ resumen: e.target.value })}
                 rows={3}
                 maxLength={500}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               />
-              <p className="text-[11px] text-gray-400 mt-1">{form.resumen.length}/500</p>
+              <p className="text-[11px] text-slate-400 mt-1">{form.resumen.length}/500</p>
             </Section>
             <Section label="Contenido (Markdown) *" hint={`Tiempo de lectura estimado: ${readingMin} min`}>
               <textarea
@@ -203,9 +203,9 @@ export default function BlogEditor() {
                 onChange={(e) => set({ contenido_md: e.target.value })}
                 rows={20}
                 placeholder={"## Subtítulo\n\nPárrafo con **negritas** y [link](https://...).\n\n- Lista\n- Otro ítem\n\n```\ncódigo\n```"}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"
               />
-              <p className="text-[11px] text-gray-400 mt-1">
+              <p className="text-[11px] text-slate-400 mt-1">
                 Soporta # H1, ## H2, ### H3, **bold**, *italic*, listas, [links](url),
                 tablas, blockquotes y bloques de código.
               </p>
@@ -217,7 +217,7 @@ export default function BlogEditor() {
               <select
                 value={form.estado}
                 onChange={(e) => set({ estado: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
               >
                 <option value="borrador">Borrador</option>
                 <option value="publicado">Publicado</option>
@@ -226,7 +226,7 @@ export default function BlogEditor() {
             </Section>
 
             <Section label="Destacado">
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.destacado}
@@ -243,10 +243,10 @@ export default function BlogEditor() {
                 value={form.cover_url}
                 onChange={(e) => set({ cover_url: e.target.value })}
                 placeholder="https://…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               />
               {form.cover_url && (
-                <img src={form.cover_url} alt="" className="mt-2 rounded-lg max-h-32 border border-gray-100" />
+                <img src={form.cover_url} alt="" className="mt-2 rounded-lg max-h-32 border border-slate-100" />
               )}
             </Section>
             <Section label="Texto alt de la portada (accesibilidad)">
@@ -254,7 +254,7 @@ export default function BlogEditor() {
                 type="text"
                 value={form.cover_alt}
                 onChange={(e) => set({ cover_alt: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               />
             </Section>
 
@@ -263,12 +263,12 @@ export default function BlogEditor() {
                 type="text"
                 value={form.autor_nombre}
                 onChange={(e) => set({ autor_nombre: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               />
             </Section>
 
-            <details className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <summary className="text-sm font-semibold text-gray-700 cursor-pointer">
+            <details className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+              <summary className="text-sm font-semibold text-slate-700 cursor-pointer">
                 SEO avanzado
               </summary>
               <div className="mt-3 space-y-3">
@@ -278,9 +278,9 @@ export default function BlogEditor() {
                     value={form.meta_title}
                     onChange={(e) => set({ meta_title: e.target.value })}
                     maxLength={70}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   />
-                  <p className="text-[11px] text-gray-400 mt-1">
+                  <p className="text-[11px] text-slate-400 mt-1">
                     {(form.meta_title?.length ?? 0)}/70
                   </p>
                 </Section>
@@ -290,9 +290,9 @@ export default function BlogEditor() {
                     onChange={(e) => set({ meta_description: e.target.value })}
                     rows={2}
                     maxLength={170}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   />
-                  <p className="text-[11px] text-gray-400 mt-1">
+                  <p className="text-[11px] text-slate-400 mt-1">
                     {(form.meta_description?.length ?? 0)}/170
                   </p>
                 </Section>
@@ -302,7 +302,7 @@ export default function BlogEditor() {
                     value={form.keywords}
                     onChange={(e) => set({ keywords: e.target.value })}
                     placeholder="ELEAM, DS 14/2017, fiscalización SEREMI"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   />
                 </Section>
               </div>
@@ -316,10 +316,10 @@ export default function BlogEditor() {
 
 function Section({ label, hint, children }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-      <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">{label}</label>
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+      <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-gray-400 mt-1">{hint}</p>}
+      {hint && <p className="text-[11px] text-slate-400 mt-1">{hint}</p>}
     </div>
   );
 }

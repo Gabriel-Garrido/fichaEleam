@@ -59,10 +59,10 @@ export default function CrmPipeline({ eleams, onPickState, activeState }) {
           return (
             <article
               key={s.key}
-              className={`rounded-lg border bg-white p-4 shadow-sm transition-all ${
+              className={`rounded-xl border bg-white p-4 shadow-sm transition-all ${
                 active
                   ? "border-slate-700 bg-slate-50"
-                  : "border-gray-200 hover:border-slate-300"
+                  : "border-slate-200 hover:border-slate-300"
               }`}
             >
               <div className="flex items-start justify-between gap-2">

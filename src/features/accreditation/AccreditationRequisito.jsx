@@ -69,21 +69,21 @@ function StateActions({ re, onChange, isAdmin }) {
         <Button
           onClick={() => setShowCumple((s) => !s)}
           disabled={busy}
-          className="bg-emerald-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-emerald-700"
+          className="bg-emerald-600 text-white text-sm px-3 py-1.5 rounded-xl hover:bg-emerald-700"
         >
-          ✓ Marcar cumple
+          Marcar cumple
         </Button>
         <Button
           onClick={() => change("pendiente", { fecha_vencimiento: null })}
           disabled={busy}
-          className="bg-amber-500 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-amber-600"
+          className="bg-amber-500 text-white text-sm px-3 py-1.5 rounded-xl hover:bg-amber-600"
         >
           Marcar pendiente
         </Button>
         <Button
           onClick={() => change("no_cumple")}
           disabled={busy}
-          className="bg-rose-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-rose-700"
+          className="bg-rose-600 text-white text-sm px-3 py-1.5 rounded-xl hover:bg-rose-700"
         >
           No cumple
         </Button>
@@ -91,7 +91,7 @@ function StateActions({ re, onChange, isAdmin }) {
           <Button
             onClick={() => setShowNA((s) => !s)}
             disabled={busy}
-            className="bg-slate-500 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-slate-600"
+            className="bg-slate-500 text-white text-sm px-3 py-1.5 rounded-xl hover:bg-slate-600"
           >
             Marcar no aplica
           </Button>
@@ -99,7 +99,7 @@ function StateActions({ re, onChange, isAdmin }) {
       </div>
 
       {showCumple && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
           <p className="text-sm text-emerald-800">
             {re.requisito?.requiere_vencimiento
               ? "Indica la fecha de vencimiento (este documento se renueva)."
@@ -115,7 +115,7 @@ function StateActions({ re, onChange, isAdmin }) {
             <Button
               onClick={submitCumple}
               disabled={busy}
-              className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
+              className="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700"
             >
               Confirmar
             </Button>
@@ -124,14 +124,14 @@ function StateActions({ re, onChange, isAdmin }) {
       )}
 
       {showNA && (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
           <p className="text-sm text-slate-700">
             "No aplica" se usa cuando este requisito no corresponde a tu ELEAM
             (ej. ascensor en establecimiento sin ascensor). Indica el motivo:
           </p>
           <textarea
             rows={2}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
             placeholder="Motivo (ej. el ELEAM no cuenta con caldera)"
             value={naMotivo}
             onChange={(e) => setNaMotivo(e.target.value)}
@@ -139,14 +139,14 @@ function StateActions({ re, onChange, isAdmin }) {
           <div className="flex gap-2 justify-end">
             <Button
               onClick={() => { setShowNA(false); setNaMotivo(""); }}
-              className="border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm"
+              className="border border-slate-200 text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 text-sm"
             >
               Cancelar
             </Button>
             <Button
               onClick={submitNoAplica}
               disabled={busy || !naMotivo.trim()}
-              className="bg-slate-700 text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 text-sm disabled:opacity-50"
+              className="bg-slate-700 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800 text-sm disabled:opacity-50"
             >
               Confirmar
             </Button>
@@ -195,7 +195,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
     return (
       <Button
         onClick={() => setOpen(true)}
-        className="bg-[var(--color-primary)] text-white text-sm px-4 py-2 rounded-lg hover:bg-[var(--color-button-hover)]"
+        className="bg-teal-700 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-800"
       >
         {hasVigente ? "+ Reemplazar evidencia" : "+ Subir evidencia"}
       </Button>
@@ -243,7 +243,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
         <label className="text-xs uppercase font-semibold text-teal-700 mb-1 block">Notas (opcional)</label>
         <textarea
           rows={2}
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
           value={notas}
           onChange={(e) => setNotas(e.target.value)}
         />
@@ -253,14 +253,14 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
         <Button
           type="button"
           onClick={() => setOpen(false)}
-          className="border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm"
+          className="border border-slate-200 text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 text-sm"
         >
           Cancelar
         </Button>
         <Button
           type="submit"
           disabled={busy}
-          className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-[var(--color-button-hover)] text-sm disabled:opacity-50"
+          className="bg-teal-700 text-white px-4 py-2 rounded-xl hover:bg-teal-800 text-sm disabled:opacity-50"
         >
           {busy ? "Subiendo..." : hasVigente ? "Reemplazar" : "Subir"}
         </Button>
@@ -271,10 +271,10 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
 
 function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-3 flex items-center justify-between gap-3">
+    <div className="bg-white border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="text-[10px] uppercase font-bold tracking-wide text-gray-400">
+          <span className="text-[10px] uppercase font-bold tracking-wide text-slate-400">
             v{doc.version}
           </span>
           {isVigente ? (
@@ -287,19 +287,19 @@ function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
             </span>
           )}
         </div>
-        <p className="text-sm font-semibold text-gray-800 truncate">{doc.archivo_nombre}</p>
-        <div className="text-xs text-gray-500 flex flex-wrap gap-x-3 mt-1">
+        <p className="text-sm font-semibold text-slate-800 truncate">{doc.archivo_nombre}</p>
+        <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 mt-1">
           {doc.fecha_emision && <span>Emisión: {formatDate(doc.fecha_emision)}</span>}
           {doc.fecha_vencimiento && <span>Vence: {formatDate(doc.fecha_vencimiento)}</span>}
           <span>Subido: {formatDate(doc.creado_en)}</span>
           {doc.subido_por?.nombre && <span>por {doc.subido_por.nombre}</span>}
         </div>
-        {doc.notas && <p className="text-xs text-gray-500 italic mt-1">{doc.notas}</p>}
+        {doc.notas && <p className="text-xs text-slate-500 italic mt-1">{doc.notas}</p>}
       </div>
       <div className="flex flex-col gap-1 shrink-0">
         <button
           onClick={() => onView(doc)}
-          className="text-xs text-[var(--color-primary)] hover:underline font-semibold"
+          className="text-xs text-teal-700 hover:underline font-semibold"
         >
           Ver
         </button>
@@ -335,7 +335,7 @@ function ObservacionItem({ obs, onCerrar, isAdmin }) {
   return (
     <div className={`border rounded-xl p-3 ${tone}`}>
       <div className="flex items-center gap-2 flex-wrap mb-1">
-        <span className="text-[10px] uppercase font-bold tracking-wide text-gray-700">
+        <span className="text-[10px] uppercase font-bold tracking-wide text-slate-700">
           {obs.origen === "fiscalizacion" ? "Fiscalización" : "Interna"}
         </span>
         <span className={`text-[10px] uppercase font-bold rounded-full px-2 py-0.5 ${
@@ -345,36 +345,36 @@ function ObservacionItem({ obs, onCerrar, isAdmin }) {
         }`}>
           {obs.estado}
         </span>
-        <span className="text-xs text-gray-500">{formatDate(obs.fecha)}</span>
+        <span className="text-xs text-slate-500">{formatDate(obs.fecha)}</span>
       </div>
-      <p className="text-sm text-gray-800">{obs.descripcion}</p>
+      <p className="text-sm text-slate-800">{obs.descripcion}</p>
       {obs.acciones_subsanacion && (
-        <p className="text-xs text-gray-600 mt-1">
+        <p className="text-xs text-slate-600 mt-1">
           <strong>Subsanación:</strong> {obs.acciones_subsanacion}
         </p>
       )}
       {obs.fecha_compromiso && (
-        <p className="text-xs text-gray-600">
+        <p className="text-xs text-slate-600">
           <strong>Compromiso:</strong> {formatDate(obs.fecha_compromiso)}
         </p>
       )}
       {obs.creador?.nombre && (
-        <p className="text-[11px] text-gray-400 mt-1">
+        <p className="text-[11px] text-slate-400 mt-1">
           Creada por {obs.creador.nombre}
         </p>
       )}
       {obs.estado === "cerrada" && (
-        <div className="mt-2 pt-2 border-t border-gray-200">
+        <div className="mt-2 pt-2 border-t border-slate-200">
           <p className="text-xs text-emerald-700">
             Cerrada el {formatDate(obs.cerrada_en)}
             {obs.cerrador?.nombre ? ` por ${obs.cerrador.nombre}` : ""}
           </p>
-          {obs.cerrada_nota && <p className="text-xs text-gray-600 italic">"{obs.cerrada_nota}"</p>}
+          {obs.cerrada_nota && <p className="text-xs text-slate-600 italic">"{obs.cerrada_nota}"</p>}
         </div>
       )}
       {isAbierta && isAdmin && (
         !open ? (
-          <button onClick={() => setOpen(true)} className="text-xs text-[var(--color-primary)] hover:underline mt-2 font-semibold">
+          <button onClick={() => setOpen(true)} className="text-xs text-teal-700 hover:underline mt-2 font-semibold">
             Cerrar observación
           </button>
         ) : (
@@ -384,14 +384,14 @@ function ObservacionItem({ obs, onCerrar, isAdmin }) {
               placeholder="Nota de cierre (cómo fue subsanada)"
               value={nota}
               onChange={(e) => setNota(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
             />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setOpen(false)} className="text-xs text-gray-500 hover:underline">Cancelar</button>
+              <button onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:underline">Cancelar</button>
               <Button
                 onClick={submit}
                 disabled={busy}
-                className="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-lg disabled:opacity-50"
+                className="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-xl disabled:opacity-50"
               >
                 {busy ? "Cerrando..." : "Cerrar"}
               </Button>
@@ -416,7 +416,7 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="text-sm text-[var(--color-primary)] hover:underline font-semibold"
+        className="text-sm text-teal-700 hover:underline font-semibold"
       >
         + Registrar observación
       </button>
@@ -456,7 +456,7 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
           <select
             value={origen}
             onChange={(e) => setOrigen(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
           >
             <option value="interna">Interna (auto-revisión)</option>
             <option value="fiscalizacion">Fiscalización (SEREMI/Municipalidad)</option>
@@ -472,7 +472,7 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
           placeholder="¿Qué está observado o falta?"
           value={descripcion}
           onChange={(e) => setDescripcion(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
         />
       </div>
 
@@ -483,7 +483,7 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
           value={accionesSubsanacion}
           onChange={(e) => setAcciones(e.target.value)}
           placeholder="¿Qué se hará para resolverlo?"
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
         />
       </div>
 
@@ -496,14 +496,14 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
         <Button
           type="button"
           onClick={() => setOpen(false)}
-          className="border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm"
+          className="border border-slate-200 text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 text-sm"
         >
           Cancelar
         </Button>
         <Button
           type="submit"
           disabled={busy}
-          className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 text-sm disabled:opacity-50"
+          className="bg-orange-600 text-white px-4 py-2 rounded-xl hover:bg-orange-700 text-sm disabled:opacity-50"
         >
           {busy ? "Guardando..." : "Registrar"}
         </Button>
@@ -514,7 +514,7 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
 
 function AuditList({ items }) {
   if (items.length === 0) {
-    return <p className="text-sm text-gray-500">Sin actividad registrada todavía.</p>;
+    return <p className="text-sm text-slate-500">Sin actividad registrada todavía.</p>;
   }
   const ACCION_LABEL = {
     create: "Creó", update: "Actualizó", replace: "Reemplazó",
@@ -529,11 +529,11 @@ function AuditList({ items }) {
     <ul className="divide-y">
       {items.map((a) => (
         <li key={a.id} className="py-2 text-sm">
-          <span className="font-semibold text-gray-700">{a.realizado_por?.nombre ?? "—"}</span>{" "}
-          <span className="text-gray-500">
+          <span className="font-semibold text-slate-700">{a.realizado_por?.nombre ?? "—"}</span>{" "}
+          <span className="text-slate-500">
             {ACCION_LABEL[a.accion] ?? a.accion} {ENTIDAD_LABEL[a.entidad] ?? a.entidad}
           </span>
-          <span className="text-xs text-gray-400 ml-2">{formatDate(a.realizado_en)}</span>
+          <span className="text-xs text-slate-400 ml-2">{formatDate(a.realizado_en)}</span>
         </li>
       ))}
     </ul>
@@ -649,7 +649,7 @@ export default function AccreditationRequisito() {
         <h1 className="text-xl font-bold mb-2">Requisito no encontrado</h1>
         <button
           onClick={() => navigate("/accreditation")}
-          className="text-sm text-[var(--color-primary)] hover:underline"
+          className="text-sm text-teal-700 hover:underline"
         >
           Volver
         </button>
@@ -666,13 +666,13 @@ export default function AccreditationRequisito() {
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
       <button
         onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
-        className="text-sm text-gray-500 hover:text-gray-800"
+        className="text-sm text-slate-500 hover:text-slate-800"
       >
-        ← {a.icono} {a.nombre}
+        ← {a.nombre}
       </button>
 
       {/* Header */}
-      <header className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <header className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <span className="text-[10px] font-mono bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded">
             {r.codigo}
@@ -690,37 +690,37 @@ export default function AccreditationRequisito() {
             </span>
           )}
         </div>
-        <h1 className="text-2xl font-black text-gray-800 mb-2">{r.nombre}</h1>
+        <h1 className="text-2xl font-black text-slate-800 mb-2">{r.nombre}</h1>
         {r.descripcion && (
-          <p className="text-sm text-gray-600 mb-2">{r.descripcion}</p>
+          <p className="text-sm text-slate-600 mb-2">{r.descripcion}</p>
         )}
         {r.medio_verificador && (
-          <p className="text-sm text-gray-500">
-            <strong className="text-gray-700">Medio verificador:</strong> {r.medio_verificador}
+          <p className="text-sm text-slate-500">
+            <strong className="text-slate-700">Medio verificador:</strong> {r.medio_verificador}
           </p>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-xs">
           <div>
-            <p className="uppercase font-semibold text-gray-400 mb-1">Responsable</p>
+            <p className="uppercase font-semibold text-slate-400 mb-1">Responsable</p>
             {re.responsable?.nombre ? (
               <p>{re.responsable.nombre}{" "}
-                <span className="text-gray-500">({re.responsable.rol})</span>
+                <span className="text-slate-500">({re.responsable.rol})</span>
               </p>
             ) : (
-              <button onClick={handleAssignSelf} className="text-[var(--color-primary)] hover:underline">
+              <button onClick={handleAssignSelf} className="text-teal-700 hover:underline">
                 + Asignarme
               </button>
             )}
           </div>
           <div>
-            <p className="uppercase font-semibold text-gray-400 mb-1">Última revisión</p>
+            <p className="uppercase font-semibold text-slate-400 mb-1">Última revisión</p>
             <p>{re.ultima_revision_en ? formatDate(re.ultima_revision_en) : "—"}</p>
           </div>
         </div>
 
         {re.no_aplica_motivo && (
-          <div className="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3">
+          <div className="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
             <p className="text-xs uppercase font-semibold text-slate-500 mb-1">Motivo "no aplica"</p>
             <p className="text-sm text-slate-700">{re.no_aplica_motivo}</p>
           </div>
@@ -732,7 +732,7 @@ export default function AccreditationRequisito() {
       </header>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
+      <div className="flex gap-2 border-b border-slate-200">
         {[
           { key: "evidencia", label: `Evidencias (${docs.length})` },
           { key: "observaciones", label: `Observaciones (${observaciones.length})` },
@@ -743,8 +743,8 @@ export default function AccreditationRequisito() {
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
               tab === t.key
-                ? "border-[var(--color-primary)] text-[var(--color-primary)]"
-                : "border-transparent text-gray-500 hover:text-gray-800"
+                ? "border-teal-700 text-teal-700"
+                : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             {t.label}
@@ -765,7 +765,7 @@ export default function AccreditationRequisito() {
           )}
 
           {docs.length === 0 ? (
-            <div className="bg-white border border-gray-100 rounded-xl p-6 text-center text-gray-500">
+            <div className="bg-white border border-slate-100 rounded-xl p-6 text-center text-slate-500">
               Aún no hay evidencias cargadas para este requisito.
             </div>
           ) : (
@@ -787,7 +787,7 @@ export default function AccreditationRequisito() {
             <div className="pt-3">
               <button
                 onClick={() => setShowHistorial((s) => !s)}
-                className="text-sm text-gray-500 hover:underline"
+                className="text-sm text-slate-500 hover:underline"
               >
                 {showHistorial ? "Ocultar" : "Ver"} historial de versiones anteriores ({historial.filter((d) => !d.vigente).length})
               </button>
@@ -815,7 +815,7 @@ export default function AccreditationRequisito() {
         <section className="space-y-3">
           <NewObservacionForm reId={id} onCreated={loadAll} isAdmin={isAdminEleam} />
           {observaciones.length === 0 ? (
-            <div className="bg-white border border-gray-100 rounded-xl p-6 text-center text-gray-500">
+            <div className="bg-white border border-slate-100 rounded-xl p-6 text-center text-slate-500">
               Sin observaciones registradas.
             </div>
           ) : (
@@ -835,7 +835,7 @@ export default function AccreditationRequisito() {
 
       {/* Historial */}
       {tab === "historial" && (
-        <section className="bg-white border border-gray-100 rounded-2xl p-5">
+        <section className="bg-white border border-slate-100 rounded-2xl p-5">
           <AuditList items={audit} />
         </section>
       )}

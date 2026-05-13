@@ -267,14 +267,14 @@ export default function ResidentForm() {
   if (familiarCreado) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center">
           <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
             <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-1">Residente y familiar creados</h2>
-          <p className="text-sm text-gray-500 mb-6">
+          <h2 className="text-xl font-bold text-slate-800 mb-1">Residente y familiar creados</h2>
+          <p className="text-sm text-slate-500 mb-6">
             Comparte estas credenciales con <strong>{familiarCreado.nombre}</strong>:
           </p>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mb-6">
@@ -283,14 +283,14 @@ export default function ResidentForm() {
             </p>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-gray-500 w-20 shrink-0">Correo:</span>
-                <code className="font-mono text-gray-800 bg-white border border-amber-200 rounded px-2 py-0.5 flex-1">
+                <span className="text-slate-500 w-20 shrink-0">Correo:</span>
+                <code className="font-mono text-slate-800 bg-white border border-amber-200 rounded px-2 py-0.5 flex-1">
                   {familiarCreado.email}
                 </code>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-gray-500 w-20 shrink-0">Contraseña:</span>
-                <code className="font-mono text-xl tracking-widest text-gray-800 bg-white border border-amber-200 rounded px-2 py-0.5 flex-1 select-all">
+                <span className="text-slate-500 w-20 shrink-0">Contraseña:</span>
+                <code className="font-mono text-xl tracking-widest text-slate-800 bg-white border border-amber-200 rounded px-2 py-0.5 flex-1 select-all">
                   {familiarCreado.temp_password}
                 </code>
               </div>
@@ -301,7 +301,7 @@ export default function ResidentForm() {
           </div>
           <Button
             onClick={() => navigate("/residents")}
-            className="bg-[var(--color-primary)] text-white px-8 py-2.5 rounded-xl font-semibold hover:bg-[var(--color-button-hover)]"
+            className="bg-teal-700 text-white px-8 py-2.5 rounded-xl font-semibold hover:bg-teal-800"
           >
             Continuar al listado →
           </Button>
@@ -317,11 +317,11 @@ export default function ResidentForm() {
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="text-[var(--color-primary)] hover:underline text-sm"
+          className="text-teal-700 hover:underline text-sm"
         >
           ← Volver
         </button>
-        <h1 className="text-2xl font-bold text-[var(--color-primary)]">
+        <h1 className="text-2xl font-bold text-teal-700">
           {isEditing ? "Editar Residente" : "Nuevo Residente"}
         </h1>
       </div>
@@ -392,7 +392,7 @@ export default function ResidentForm() {
           </div>
 
           {showEgreso && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
               <Field label="Fecha de egreso *" name="fecha_egreso" type="date"
                 value={form.fecha_egreso} onChange={handleChange} error={errors.fecha_egreso} />
               <Field label="Motivo de egreso" name="motivo_egreso"
@@ -414,18 +414,18 @@ export default function ResidentForm() {
                   setFamiliarEnabled(e.target.checked);
                   if (!e.target.checked) { setFamiliarForm(FAMILIAR_EMPTY); setFamiliarErrors({}); }
                 }}
-                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-200"
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-200"
               />
               <div>
-                <span className="text-sm font-medium text-gray-700">Agregar acceso para un familiar ahora</span>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <span className="text-sm font-medium text-slate-700">Agregar acceso para un familiar ahora</span>
+                <p className="text-xs text-slate-400 mt-0.5">
                   Opcional. Admins y funcionarios pueden crear familiares vinculados a residentes activos.
                 </p>
               </div>
             </label>
 
             {familiarEnabled && (
-              <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Nombre del familiar *" name="nombre"
                   value={familiarForm.nombre} onChange={handleFamiliarChange}
                   error={errors.familiar_nombre} />
@@ -442,7 +442,7 @@ export default function ResidentForm() {
                     </p>
                   )}
                 </div>
-                <p className="sm:col-span-2 text-xs text-gray-400">
+                <p className="sm:col-span-2 text-xs text-slate-400">
                   Se generará una contraseña temporal que podrás compartir con el familiar. Deberá cambiarla en su primer acceso.
                 </p>
               </div>
@@ -460,12 +460,12 @@ export default function ResidentForm() {
                     {(familiarActual.profiles?.nombre ?? familiarActual.profiles?.email ?? "?")[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm truncate">
+                    <p className="font-semibold text-slate-800 text-sm truncate">
                       {familiarActual.profiles?.nombre ?? "—"}
                     </p>
-                    <p className="text-xs text-gray-500 truncate">{familiarActual.profiles?.email ?? "—"}</p>
+                    <p className="text-xs text-slate-500 truncate">{familiarActual.profiles?.email ?? "—"}</p>
                     {familiarActual.parentesco && (
-                      <p className="text-xs text-gray-400">{familiarActual.parentesco}</p>
+                      <p className="text-xs text-slate-400">{familiarActual.parentesco}</p>
                     )}
                   </div>
                 </div>
@@ -480,7 +480,7 @@ export default function ResidentForm() {
                       });
                       setShowFamiliarEdit(true);
                     }}
-                    className="text-sm text-[var(--color-primary)] hover:underline font-medium"
+                    className="text-sm text-teal-700 hover:underline font-medium"
                     disabled={savingFamiliar}
                   >
                     Cambiar familiar
@@ -497,11 +497,11 @@ export default function ResidentForm() {
               </div>
             ) : !familiarActual && !showFamiliarEdit ? (
               <div>
-                <p className="text-sm text-gray-400 mb-3">Sin familiar vinculado.</p>
+                <p className="text-sm text-slate-400 mb-3">Sin familiar vinculado.</p>
                 <button
                   type="button"
                   onClick={() => { setFamiliarForm(FAMILIAR_EMPTY); setShowFamiliarEdit(true); }}
-                  className="text-sm text-[var(--color-primary)] hover:underline font-medium"
+                  className="text-sm text-teal-700 hover:underline font-medium"
                 >
                   + Agregar familiar
                 </button>
@@ -510,7 +510,7 @@ export default function ResidentForm() {
               /* Formulario de creación/cambio de familiar */
               <div className="space-y-4">
                 {familiarActual && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                     Se desvinculará al familiar actual y se creará uno nuevo con las credenciales indicadas.
                   </p>
                 )}
@@ -531,7 +531,7 @@ export default function ResidentForm() {
                       </p>
                     )}
                   </div>
-                  <p className="sm:col-span-2 text-xs text-gray-400">
+                  <p className="sm:col-span-2 text-xs text-slate-400">
                     Se generará una contraseña temporal. El familiar deberá cambiarla en su primer acceso.
                   </p>
                 </div>
@@ -540,7 +540,7 @@ export default function ResidentForm() {
                     type="button"
                     onClick={() => { setShowFamiliarEdit(false); setFamiliarForm(FAMILIAR_EMPTY); setFamiliarErrors({}); }}
                     disabled={savingFamiliar}
-                    className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 text-sm"
+                    className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50 text-sm"
                   >
                     Cancelar
                   </Button>
@@ -548,7 +548,7 @@ export default function ResidentForm() {
                     type="button"
                     onClick={handleSaveFamiliarEdit}
                     disabled={savingFamiliar}
-                    className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-button-hover)] text-sm font-medium disabled:opacity-50"
+                    className="px-4 py-2 bg-teal-700 text-white rounded-xl hover:bg-teal-800 text-sm font-medium disabled:opacity-50"
                   >
                     {savingFamiliar ? "Guardando…" : "Crear y vincular familiar"}
                   </Button>
@@ -562,14 +562,14 @@ export default function ResidentForm() {
           <Button
             type="button"
             onClick={() => navigate(-1)}
-            className="px-6 py-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
+            className="px-6 py-2.5 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50"
           >
             Cancelar
           </Button>
           <Button
             type="submit"
             disabled={saving}
-            className="px-6 py-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-button-hover)] disabled:opacity-50 font-medium"
+            className="px-6 py-2.5 bg-teal-700 text-white rounded-xl hover:bg-teal-800 disabled:opacity-50 font-medium"
           >
             {saving ? "Guardando…" : isEditing ? "Actualizar" : "Crear Residente"}
           </Button>
@@ -583,8 +583,8 @@ export default function ResidentForm() {
 
 function Card({ title, children }) {
   return (
-    <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <h2 className="text-base font-semibold text-gray-700 mb-4 pb-2 border-b">{title}</h2>
+    <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+      <h2 className="text-base font-semibold text-slate-700 mb-4 pb-2 border-b">{title}</h2>
       {children}
     </section>
   );
@@ -593,7 +593,7 @@ function Card({ title, children }) {
 function Field({ label, name, type = "text", value, onChange, onBlur, required, placeholder, min, max, error }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
       <input
         type={type}
         name={name}
@@ -604,8 +604,8 @@ function Field({ label, name, type = "text", value, onChange, onBlur, required, 
         placeholder={placeholder}
         min={min}
         max={max}
-        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] transition-colors ${
-          error ? "border-red-400 bg-red-50" : "border-gray-300"
+        className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 transition-colors ${
+          error ? "border-red-400 bg-red-50" : "border-slate-300"
         }`}
       />
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
@@ -616,12 +616,12 @@ function Field({ label, name, type = "text", value, onChange, onBlur, required, 
 function SelectField({ label, name, value, onChange, options }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
       <select
         name={name}
         value={value ?? ""}
         onChange={onChange}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] bg-white"
+        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
       >
         {options.map(([val, lbl]) => (
           <option key={val} value={val}>{lbl}</option>

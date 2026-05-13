@@ -78,7 +78,7 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
               onClick={() => setMoreOpen(true)}
               className="rounded-2xl px-1 py-1.5 text-center text-[11px] font-medium text-slate-600"
             >
-              <span className="mx-auto mb-0.5 grid h-6 w-6 place-items-center rounded-lg bg-slate-100">⋯</span>
+              <span className="mx-auto mb-0.5 grid h-6 w-6 place-items-center rounded-xl bg-slate-100">⋯</span>
               Más
             </button>
           )}
@@ -88,7 +88,7 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
               onClick={() => setMoreOpen(true)}
               className="rounded-2xl px-1 py-1.5 text-center text-[11px] font-medium text-slate-600"
             >
-              <span className="mx-auto mb-0.5 grid h-6 w-6 place-items-center rounded-lg bg-slate-100">⋯</span>
+              <span className="mx-auto mb-0.5 grid h-6 w-6 place-items-center rounded-xl bg-slate-100">⋯</span>
               Más
             </button>
           )}
@@ -117,7 +117,7 @@ function NavButton({ item, active, onClick }) {
       }`}
       title={item.description}
     >
-      <span className={`mx-auto mb-0.5 grid h-6 w-6 place-items-center rounded-lg ${
+      <span className={`mx-auto mb-0.5 grid h-6 w-6 place-items-center rounded-xl ${
         active ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-slate-600"
       }`}>
         <NavIcon id={item.icon} className="h-3.5 w-3.5" />

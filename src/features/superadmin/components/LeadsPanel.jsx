@@ -9,7 +9,7 @@ const ESTADO_LABELS = {
   contactado:    { txt: "Contactado",      cls: "bg-blue-100 text-blue-700" },
   demo_activo:   { txt: "Demo activo",     cls: "bg-teal-100 text-teal-700" },
   demo_completado:{ txt: "Demo completado", cls: "bg-green-100 text-green-700" },
-  descartado:    { txt: "Descartado",      cls: "bg-gray-100 text-gray-500" },
+  descartado:    { txt: "Descartado",      cls: "bg-slate-100 text-slate-500" },
   convertido:    { txt: "Convertido",      cls: "bg-emerald-100 text-emerald-700" },
 };
 
@@ -115,7 +115,7 @@ export default function LeadsPanel({
           title={credenciales.temp_password ? "Usuario demo creado" : "Demo activado"}
         >
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-600">
               {credenciales.temp_password ? (
                 <>
                   {credenciales.repaired_existing_auth_user ? (
@@ -148,10 +148,10 @@ export default function LeadsPanel({
               )}
             </p>
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
-              <p className="text-sm text-gray-700"><strong>Correo:</strong> {credenciales.email}</p>
+              <p className="text-sm text-slate-700"><strong>Correo:</strong> {credenciales.email}</p>
               {credenciales.temp_password && (
                 <div className="flex items-center gap-2">
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-slate-700">
                     <strong>Contraseña temporal:</strong>{" "}
                     <span className="font-mono bg-white border border-slate-200 rounded px-2 py-0.5 text-base">
                       {credenciales.temp_password}
@@ -177,12 +177,12 @@ export default function LeadsPanel({
               </div>
             )}
             {credenciales.temp_password ? (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-slate-400">
                 El usuario deberá cambiar esta contraseña en su primer acceso.
                 Si tiene correo Gmail, podrá vincular Google después de entrar con esta contraseña temporal.
               </p>
             ) : (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-slate-400">
                 El usuario debe ingresar con su contraseña actual o con Google si ya tenía ese método configurado.
               </p>
             )}
@@ -190,14 +190,14 @@ export default function LeadsPanel({
               {credenciales.temp_password && (
                 <button
                   onClick={() => { copyToClipboard(`Correo: ${credenciales.email}\nContraseña temporal: ${credenciales.temp_password}`); toast("Credenciales copiadas", "success"); }}
-                  className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+                  className="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm hover:bg-slate-50"
                 >
                   Copiar todo
                 </button>
               )}
               <button
                 onClick={() => setCredenciales(null)}
-                className="bg-[var(--color-primary,#2563eb)] text-white px-4 py-2 rounded-lg text-sm hover:opacity-90"
+                className="bg-teal-700 text-white px-4 py-2 rounded-xl text-sm hover:opacity-90"
               >
                 Listo
               </button>
@@ -236,12 +236,12 @@ export default function LeadsPanel({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar por nombre, email o ELEAM..."
-          className="flex-1 min-w-48 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          className="flex-1 min-w-48 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
         />
         <select
           value={filterEstado}
           onChange={(e) => setFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
         >
           <option value="">Todos los estados</option>
           {ESTADOS.map((e) => (
@@ -250,18 +250,18 @@ export default function LeadsPanel({
         </select>
         <button
           onClick={() => onLoadLeads({ estado: filterEstado || undefined, search })}
-          className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+          className="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm hover:bg-slate-50"
         >
           Actualizar
         </button>
-        <span className="text-xs text-gray-400">{filtered.length} leads</span>
+        <span className="text-xs text-slate-400">{filtered.length} leads</span>
       </div>
 
       {/* Table */}
       {loading ? (
-        <div className="text-center text-gray-400 py-8 text-sm">Cargando leads...</div>
+        <div className="text-center text-slate-400 py-8 text-sm">Cargando leads...</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center text-gray-400 py-8 text-sm">No hay leads todavía.</div>
+        <div className="text-center text-slate-400 py-8 text-sm">No hay leads todavía.</div>
       ) : (
         <div className="space-y-2">
           {filtered.map((lead) => {
@@ -276,7 +276,7 @@ export default function LeadsPanel({
               <div
                 key={lead.id}
                 className={`bg-white rounded-xl border shadow-sm overflow-hidden ${
-                  wantsContact ? "border-red-300" : isActive ? "border-teal-300" : "border-gray-100"
+                  wantsContact ? "border-red-300" : isActive ? "border-teal-300" : "border-slate-100"
                 }`}
               >
                 <div
@@ -296,9 +296,9 @@ export default function LeadsPanel({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div>
-                        <p className="font-semibold text-gray-800 text-sm">{lead.nombre} · {lead.cargo}</p>
-                        <p className="text-xs text-gray-500">{lead.eleam_nombre} · {lead.email}</p>
-                        {lead.telefono && <p className="text-xs text-gray-400">{lead.telefono}</p>}
+                        <p className="font-semibold text-slate-800 text-sm">{lead.nombre} · {lead.cargo}</p>
+                        <p className="text-xs text-slate-500">{lead.eleam_nombre} · {lead.email}</p>
+                        {lead.telefono && <p className="text-xs text-slate-400">{lead.telefono}</p>}
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${estado.cls}`}>
@@ -317,25 +317,25 @@ export default function LeadsPanel({
                       </div>
                     </div>
                     <div className="flex items-center gap-4 mt-2 flex-wrap">
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-slate-400">
                         {formatDate(lead.creado_en)}
                         {lead.utm_source ? ` · ${lead.utm_source}` : ""}
                         {lead.num_residentes ? ` · ${lead.num_residentes} res.` : ""}
                       </span>
                       {lead.demo_token && (
                         <div className="flex items-center gap-1">
-                          <span className="text-xs text-gray-400">Demo</span>
-                          <div className="w-16 bg-gray-100 rounded-full h-1.5">
+                          <span className="text-xs text-slate-400">Demo</span>
+                          <div className="w-16 bg-slate-100 rounded-full h-1.5">
                             <div className="bg-teal-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-xs text-gray-500">{pct}%</span>
+                          <span className="text-xs text-slate-500">{pct}%</span>
                         </div>
                       )}
                     </div>
                   </div>
 
                   <svg
-                    className={`w-4 h-4 text-gray-400 shrink-0 mt-1 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                    className={`w-4 h-4 text-slate-400 shrink-0 mt-1 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                     fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -343,9 +343,9 @@ export default function LeadsPanel({
                 </div>
 
                 {isExpanded && (
-                  <div className="border-t border-gray-100 p-4 space-y-4 bg-gray-50">
+                  <div className="border-t border-slate-100 p-4 space-y-4 bg-slate-50">
                     {wantsContact && lead.solicita_contacto_mensaje && (
-                      <div className="bg-red-50 border border-red-100 rounded-lg p-3">
+                      <div className="bg-red-50 border border-red-100 rounded-xl p-3">
                         <p className="text-xs font-semibold text-red-800 mb-1">Mensaje del prospecto:</p>
                         <p className="text-sm text-red-700">{lead.solicita_contacto_mensaje}</p>
                         <p className="text-xs text-red-400 mt-1">{formatDateTime(lead.solicita_contacto_en)}</p>
@@ -353,20 +353,20 @@ export default function LeadsPanel({
                     )}
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                      <div><p className="text-gray-400">Cargo</p><p className="font-medium">{lead.cargo}</p></div>
-                      <div><p className="text-gray-400">Residentes</p><p className="font-medium">{lead.num_residentes ?? "—"}</p></div>
-                      <div><p className="text-gray-400">Origen</p><p className="font-medium">{lead.utm_source ?? lead.referrer ?? "directo"}</p></div>
-                      <div><p className="text-gray-400">Demo expira</p><p className="font-medium">{formatDate(lead.demo_expires_at)}</p></div>
+                      <div><p className="text-slate-400">Cargo</p><p className="font-medium">{lead.cargo}</p></div>
+                      <div><p className="text-slate-400">Residentes</p><p className="font-medium">{lead.num_residentes ?? "—"}</p></div>
+                      <div><p className="text-slate-400">Origen</p><p className="font-medium">{lead.utm_source ?? lead.referrer ?? "directo"}</p></div>
+                      <div><p className="text-slate-400">Demo expira</p><p className="font-medium">{formatDate(lead.demo_expires_at)}</p></div>
                     </div>
 
                     {/* Notes */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">Notas internas</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Notas internas</label>
                       <textarea
                         rows={2}
                         value={notesVal}
                         onChange={(e) => setEditNotes((p) => ({ ...p, [lead.id]: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-400"
+                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-400"
                         placeholder="Notas de seguimiento..."
                       />
                     </div>
@@ -376,7 +376,7 @@ export default function LeadsPanel({
                       <select
                         value={lead.estado}
                         onChange={(e) => handleEstadoChange(lead.id, e.target.value)}
-                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                        className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
                       >
                         {ESTADOS.map((e) => (
                           <option key={e} value={e}>{ESTADO_LABELS[e].txt}</option>
@@ -388,12 +388,12 @@ export default function LeadsPanel({
                       {!lead.demo_user_id && !lead.demo_token ? (
                         <button
                           onClick={() => handleGrant(lead)}
-                          className="bg-teal-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-teal-700 font-semibold"
+                          className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 font-semibold"
                         >
                           Dar acceso a demo
                         </button>
                       ) : (
-                        <span className="text-xs text-teal-700 bg-teal-50 border border-teal-200 px-3 py-2 rounded-lg font-medium">
+                        <span className="text-xs text-teal-700 bg-teal-50 border border-teal-200 px-3 py-2 rounded-xl font-medium">
                           Demo activo
                         </span>
                       )}
@@ -401,7 +401,7 @@ export default function LeadsPanel({
                       {editNotes[lead.id] !== undefined && (
                         <button
                           onClick={() => handleSaveNotes(lead.id)}
-                          className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800"
+                          className="bg-slate-700 text-white text-sm px-4 py-2 rounded-xl hover:bg-slate-800"
                         >
                           Guardar notas
                         </button>
@@ -412,7 +412,7 @@ export default function LeadsPanel({
                           onClick={() => onUpdateLead(lead.id, { solicita_contacto: false }).then(() =>
                             toast("Marcado como contactado", "success")
                           )}
-                          className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700"
+                          className="bg-green-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-green-700"
                         >
                           Marcar contactado
                         </button>

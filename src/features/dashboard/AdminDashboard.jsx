@@ -223,7 +223,7 @@ export default function AdminDashboard() {
                 value={cobertura ? `${cobertura.pct}%` : "—"}
                 sub={cobertura ? `${cobertura.hoy} de ${cobertura.total} residentes` : "Sin residentes activos"}
                 icon="observations"
-                tone={!cobertura ? "gray" : cobertura.pct >= 80 ? "emerald" : cobertura.pct >= 40 ? "amber" : "rose"}
+                tone={!cobertura ? "slate" : cobertura.pct >= 80 ? "emerald" : cobertura.pct >= 40 ? "amber" : "rose"}
                 onClick={() => navigate("/vital-signs/new")}
               />
               <KpiCard
@@ -256,16 +256,16 @@ export default function AdminDashboard() {
         navigate={navigate}
       />
 
-      <details className="group bg-white rounded-2xl border border-gray-100 shadow-sm">
+      <details className="group bg-white rounded-2xl border border-slate-100 shadow-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
           <div>
-            <h2 className="text-sm font-bold text-gray-800">Contexto adicional</h2>
-            <p className="text-xs text-gray-500">Indicadores para revisar después de resolver las prioridades del turno.</p>
+            <h2 className="text-sm font-bold text-slate-800">Contexto adicional</h2>
+            <p className="text-xs text-slate-500">Indicadores para revisar después de resolver las prioridades del turno.</p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 group-open:hidden">Ver</span>
           <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 group-open:inline-flex">Ocultar</span>
         </summary>
-        <div className="space-y-6 border-t border-gray-100 p-4 sm:p-5">
+        <div className="space-y-6 border-t border-slate-100 p-4 sm:p-5">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <RiskMatrix
               clinicalSummary={clinicalSummary}
@@ -292,7 +292,7 @@ export default function AdminDashboard() {
 
       {/* Quick actions — rol-specific */}
       <section>
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
           Acciones principales
           <HelpTooltip className="ml-2" label="Ayuda sobre acciones rápidas">
             Tareas más repetidas del turno. Las consultas secundarias quedan agrupadas abajo.
@@ -311,13 +311,13 @@ export default function AdminDashboard() {
             <QuickAction iconId="residents" label="Ver residentes" onClick={() => navigate("/residents")} />
           )}
         </div>
-        <details className="group mt-3 rounded-xl border border-gray-100 bg-white">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-gray-700">
+        <details className="group mt-3 rounded-xl border border-slate-100 bg-white">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-700">
             <span>Más accesos</span>
-            <span className="text-xs text-gray-400 group-open:hidden">Ver</span>
-            <span className="hidden text-xs text-gray-400 group-open:inline">Ocultar</span>
+            <span className="text-xs text-slate-400 group-open:hidden">Ver</span>
+            <span className="hidden text-xs text-slate-400 group-open:inline">Ocultar</span>
           </summary>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-gray-100 p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-slate-100 p-3">
             <QuickAction iconId="residents"    label="Agregar residente"  onClick={() => navigate("/residents/new")} />
             <QuickAction iconId="residents"    label="Ver residentes"     onClick={() => navigate("/residents")} />
             <QuickAction iconId="vitals"       label="Historial signos"   onClick={() => navigate("/vital-signs")} />

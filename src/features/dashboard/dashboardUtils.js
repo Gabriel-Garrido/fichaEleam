@@ -11,17 +11,17 @@ export const DEPENDENCIA_TONE = {
   moderado:       { bg: "bg-amber-500",   text: "text-amber-700",    label: "Moderado" },
   severo:         { bg: "bg-orange-500",  text: "text-orange-700",   label: "Severo" },
   total:          { bg: "bg-rose-500",    text: "text-rose-700",     label: "Total" },
-  sin_clasificar: { bg: "bg-gray-400",    text: "text-gray-600",     label: "Sin clasificar" },
+  sin_clasificar: { bg: "bg-slate-400",    text: "text-slate-600",     label: "Sin clasificar" },
 };
 
 export const TURNOS = ["mañana", "tarde", "noche"];
 
 export const KPI_TONE = {
-  primary: { bg: "bg-white", accent: "text-[var(--color-primary)]", chip: "bg-teal-50 text-teal-700" },
-  emerald: { bg: "bg-white", accent: "text-emerald-700",            chip: "bg-emerald-50 text-emerald-700" },
-  amber:   { bg: "bg-white", accent: "text-amber-700",              chip: "bg-amber-50 text-amber-700" },
-  rose:    { bg: "bg-white", accent: "text-rose-700",               chip: "bg-rose-50 text-rose-700" },
-  gray:    { bg: "bg-white", accent: "text-gray-700",               chip: "bg-gray-100 text-gray-600" },
+  primary: { bg: "bg-white", accent: "text-teal-700",   chip: "bg-teal-50 text-teal-700" },
+  emerald: { bg: "bg-white", accent: "text-emerald-700", chip: "bg-emerald-50 text-emerald-700" },
+  amber:   { bg: "bg-white", accent: "text-amber-700",   chip: "bg-amber-50 text-amber-700" },
+  rose:    { bg: "bg-white", accent: "text-rose-700",    chip: "bg-rose-50 text-rose-700" },
+  slate:   { bg: "bg-white", accent: "text-slate-700",   chip: "bg-slate-100 text-slate-600" },
 };
 
 export const ALERT_TONE = {
@@ -30,14 +30,14 @@ export const ALERT_TONE = {
 };
 
 export const FILTER_TONE = {
-  gray:    "bg-white text-gray-700 border-gray-200 hover:bg-gray-50",
+  slate:   "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
   rose:    "bg-white text-rose-700 border-rose-200 hover:bg-rose-50",
   amber:   "bg-white text-amber-800 border-amber-200 hover:bg-amber-50",
   emerald: "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50",
 };
 
 export const CARD_TONE = {
-  default: "border-gray-100",
+  default: "border-slate-100",
   amber:   "border-amber-100",
   rose:    "border-rose-100",
 };
@@ -95,6 +95,6 @@ export function riskTone(tone) {
     rose:    "bg-rose-50 border-rose-100 text-rose-700",
     amber:   "bg-amber-50 border-amber-100 text-amber-800",
     emerald: "bg-emerald-50 border-emerald-100 text-emerald-700",
-    gray:    "bg-gray-50 border-gray-100 text-gray-600",
+    slate:   "bg-slate-50 border-slate-100 text-slate-600",
   }[tone];
 }

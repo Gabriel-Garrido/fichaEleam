@@ -60,8 +60,8 @@ export default function ContactSpecialistButton({ token }) {
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="font-bold text-gray-800 mb-1">Habla con un especialista</h3>
-            <p className="text-sm text-gray-500 mb-4">
+            <h3 className="font-bold text-slate-800 mb-1">Habla con un especialista</h3>
+            <p className="text-sm text-slate-500 mb-4">
               Te contactaremos en menos de 2 horas hábiles.
             </p>
             <textarea
@@ -69,12 +69,12 @@ export default function ContactSpecialistButton({ token }) {
               onChange={(e) => setMsg(e.target.value)}
               placeholder="¿Tienes alguna pregunta específica? (opcional)"
               rows={3}
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-400 mb-4"
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-400 mb-4"
             />
             <div className="flex gap-3">
               <button
                 onClick={() => setOpen(false)}
-                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-xl text-sm hover:bg-gray-50"
+                className="flex-1 border border-slate-300 text-slate-700 py-2 rounded-xl text-sm hover:bg-slate-50"
               >
                 Cancelar
               </button>

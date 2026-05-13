@@ -628,6 +628,59 @@ update public.profiles set rol = 'superadmin' where email = 'tu-email@gmail.com'
 
 ---
 
+## Sistema de Diseño (Design System)
+
+El proyecto usa **Tailwind CSS 4 puro** sin CSS variables de colores. No hay `var(--color-*)` en el código; todo usa clases Tailwind directas.
+
+### Paleta de colores
+
+| Propósito | Tailwind |
+|-----------|---------|
+| Primario (acciones, CTA) | `teal-700` / `hover:teal-800` |
+| Primario fondo suave | `teal-50`, `teal-100` |
+| Primario texto suave | `teal-600`, `teal-700` |
+| Superficies / texto neutro | `slate-*` (NO `gray-*`) |
+| Fondo página | `slate-50` o `white` |
+| Éxito | `emerald-*` |
+| Alerta | `amber-*` |
+| Error / urgente | `rose-*` |
+| Info | `sky-*` |
+
+### Bordes y formas
+
+- Cards: `rounded-2xl` con `border border-slate-100 shadow-sm`
+- Modales: `rounded-2xl` (mobile: `rounded-t-2xl`) — manejado por `Modal.jsx`
+- Botones: `rounded-xl`
+- Inputs/selects: `rounded-xl border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100`
+- Badges / pills: `rounded-full`
+- Badges internos pequeños: `rounded-xl`
+
+### Iconografía
+
+- **Heroicons outline** (SVG inline). NO emojis en UI de la aplicación.
+- Patrón de icono en empty states: caja teal-50 + icono teal-600, 12×12px, `rounded-xl`.
+- Iconos de navegación: centralizados en `NavIcon.jsx`.
+
+### Componentes base
+
+| Componente | Notas |
+|-----------|-------|
+| `Button.jsx` | Acepta `className` para override de color. Base: `rounded-xl`. |
+| `Input.jsx` | Base: `rounded-xl border-slate-300 focus:border-teal-500`. |
+| `Modal.jsx` | Accesible: Escape, backdrop click, `role=dialog`. |
+| `Loading.jsx` | Spinner teal-700. |
+| `ErrorBoundary.jsx` | Clase. Stack trace solo en DEV. |
+| `SupabaseError.jsx` | Pantalla de error si Supabase no configurado. |
+| `Toast.jsx` | `useToast()` hook. 4s auto-dismiss. |
+| `HelpTooltip.jsx` | Botón `?` con tooltip de ayuda. |
+| `PageLayout.jsx` | Wrapper con `PageHeader` + slot `actions`. |
+
+### dashboardUtils.js — claves de tono
+
+`KPI_TONE`, `FILTER_TONE`, `CARD_TONE` usan claves: `primary`, `emerald`, `amber`, `rose`, `slate` (no `gray`).
+
+---
+
 ## Onboarding Adaptativo
 
 Sistema de guía de primeros pasos en `src/features/onboarding/`. Montado en `AppShell.jsx` via `<OnboardingProvider>`.

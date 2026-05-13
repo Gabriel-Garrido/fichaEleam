@@ -135,7 +135,7 @@ export default function ChangePasswordPage() {
   // User already signed in with Google OAuth — just confirm and continue
   if (isAlreadyGoogleUser) {
     return (
-      <div className="min-h-screen bg-[var(--color-background,#f8fafc)] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -143,14 +143,14 @@ export default function ChangePasswordPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-gray-800">Acceso con Google confirmado</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-slate-800">Acceso con Google confirmado</h1>
+            <p className="text-sm text-slate-500">
               Tu cuenta ya está vinculada a Google. No necesitas crear una contraseña.
             </p>
           </div>
 
           {error && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-center">
+            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-center">
               {error}
             </p>
           )}
@@ -158,7 +158,7 @@ export default function ChangePasswordPage() {
           <Button
             onClick={handleContinueAsGoogle}
             disabled={submitting}
-            className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold hover:bg-[var(--color-button-hover)] disabled:opacity-50 transition-colors"
+            className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold hover:bg-teal-800 disabled:opacity-50 transition-colors"
           >
             {submitting ? "Confirmando..." : "Continuar al sistema"}
           </Button>
@@ -169,7 +169,7 @@ export default function ChangePasswordPage() {
 
   // Standard flow: set a new password
   return (
-    <div className="min-h-screen bg-[var(--color-background,#f8fafc)] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 space-y-6">
         <div>
           <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
@@ -178,8 +178,8 @@ export default function ChangePasswordPage() {
                 d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Elige tu contraseña</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-slate-800">Elige tu contraseña</h1>
+          <p className="text-sm text-slate-500 mt-1">
             Por seguridad, debes establecer una contraseña personal antes de continuar.
             La contraseña temporal que recibiste quedará sin efecto.
           </p>
@@ -187,7 +187,7 @@ export default function ChangePasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">
+            <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
               Nueva contraseña
             </label>
             <div className="relative">
@@ -198,12 +198,12 @@ export default function ChangePasswordPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={submitting}
-                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] pr-10"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 tabIndex={-1}
               >
                 {showPw ? (
@@ -220,16 +220,16 @@ export default function ChangePasswordPage() {
             </div>
             {strength && (
               <div className="mt-2 space-y-1">
-                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                <div className="w-full bg-slate-100 rounded-full h-1.5">
                   <div className={`h-1.5 rounded-full transition-all ${strength.cls} ${strength.bar}`} />
                 </div>
-                <p className="text-xs text-gray-500">{strength.txt}</p>
+                <p className="text-xs text-slate-500">{strength.txt}</p>
               </div>
             )}
           </div>
 
           <div>
-            <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">
+            <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
               Confirmar contraseña
             </label>
             <Input
@@ -239,12 +239,12 @@ export default function ChangePasswordPage() {
               onChange={(e) => setConfirm(e.target.value)}
               required
               disabled={submitting}
-              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           {error && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-xl px-3 py-2">
               {error}
             </p>
           )}
@@ -252,13 +252,13 @@ export default function ChangePasswordPage() {
           <Button
             type="submit"
             disabled={submitting || !password || !confirm}
-            className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold hover:bg-[var(--color-button-hover)] disabled:opacity-50 transition-colors"
+            className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold hover:bg-teal-800 disabled:opacity-50 transition-colors"
           >
             {submitting ? "Actualizando..." : "Establecer contraseña"}
           </Button>
         </form>
 
-        <p className="text-xs text-center text-gray-400">
+        <p className="text-xs text-center text-slate-400">
           Tu contraseña debe tener al menos 8 caracteres, una mayúscula y un número.
         </p>
       </div>

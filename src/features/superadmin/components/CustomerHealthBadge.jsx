@@ -16,7 +16,7 @@ export default function CustomerHealthBadge({ eleam, tasksOverdue = 0, showReaso
         {health.label}
       </span>
       {showReasons && health.reasons.length > 0 && (
-        <ul className="text-[11px] text-gray-500 mt-1 list-disc list-inside max-w-xs">
+        <ul className="text-[11px] text-slate-500 mt-1 list-disc list-inside max-w-xs">
           {health.reasons.slice(0, 3).map((r, i) => <li key={i}>{r}</li>)}
         </ul>
       )}

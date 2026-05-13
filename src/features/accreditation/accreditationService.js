@@ -15,7 +15,7 @@ export const ESTADOS_REQUISITO = {
 };
 
 export function estadoMeta(estado) {
-  return ESTADOS_REQUISITO[estado] ?? { label: estado, cls: "bg-gray-100 text-gray-700", dot: "bg-gray-400" };
+  return ESTADOS_REQUISITO[estado] ?? { label: estado, cls: "bg-slate-100 text-slate-700", dot: "bg-slate-400" };
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -92,7 +92,7 @@ export default function DesktopSidebar({
           <button
             type="button"
             onClick={onToggle}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
             aria-label="Contraer menú"
             title="Contraer menú"
           >
@@ -122,7 +122,7 @@ export default function DesktopSidebar({
                   return (
                     <div key={item.id} className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800" title={item.description}>
                       <span className="inline-flex items-center gap-3">
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/70">
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white/70">
                           <NavIcon id={item.icon} className="h-4 w-4" />
                         </span>
                         {expanded && <span>{item.label}</span>}
@@ -139,7 +139,7 @@ export default function DesktopSidebar({
                     className={common}
                     title={expanded ? item.description : `${item.label}: ${item.description ?? ""}`}
                   >
-                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${active ? "bg-white text-teal-800" : "bg-slate-100 text-slate-600"}`}>
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-xl ${active ? "bg-white text-teal-800" : "bg-slate-100 text-slate-600"}`}>
                       <NavIcon id={item.icon} className="h-4 w-4" />
                     </span>
                     {expanded && (

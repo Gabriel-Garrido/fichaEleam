@@ -23,8 +23,6 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const TURNO_ICON = { mañana: "🌅", tarde: "🌇", noche: "🌙" };
-
 export default function VitalSignsList() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -119,7 +117,7 @@ export default function VitalSignsList() {
                   : "/vital-signs/new"
               )
             }
-            className="w-full sm:w-auto bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-lg hover:bg-[var(--color-button-hover)] font-medium shadow-sm"
+            className="w-full sm:w-auto bg-teal-700 text-white px-6 py-2.5 rounded-xl hover:bg-teal-800 font-medium shadow-sm"
           >
             + Nuevo Registro
           </Button>
@@ -128,7 +126,7 @@ export default function VitalSignsList() {
     >
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex justify-between items-center">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 flex justify-between items-center">
           <span>{error}</span>
           <button onClick={fetchRecords} className="underline text-sm ml-2">
             Reintentar
@@ -143,7 +141,7 @@ export default function VitalSignsList() {
           onClick={() => setFiltroEstado("")}
           label="Todos"
           value={stats.total}
-          tone="gray"
+          tone="slate"
         />
         <StatChip
           active={filtroEstado === "normal"}
@@ -169,25 +167,25 @@ export default function VitalSignsList() {
       </div>
 
       {/* Filters */}
-      <details className="group bg-white rounded-xl border border-gray-100 shadow-sm mb-5">
+      <details className="group bg-white rounded-xl border border-slate-100 shadow-sm mb-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
           <div>
-            <p className="text-sm font-semibold text-gray-800">Filtros y vista</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm font-semibold text-slate-800">Filtros y vista</p>
+            <p className="text-xs text-slate-500">
               {filtroResidente ? "Filtrando por residente" : "Mes actual por defecto"}
             </p>
           </div>
-          <span className="text-xs font-semibold text-[var(--color-primary)] group-open:hidden">Ajustar</span>
-          <span className="hidden text-xs font-semibold text-gray-500 group-open:inline">Cerrar</span>
+          <span className="text-xs font-semibold text-teal-700 group-open:hidden">Ajustar</span>
+          <span className="hidden text-xs font-semibold text-slate-500 group-open:inline">Cerrar</span>
         </summary>
-        <div className="border-t border-gray-100 p-4">
+        <div className="border-t border-slate-100 p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Residente</label>
+              <label className="block text-xs text-slate-500 mb-1">Residente</label>
               <select
                 value={filtroResidente}
                 onChange={(e) => setFiltroResidente(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="">Todos los residentes</option>
                 {residents.map((r) => (
@@ -198,31 +196,31 @@ export default function VitalSignsList() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Desde</label>
+              <label className="block text-xs text-slate-500 mb-1">Desde</label>
               <input
                 type="date"
                 value={filtroDesde}
                 onChange={(e) => setFiltroDesde(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Hasta</label>
+              <label className="block text-xs text-slate-500 mb-1">Hasta</label>
               <input
                 type="date"
                 value={filtroHasta}
                 onChange={(e) => setFiltroHasta(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
-            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden self-stretch">
+            <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch">
               <button
                 onClick={() => setView("cards")}
                 aria-pressed={view === "cards"}
                 className={`flex-1 px-3 py-2 text-xs font-medium ${
                   view === "cards"
-                    ? "bg-[var(--color-primary)] text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
+                    ? "bg-teal-700 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 Tarjetas
@@ -230,10 +228,10 @@ export default function VitalSignsList() {
               <button
                 onClick={() => setView("table")}
                 aria-pressed={view === "table"}
-                className={`flex-1 px-3 py-2 text-xs font-medium border-l border-gray-200 ${
+                className={`flex-1 px-3 py-2 text-xs font-medium border-l border-slate-200 ${
                   view === "table"
-                    ? "bg-[var(--color-primary)] text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
+                    ? "bg-teal-700 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 Tabla
@@ -241,12 +239,12 @@ export default function VitalSignsList() {
             </div>
           </div>
           <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-500">
               Tarjetas es la vista recomendada en móvil; tabla queda para revisión compacta.
             </p>
             <button
               onClick={clearFilters}
-              className="self-start text-sm text-gray-500 hover:text-gray-700 underline"
+              className="self-start text-sm text-slate-500 hover:text-slate-700 underline"
             >
               Limpiar filtros
             </button>
@@ -255,8 +253,10 @@ export default function VitalSignsList() {
       </details>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-500 bg-white rounded-xl border border-gray-100">
-          <div className="text-5xl mb-4">📊</div>
+        <div className="text-center py-16 text-slate-500 bg-white rounded-xl border border-slate-100">
+          <svg className="mx-auto mb-4 h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+          </svg>
           <p>No hay registros para el período / filtro seleccionado.</p>
         </div>
       ) : view === "cards" ? (
@@ -279,7 +279,7 @@ export default function VitalSignsList() {
 /* ─── StatChip ───────────────────────────────────────────────── */
 
 const TONE = {
-  gray:    { bg: "bg-white",      text: "text-gray-700",     ring: "ring-gray-200",    accent: "text-gray-500"   },
+  slate:   { bg: "bg-white",      text: "text-slate-700",    ring: "ring-slate-200",   accent: "text-slate-500"  },
   emerald: { bg: "bg-emerald-50", text: "text-emerald-700",  ring: "ring-emerald-200", accent: "text-emerald-600" },
   amber:   { bg: "bg-amber-50",   text: "text-amber-800",    ring: "ring-amber-200",   accent: "text-amber-600"  },
   rose:    { bg: "bg-rose-50",    text: "text-rose-700",     ring: "ring-rose-200",    accent: "text-rose-600"   },
@@ -291,7 +291,7 @@ function StatChip({ active, onClick, label, value, tone }) {
     <button
       type="button"
       onClick={onClick}
-      className={`text-left rounded-xl border border-gray-100 ${t.bg} px-4 py-3 shadow-sm transition-all hover:shadow-md ${
+      className={`text-left rounded-xl border border-slate-100 ${t.bg} px-4 py-3 shadow-sm transition-all hover:shadow-md ${
         active ? `ring-2 ${t.ring}` : ""
       }`}
     >
@@ -311,12 +311,14 @@ function VitalRecordCard({ record, onDelete }) {
     timeStyle: "short",
   });
 
+  const turnoLabel = { mañana: "Mañana", tarde: "Tarde", noche: "Noche" };
+
   return (
-    <article className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <header className="flex flex-col sm:flex-row justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+    <article className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <header className="flex flex-col sm:flex-row justify-between gap-3 px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-gray-800 truncate">
+            <h3 className="font-semibold text-slate-800 truncate">
               {record.residentes
                 ? `${record.residentes.apellido}, ${record.residentes.nombre}`
                 : "Residente"}
@@ -328,11 +330,11 @@ function VitalRecordCard({ record, onDelete }) {
               {overall.label}
             </span>
           </div>
-          <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+          <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
             <span>{fecha}</span>
             {record.turno && (
               <span className="capitalize">
-                {TURNO_ICON[record.turno] ?? "•"} {record.turno}
+                {turnoLabel[record.turno] ?? record.turno}
               </span>
             )}
             {record.estado_conciencia && (
@@ -406,7 +408,7 @@ function VitalRecordCard({ record, onDelete }) {
         />
         {record.peso != null && (
           <VitalCard
-            icon="⚖️"
+            icon=""
             label="Peso"
             value={`${record.peso}`}
             unit="kg"
@@ -416,8 +418,8 @@ function VitalRecordCard({ record, onDelete }) {
       </div>
 
       {record.observaciones && (
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 text-sm text-gray-600">
-          <span className="text-xs uppercase tracking-wide text-gray-400 mr-2">Notas</span>
+        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-sm text-slate-600">
+          <span className="text-xs uppercase tracking-wide text-slate-400 mr-2">Notas</span>
           {record.observaciones}
         </div>
       )}
@@ -432,14 +434,14 @@ function VitalRecordsTable({ records, onDelete }) {
     const s = STATUS[status];
     if (status === "critical") return `font-semibold ${s.text}`;
     if (status === "warning") return `font-medium ${s.text}`;
-    if (status === "unknown") return "text-gray-300";
-    return "text-gray-700";
+    if (status === "unknown") return "text-slate-300";
+    return "text-slate-700";
   };
 
   return (
-    <div className="overflow-x-auto rounded-xl shadow-sm border border-gray-100 bg-white">
+    <div className="overflow-x-auto rounded-xl shadow-sm border border-slate-100 bg-white">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+        <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
           <tr>
             <th className="px-4 py-3 text-left">Residente</th>
             <th className="px-4 py-3 text-left">Fecha/Hora</th>
@@ -454,13 +456,13 @@ function VitalRecordsTable({ records, onDelete }) {
             {onDelete && <th className="px-4 py-3"></th>}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-slate-100">
           {records.map((r) => (
-            <tr key={r.id} className="hover:bg-gray-50">
-              <td className="px-4 py-3 font-medium text-gray-800">
+            <tr key={r.id} className="hover:bg-slate-50">
+              <td className="px-4 py-3 font-medium text-slate-800">
                 {r.residentes ? `${r.residentes.apellido}, ${r.residentes.nombre}` : "—"}
               </td>
-              <td className="px-4 py-3 text-gray-600">
+              <td className="px-4 py-3 text-slate-600">
                 {new Date(r.fecha_hora).toLocaleString("es-CL", {
                   dateStyle: "short",
                   timeStyle: "short",
@@ -487,7 +489,7 @@ function VitalRecordsTable({ records, onDelete }) {
               <td className={`px-4 py-3 text-center tabular-nums ${cellTone(VITAL_DEFS.dolor.statusFor(r))}`}>
                 {VITAL_DEFS.dolor.format(r.dolor_escala)}
               </td>
-              <td className="px-4 py-3 text-center capitalize text-gray-500">
+              <td className="px-4 py-3 text-center capitalize text-slate-500">
                 {r.turno ?? "—"}
               </td>
               {onDelete && (

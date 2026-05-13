@@ -40,7 +40,7 @@ export default function OnboardingBanner() {
     >
       {/* Step icon */}
       <div
-        className={`flex-shrink-0 w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center ${colors.text}`}
+        className={`flex-shrink-0 w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center ${colors.text}`}
         aria-hidden="true"
       >
         <NavIcon id={currentRouteStep.icon} className="w-4 h-4" />

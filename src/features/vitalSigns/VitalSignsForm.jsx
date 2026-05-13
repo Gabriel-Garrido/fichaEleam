@@ -126,17 +126,17 @@ function VitalSignsForm() {
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="text-[var(--color-primary)] hover:underline text-sm"
+          className="text-teal-700 hover:underline text-sm"
         >
           ← Volver
         </button>
-        <h1 className="text-3xl font-bold text-[var(--color-primary)]">
+        <h1 className="text-3xl font-bold text-teal-700">
           Registrar Signos Vitales
         </h1>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4">
           {error}
         </div>
       )}
@@ -150,7 +150,7 @@ function VitalSignsForm() {
           <button
             type="button"
             onClick={() => navigate("/residents/new")}
-            className="mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-lg hover:bg-amber-100"
+            className="mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-xl hover:bg-amber-100"
           >
             Agregar residente
           </button>
@@ -159,13 +159,13 @@ function VitalSignsForm() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Residente y turno */}
-        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">
+        <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+          <h2 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">
             Datos generales
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-600 mb-1">
+              <label className="block text-sm font-medium text-slate-600 mb-1">
                 Residente *
               </label>
               <select
@@ -174,7 +174,7 @@ function VitalSignsForm() {
                 onChange={handleChange}
                 required
                 disabled={noActiveResidents}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="">Seleccionar residente...</option>
                 {residents.map((r) => (
@@ -185,7 +185,7 @@ function VitalSignsForm() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">
+              <label className="block text-sm font-medium text-slate-600 mb-1">
                 Fecha y hora *
               </label>
               <input
@@ -194,16 +194,16 @@ function VitalSignsForm() {
                 value={form.fecha_hora}
                 onChange={handleChange}
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Turno</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Turno</label>
               <select
                 name="turno"
                 value={form.turno}
                 onChange={handleChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="mañana">Mañana</option>
                 <option value="tarde">Tarde</option>
@@ -214,9 +214,9 @@ function VitalSignsForm() {
         </section>
 
         {/* Signos vitales */}
-        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
           <div className="flex items-center justify-between mb-4 border-b pb-2 gap-3 flex-wrap">
-            <h2 className="text-lg font-semibold text-gray-700">Signos Vitales</h2>
+            <h2 className="text-lg font-semibold text-slate-700">Signos Vitales</h2>
             <span
               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${liveBadge.badge}`}
               title="Estado general según los valores ingresados"
@@ -311,7 +311,7 @@ function VitalSignsForm() {
 
             <div className="sm:col-span-2">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium text-gray-600">Dolor (0-10)</label>
+                <label className="text-sm font-medium text-slate-600">Dolor (0-10)</label>
                 <PainBadge value={form.dolor_escala} />
               </div>
               <input
@@ -321,9 +321,9 @@ function VitalSignsForm() {
                 onChange={handleChange}
                 min="0"
                 max="10"
-                className="w-full accent-[var(--color-primary)]"
+                className="w-full accent-teal-700"
               />
-              <div className="flex justify-between text-xs text-gray-400">
+              <div className="flex justify-between text-xs text-slate-400">
                 <span>0 Sin dolor</span>
                 <span>10 Máximo</span>
               </div>
@@ -332,20 +332,20 @@ function VitalSignsForm() {
         </section>
 
         {/* Estado y observaciones */}
-        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">
+        <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+          <h2 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">
             Estado y Observaciones
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">
+              <label className="block text-sm font-medium text-slate-600 mb-1">
                 Estado de conciencia
               </label>
               <select
                 name="estado_conciencia"
                 value={form.estado_conciencia}
                 onChange={handleChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="alerta">Alerta</option>
                 <option value="somnoliento">Somnoliento/a</option>
@@ -354,7 +354,7 @@ function VitalSignsForm() {
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-600 mb-1">
+              <label className="block text-sm font-medium text-slate-600 mb-1">
                 Observaciones
               </label>
               <textarea
@@ -363,7 +363,7 @@ function VitalSignsForm() {
                 onChange={handleChange}
                 rows={3}
                 placeholder="Notas adicionales del registro..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
           </div>
@@ -373,14 +373,14 @@ function VitalSignsForm() {
           <Button
             type="button"
             onClick={() => navigate(-1)}
-            className="px-6 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
+            className="px-6 py-2 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50"
           >
             Cancelar
           </Button>
           <Button
             type="submit"
             disabled={saving || noActiveResidents}
-            className="px-6 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+            className="px-6 py-2 bg-teal-700 text-white rounded-xl hover:bg-teal-800 disabled:opacity-50"
           >
             {saving ? "Guardando..." : "Guardar Registro"}
           </Button>
@@ -406,7 +406,7 @@ function NumField({
   const s = status ? STATUS[status] : null;
   const showStatus = status && status !== "unknown";
   const ringClass = !showStatus
-    ? "border-gray-300 focus:ring-[var(--color-secondary)]"
+    ? "border-slate-300 focus:ring-teal-500"
     : status === "critical"
       ? "border-rose-300 focus:ring-rose-200"
       : status === "warning"
@@ -416,8 +416,8 @@ function NumField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="text-sm font-medium text-gray-600">
-          {label} {unit && <span className="text-gray-400 font-normal">({unit})</span>}
+        <label className="text-sm font-medium text-slate-600">
+          {label} {unit && <span className="text-slate-400 font-normal">({unit})</span>}
         </label>
         {showStatus && (
           <span
@@ -437,11 +437,11 @@ function NumField({
         step={step}
         min={min}
         max={max}
-        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${ringClass}`}
+        className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 ${ringClass}`}
       />
       {normal && (
-        <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-400">
-          Normal: <span className="text-gray-500 normal-case">{normal}</span>
+        <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
+          Normal: <span className="text-slate-500 normal-case">{normal}</span>
         </div>
       )}
     </div>

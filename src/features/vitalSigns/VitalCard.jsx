@@ -12,7 +12,7 @@ export default function VitalCard({ icon, label, value, unit, status, normal, su
       className={`relative rounded-xl border ${s.badge.split(" ").find((c) => c.startsWith("border-"))} bg-white p-3 sm:p-4 shadow-sm`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
+        <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
           <span aria-hidden>{icon}</span>
           <span className="truncate">{label}</span>
         </div>
@@ -26,18 +26,18 @@ export default function VitalCard({ icon, label, value, unit, status, normal, su
       </div>
 
       <div className="mt-2 flex items-baseline gap-1">
-        <span className={`text-2xl font-bold tabular-nums ${isUnknown ? "text-gray-300" : s.text}`}>
+        <span className={`text-2xl font-bold tabular-nums ${isUnknown ? "text-slate-300" : s.text}`}>
           {value ?? "—"}
         </span>
         {unit && !isUnknown && value !== "—" && (
-          <span className="text-xs text-gray-400">{unit}</span>
+          <span className="text-xs text-slate-400">{unit}</span>
         )}
       </div>
 
-      {sub && <div className="mt-0.5 text-[11px] text-gray-400">{sub}</div>}
+      {sub && <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div>}
       {normal && (
-        <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-400">
-          Normal: <span className="text-gray-500 normal-case">{normal}</span>
+        <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
+          Normal: <span className="text-slate-500 normal-case">{normal}</span>
         </div>
       )}
     </div>

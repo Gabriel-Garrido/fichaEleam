@@ -1,14 +1,14 @@
 export const ESTADO_CONFIG = {
   activo:        { label: "Activo",        badge: "bg-emerald-100 text-emerald-800 border-emerald-200", dot: "bg-emerald-500" },
   hospitalizado: { label: "Hospitalizado", badge: "bg-amber-100 text-amber-800 border-amber-200",       dot: "bg-amber-500"   },
-  egresado:      { label: "Egresado",      badge: "bg-gray-100 text-gray-700 border-gray-200",          dot: "bg-gray-400"    },
+  egresado:      { label: "Egresado",      badge: "bg-slate-100 text-slate-700 border-slate-200",          dot: "bg-slate-400"    },
   fallecido:     { label: "Fallecido",     badge: "bg-rose-100 text-rose-800 border-rose-200",          dot: "bg-rose-500"    },
 };
 
 export const ESTADO_BADGE = {
   activo:        "bg-emerald-100 text-emerald-800 border border-emerald-200",
   hospitalizado: "bg-amber-100 text-amber-800 border border-amber-200",
-  egresado:      "bg-gray-100 text-gray-700 border border-gray-200",
+  egresado:      "bg-slate-100 text-slate-700 border border-slate-200",
   fallecido:     "bg-rose-100 text-rose-800 border border-rose-200",
 };
 
@@ -40,7 +40,7 @@ export const TIPO_BADGE = {
   visita_medica:              "bg-blue-100 text-blue-700",
   curacion:                   "bg-purple-100 text-purple-700",
   administracion_medicamento: "bg-amber-100 text-amber-700",
-  observacion_general:        "bg-gray-100 text-gray-700",
+  observacion_general:        "bg-slate-100 text-slate-700",
 };
 
 export function initials(nombre = "", apellido = "") {

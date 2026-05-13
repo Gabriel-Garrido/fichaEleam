@@ -24,7 +24,7 @@ function MetricCard({
   const toneClass = toneClasses[tone] ?? toneClasses.slate;
 
   return (
-    <article className={`rounded-lg border bg-white p-4 shadow-sm ${toneClass}`}>
+    <article className={`rounded-xl border bg-white p-4 shadow-sm ${toneClass}`}>
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           {label}

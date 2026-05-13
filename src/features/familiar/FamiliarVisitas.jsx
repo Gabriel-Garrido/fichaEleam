@@ -84,8 +84,8 @@ export default function FamiliarVisitas() {
   if (residentes.length === 0) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">Sin residentes asignados</h1>
-        <p className="text-gray-500">Pide al administrador del ELEAM que cree el vínculo.</p>
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Sin residentes asignados</h1>
+        <p className="text-slate-500">Pide al administrador del ELEAM que cree el vínculo.</p>
       </div>
     );
   }
@@ -96,14 +96,14 @@ export default function FamiliarVisitas() {
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-black text-gray-800">Mis visitas</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-black text-slate-800">Mis visitas</h1>
+          <p className="text-sm text-slate-500">
             Registro de tus visitas a {activeRes?.nombre} {activeRes?.apellido}
           </p>
         </div>
         <button
           onClick={() => navigate("/familiar")}
-          className="text-sm text-[var(--color-primary)] hover:underline"
+          className="text-sm text-teal-700 hover:underline"
         >
           ← Volver al portal
         </button>
@@ -115,10 +115,10 @@ export default function FamiliarVisitas() {
             <button
               key={r.id}
               onClick={() => { setActiveId(r.id); loadVisits(r.id); }}
-              className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${
+              className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${
                 r.id === activeId
-                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  ? "bg-teal-700 text-white border-teal-700"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
               }`}
             >
               {r.nombre} {r.apellido}
@@ -129,12 +129,12 @@ export default function FamiliarVisitas() {
 
       <form
         onSubmit={handleSubmit}
-        className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3"
+        className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3"
       >
-        <h2 className="font-bold text-gray-800 mb-1">Registrar nueva visita</h2>
+        <h2 className="font-bold text-slate-800 mb-1">Registrar nueva visita</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">
+            <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
               Fecha y hora
             </label>
             <Input
@@ -145,7 +145,7 @@ export default function FamiliarVisitas() {
             />
           </div>
           <div>
-            <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">
+            <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
               Duración (minutos)
             </label>
             <Input
@@ -158,11 +158,11 @@ export default function FamiliarVisitas() {
           </div>
         </div>
         <div>
-          <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">
+          <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
             Notas (opcional)
           </label>
           <textarea
-            className="w-full rounded-lg border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
             rows={3}
             placeholder="¿Cómo encontraste a tu familiar? ¿Algo que el equipo deba saber?"
             value={form.notas}
@@ -173,30 +173,30 @@ export default function FamiliarVisitas() {
           <Button
             type="submit"
             disabled={saving}
-            className="bg-[var(--color-primary)] text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+            className="bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"
           >
             {saving ? "Guardando..." : "Guardar visita"}
           </Button>
         </div>
       </form>
 
-      <section className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <h2 className="font-bold text-gray-800 mb-3">Historial</h2>
+      <section className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+        <h2 className="font-bold text-slate-800 mb-3">Historial</h2>
         {visitas.length === 0 ? (
-          <p className="text-sm text-gray-500">Aún no tienes visitas registradas.</p>
+          <p className="text-sm text-slate-500">Aún no tienes visitas registradas.</p>
         ) : (
           <ul className="divide-y">
             {visitas.map((v) => (
               <li key={v.id} className="py-3 flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-gray-700">
+                  <p className="text-sm font-semibold text-slate-700">
                     {formatDateTime(v.fecha_hora)}
-                    {v.duracion_min ? <span className="text-gray-500 font-normal"> · {v.duracion_min} min</span> : null}
+                    {v.duracion_min ? <span className="text-slate-500 font-normal"> · {v.duracion_min} min</span> : null}
                   </p>
-                  {v.notas && <p className="text-sm text-gray-500 mt-0.5">{v.notas}</p>}
+                  {v.notas && <p className="text-sm text-slate-500 mt-0.5">{v.notas}</p>}
                 </div>
                 {v.profiles?.nombre && (
-                  <span className="text-[11px] text-gray-400 shrink-0">
+                  <span className="text-[11px] text-slate-400 shrink-0">
                     {v.profiles.nombre}
                   </span>
                 )}

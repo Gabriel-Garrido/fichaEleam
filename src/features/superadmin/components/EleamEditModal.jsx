@@ -58,16 +58,16 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
             onChange={(e) => setForm((p) => ({ ...p, pago_activo: e.target.checked }))}
             className="w-4 h-4 accent-slate-600"
           />
-          <span className="text-sm font-medium text-gray-700">Suscripción activa</span>
+          <span className="text-sm font-medium text-slate-700">Suscripción activa</span>
         </label>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">Plan</label>
+            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Plan</label>
             <select
               value={form.plan ?? "demo"}
               onChange={(e) => setForm((p) => ({ ...p, plan: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
             >
               <option value="demo">Demo</option>
               <option value="mensual">Mensual</option>
@@ -76,78 +76,78 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">Estado CRM</label>
+            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Estado CRM</label>
             <select
               value={form.crm_estado}
               onChange={(e) => setForm((p) => ({ ...p, crm_estado: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
             >
               {CRM_STATES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">Riesgo churn</label>
+            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Riesgo churn</label>
             <select
               value={form.riesgo_churn}
               onChange={(e) => setForm((p) => ({ ...p, riesgo_churn: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
             >
               {RIESGO_CHURN.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">Origen lead</label>
+            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Origen lead</label>
             <input
               type="text"
               value={form.origen_lead}
               onChange={(e) => setForm((p) => ({ ...p, origen_lead: e.target.value }))}
               placeholder="Web, referido, evento…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">
-              Máx. residentes <span className="font-normal text-gray-400">(vacío = ilimitado)</span>
+            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">
+              Máx. residentes <span className="font-normal text-slate-400">(vacío = ilimitado)</span>
             </label>
             <input
               type="number" min="1"
               value={form.max_residentes}
               onChange={(e) => setForm((p) => ({ ...p, max_residentes: e.target.value }))}
               placeholder="Ej: 30"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
             />
           </div>
           <div>
-            <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">Vencimiento suscripción</label>
+            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Vencimiento suscripción</label>
             <input
               type="date"
               value={form.fecha_vencimiento_suscripcion}
               onChange={(e) => setForm((p) => ({ ...p, fecha_vencimiento_suscripcion: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
             />
           </div>
           <div>
-            <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">Próxima acción</label>
+            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Próxima acción</label>
             <input
               type="date"
               value={form.proxima_accion_fecha}
               onChange={(e) => setForm((p) => ({ ...p, proxima_accion_fecha: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs uppercase font-semibold text-gray-500 mb-1">Notas internas</label>
+          <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Notas internas</label>
           <textarea
             value={form.notas_admin}
             onChange={(e) => setForm((p) => ({ ...p, notas_admin: e.target.value }))}
             rows={3}
             placeholder="Notas visibles solo para superadmin…"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
           />
         </div>
       </div>
@@ -156,7 +156,7 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
         <button
           type="button"
           onClick={onClose}
-          className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50"
+          className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-sm hover:bg-slate-50"
         >
           Cancelar
         </button>
@@ -164,7 +164,7 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="px-4 py-2 bg-slate-700 text-white rounded-lg text-sm hover:bg-slate-800 disabled:opacity-50"
+          className="px-4 py-2 bg-slate-700 text-white rounded-xl text-sm hover:bg-slate-800 disabled:opacity-50"
         >
           {saving ? "Guardando…" : "Guardar cambios"}
         </button>

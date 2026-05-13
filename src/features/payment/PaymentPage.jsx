@@ -141,29 +141,29 @@ export default function PaymentPage() {
   const showPublicNav = !user;
 
   return (
-    <div className={showPublicNav ? "min-h-screen bg-gray-50" : ""}>
+    <div className={showPublicNav ? "min-h-screen bg-slate-50" : ""}>
       {/* Nav mínima */}
       {showPublicNav && (
-      <nav className="bg-white border-b border-gray-100 shadow-sm">
+      <nav className="bg-white border-b border-slate-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
             onClick={() => navigate("/")}
-            className="text-xl font-black text-[var(--color-primary)] tracking-tight"
+            className="text-xl font-black text-teal-700 tracking-tight"
           >
             FichaEleam
           </button>
           <div className="flex items-center gap-3">
             {user && pagoActivo && (
-              <button onClick={() => navigate("/dashboard")} className="text-sm text-[var(--color-primary)] hover:underline">
+              <button onClick={() => navigate("/dashboard")} className="text-sm text-teal-700 hover:underline">
                 Ir al panel
               </button>
             )}
             {user ? (
-              <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-700">
+              <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700">
                 Cerrar sesión
               </button>
             ) : (
-              <button onClick={() => navigate("/login")} className="text-sm text-[var(--color-primary)] hover:underline">
+              <button onClick={() => navigate("/login")} className="text-sm text-teal-700 hover:underline">
                 Ya tengo cuenta
               </button>
             )}
@@ -222,20 +222,20 @@ export default function PaymentPage() {
         )}
 
         {user && eleam && (
-          <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-8 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white border border-slate-100 rounded-2xl p-5 mb-8 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Cuenta conectada</p>
-              <h2 className="font-bold text-gray-800">{eleam.nombre}</h2>
-              <p className="text-sm text-gray-500">{accountEmail}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Cuenta conectada</p>
+              <h2 className="font-bold text-slate-800">{eleam.nombre}</h2>
+              <p className="text-sm text-slate-500">{accountEmail}</p>
               {eleam.planes?.nombre && (
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-slate-600 mt-1">
                   Plan actual: <span className="font-semibold">{eleam.planes.nombre}</span>
                   {" — "}
                   {formatCLP(eleam.planes.precio_clp)} / mes
                 </p>
               )}
               {proximo && pagoActivo && (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   Próximo cobro: {formatDate(proximo)}
                 </p>
               )}
@@ -261,7 +261,7 @@ export default function PaymentPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
             Suscripción
           </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-gray-950 sm:text-3xl">
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
             {blockedNonAdmin ? "Acceso pendiente del ELEAM" : "Activa tu ELEAM"}
             {!blockedNonAdmin && (
               <HelpTooltip className="ml-2" label="Ayuda sobre activación">
@@ -269,7 +269,7 @@ export default function PaymentPage() {
               </HelpTooltip>
             )}
           </h1>
-          <p className="mt-2 text-sm leading-6 text-gray-600">
+          <p className="mt-2 text-sm leading-6 text-slate-600">
             {blockedNonAdmin
               ? "Tu cuenta fue creada correctamente, pero la habilitación del establecimiento la gestiona el administrador ELEAM."
               : "Un precio mensual por establecimiento. Sin cobros por usuario. Todos tus funcionarios acceden incluidos."}
@@ -278,7 +278,7 @@ export default function PaymentPage() {
 
         {/* Planes dinámicos */}
         {loadingPlans ? (
-          <div className="text-center text-gray-500 py-8">Cargando planes...</div>
+          <div className="text-center text-slate-500 py-8">Cargando planes...</div>
         ) : plans.length === 0 ? (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-amber-800">
             Aún no hay planes configurados. Contacta al administrador.
@@ -293,31 +293,31 @@ export default function PaymentPage() {
                   key={p.id}
                   className={`rounded-2xl p-6 border-2 text-center relative flex flex-col ${
                     popular
-                      ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-white shadow-xl"
-                      : "border-gray-200 bg-white"
+                      ? "border-teal-700 bg-teal-700 text-white shadow-xl"
+                      : "border-slate-200 bg-white"
                   }`}
                 >
                   {popular && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[var(--color-accent)] text-white text-xs px-3 py-0.5 rounded-full font-semibold whitespace-nowrap">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-teal-800 text-white text-xs px-3 py-0.5 rounded-full font-semibold whitespace-nowrap">
                       Más elegido
                     </span>
                   )}
-                  <p className={`text-xs font-bold mb-1 ${popular ? "text-teal-200" : "text-gray-400"}`}>
+                  <p className={`text-xs font-bold mb-1 ${popular ? "text-teal-200" : "text-slate-400"}`}>
                     {p.nombre}
                   </p>
-                  <p className={`text-3xl font-black mb-0.5 ${popular ? "text-white" : "text-gray-800"}`}>
+                  <p className={`text-3xl font-black mb-0.5 ${popular ? "text-white" : "text-slate-800"}`}>
                     {formatCLP(p.precio_clp)}
                   </p>
-                  <p className={`text-xs mb-4 ${popular ? "text-teal-200" : "text-gray-400"}`}>
+                  <p className={`text-xs mb-4 ${popular ? "text-teal-200" : "text-slate-400"}`}>
                     CLP / mes
                   </p>
-                  <ul className={`text-xs mb-6 space-y-1 ${popular ? "text-teal-100" : "text-gray-500"}`}>
+                  <ul className={`text-xs mb-6 space-y-1 ${popular ? "text-teal-100" : "text-slate-500"}`}>
                     <li>Hasta {p.max_residentes ?? "∞"} residentes activos</li>
                     <li>Hasta {p.max_funcionarios ?? "∞"} funcionarios</li>
                   </ul>
                   <div className="mt-auto">
                     {isCurrent ? (
-                      <span className={`inline-flex w-full justify-center font-semibold py-2 rounded-lg ${
+                      <span className={`inline-flex w-full justify-center font-semibold py-2 rounded-xl ${
                         popular ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700"
                       }`}>
                         Plan actual
@@ -326,10 +326,10 @@ export default function PaymentPage() {
                       <button
                         onClick={() => handleStart(p.codigo)}
                         disabled={loadingAction || (user && !isAdminEleam)}
-                        className={`w-full font-semibold py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                        className={`w-full font-semibold py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                           popular
-                            ? "bg-white text-[var(--color-primary)] hover:bg-gray-100"
-                            : "bg-[var(--color-primary)] text-white hover:bg-[var(--color-button-hover)]"
+                            ? "bg-white text-teal-700 hover:bg-slate-100"
+                            : "bg-teal-700 text-white hover:bg-teal-800"
                         }`}
                       >
                         {loadingAction ? "Procesando..." : (user && !isAdminEleam ? "Solo admin ELEAM" : user ? "Suscribirme" : "Solicitar demo")}
@@ -342,11 +342,11 @@ export default function PaymentPage() {
           </div>
         )}
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
-          <h2 className="font-bold text-gray-800 mb-4">Todos los planes incluyen</h2>
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-8">
+          <h2 className="font-bold text-slate-800 mb-4">Todos los planes incluyen</h2>
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {INCLUYE.map((item, i) => (
-              <li key={i} className="flex items-center gap-3 text-sm text-gray-600">
+              <li key={i} className="flex items-center gap-3 text-sm text-slate-600">
                 <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center shrink-0">
                   <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -360,12 +360,12 @@ export default function PaymentPage() {
 
         {/* Historial de pagos */}
         {user && pagos.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
-            <h2 className="font-bold text-gray-800 mb-4">Historial de pagos</h2>
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-8">
+            <h2 className="font-bold text-slate-800 mb-4">Historial de pagos</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-500 border-b">
+                  <tr className="text-left text-slate-500 border-b">
                     <th className="py-2">Fecha</th>
                     <th>Monto</th>
                     <th>Estado</th>
@@ -384,7 +384,7 @@ export default function PaymentPage() {
                           "bg-amber-100 text-amber-700"
                         }`}>{p.estado}</span>
                       </td>
-                      <td className="text-gray-500">{p.metodo_pago ?? "—"}</td>
+                      <td className="text-slate-500">{p.metodo_pago ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -394,7 +394,7 @@ export default function PaymentPage() {
         )}
 
         <div className="text-center pt-2">
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-slate-400">
             Procesado por MercadoPago · puedes cancelar cuando quieras
           </p>
         </div>

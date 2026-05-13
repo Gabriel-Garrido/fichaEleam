@@ -65,11 +65,11 @@ export default function BlogManagement() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
         <div>
-          <button onClick={() => navigate("/superadmin")} className="text-sm text-gray-500 hover:underline">
+          <button onClick={() => navigate("/superadmin")} className="text-sm text-slate-500 hover:underline">
             ← Volver a Superadmin
           </button>
-          <h1 className="text-2xl sm:text-3xl font-black text-gray-800 mt-2">Blog · Gestión</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-800 mt-2">Blog · Gestión</h1>
+          <p className="text-sm text-slate-500">
             Crea, edita, publica o archiva los artículos del blog público.
           </p>
         </div>
@@ -81,13 +81,13 @@ export default function BlogManagement() {
         </button>
       </header>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex gap-3 flex-wrap items-center">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-4 flex gap-3 flex-wrap items-center">
         <input
           type="search"
           placeholder="Buscar por título, slug o keyword…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[220px] border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          className="flex-1 min-w-[220px] border border-slate-300 rounded-lg px-3 py-2 text-sm"
         />
         <div className="flex gap-1">
           {["todos","publicado","borrador","archivado"].map((f) => (
@@ -97,7 +97,7 @@ export default function BlogManagement() {
               className={`text-xs px-3 py-1.5 rounded-full border ${
                 filter === f
                   ? "bg-slate-700 text-white border-slate-700"
-                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
               }`}
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -106,15 +106,15 @@ export default function BlogManagement() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         {filtered.length === 0 ? (
-          <div className="p-12 text-center text-gray-400 text-sm">
+          <div className="p-12 text-center text-slate-400 text-sm">
             No hay posts con ese filtro.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-[10px]">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-[10px]">
                 <tr>
                   <th className="px-3 py-2 text-left">Título</th>
                   <th className="px-3 py-2 text-center">Estado</th>
@@ -124,12 +124,12 @@ export default function BlogManagement() {
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100">
                 {filtered.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
+                  <tr key={p.id} className="hover:bg-slate-50">
                     <td className="px-3 py-2 max-w-md">
-                      <p className="font-semibold text-gray-800 truncate">{p.titulo}</p>
-                      <p className="text-[11px] text-gray-400 truncate">/blog/{p.slug}</p>
+                      <p className="font-semibold text-slate-800 truncate">{p.titulo}</p>
+                      <p className="text-[11px] text-slate-400 truncate">/blog/{p.slug}</p>
                       {p.destacado && (
                         <span className="inline-block mt-1 text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">
                           Destacado
@@ -137,13 +137,13 @@ export default function BlogManagement() {
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${ESTADO_BADGE[p.estado] ?? "bg-gray-100"}`}>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${ESTADO_BADGE[p.estado] ?? "bg-slate-100"}`}>
                         {p.estado}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-center text-gray-500 text-xs">{formatDate(p.publicado_en)}</td>
+                    <td className="px-3 py-2 text-center text-slate-500 text-xs">{formatDate(p.publicado_en)}</td>
                     <td className="px-3 py-2 text-center font-semibold tabular-nums">{p.views ?? 0}</td>
-                    <td className="px-3 py-2 text-center text-gray-400 text-xs">{formatDate(p.actualizado_en)}</td>
+                    <td className="px-3 py-2 text-center text-slate-400 text-xs">{formatDate(p.actualizado_en)}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <button
                         onClick={() => navigate(`/superadmin/blog/${p.id}/edit`)}
