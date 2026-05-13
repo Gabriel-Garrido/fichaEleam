@@ -4,7 +4,6 @@ import { getPostBySlug, getRelatedPosts } from "./blogService";
 import { renderMarkdown, extractTOC } from "./utils/markdown";
 import Loading from "../../components/Loading";
 import { useSEO, articleJsonLd, breadcrumbJsonLd } from "../../utils/seo";
-import { formatDate } from "../../utils/dateUtils";
 import DemoRequestModal from "../landing/DemoRequestModal";
 import { trackEvent } from "../landing/landingAnalytics";
 import { incrementViews } from "./blogService";

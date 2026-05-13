@@ -5,6 +5,21 @@ import Loading from "../components/Loading";
 const AuthContext = createContext();
 const LoadingContext = createContext();
 const PLATFORM_SUPERADMIN_EMAILS = new Set(["gabrielgarrido89@gmail.com"]);
+
+// Permisos que deben negar acceso por defecto cuando no hay row en funcionario_permisos.
+// Coincide con los campos que tienen DEFAULT FALSE en BD.
+const FAIL_CLOSED_PERMS = new Set([
+  "eliminar_residentes",
+  "eliminar_signos_vitales",
+  "eliminar_observaciones",
+  "archivar_acreditacion",
+  "validar_medicamentos_controlados",
+  "ajustar_stock_medicamentos",
+  "crear_indicaciones_medicamentos",
+  "editar_indicaciones_medicamentos",
+  "completar_tareas_cuidado",
+  "editar_indicaciones_cuidado",
+]);
 const AUTH_NOTICE_STORAGE_KEY = "fichaeleam_auth_notice";
 
 function isPlatformSuperadminEmail(email) {
@@ -256,7 +271,7 @@ export function AuthProvider({ children }) {
     if (isSuperadmin || isAdminEleam) return true;
     if (!isFuncionario) return false;
     if (!permisos) {
-      return !perm.startsWith("eliminar_") && perm !== "archivar_acreditacion";
+      return !FAIL_CLOSED_PERMS.has(perm);
     }
     return permisos[perm] === true;
   }, [isSuperadmin, isAdminEleam, isFuncionario, permisos]);
@@ -312,7 +327,7 @@ export function AuthProvider({ children }) {
     authNotice,
     supabaseError: supabaseError || !isSupabaseConfigured,
     refetchProfile,
-  }), [ // eslint-disable-line react-hooks/exhaustive-deps
+  }), [
     user, profile, eleam, plan, subscriptionStatus, pagoActivo, rol,
     isAdminEleam, isFuncionario, isFamiliar, isSuperadmin, isStaff,
     homePath, permisos, featurePermissions, can, canFeature,

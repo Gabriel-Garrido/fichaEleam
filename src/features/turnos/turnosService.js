@@ -1,21 +1,12 @@
 import { supabase } from "../../services/supabaseConfig";
 import { getRequisitosEleam, getObservaciones, buildResumen } from "../accreditation/accreditationService";
 import { recordOverallStatus, recordOverallLabel, VITAL_DEFS } from "../vitalSigns/vitalRanges";
-import { listCareTasks } from "../carePlans/carePlansService";
+import { listCareTasks, getSessionProfile, todayIso, currentTurno } from "../carePlans/carePlansService";
 import { listMedicationAdministrations } from "../emar/emarService";
 
 export const TURNOS = ["mañana", "tarde", "noche"];
 
-export function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export function currentTurno(date = new Date()) {
-  const hour = date.getHours();
-  if (hour >= 7 && hour < 15) return "mañana";
-  if (hour >= 15 && hour < 23) return "tarde";
-  return "noche";
-}
+export { todayIso, currentTurno };
 
 export function turnoLabel(turno) {
   return turno ? turno.charAt(0).toUpperCase() + turno.slice(1) : "Turno";
@@ -68,21 +59,6 @@ function criticalDetails(record) {
     .filter(Boolean);
 }
 
-async function getMyEleamId() {
-  const { data: auth, error: authError } = await supabase.auth.getUser();
-  if (authError) throw authError;
-  const userId = auth?.user?.id;
-  if (!userId) throw new Error("Debes iniciar sesión.");
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, eleam_id, rol")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.eleam_id) throw new Error("Tu cuenta no tiene ELEAM asociado.");
-  return { eleamId: data.eleam_id, userId, rol: data.rol };
-}
 
 async function loadActiveResidents() {
   const { data, error } = await supabase
@@ -378,7 +354,7 @@ export async function getTurnoEntrega(id) {
 }
 
 export async function saveTurnoEntrega({ fecha, turno, resumen, notas, pendientes }) {
-  const { eleamId, userId } = await getMyEleamId();
+  const { eleamId, userId } = await getSessionProfile();
   const payload = {
     eleam_id: eleamId,
     fecha,

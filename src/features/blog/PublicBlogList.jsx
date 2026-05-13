@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { getPublishedPosts } from "./blogService";
 import Loading from "../../components/Loading";
 import { useSEO, breadcrumbJsonLd, blogListJsonLd } from "../../utils/seo";
-import { formatDate } from "../../utils/dateUtils";
 import DemoRequestModal from "../landing/DemoRequestModal";
 import { trackEvent } from "../landing/landingAnalytics";
 
