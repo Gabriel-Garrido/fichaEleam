@@ -69,7 +69,8 @@ src/
 ├── services/
 │   └── supabaseConfig.js       # Cliente Supabase singleton
 └── utils/
-    ├── dateUtils.js
+    ├── dateUtils.js            # formatDate(iso), formatDateTime(iso) — fuente canónica para toda la app
+    ├── passwordValidation.js   # validatePassword(password, confirm) — compartido por Register, ResetPassword, ChangePasswordPage
     ├── validators.js           # Email, UUID, RUT, phone
     └── seo.js                  # Hook useSEO + JSON-LD builders
 
