@@ -52,12 +52,12 @@ const TASK_SELECT = `
   actividad:plan_cuidado_actividades(id, titulo, categoria, prioridad, instrucciones, requiere_observacion)
 `;
 
-function previousTurnos(turno) {
+export function previousTurnos(turno) {
   const index = CARE_TURNOS.indexOf(turno);
   return index > 0 ? CARE_TURNOS.slice(0, index) : [];
 }
 
-async function getSessionProfile() {
+export async function getSessionProfile() {
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError) throw authError;
   const userId = auth?.user?.id;
@@ -73,7 +73,7 @@ async function getSessionProfile() {
   return { userId, eleamId: data.eleam_id, rol: data.rol };
 }
 
-function normalizeSchedule(schedule = {}) {
+export function normalizeSchedule(schedule = {}) {
   const frecuencia = schedule.frecuencia || "diaria";
   return {
     frecuencia,

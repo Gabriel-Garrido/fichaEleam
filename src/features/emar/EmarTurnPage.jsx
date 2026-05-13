@@ -179,9 +179,10 @@ export default function EmarTurnPage() {
         </label>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Metric label="Total" value={metrics.total} />
         <Metric label="Pendientes" value={metrics.pendiente} tone="amber" />
+        <Metric label="Vencidas" value={metrics.vencidas} tone="rose" />
         <Metric label="Por validar" value={metrics.pendiente_validacion} tone="sky" />
         <Metric label="Controlados" value={metrics.controlados} tone="rose" />
         <Metric label="Omitidos" value={metrics.omitido} tone="rose" />
@@ -200,8 +201,10 @@ export default function EmarTurnPage() {
           </div>
         ) : rows.length === 0 ? (
           <div className="p-8 text-center">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-sky-50 text-sky-700">
-              Rx
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-sky-50">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-sky-600">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+              </svg>
             </div>
             <h2 className="mt-3 text-sm font-semibold text-slate-950">Sin administraciones para este filtro</h2>
             <p className="mt-1 text-sm text-slate-500">
@@ -388,6 +391,11 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
             </select>
           </label>
         )}
+        {needsLot && !loadingLots && lots.length === 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Sin stock disponible para este medicamento. Registra un lote con inventario desde la ficha del residente, pestaña eMAR.
+          </div>
+        )}
 
         {modal.action === "administrado" && (
           <label className="block text-sm font-medium text-slate-700">
@@ -443,7 +451,7 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
           <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
             Cancelar
           </button>
-          <button type="submit" disabled={saving || (needsLot && !loteId)} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving || (needsLot && (!loteId || lots.length === 0))} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
             {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>

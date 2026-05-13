@@ -1,5 +1,8 @@
 import { supabase } from "../../services/supabaseConfig";
-import { currentTurno, todayIso } from "../carePlans/carePlansService";
+import {
+  currentTurno, todayIso,
+  getSessionProfile, normalizeSchedule, previousTurnos,
+} from "../carePlans/carePlansService";
 
 export { currentTurno, todayIso };
 
@@ -44,41 +47,6 @@ const ADMIN_SELECT = `
   ),
   lote:medicamentos_stock_lotes(id, lote, cantidad_actual, unidad, fecha_vencimiento, es_controlado)
 `;
-
-function previousTurnos(turno) {
-  const index = EMAR_TURNOS.indexOf(turno);
-  return index > 0 ? EMAR_TURNOS.slice(0, index) : [];
-}
-
-async function getSessionProfile() {
-  const { data: auth, error: authError } = await supabase.auth.getUser();
-  if (authError) throw authError;
-  const userId = auth?.user?.id;
-  if (!userId) throw new Error("Debes iniciar sesión.");
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, eleam_id, rol")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.eleam_id) throw new Error("Tu cuenta no tiene ELEAM asociado.");
-  return { userId, eleamId: data.eleam_id, rol: data.rol };
-}
-
-function normalizeSchedule(schedule = {}) {
-  const frecuencia = schedule.frecuencia || "diaria";
-  return {
-    frecuencia,
-    dias_semana: frecuencia === "semanal" ? schedule.dias_semana ?? [] : null,
-    dias_mes: frecuencia === "mensual" ? schedule.dias_mes ?? [] : null,
-    fecha_unica: frecuencia === "una_vez" ? schedule.fecha_unica || todayIso() : null,
-    hora: schedule.hora || "09:00",
-    turno: schedule.turno || currentTurno(),
-    tolerancia_min: Number(schedule.tolerancia_min ?? 60),
-    activo: schedule.activo !== false,
-  };
-}
 
 export async function generateMedicationAdministrations({ fecha = todayIso(), turno = null } = {}) {
   const { data, error } = await supabase.rpc("generar_administraciones_medicamentos", {
