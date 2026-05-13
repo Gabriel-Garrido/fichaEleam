@@ -21,6 +21,20 @@ export const FEATURE_CATALOG = [
     roles: ["admin_eleam", "funcionario"],
   },
   {
+    id: "care-plans",
+    label: "Plan de cuidado",
+    description: "Pautas no farmacológicas y tareas por turno.",
+    group: "Operación",
+    roles: ["admin_eleam", "funcionario"],
+  },
+  {
+    id: "emar",
+    label: "eMAR medicamentos",
+    description: "Administración, stock y controlados con doble validación.",
+    group: "Operación",
+    roles: ["admin_eleam", "funcionario"],
+  },
+  {
     id: "vital-signs",
     label: "Signos vitales",
     description: "Registro e historial de controles clínicos.",
@@ -97,4 +111,3 @@ export function groupFeatures(features) {
   }
   return groups;
 }
-

@@ -196,6 +196,325 @@ create index if not exists idx_turno_entregas_creado_por
   on public.turno_entregas(creado_por);
 
 -- ============================================================
+-- 2.b Plan de cuidado y eMAR
+-- ============================================================
+
+create table if not exists public.planes_cuidado (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null references public.residentes(id) on delete cascade,
+  titulo                text not null default 'Plan de cuidado',
+  objetivos             text,
+  pauta_alimentacion    text,
+  pauta_hidratacion     text,
+  restricciones         text,
+  riesgo_caidas         text check (riesgo_caidas in ('bajo','medio','alto') or riesgo_caidas is null),
+  riesgo_up             text check (riesgo_up in ('bajo','medio','alto') or riesgo_up is null),
+  estado                text not null default 'activo' check (estado in ('activo','pausado','cerrado')),
+  version               integer not null default 1 check (version > 0),
+  creado_por            uuid references auth.users(id) on delete set null,
+  actualizado_por       uuid references auth.users(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
+);
+
+create unique index if not exists planes_cuidado_residente_activo_unique
+  on public.planes_cuidado(residente_id)
+  where estado = 'activo';
+create index if not exists idx_planes_cuidado_eleam_residente
+  on public.planes_cuidado(eleam_id, residente_id, estado);
+
+create table if not exists public.plan_cuidado_actividades (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null references public.residentes(id) on delete cascade,
+  plan_id               uuid not null references public.planes_cuidado(id) on delete cascade,
+  categoria             text not null check (categoria in (
+                          'alimentacion','hidratacion','higiene','bano','movilidad',
+                          'cambios_posicion','eliminacion','prevencion_caidas',
+                          'prevencion_up','actividad','controles','otro'
+                        )),
+  titulo                text not null,
+  descripcion           text,
+  instrucciones         text,
+  prioridad             text not null default 'media' check (prioridad in ('baja','media','alta','urgente')),
+  requiere_observacion  boolean not null default false,
+  activo                boolean not null default true,
+  creado_por            uuid references auth.users(id) on delete set null,
+  actualizado_por       uuid references auth.users(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
+);
+
+create index if not exists idx_plan_actividades_plan
+  on public.plan_cuidado_actividades(plan_id, activo);
+create index if not exists idx_plan_actividades_eleam_residente
+  on public.plan_cuidado_actividades(eleam_id, residente_id, categoria);
+
+create table if not exists public.plan_cuidado_horarios (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null references public.residentes(id) on delete cascade,
+  actividad_id          uuid not null references public.plan_cuidado_actividades(id) on delete cascade,
+  frecuencia            text not null default 'diaria' check (frecuencia in ('diaria','semanal','mensual','una_vez')),
+  dias_semana           smallint[] check (
+                          dias_semana is null
+                          or dias_semana <@ array[1,2,3,4,5,6,7]::smallint[]
+                        ),
+  dias_mes              smallint[] check (
+                          dias_mes is null
+                          or dias_mes <@ array[
+                            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
+                            17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+                          ]::smallint[]
+                        ),
+  fecha_unica           date,
+  hora                  time not null,
+  turno                 text not null check (turno in ('mañana','tarde','noche')),
+  tolerancia_min        integer not null default 60 check (tolerancia_min between 0 and 720),
+  activo                boolean not null default true,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
+);
+
+create index if not exists idx_plan_horarios_actividad
+  on public.plan_cuidado_horarios(actividad_id, activo);
+create index if not exists idx_plan_horarios_eleam_turno
+  on public.plan_cuidado_horarios(eleam_id, turno, activo);
+
+create table if not exists public.tareas_cuidado (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null references public.residentes(id) on delete cascade,
+  plan_id               uuid not null references public.planes_cuidado(id) on delete cascade,
+  actividad_id          uuid not null references public.plan_cuidado_actividades(id) on delete cascade,
+  horario_id            uuid not null references public.plan_cuidado_horarios(id) on delete cascade,
+  fecha                 date not null,
+  turno                 text not null check (turno in ('mañana','tarde','noche')),
+  hora                  time not null,
+  estado                text not null default 'pendiente'
+                        check (estado in ('pendiente','cumplida','omitida','reprogramada','cancelada')),
+  motivo_omision        text check (
+                          motivo_omision is null
+                          or motivo_omision in ('rechazo','no_disponible','contraindicado','residente_ausente','otro')
+                        ),
+  notas                 text,
+  requiere_seguimiento  boolean not null default false,
+  observacion_id        uuid references public.observaciones_diarias(id) on delete set null,
+  reprogramada_para     timestamptz,
+  cumplida_por          uuid references auth.users(id) on delete set null,
+  cumplida_en           timestamptz,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now(),
+  unique (horario_id, fecha)
+);
+
+create index if not exists idx_tareas_cuidado_eleam_fecha_turno
+  on public.tareas_cuidado(eleam_id, fecha desc, turno, estado);
+create index if not exists idx_tareas_cuidado_residente_fecha
+  on public.tareas_cuidado(residente_id, fecha desc, turno);
+
+create table if not exists public.plan_cuidado_audit (
+  id             uuid primary key default gen_random_uuid(),
+  eleam_id       uuid references public.eleams(id) on delete cascade,
+  residente_id   uuid references public.residentes(id) on delete cascade,
+  entidad        text not null,
+  entidad_id     uuid,
+  accion         text not null,
+  detalle        jsonb,
+  realizado_por  uuid references public.profiles(id) on delete set null,
+  realizado_en   timestamptz not null default now()
+);
+
+create index if not exists idx_plan_cuidado_audit_eleam
+  on public.plan_cuidado_audit(eleam_id, realizado_en desc);
+
+create table if not exists public.medicamentos_indicaciones (
+  id                         uuid primary key default gen_random_uuid(),
+  eleam_id                   uuid not null references public.eleams(id) on delete cascade,
+  residente_id               uuid not null references public.residentes(id) on delete cascade,
+  medicamento_nombre         text not null,
+  principio_activo           text,
+  concentracion              text,
+  forma_farmaceutica         text,
+  dosis                      text not null,
+  unidad_dosis               text,
+  via                        text not null check (via in ('oral','topica','subcutanea','enteral','inhalatoria','oftalmica','otica','nasal','otra')),
+  indicacion                 text,
+  prescriptor_nombre         text,
+  fecha_indicacion           date,
+  fecha_inicio               date not null default current_date,
+  fecha_fin                  date,
+  estado                     text not null default 'activo' check (estado in ('activo','pausada','suspendida','finalizada')),
+  es_controlado              boolean not null default false,
+  tipo_controlado            text check (tipo_controlado in ('psicotropico','estupefaciente') or tipo_controlado is null),
+  requiere_doble_validacion  boolean not null default false,
+  requiere_stock             boolean not null default true,
+  instrucciones              text,
+  creado_por                 uuid references auth.users(id) on delete set null,
+  actualizado_por            uuid references auth.users(id) on delete set null,
+  creado_en                  timestamptz not null default now(),
+  actualizado_en             timestamptz not null default now(),
+  check (es_controlado = false or tipo_controlado is not null)
+);
+
+create index if not exists idx_med_indicaciones_residente
+  on public.medicamentos_indicaciones(residente_id, estado);
+create index if not exists idx_med_indicaciones_eleam_controlado
+  on public.medicamentos_indicaciones(eleam_id, es_controlado, estado);
+
+create table if not exists public.medicamentos_horarios (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null references public.residentes(id) on delete cascade,
+  indicacion_id         uuid not null references public.medicamentos_indicaciones(id) on delete cascade,
+  frecuencia            text not null default 'diaria' check (frecuencia in ('diaria','semanal','mensual','una_vez')),
+  dias_semana           smallint[] check (
+                          dias_semana is null
+                          or dias_semana <@ array[1,2,3,4,5,6,7]::smallint[]
+                        ),
+  dias_mes              smallint[] check (
+                          dias_mes is null
+                          or dias_mes <@ array[
+                            1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
+                            17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+                          ]::smallint[]
+                        ),
+  fecha_unica           date,
+  hora                  time not null,
+  turno                 text not null check (turno in ('mañana','tarde','noche')),
+  tolerancia_min        integer not null default 60 check (tolerancia_min between 0 and 720),
+  activo                boolean not null default true,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
+);
+
+create index if not exists idx_med_horarios_indicacion
+  on public.medicamentos_horarios(indicacion_id, activo);
+create index if not exists idx_med_horarios_eleam_turno
+  on public.medicamentos_horarios(eleam_id, turno, activo);
+
+create table if not exists public.medicamentos_stock_lotes (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid references public.residentes(id) on delete cascade,
+  indicacion_id         uuid references public.medicamentos_indicaciones(id) on delete set null,
+  medicamento_nombre    text not null,
+  lote                  text,
+  fecha_vencimiento     date,
+  cantidad_actual       numeric(12,2) not null default 0 check (cantidad_actual >= 0),
+  unidad                text not null default 'unidad',
+  ubicacion             text,
+  es_controlado         boolean not null default false,
+  tipo_controlado       text check (tipo_controlado in ('psicotropico','estupefaciente') or tipo_controlado is null),
+  estado                text not null default 'activo' check (estado in ('activo','agotado','vencido','retirado')),
+  creado_por            uuid references auth.users(id) on delete set null,
+  actualizado_por       uuid references auth.users(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now(),
+  check (es_controlado = false or tipo_controlado is not null)
+);
+
+create index if not exists idx_med_stock_lotes_eleam_controlado
+  on public.medicamentos_stock_lotes(eleam_id, es_controlado, estado);
+create index if not exists idx_med_stock_lotes_residente
+  on public.medicamentos_stock_lotes(residente_id, estado);
+
+create table if not exists public.medicamentos_administraciones (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null references public.residentes(id) on delete cascade,
+  indicacion_id         uuid not null references public.medicamentos_indicaciones(id) on delete cascade,
+  horario_id            uuid not null references public.medicamentos_horarios(id) on delete cascade,
+  lote_id               uuid references public.medicamentos_stock_lotes(id) on delete set null,
+  fecha                 date not null,
+  turno                 text not null check (turno in ('mañana','tarde','noche')),
+  hora                  time not null,
+  estado                text not null default 'pendiente'
+                        check (estado in ('pendiente','administrado','omitido','pendiente_validacion','validado','revertido','cancelado')),
+  dosis_administrada    numeric(12,2),
+  unidad_dosis          text,
+  motivo_omision        text check (
+                          motivo_omision is null
+                          or motivo_omision in ('rechazo','no_disponible','contraindicado','residente_ausente','otro')
+                        ),
+  notas                 text,
+  requiere_seguimiento  boolean not null default false,
+  observacion_id        uuid references public.observaciones_diarias(id) on delete set null,
+  administrado_por      uuid references auth.users(id) on delete set null,
+  administrado_en       timestamptz,
+  validado_por          uuid references auth.users(id) on delete set null,
+  validado_en           timestamptz,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now(),
+  unique (horario_id, fecha)
+);
+
+create index if not exists idx_med_admin_eleam_fecha_turno
+  on public.medicamentos_administraciones(eleam_id, fecha desc, turno, estado);
+create index if not exists idx_med_admin_residente_fecha
+  on public.medicamentos_administraciones(residente_id, fecha desc, turno);
+create index if not exists idx_med_admin_control_validacion
+  on public.medicamentos_administraciones(eleam_id, estado)
+  where estado = 'pendiente_validacion';
+
+create table if not exists public.medicamentos_stock_movimientos (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  lote_id               uuid not null references public.medicamentos_stock_lotes(id) on delete cascade,
+  indicacion_id         uuid references public.medicamentos_indicaciones(id) on delete set null,
+  administracion_id     uuid references public.medicamentos_administraciones(id) on delete set null,
+  tipo                  text not null check (tipo in ('recepcion','administracion','ajuste','reversa','merma','retiro','conciliacion')),
+  cantidad              numeric(12,2) not null check (cantidad <> 0),
+  stock_resultante      numeric(12,2) not null check (stock_resultante >= 0),
+  motivo                text,
+  requiere_validacion   boolean not null default false,
+  validado_por          uuid references auth.users(id) on delete set null,
+  validado_en           timestamptz,
+  creado_por            uuid references auth.users(id) on delete set null,
+  creado_en             timestamptz not null default now()
+);
+
+create index if not exists idx_med_stock_mov_lote
+  on public.medicamentos_stock_movimientos(lote_id, creado_en desc);
+create index if not exists idx_med_stock_mov_eleam_control
+  on public.medicamentos_stock_movimientos(eleam_id, requiere_validacion, creado_en desc);
+
+create table if not exists public.medicamentos_conciliaciones (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  lote_id               uuid not null references public.medicamentos_stock_lotes(id) on delete cascade,
+  cantidad_sistema      numeric(12,2) not null,
+  cantidad_fisica       numeric(12,2) not null check (cantidad_fisica >= 0),
+  diferencia            numeric(12,2) not null,
+  motivo                text not null,
+  estado                text not null default 'pendiente_validacion'
+                        check (estado in ('pendiente_validacion','validada','rechazada')),
+  creado_por            uuid references auth.users(id) on delete set null,
+  validado_por          uuid references auth.users(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  validado_en           timestamptz
+);
+
+create index if not exists idx_med_conciliaciones_lote
+  on public.medicamentos_conciliaciones(lote_id, estado, creado_en desc);
+
+create table if not exists public.medicamentos_audit (
+  id             uuid primary key default gen_random_uuid(),
+  eleam_id       uuid references public.eleams(id) on delete cascade,
+  residente_id   uuid references public.residentes(id) on delete cascade,
+  entidad        text not null,
+  entidad_id     uuid,
+  accion         text not null,
+  detalle        jsonb,
+  realizado_por  uuid references public.profiles(id) on delete set null,
+  realizado_en   timestamptz not null default now()
+);
+
+create index if not exists idx_medicamentos_audit_eleam
+  on public.medicamentos_audit(eleam_id, realizado_en desc);
+
+-- ============================================================
 -- 3. Invitaciones y portal familiar
 -- ============================================================
 
@@ -245,6 +564,16 @@ create table if not exists public.funcionario_permisos (
   registrar_visitas       boolean not null default true,
   actualizado_en          timestamptz not null default now()
 );
+
+alter table public.funcionario_permisos
+  add column if not exists crear_planes_cuidado boolean not null default true,
+  add column if not exists editar_planes_cuidado boolean not null default true,
+  add column if not exists completar_tareas_cuidado boolean not null default true,
+  add column if not exists crear_indicaciones_medicamentos boolean not null default false,
+  add column if not exists editar_indicaciones_medicamentos boolean not null default false,
+  add column if not exists administrar_medicamentos boolean not null default true,
+  add column if not exists validar_medicamentos_controlados boolean not null default false,
+  add column if not exists ajustar_stock_medicamentos boolean not null default false;
 
 create index if not exists idx_func_permisos_profile on public.funcionario_permisos(profile_id);
 
@@ -806,6 +1135,14 @@ begin
     when 'editar_acreditacion'     then editar_acreditacion
     when 'archivar_acreditacion'   then archivar_acreditacion
     when 'registrar_visitas'       then registrar_visitas
+    when 'crear_planes_cuidado'    then crear_planes_cuidado
+    when 'editar_planes_cuidado'   then editar_planes_cuidado
+    when 'completar_tareas_cuidado' then completar_tareas_cuidado
+    when 'crear_indicaciones_medicamentos' then crear_indicaciones_medicamentos
+    when 'editar_indicaciones_medicamentos' then editar_indicaciones_medicamentos
+    when 'administrar_medicamentos' then administrar_medicamentos
+    when 'validar_medicamentos_controlados' then validar_medicamentos_controlados
+    when 'ajustar_stock_medicamentos' then ajustar_stock_medicamentos
     else false
   end
   into v_result
@@ -1457,6 +1794,748 @@ as $$
   where slug = p_slug and estado = 'publicado';
 $$;
 
+create or replace function public.cuidado_tipo_observacion(p_categoria text)
+returns text
+language sql
+immutable
+set search_path = public
+as $$
+  select case p_categoria
+    when 'alimentacion' then 'alimentacion'
+    when 'hidratacion' then 'alimentacion'
+    when 'higiene' then 'higiene'
+    when 'bano' then 'higiene'
+    when 'movilidad' then 'actividad'
+    when 'cambios_posicion' then 'cambio_posicion'
+    when 'eliminacion' then 'eliminacion'
+    when 'actividad' then 'actividad'
+    else 'observacion_general'
+  end;
+$$;
+
+create or replace function public.generar_tareas_cuidado(
+  p_fecha date default current_date,
+  p_turno text default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid := public.my_eleam_id();
+  v_count integer := 0;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_eleam_id is null or not public.eleam_has_access(v_eleam_id) then
+      raise exception 'ELEAM sin acceso activo' using errcode = '42501';
+    end if;
+
+    if public.my_rol() not in ('admin_eleam','funcionario') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  if p_turno is not null and p_turno not in ('mañana','tarde','noche') then
+    raise exception 'Turno invalido' using errcode = 'P0001';
+  end if;
+
+  insert into public.tareas_cuidado (
+    eleam_id, residente_id, plan_id, actividad_id, horario_id,
+    fecha, turno, hora, estado
+  )
+  select
+    h.eleam_id, h.residente_id, a.plan_id, a.id, h.id,
+    p_fecha, h.turno, h.hora, 'pendiente'
+  from public.plan_cuidado_horarios h
+  join public.plan_cuidado_actividades a on a.id = h.actividad_id
+  join public.planes_cuidado p on p.id = a.plan_id
+  join public.residentes r on r.id = h.residente_id
+  where h.activo = true
+    and a.activo = true
+    and p.estado = 'activo'
+    and r.estado = 'activo'
+    and (public.is_superadmin() or h.eleam_id = v_eleam_id)
+    and (p_turno is null or h.turno = p_turno)
+    and (
+      h.frecuencia = 'diaria'
+      or (h.frecuencia = 'semanal' and extract(isodow from p_fecha)::smallint = any(h.dias_semana))
+      or (h.frecuencia = 'mensual' and extract(day from p_fecha)::smallint = any(h.dias_mes))
+      or (h.frecuencia = 'una_vez' and h.fecha_unica = p_fecha)
+    )
+  on conflict (horario_id, fecha) do nothing;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+create or replace function public.completar_tarea_cuidado(
+  p_tarea_id uuid,
+  p_estado text,
+  p_notas text default null,
+  p_motivo_omision text default null,
+  p_requiere_seguimiento boolean default false
+)
+returns public.tareas_cuidado
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_row record;
+  v_obs_id uuid;
+  v_updated public.tareas_cuidado;
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_estado not in ('cumplida','omitida') then
+    raise exception 'Estado invalido' using errcode = 'P0001';
+  end if;
+
+  select
+    t.*,
+    a.titulo as actividad_titulo,
+    a.categoria as actividad_categoria,
+    a.requiere_observacion as actividad_requiere_observacion
+  into v_row
+  from public.tareas_cuidado t
+  join public.plan_cuidado_actividades a on a.id = t.actividad_id
+  where t.id = p_tarea_id
+  for update;
+
+  if not found then
+    raise exception 'Tarea no encontrada' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_row.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_row.eleam_id)
+       or not public.funcionario_can('completar_tareas_cuidado') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  if v_row.estado not in ('pendiente','reprogramada') then
+    raise exception 'La tarea ya fue cerrada' using errcode = 'P0001';
+  end if;
+
+  if p_estado = 'omitida' and p_motivo_omision not in ('rechazo','no_disponible','contraindicado','residente_ausente','otro') then
+    raise exception 'Motivo de omision obligatorio' using errcode = 'P0001';
+  end if;
+
+  update public.tareas_cuidado
+  set estado = p_estado,
+      motivo_omision = case when p_estado = 'omitida' then p_motivo_omision else null end,
+      notas = nullif(trim(coalesce(p_notas, '')), ''),
+      requiere_seguimiento = coalesce(p_requiere_seguimiento, false) or coalesce(v_row.actividad_requiere_observacion, false),
+      cumplida_por = v_user,
+      cumplida_en = now(),
+      actualizado_en = now()
+  where id = p_tarea_id
+  returning * into v_updated;
+
+  if v_updated.requiere_seguimiento then
+    insert into public.observaciones_diarias (
+      residente_id, fecha_hora, turno, tipo, descripcion,
+      acciones_tomadas, requiere_seguimiento, registrado_por
+    )
+    values (
+      v_row.residente_id,
+      now(),
+      v_row.turno,
+      public.cuidado_tipo_observacion(v_row.actividad_categoria),
+      'Tarea de cuidado ' || case when p_estado = 'omitida' then 'omitida' else 'cumplida' end ||
+        ': ' || v_row.actividad_titulo,
+      nullif(trim(coalesce(p_notas, '')), ''),
+      true,
+      v_user
+    )
+    returning id into v_obs_id;
+
+    update public.tareas_cuidado
+    set observacion_id = v_obs_id
+    where id = p_tarea_id
+    returning * into v_updated;
+  end if;
+
+  insert into public.plan_cuidado_audit (
+    eleam_id, residente_id, entidad, entidad_id, accion, detalle, realizado_por
+  )
+  values (
+    v_row.eleam_id, v_row.residente_id, 'tareas_cuidado', p_tarea_id, p_estado,
+    jsonb_build_object('notas', p_notas, 'motivo_omision', p_motivo_omision),
+    v_user
+  );
+
+  return v_updated;
+end;
+$$;
+
+create or replace function public.generar_administraciones_medicamentos(
+  p_fecha date default current_date,
+  p_turno text default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid := public.my_eleam_id();
+  v_count integer := 0;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_eleam_id is null or not public.eleam_has_access(v_eleam_id) then
+      raise exception 'ELEAM sin acceso activo' using errcode = '42501';
+    end if;
+
+    if public.my_rol() not in ('admin_eleam','funcionario') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  if p_turno is not null and p_turno not in ('mañana','tarde','noche') then
+    raise exception 'Turno invalido' using errcode = 'P0001';
+  end if;
+
+  insert into public.medicamentos_administraciones (
+    eleam_id, residente_id, indicacion_id, horario_id,
+    fecha, turno, hora, estado, unidad_dosis
+  )
+  select
+    h.eleam_id, h.residente_id, i.id, h.id,
+    p_fecha, h.turno, h.hora, 'pendiente', i.unidad_dosis
+  from public.medicamentos_horarios h
+  join public.medicamentos_indicaciones i on i.id = h.indicacion_id
+  join public.residentes r on r.id = h.residente_id
+  where h.activo = true
+    and i.estado = 'activo'
+    and r.estado = 'activo'
+    and p_fecha >= i.fecha_inicio
+    and (i.fecha_fin is null or p_fecha <= i.fecha_fin)
+    and (public.is_superadmin() or h.eleam_id = v_eleam_id)
+    and (p_turno is null or h.turno = p_turno)
+    and (
+      h.frecuencia = 'diaria'
+      or (h.frecuencia = 'semanal' and extract(isodow from p_fecha)::smallint = any(h.dias_semana))
+      or (h.frecuencia = 'mensual' and extract(day from p_fecha)::smallint = any(h.dias_mes))
+      or (h.frecuencia = 'una_vez' and h.fecha_unica = p_fecha)
+    )
+  on conflict (horario_id, fecha) do nothing;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+create or replace function public.registrar_administracion_medicamento(
+  p_administracion_id uuid,
+  p_estado text,
+  p_lote_id uuid default null,
+  p_dosis_administrada numeric default null,
+  p_notas text default null,
+  p_motivo_omision text default null,
+  p_requiere_seguimiento boolean default false
+)
+returns public.medicamentos_administraciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_admin record;
+  v_lote public.medicamentos_stock_lotes;
+  v_dosis numeric(12,2);
+  v_stock numeric(12,2);
+  v_estado_final text;
+  v_obs_id uuid;
+  v_updated public.medicamentos_administraciones;
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_estado not in ('administrado','omitido') then
+    raise exception 'Estado invalido' using errcode = 'P0001';
+  end if;
+
+  select
+    a.*,
+    i.medicamento_nombre,
+    i.es_controlado,
+    i.tipo_controlado,
+    i.requiere_doble_validacion,
+    i.requiere_stock
+  into v_admin
+  from public.medicamentos_administraciones a
+  join public.medicamentos_indicaciones i on i.id = a.indicacion_id
+  where a.id = p_administracion_id
+  for update;
+
+  if not found then
+    raise exception 'Administracion no encontrada' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_admin.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_admin.eleam_id)
+       or not public.funcionario_can('administrar_medicamentos') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  if v_admin.estado <> 'pendiente' then
+    raise exception 'La administracion ya fue cerrada' using errcode = 'P0001';
+  end if;
+
+  if p_estado = 'omitido' and p_motivo_omision not in ('rechazo','no_disponible','contraindicado','residente_ausente','otro') then
+    raise exception 'Motivo de omision obligatorio' using errcode = 'P0001';
+  end if;
+
+  if p_estado = 'omitido' then
+    update public.medicamentos_administraciones
+    set estado = 'omitido',
+        motivo_omision = p_motivo_omision,
+        notas = nullif(trim(coalesce(p_notas, '')), ''),
+        requiere_seguimiento = coalesce(p_requiere_seguimiento, false),
+        administrado_por = v_user,
+        administrado_en = now(),
+        actualizado_en = now()
+    where id = p_administracion_id
+    returning * into v_updated;
+  else
+    v_dosis := coalesce(p_dosis_administrada, 1);
+    if v_dosis <= 0 then
+      raise exception 'Dosis administrada invalida' using errcode = 'P0001';
+    end if;
+
+    if v_admin.es_controlado or v_admin.requiere_stock or p_lote_id is not null then
+      if p_lote_id is null then
+        raise exception 'Debe seleccionar lote/stock' using errcode = 'P0001';
+      end if;
+
+      select * into v_lote
+      from public.medicamentos_stock_lotes
+      where id = p_lote_id
+      for update;
+
+      if not found then
+        raise exception 'Lote no encontrado' using errcode = 'P0001';
+      end if;
+
+      if v_lote.eleam_id <> v_admin.eleam_id
+         or (v_lote.residente_id is not null and v_lote.residente_id <> v_admin.residente_id)
+         or v_lote.estado <> 'activo' then
+        raise exception 'Lote no valido para esta administracion' using errcode = 'P0001';
+      end if;
+
+      if v_admin.es_controlado and v_lote.es_controlado = false then
+        raise exception 'La indicacion controlada requiere lote controlado' using errcode = 'P0001';
+      end if;
+
+      if v_lote.cantidad_actual < v_dosis then
+        raise exception 'Stock insuficiente' using errcode = 'P0001';
+      end if;
+
+      v_stock := v_lote.cantidad_actual - v_dosis;
+
+      update public.medicamentos_stock_lotes
+      set cantidad_actual = v_stock,
+          estado = case when v_stock = 0 then 'agotado' else estado end,
+          actualizado_por = v_user,
+          actualizado_en = now()
+      where id = v_lote.id;
+
+      insert into public.medicamentos_stock_movimientos (
+        eleam_id, lote_id, indicacion_id, administracion_id, tipo,
+        cantidad, stock_resultante, motivo, requiere_validacion,
+        validado_por, validado_en, creado_por
+      )
+      values (
+        v_admin.eleam_id, v_lote.id, v_admin.indicacion_id, p_administracion_id,
+        'administracion', -v_dosis, v_stock,
+        'Administracion eMAR',
+        v_admin.es_controlado,
+        case when v_admin.es_controlado then null else v_user end,
+        case when v_admin.es_controlado then null else now() end,
+        v_user
+      );
+    end if;
+
+    v_estado_final := case when v_admin.es_controlado or v_admin.requiere_doble_validacion then 'pendiente_validacion' else 'administrado' end;
+
+    update public.medicamentos_administraciones
+    set estado = v_estado_final,
+        lote_id = p_lote_id,
+        dosis_administrada = v_dosis,
+        notas = nullif(trim(coalesce(p_notas, '')), ''),
+        requiere_seguimiento = coalesce(p_requiere_seguimiento, false),
+        administrado_por = v_user,
+        administrado_en = now(),
+        actualizado_en = now()
+    where id = p_administracion_id
+    returning * into v_updated;
+  end if;
+
+  if v_updated.requiere_seguimiento then
+    insert into public.observaciones_diarias (
+      residente_id, fecha_hora, turno, tipo, descripcion,
+      acciones_tomadas, requiere_seguimiento, registrado_por
+    )
+    values (
+      v_admin.residente_id,
+      now(),
+      v_admin.turno,
+      'administracion_medicamento',
+      'eMAR ' || case when p_estado = 'omitido' then 'omitido' else 'registrado' end ||
+        ': ' || v_admin.medicamento_nombre,
+      nullif(trim(coalesce(p_notas, '')), ''),
+      true,
+      v_user
+    )
+    returning id into v_obs_id;
+
+    update public.medicamentos_administraciones
+    set observacion_id = v_obs_id
+    where id = p_administracion_id
+    returning * into v_updated;
+  end if;
+
+  insert into public.medicamentos_audit (
+    eleam_id, residente_id, entidad, entidad_id, accion, detalle, realizado_por
+  )
+  values (
+    v_admin.eleam_id, v_admin.residente_id, 'medicamentos_administraciones',
+    p_administracion_id, p_estado,
+    jsonb_build_object('lote_id', p_lote_id, 'dosis', p_dosis_administrada, 'motivo_omision', p_motivo_omision),
+    v_user
+  );
+
+  return v_updated;
+end;
+$$;
+
+create or replace function public.validar_administracion_controlada(
+  p_administracion_id uuid,
+  p_notas text default null
+)
+returns public.medicamentos_administraciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_admin record;
+  v_updated public.medicamentos_administraciones;
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  select a.*, i.es_controlado, i.requiere_doble_validacion
+  into v_admin
+  from public.medicamentos_administraciones a
+  join public.medicamentos_indicaciones i on i.id = a.indicacion_id
+  where a.id = p_administracion_id
+  for update;
+
+  if not found then
+    raise exception 'Administracion no encontrada' using errcode = 'P0001';
+  end if;
+
+  if not (v_admin.es_controlado or v_admin.requiere_doble_validacion) then
+    raise exception 'La administracion no requiere validacion' using errcode = 'P0001';
+  end if;
+
+  if v_admin.estado <> 'pendiente_validacion' then
+    raise exception 'La administracion no esta pendiente de validacion' using errcode = 'P0001';
+  end if;
+
+  if v_admin.administrado_por = v_user then
+    raise exception 'La validacion debe realizarla otro usuario' using errcode = '42501';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_admin.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_admin.eleam_id)
+       or not public.funcionario_can('validar_medicamentos_controlados') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  update public.medicamentos_administraciones
+  set estado = 'validado',
+      validado_por = v_user,
+      validado_en = now(),
+      notas = trim(both from concat_ws(E'\n', notas, nullif(trim(coalesce(p_notas, '')), ''))),
+      actualizado_en = now()
+  where id = p_administracion_id
+  returning * into v_updated;
+
+  update public.medicamentos_stock_movimientos
+  set validado_por = v_user,
+      validado_en = now()
+  where administracion_id = p_administracion_id
+    and requiere_validacion = true
+    and validado_por is null;
+
+  insert into public.medicamentos_audit (
+    eleam_id, residente_id, entidad, entidad_id, accion, detalle, realizado_por
+  )
+  values (
+    v_admin.eleam_id, v_admin.residente_id, 'medicamentos_administraciones',
+    p_administracion_id, 'validado',
+    jsonb_build_object('notas', p_notas),
+    v_user
+  );
+
+  return v_updated;
+end;
+$$;
+
+create or replace function public.registrar_movimiento_stock_medicamento(
+  p_lote_id uuid,
+  p_tipo text,
+  p_cantidad numeric,
+  p_motivo text default null
+)
+returns public.medicamentos_stock_lotes
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_lote public.medicamentos_stock_lotes;
+  v_stock numeric(12,2);
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_tipo not in ('recepcion','ajuste','reversa','merma','retiro') then
+    raise exception 'Tipo de movimiento invalido' using errcode = 'P0001';
+  end if;
+
+  if p_cantidad = 0 then
+    raise exception 'Cantidad invalida' using errcode = 'P0001';
+  end if;
+
+  select * into v_lote
+  from public.medicamentos_stock_lotes
+  where id = p_lote_id
+  for update;
+
+  if not found then
+    raise exception 'Lote no encontrado' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_lote.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_lote.eleam_id)
+       or not public.funcionario_can('ajustar_stock_medicamentos') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  if v_lote.es_controlado and nullif(trim(coalesce(p_motivo, '')), '') is null then
+    raise exception 'Los movimientos de medicamentos controlados requieren motivo' using errcode = 'P0001';
+  end if;
+
+  if v_lote.es_controlado and p_tipo <> 'recepcion' then
+    raise exception 'Los ajustes de medicamentos controlados deben realizarse mediante conciliacion con doble validacion'
+      using errcode = 'P0001';
+  end if;
+
+  v_stock := v_lote.cantidad_actual + p_cantidad;
+  if v_stock < 0 then
+    raise exception 'Stock insuficiente' using errcode = 'P0001';
+  end if;
+
+  update public.medicamentos_stock_lotes
+  set cantidad_actual = v_stock,
+      estado = case when v_stock = 0 then 'agotado' when estado = 'agotado' and v_stock > 0 then 'activo' else estado end,
+      actualizado_por = v_user,
+      actualizado_en = now()
+  where id = p_lote_id
+  returning * into v_lote;
+
+  insert into public.medicamentos_stock_movimientos (
+    eleam_id, lote_id, indicacion_id, tipo, cantidad, stock_resultante,
+    motivo, requiere_validacion, validado_por, validado_en, creado_por
+  )
+  values (
+    v_lote.eleam_id, v_lote.id, v_lote.indicacion_id, p_tipo, p_cantidad, v_stock,
+    nullif(trim(coalesce(p_motivo, '')), ''),
+    v_lote.es_controlado,
+    case when v_lote.es_controlado then null else v_user end,
+    case when v_lote.es_controlado then null else now() end,
+    v_user
+  );
+
+  insert into public.medicamentos_audit (
+    eleam_id, residente_id, entidad, entidad_id, accion, detalle, realizado_por
+  )
+  values (
+    v_lote.eleam_id, v_lote.residente_id, 'medicamentos_stock_lotes',
+    v_lote.id, p_tipo,
+    jsonb_build_object('cantidad', p_cantidad, 'stock_resultante', v_stock, 'motivo', p_motivo),
+    v_user
+  );
+
+  return v_lote;
+end;
+$$;
+
+create or replace function public.conciliar_stock_controlado(
+  p_lote_id uuid default null,
+  p_cantidad_fisica numeric default null,
+  p_motivo text default null,
+  p_conciliacion_id uuid default null
+)
+returns public.medicamentos_conciliaciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_lote public.medicamentos_stock_lotes;
+  v_conc public.medicamentos_conciliaciones;
+  v_diff numeric(12,2);
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_conciliacion_id is not null then
+    select * into v_conc
+    from public.medicamentos_conciliaciones
+    where id = p_conciliacion_id
+    for update;
+
+    if not found then
+      raise exception 'Conciliacion no encontrada' using errcode = 'P0001';
+    end if;
+
+    if v_conc.estado <> 'pendiente_validacion' then
+      raise exception 'La conciliacion ya fue cerrada' using errcode = 'P0001';
+    end if;
+
+    if v_conc.creado_por = v_user then
+      raise exception 'La validacion debe realizarla otro usuario' using errcode = '42501';
+    end if;
+
+    select * into v_lote
+    from public.medicamentos_stock_lotes
+    where id = v_conc.lote_id
+    for update;
+  else
+    if p_lote_id is null or p_cantidad_fisica is null or nullif(trim(coalesce(p_motivo, '')), '') is null then
+      raise exception 'Lote, cantidad fisica y motivo son obligatorios' using errcode = 'P0001';
+    end if;
+
+    select * into v_lote
+    from public.medicamentos_stock_lotes
+    where id = p_lote_id
+    for update;
+  end if;
+
+  if not found then
+    raise exception 'Lote no encontrado' using errcode = 'P0001';
+  end if;
+
+  if not v_lote.es_controlado then
+    raise exception 'Solo se concilian controlados con esta RPC' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_lote.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_lote.eleam_id)
+       or not public.funcionario_can('ajustar_stock_medicamentos') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  if p_conciliacion_id is not null then
+    update public.medicamentos_stock_lotes
+    set cantidad_actual = v_conc.cantidad_fisica,
+        estado = case when v_conc.cantidad_fisica = 0 then 'agotado' else 'activo' end,
+        actualizado_por = v_user,
+        actualizado_en = now()
+    where id = v_lote.id;
+
+    insert into public.medicamentos_stock_movimientos (
+      eleam_id, lote_id, indicacion_id, tipo, cantidad, stock_resultante,
+      motivo, requiere_validacion, validado_por, validado_en, creado_por
+    )
+    values (
+      v_lote.eleam_id, v_lote.id, v_lote.indicacion_id, 'conciliacion',
+      v_conc.diferencia, v_conc.cantidad_fisica,
+      v_conc.motivo, true, v_user, now(), v_conc.creado_por
+    );
+
+    update public.medicamentos_conciliaciones
+    set estado = 'validada',
+        validado_por = v_user,
+        validado_en = now()
+    where id = v_conc.id
+    returning * into v_conc;
+  else
+    v_diff := p_cantidad_fisica - v_lote.cantidad_actual;
+
+    insert into public.medicamentos_conciliaciones (
+      eleam_id, lote_id, cantidad_sistema, cantidad_fisica,
+      diferencia, motivo, creado_por
+    )
+    values (
+      v_lote.eleam_id, v_lote.id, v_lote.cantidad_actual, p_cantidad_fisica,
+      v_diff, nullif(trim(coalesce(p_motivo, '')), ''), v_user
+    )
+    returning * into v_conc;
+  end if;
+
+  insert into public.medicamentos_audit (
+    eleam_id, residente_id, entidad, entidad_id, accion, detalle, realizado_por
+  )
+  values (
+    v_lote.eleam_id, v_lote.residente_id, 'medicamentos_conciliaciones',
+    v_conc.id, v_conc.estado,
+    jsonb_build_object('cantidad_sistema', v_conc.cantidad_sistema, 'cantidad_fisica', v_conc.cantidad_fisica, 'diferencia', v_conc.diferencia),
+    v_user
+  );
+
+  return v_conc;
+end;
+$$;
+
+create or replace function public.sync_medicamento_controlado()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.es_controlado then
+    new.requiere_doble_validacion := true;
+  end if;
+  return new;
+end;
+$$;
+
 -- Triggers
 drop trigger if exists trg_sync_pago_activo on public.eleams;
 create trigger trg_sync_pago_activo
@@ -1519,6 +2598,51 @@ create trigger trg_turno_entregas_updated_at
   before update on public.turno_entregas
   for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_planes_cuidado_updated_at on public.planes_cuidado;
+create trigger trg_planes_cuidado_updated_at
+  before update on public.planes_cuidado
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_plan_actividades_updated_at on public.plan_cuidado_actividades;
+create trigger trg_plan_actividades_updated_at
+  before update on public.plan_cuidado_actividades
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_plan_horarios_updated_at on public.plan_cuidado_horarios;
+create trigger trg_plan_horarios_updated_at
+  before update on public.plan_cuidado_horarios
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_tareas_cuidado_updated_at on public.tareas_cuidado;
+create trigger trg_tareas_cuidado_updated_at
+  before update on public.tareas_cuidado
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_med_indicaciones_controlado on public.medicamentos_indicaciones;
+create trigger trg_med_indicaciones_controlado
+  before insert or update of es_controlado, requiere_doble_validacion on public.medicamentos_indicaciones
+  for each row execute function public.sync_medicamento_controlado();
+
+drop trigger if exists trg_med_indicaciones_updated_at on public.medicamentos_indicaciones;
+create trigger trg_med_indicaciones_updated_at
+  before update on public.medicamentos_indicaciones
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_med_horarios_updated_at on public.medicamentos_horarios;
+create trigger trg_med_horarios_updated_at
+  before update on public.medicamentos_horarios
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_med_stock_lotes_updated_at on public.medicamentos_stock_lotes;
+create trigger trg_med_stock_lotes_updated_at
+  before update on public.medicamentos_stock_lotes
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_med_admin_updated_at on public.medicamentos_administraciones;
+create trigger trg_med_admin_updated_at
+  before update on public.medicamentos_administraciones
+  for each row execute function public.set_updated_at();
+
 drop trigger if exists trg_acred_re_updated_at on public.acred_requisitos_eleam;
 create trigger trg_acred_re_updated_at
   before update on public.acred_requisitos_eleam
@@ -1563,6 +2687,27 @@ grant execute on function public.registrar_pago_y_activar_eleam(uuid, integer, t
 revoke all on function public.blog_increment_views(text) from public;
 grant execute on function public.blog_increment_views(text) to anon, authenticated;
 
+revoke all on function public.generar_tareas_cuidado(date, text) from public;
+grant execute on function public.generar_tareas_cuidado(date, text) to authenticated;
+
+revoke all on function public.completar_tarea_cuidado(uuid, text, text, text, boolean) from public;
+grant execute on function public.completar_tarea_cuidado(uuid, text, text, text, boolean) to authenticated;
+
+revoke all on function public.generar_administraciones_medicamentos(date, text) from public;
+grant execute on function public.generar_administraciones_medicamentos(date, text) to authenticated;
+
+revoke all on function public.registrar_administracion_medicamento(uuid, text, uuid, numeric, text, text, boolean) from public;
+grant execute on function public.registrar_administracion_medicamento(uuid, text, uuid, numeric, text, text, boolean) to authenticated;
+
+revoke all on function public.validar_administracion_controlada(uuid, text) from public;
+grant execute on function public.validar_administracion_controlada(uuid, text) to authenticated;
+
+revoke all on function public.registrar_movimiento_stock_medicamento(uuid, text, numeric, text) from public;
+grant execute on function public.registrar_movimiento_stock_medicamento(uuid, text, numeric, text) to authenticated;
+
+revoke all on function public.conciliar_stock_controlado(uuid, numeric, text, uuid) from public;
+grant execute on function public.conciliar_stock_controlado(uuid, numeric, text, uuid) to authenticated;
+
 -- ============================================================
 -- 8. Row Level Security
 -- ============================================================
@@ -1574,6 +2719,18 @@ alter table public.residentes enable row level security;
 alter table public.signos_vitales enable row level security;
 alter table public.observaciones_diarias enable row level security;
 alter table public.turno_entregas enable row level security;
+alter table public.planes_cuidado enable row level security;
+alter table public.plan_cuidado_actividades enable row level security;
+alter table public.plan_cuidado_horarios enable row level security;
+alter table public.tareas_cuidado enable row level security;
+alter table public.plan_cuidado_audit enable row level security;
+alter table public.medicamentos_indicaciones enable row level security;
+alter table public.medicamentos_horarios enable row level security;
+alter table public.medicamentos_administraciones enable row level security;
+alter table public.medicamentos_stock_lotes enable row level security;
+alter table public.medicamentos_stock_movimientos enable row level security;
+alter table public.medicamentos_conciliaciones enable row level security;
+alter table public.medicamentos_audit enable row level security;
 alter table public.funcionario_invitaciones enable row level security;
 alter table public.familiar_residentes enable row level security;
 alter table public.visitas_familiar enable row level security;
@@ -1865,6 +3022,482 @@ create policy "te_delete" on public.turno_entregas
     public.is_superadmin()
     or (
       public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+-- Plan de cuidado
+drop policy if exists "pc_select" on public.planes_cuidado;
+drop policy if exists "pc_insert" on public.planes_cuidado;
+drop policy if exists "pc_update" on public.planes_cuidado;
+drop policy if exists "pc_delete" on public.planes_cuidado;
+
+create policy "pc_select" on public.planes_cuidado
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "pc_insert" on public.planes_cuidado
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('crear_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+create policy "pc_update" on public.planes_cuidado
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "pc_delete" on public.planes_cuidado
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "pca_select" on public.plan_cuidado_actividades;
+drop policy if exists "pca_insert" on public.plan_cuidado_actividades;
+drop policy if exists "pca_update" on public.plan_cuidado_actividades;
+drop policy if exists "pca_delete" on public.plan_cuidado_actividades;
+
+create policy "pca_select" on public.plan_cuidado_actividades
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "pca_insert" on public.plan_cuidado_actividades
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('crear_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "pca_update" on public.plan_cuidado_actividades
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "pca_delete" on public.plan_cuidado_actividades
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "pch_select" on public.plan_cuidado_horarios;
+drop policy if exists "pch_insert" on public.plan_cuidado_horarios;
+drop policy if exists "pch_update" on public.plan_cuidado_horarios;
+drop policy if exists "pch_delete" on public.plan_cuidado_horarios;
+
+create policy "pch_select" on public.plan_cuidado_horarios
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "pch_insert" on public.plan_cuidado_horarios
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('crear_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "pch_update" on public.plan_cuidado_horarios
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "pch_delete" on public.plan_cuidado_horarios
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_planes_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "tc_select" on public.tareas_cuidado;
+drop policy if exists "tc_insert" on public.tareas_cuidado;
+drop policy if exists "tc_update" on public.tareas_cuidado;
+
+create policy "tc_select" on public.tareas_cuidado
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "tc_insert" on public.tareas_cuidado
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('completar_tareas_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "tc_update" on public.tareas_cuidado
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('completar_tareas_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('completar_tareas_cuidado')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "pc_audit_select" on public.plan_cuidado_audit;
+create policy "pc_audit_select" on public.plan_cuidado_audit
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+-- eMAR
+drop policy if exists "mi_select" on public.medicamentos_indicaciones;
+drop policy if exists "mi_insert" on public.medicamentos_indicaciones;
+drop policy if exists "mi_update" on public.medicamentos_indicaciones;
+
+create policy "mi_select" on public.medicamentos_indicaciones
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "mi_insert" on public.medicamentos_indicaciones
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('crear_indicaciones_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "mi_update" on public.medicamentos_indicaciones
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_indicaciones_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_indicaciones_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "mh_select" on public.medicamentos_horarios;
+drop policy if exists "mh_insert" on public.medicamentos_horarios;
+drop policy if exists "mh_update" on public.medicamentos_horarios;
+drop policy if exists "mh_delete" on public.medicamentos_horarios;
+
+create policy "mh_select" on public.medicamentos_horarios
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "mh_insert" on public.medicamentos_horarios
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('crear_indicaciones_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "mh_update" on public.medicamentos_horarios
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_indicaciones_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_indicaciones_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "mh_delete" on public.medicamentos_horarios
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('editar_indicaciones_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "ma_select" on public.medicamentos_administraciones;
+drop policy if exists "ma_insert" on public.medicamentos_administraciones;
+drop policy if exists "ma_update" on public.medicamentos_administraciones;
+
+create policy "ma_select" on public.medicamentos_administraciones
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "ma_insert" on public.medicamentos_administraciones
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('administrar_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "ma_update" on public.medicamentos_administraciones
+  for update using (
+    public.is_superadmin()
+    or (
+      (
+        public.funcionario_can('administrar_medicamentos')
+        or public.funcionario_can('validar_medicamentos_controlados')
+      )
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      (
+        public.funcionario_can('administrar_medicamentos')
+        or public.funcionario_can('validar_medicamentos_controlados')
+      )
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "msl_select" on public.medicamentos_stock_lotes;
+drop policy if exists "msl_insert" on public.medicamentos_stock_lotes;
+drop policy if exists "msl_update" on public.medicamentos_stock_lotes;
+
+create policy "msl_select" on public.medicamentos_stock_lotes
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "msl_insert" on public.medicamentos_stock_lotes
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('ajustar_stock_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "msl_update" on public.medicamentos_stock_lotes
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('ajustar_stock_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('ajustar_stock_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "msm_select" on public.medicamentos_stock_movimientos;
+drop policy if exists "msm_insert" on public.medicamentos_stock_movimientos;
+
+create policy "msm_select" on public.medicamentos_stock_movimientos
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "msm_insert" on public.medicamentos_stock_movimientos
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('ajustar_stock_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "mc_select" on public.medicamentos_conciliaciones;
+drop policy if exists "mc_insert" on public.medicamentos_conciliaciones;
+drop policy if exists "mc_update" on public.medicamentos_conciliaciones;
+
+create policy "mc_select" on public.medicamentos_conciliaciones
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "mc_insert" on public.medicamentos_conciliaciones
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('ajustar_stock_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "mc_update" on public.medicamentos_conciliaciones
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('ajustar_stock_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('ajustar_stock_medicamentos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "med_audit_select" on public.medicamentos_audit;
+create policy "med_audit_select" on public.medicamentos_audit
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )

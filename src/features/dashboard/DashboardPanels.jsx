@@ -16,7 +16,7 @@ import {
 
 /* ─── Critical alerts strip ──────────────────────────────────── */
 
-export function CriticalAlerts({ latestVitals, followUps, expiring, loading, navigate }) {
+export function CriticalAlerts({ latestVitals, followUps, expiring, operational, loading, navigate }) {
   if (loading) return null;
 
   const critical = latestVitals.filter(
@@ -26,7 +26,9 @@ export function CriticalAlerts({ latestVitals, followUps, expiring, loading, nav
     const days = daysUntil(d.fecha_vencimiento);
     return days != null && days <= 7;
   });
-  const totalAlertas = critical.length + followUps.length + docs7d.length;
+  const emarUrgent = (operational?.emar?.pendiente_validacion ?? 0) + (operational?.emar?.vencidas ?? 0);
+  const careUrgent = operational?.care?.vencidas ?? 0;
+  const totalAlertas = critical.length + followUps.length + docs7d.length + emarUrgent + careUrgent;
 
   if (!totalAlertas) {
     return (
@@ -50,7 +52,21 @@ export function CriticalAlerts({ latestVitals, followUps, expiring, loading, nav
           Atención inmediata · {totalAlertas} alerta{totalAlertas === 1 ? "" : "s"}
         </h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+        <AlertChip
+          label="eMAR urgente"
+          value={emarUrgent}
+          tone="rose"
+          onClick={emarUrgent ? () => navigate("/turnos/emar") : null}
+          hint={emarUrgent ? "Vencidos o controlados sin validar" : "Al día"}
+        />
+        <AlertChip
+          label="Tareas vencidas"
+          value={careUrgent}
+          tone="amber"
+          onClick={careUrgent ? () => navigate("/turnos/tareas") : null}
+          hint={careUrgent ? "Plan de cuidado por cerrar" : "Al día"}
+        />
         <AlertChip
           label="Signos vitales críticos"
           value={critical.length}
@@ -79,7 +95,7 @@ export function CriticalAlerts({ latestVitals, followUps, expiring, loading, nav
 
 /* ─── Management brief ────────────────────────────────────────── */
 
-export function ManagementBrief({ loading, score, scoreTone, stale, followUps, expiring7, activity, turno, navigate }) {
+export function ManagementBrief({ loading, score, scoreTone, stale, followUps, expiring7, activity, operational, turno, navigate }) {
   if (loading) {
     return (
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -99,13 +115,28 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
   const turnoHealthHelp = "Mide qué tan despejado está el turno. Parte en 100% y baja si hay residentes sin control de signos hoy, signos fuera de rango, seguimientos abiertos o documentos SEREMI urgentes. Sirve para priorizar el trabajo, no reemplaza una evaluación clínica.";
   const nextActionHelp = "Se calcula con la alerta más accionable del momento: controles pendientes, seguimientos abiertos o documentos próximos a vencer.";
   const activityHelp = "Cuenta signos vitales y observaciones registrados durante el turno actual. Ayuda a confirmar si el equipo está dejando trazabilidad del trabajo.";
-  const nextAction = stale.length
-    ? { label: "Tomar controles pendientes", hint: `${stale.length} residente${stale.length === 1 ? "" : "s"} sin control hoy`, path: "/vital-signs/new", tone: "rose" }
-    : followUps.length
-      ? { label: "Cerrar seguimientos", hint: `${followUps.length} observaci${followUps.length === 1 ? "ón" : "ones"} por revisar`, path: "/observations", tone: "amber" }
-      : expiring7
-        ? { label: "Renovar documentos", hint: `${expiring7} vencen en 7 días o menos`, path: "/accreditation", tone: "amber" }
-        : { label: "Mantener seguimiento", hint: "Sin bloqueos urgentes; revisa el panel clínico si necesitas detalle", path: "/vital-signs", tone: "emerald" };
+  const emarValidation = operational?.emar?.pendiente_validacion ?? 0;
+  const emarOverdue = operational?.emar?.vencidas ?? 0;
+  const careOverdue = operational?.care?.vencidas ?? 0;
+  const carePending = operational?.care?.pendiente ?? 0;
+  let nextAction;
+  if (emarOverdue) {
+    nextAction = { label: "Administrar eMAR vencido", hint: `${emarOverdue} medicamento${emarOverdue === 1 ? "" : "s"} fuera de horario`, path: "/turnos/emar", tone: "rose" };
+  } else if (emarValidation) {
+    nextAction = { label: "Validar controlados", hint: `${emarValidation} administraci${emarValidation === 1 ? "ón" : "ones"} requiere segundo usuario`, path: "/turnos/emar", tone: "rose" };
+  } else if (careOverdue) {
+    nextAction = { label: "Cerrar tareas vencidas", hint: `${careOverdue} tarea${careOverdue === 1 ? "" : "s"} de cuidado vencida${careOverdue === 1 ? "" : "s"}`, path: "/turnos/tareas", tone: "amber" };
+  } else if (carePending) {
+    nextAction = { label: "Completar tareas del turno", hint: `${carePending} tarea${carePending === 1 ? "" : "s"} pendiente${carePending === 1 ? "" : "s"}`, path: "/turnos/tareas", tone: "amber" };
+  } else if (stale.length) {
+    nextAction = { label: "Tomar controles pendientes", hint: `${stale.length} residente${stale.length === 1 ? "" : "s"} sin control hoy`, path: "/vital-signs/new", tone: "rose" };
+  } else if (followUps.length) {
+    nextAction = { label: "Cerrar seguimientos", hint: `${followUps.length} observaci${followUps.length === 1 ? "ón" : "ones"} por revisar`, path: "/observations", tone: "amber" };
+  } else if (expiring7) {
+    nextAction = { label: "Renovar documentos", hint: `${expiring7} vencen en 7 días o menos`, path: "/accreditation", tone: "amber" };
+  } else {
+    nextAction = { label: "Mantener seguimiento", hint: "Sin bloqueos urgentes; revisa el panel clínico si necesitas detalle", path: "/vital-signs", tone: "emerald" };
+  }
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">

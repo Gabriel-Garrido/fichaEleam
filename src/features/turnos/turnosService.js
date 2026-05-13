@@ -1,6 +1,8 @@
 import { supabase } from "../../services/supabaseConfig";
 import { getRequisitosEleam, getObservaciones, buildResumen } from "../accreditation/accreditationService";
 import { recordOverallStatus, recordOverallLabel, VITAL_DEFS } from "../vitalSigns/vitalRanges";
+import { listCareTasks } from "../carePlans/carePlansService";
+import { listMedicationAdministrations } from "../emar/emarService";
 
 export const TURNOS = ["mañana", "tarde", "noche"];
 
@@ -10,8 +12,8 @@ export function todayIso() {
 
 export function currentTurno(date = new Date()) {
   const hour = date.getHours();
-  if (hour >= 7 && hour < 14) return "mañana";
-  if (hour >= 14 && hour < 21) return "tarde";
+  if (hour >= 7 && hour < 15) return "mañana";
+  if (hour >= 15 && hour < 23) return "tarde";
   return "noche";
 }
 
@@ -155,12 +157,126 @@ async function loadSeremiAlerts() {
   }
 }
 
+function summarizeRows(rows, statusKeys) {
+  return rows.reduce((acc, row) => {
+    acc.total += 1;
+    if (statusKeys.includes(row.estado)) acc[row.estado] = (acc[row.estado] ?? 0) + 1;
+    return acc;
+  }, Object.fromEntries([["total", 0], ...statusKeys.map((key) => [key, 0])]));
+}
+
+function isDueNow(row, status = "pendiente") {
+  if (row._arrastre) return true;
+  if (row.estado !== status || row.fecha !== todayIso() || !row.hora) return false;
+  const due = new Date(`${row.fecha}T${row.hora}`);
+  return !Number.isNaN(due.valueOf()) && due < new Date();
+}
+
+async function loadCareTurno(fecha, turno) {
+  try {
+    const rows = await listCareTasks({ fecha, turno, estado: null, generate: true, limit: 300 });
+    const resumen = summarizeRows(rows, ["pendiente", "cumplida", "omitida", "reprogramada", "cancelada"]);
+    resumen.vencidas = rows.filter((row) => isDueNow(row)).length;
+    return {
+      resumen,
+      pendientes: rows
+        .filter((row) => row.estado === "pendiente")
+        .slice(0, 12)
+        .map((row) => ({
+          id: row.id,
+          hora: row.hora,
+          estado: row.estado,
+          titulo: row.actividad?.titulo ?? "Actividad de cuidado",
+          categoria: row.actividad?.categoria ?? null,
+          prioridad: row.actividad?.prioridad ?? "media",
+          instrucciones: row.actividad?.instrucciones ?? null,
+          residente: residentMeta(row.residentes),
+          vencida: isDueNow(row),
+        })),
+      omitidas: rows
+        .filter((row) => row.estado === "omitida")
+        .slice(0, 6)
+        .map((row) => ({
+          id: row.id,
+          hora: row.hora,
+          titulo: row.actividad?.titulo ?? "Actividad de cuidado",
+          motivo_omision: row.motivo_omision,
+          residente: residentMeta(row.residentes),
+        })),
+    };
+  } catch (error) {
+    console.warn("No se pudo cargar tareas de cuidado para entrega de turno:", error);
+    return {
+      resumen: { total: 0, pendiente: 0, cumplida: 0, omitida: 0, reprogramada: 0, cancelada: 0, vencidas: 0 },
+      pendientes: [],
+      omitidas: [],
+      error: true,
+    };
+  }
+}
+
+async function loadEmarTurno(fecha, turno) {
+  try {
+    const rows = await listMedicationAdministrations({ fecha, turno, estado: null, generate: true, limit: 300 });
+    const resumen = summarizeRows(rows, ["pendiente", "administrado", "omitido", "pendiente_validacion", "validado", "cancelado"]);
+    resumen.controlados = rows.filter((row) => row.indicacion?.es_controlado).length;
+    resumen.vencidas = rows.filter((row) => isDueNow(row)).length;
+    return {
+      resumen,
+      pendientes: rows
+        .filter((row) => row.estado === "pendiente")
+        .slice(0, 12)
+        .map((row) => ({
+          id: row.id,
+          hora: row.hora,
+          medicamento: row.indicacion?.medicamento_nombre ?? "Medicamento",
+          dosis: row.indicacion?.dosis ?? null,
+          via: row.indicacion?.via ?? null,
+          controlado: row.indicacion?.es_controlado === true,
+          residente: residentMeta(row.residentes),
+          vencida: isDueNow(row),
+        })),
+      por_validar: rows
+        .filter((row) => row.estado === "pendiente_validacion")
+        .slice(0, 12)
+        .map((row) => ({
+          id: row.id,
+          hora: row.hora,
+          medicamento: row.indicacion?.medicamento_nombre ?? "Medicamento",
+          dosis: row.indicacion?.dosis ?? null,
+          residente: residentMeta(row.residentes),
+        })),
+      omitidas: rows
+        .filter((row) => row.estado === "omitido")
+        .slice(0, 6)
+        .map((row) => ({
+          id: row.id,
+          hora: row.hora,
+          medicamento: row.indicacion?.medicamento_nombre ?? "Medicamento",
+          motivo_omision: row.motivo_omision,
+          residente: residentMeta(row.residentes),
+        })),
+    };
+  } catch (error) {
+    console.warn("No se pudo cargar eMAR para entrega de turno:", error);
+    return {
+      resumen: { total: 0, pendiente: 0, administrado: 0, omitido: 0, pendiente_validacion: 0, validado: 0, cancelado: 0, controlados: 0, vencidas: 0 },
+      pendientes: [],
+      por_validar: [],
+      omitidas: [],
+      error: true,
+    };
+  }
+}
+
 export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTurno() } = {}) {
-  const [residentes, signos, obs, seremi] = await Promise.all([
+  const [residentes, signos, obs, seremi, careTurno, emarTurno] = await Promise.all([
     loadActiveResidents(),
     loadVitals(fecha),
     loadObservations(fecha),
     loadSeremiAlerts(),
+    loadCareTurno(fecha, turno),
+    loadEmarTurno(fecha, turno),
   ]);
 
   const vitalsByResident = new Map();
@@ -205,6 +321,11 @@ export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTur
   const actividadTurno = {
     signos: signos.filter((item) => item.turno === turno).length,
     observaciones: obs.today.filter((item) => item.turno === turno).length,
+    tareas_cuidado: careTurno.resumen.total,
+    tareas_cuidado_pendientes: careTurno.resumen.pendiente,
+    medicamentos: emarTurno.resumen.total,
+    medicamentos_pendientes: emarTurno.resumen.pendiente,
+    medicamentos_por_validar: emarTurno.resumen.pendiente_validacion,
   };
 
   return {
@@ -223,10 +344,14 @@ export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTur
       residente: residentMeta(item.residentes),
     })),
     seremi,
+    tareas_cuidado: careTurno,
+    emar: emarTurno,
     actividad_turno: actividadTurno,
     actividad_dia: {
       signos: signos.length,
       observaciones: obs.today.length,
+      tareas_cuidado: careTurno.resumen.total,
+      medicamentos: emarTurno.resumen.total,
     },
   };
 }

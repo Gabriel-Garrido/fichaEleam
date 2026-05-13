@@ -26,6 +26,8 @@ import ObservationForm from "../features/observations/ObservationForm";
 import TurnosDashboard from "../features/turnos/TurnosDashboard";
 import TurnoBuilder from "../features/turnos/TurnoBuilder";
 import TurnoPrintable from "../features/turnos/TurnoPrintable";
+import CareTasksPage from "../features/carePlans/CareTasksPage";
+import EmarTurnPage from "../features/emar/EmarTurnPage";
 
 import AccreditationDashboard      from "../features/accreditation/AccreditationDashboard";
 import AccreditationAmbito         from "../features/accreditation/AccreditationAmbito";
@@ -100,6 +102,12 @@ function AppRouter() {
           } />
           <Route path="/turnos/nueva" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="turnos"><TurnoBuilder /></ProtectedRoute>
+          } />
+          <Route path="/turnos/tareas" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="care-plans"><CareTasksPage /></ProtectedRoute>
+          } />
+          <Route path="/turnos/emar" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="emar"><EmarTurnPage /></ProtectedRoute>
           } />
           <Route path="/turnos/:id" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="turnos"><TurnoPrintable /></ProtectedRoute>

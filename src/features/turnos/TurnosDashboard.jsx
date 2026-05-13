@@ -17,6 +17,10 @@ function summaryCount(summary, key) {
   return Array.isArray(value) ? value.length : 0;
 }
 
+function summaryNested(summary, group, key) {
+  return summary?.[group]?.resumen?.[key] ?? 0;
+}
+
 export default function TurnosDashboard() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +115,9 @@ export default function TurnosDashboard() {
                       {item.pendientes || item.notas || "Sin notas manuales."}
                     </p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs text-slate-500">
+                  <div className="grid grid-cols-5 gap-2 text-center text-xs text-slate-500">
+                    <Metric label="eMAR" value={summaryNested(item.resumen_json, "emar", "pendiente") + summaryNested(item.resumen_json, "emar", "pendiente_validacion")} />
+                    <Metric label="Tareas" value={summaryNested(item.resumen_json, "tareas_cuidado", "pendiente")} />
                     <Metric label="Sin signos" value={summaryCount(item.resumen_json, "sin_signos_hoy")} />
                     <Metric label="Atención" value={summaryCount(item.resumen_json, "signos_atencion")} />
                     <Metric label="Seguim." value={summaryCount(item.resumen_json, "seguimientos")} />
@@ -154,4 +160,3 @@ function Step({ n, text }) {
     </div>
   );
 }
-

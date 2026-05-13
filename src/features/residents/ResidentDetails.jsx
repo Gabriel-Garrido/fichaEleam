@@ -3,10 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { getResidentById } from "./residentService";
 import { getVitalSigns } from "../vitalSigns/vitalSignsService";
 import { getObservations } from "../observations/observationsService";
+import { useAuth } from "../../context/AuthContext";
 import { isValidUUID } from "../../utils/validators";
 import Loading from "../../components/Loading";
 import Button from "../../components/Button";
 import VitalCard from "../vitalSigns/VitalCard";
+import CarePlanTab from "../carePlans/CarePlanTab";
+import EmarResidentTab from "../emar/EmarResidentTab";
 import {
   VITAL_DEFS,
   STATUS,
@@ -72,6 +75,7 @@ function daysSince(date) {
 function ResidentDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { canFeature } = useAuth();
   const [resident, setResident] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -100,7 +104,9 @@ function ResidentDetails() {
     { id: "info",          label: "Información" },
     { id: "signos",        label: "Signos Vitales" },
     { id: "observaciones", label: "Observaciones" },
-  ];
+    canFeature("care-plans") && { id: "care", label: "Plan de cuidado" },
+    canFeature("emar") && { id: "emar", label: "eMAR" },
+  ].filter(Boolean);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -226,6 +232,8 @@ function ResidentDetails() {
       {tab === "info"          && <InfoTab resident={resident} />}
       {tab === "signos"        && <SignosTab residenteId={id} navigate={navigate} />}
       {tab === "observaciones" && <ObservacionesTab residenteId={id} navigate={navigate} />}
+      {tab === "care"          && <CarePlanTab resident={resident} />}
+      {tab === "emar"          && <EmarResidentTab resident={resident} />}
     </div>
   );
 }

@@ -62,7 +62,9 @@ function loadState(userId, role) {
 function persist(userId, state) {
   try {
     localStorage.setItem(storageKey(userId), JSON.stringify(state));
-  } catch {}
+  } catch {
+    // Local storage can be unavailable in private browsing or embedded contexts.
+  }
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

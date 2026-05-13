@@ -31,6 +31,7 @@ export default function AdminDashboard() {
   const stats   = data?.residentStats ?? null;
   const errors  = data?.errors ?? {};
   const turno   = currentShift();
+  const operational = data?.operationalSummary ?? null;
 
   const acreditacion = useMemo(() => {
     const s = data?.acreditacionSummary;
@@ -75,18 +76,29 @@ export default function AdminDashboard() {
       const days = daysUntil(d.fecha_vencimiento);
       return days != null && days <= 7;
     }).length;
+    const emarValidation = data?.operationalSummary?.emar?.pendiente_validacion ?? 0;
+    const emarOverdue = data?.operationalSummary?.emar?.vencidas ?? 0;
+    const careOverdue = data?.operationalSummary?.care?.vencidas ?? 0;
+    const carePending = data?.operationalSummary?.care?.pendiente ?? 0;
     const totalAlerts =
       clinicalSummary.critical +
       clinicalSummary.warning +
       stale.length +
       (data?.pendingFollowUps ?? []).length +
-      expiring7;
+      expiring7 +
+      emarValidation +
+      emarOverdue +
+      careOverdue;
     const score = Math.max(0, 100 -
       clinicalSummary.critical * 18 -
       clinicalSummary.warning  * 8 -
       stale.length             * 7 -
       (data?.pendingFollowUps ?? []).length * 5 -
-      expiring7                * 6
+      expiring7                * 6 -
+      emarOverdue              * 18 -
+      emarValidation           * 14 -
+      careOverdue              * 8 -
+      carePending              * 2
     );
     return {
       stale, highDependency, expiring7, totalAlerts, score,
@@ -132,7 +144,14 @@ export default function AdminDashboard() {
         followUps={data?.pendingFollowUps ?? []}
         expiring7={management.expiring7}
         activity={data?.activityByShift}
+        operational={operational}
         turno={turno}
+        navigate={navigate}
+      />
+
+      <OperationalTurnPanel
+        loading={loading}
+        summary={operational}
         navigate={navigate}
       />
 
@@ -225,6 +244,7 @@ export default function AdminDashboard() {
         latestVitals={data?.latestVitalsByResident ?? []}
         followUps={data?.pendingFollowUps ?? []}
         expiring={data?.expiringDocuments ?? []}
+        operational={operational}
         loading={loading}
         navigate={navigate}
       />
@@ -280,6 +300,8 @@ export default function AdminDashboard() {
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <QuickAction iconId="shift"        label="Entrega de turno"         onClick={() => navigate("/turnos/nueva")} />
+          <QuickAction iconId="tasks"        label="Tareas diarias"           onClick={() => navigate("/turnos/tareas")} />
+          <QuickAction iconId="meds"         label="eMAR turno"               onClick={() => navigate("/turnos/emar")} />
           <QuickAction iconId="vitals"       label="Registrar signos vitales" onClick={() => navigate("/vital-signs/new")} />
           <QuickAction iconId="observations" label="Nueva observación"        onClick={() => navigate("/observations/new")} />
           {rol !== "funcionario" && (
@@ -308,5 +330,62 @@ export default function AdminDashboard() {
         </details>
       </section>
     </PageLayout>
+  );
+}
+
+function OperationalTurnPanel({ loading, summary, navigate }) {
+  if (loading || !summary) return null;
+
+  const care = summary.care ?? {};
+  const emar = summary.emar ?? {};
+  const emarPending = (emar.pendiente ?? 0) + (emar.pendiente_validacion ?? 0);
+  const carePending = care.pendiente ?? 0;
+  const emarTone = (emar.vencidas ?? 0) || (emar.pendiente_validacion ?? 0) ? "rose" : emarPending ? "amber" : "emerald";
+  const careTone = (care.vencidas ?? 0) ? "rose" : carePending ? "amber" : "emerald";
+
+  return (
+    <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <OperationalCard
+        title="eMAR del turno"
+        value={emarPending}
+        tone={emarTone}
+        sub={`${emar.pendiente ?? 0} pendientes · ${emar.pendiente_validacion ?? 0} por validar · ${emar.vencidas ?? 0} vencidos`}
+        action="Abrir eMAR"
+        onClick={() => navigate("/turnos/emar")}
+      />
+      <OperationalCard
+        title="Tareas de cuidado"
+        value={carePending}
+        tone={careTone}
+        sub={`${care.cumplida ?? 0} cumplidas · ${care.omitida ?? 0} omitidas · ${care.vencidas ?? 0} vencidas`}
+        action="Abrir tareas"
+        onClick={() => navigate("/turnos/tareas")}
+      />
+    </section>
+  );
+}
+
+function OperationalCard({ title, value, sub, tone, action, onClick }) {
+  const toneClass = {
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    amber: "border-amber-200 bg-amber-50 text-amber-900",
+    rose: "border-rose-200 bg-rose-50 text-rose-900",
+  }[tone] ?? "border-slate-200 bg-white text-slate-900";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${toneClass}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{title}</p>
+          <div className="mt-1 text-3xl font-bold tabular-nums">{value}</div>
+          <p className="mt-1 text-sm opacity-80">{sub}</p>
+        </div>
+        <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold">{action}</span>
+      </div>
+    </button>
   );
 }

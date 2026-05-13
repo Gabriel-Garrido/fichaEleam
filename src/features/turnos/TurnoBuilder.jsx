@@ -41,9 +41,17 @@ export default function TurnoBuilder() {
 
   const nextText = useMemo(() => {
     if (!summary) return "";
+    const emarValidation = summary.emar?.resumen?.pendiente_validacion ?? 0;
+    const emarOverdue = summary.emar?.resumen?.vencidas ?? 0;
+    const careOverdue = summary.tareas_cuidado?.resumen?.vencidas ?? 0;
+    const carePending = summary.tareas_cuidado?.resumen?.pendiente ?? 0;
     const urgent = summary.signos_atencion?.filter((item) => item.status === "critical").length ?? 0;
     const sinSignos = summary.sin_signos_hoy?.length ?? 0;
     const seguimientos = summary.seguimientos?.length ?? 0;
+    if (emarOverdue) return `Administrar ${emarOverdue} medicamento${emarOverdue > 1 ? "s" : ""} vencido${emarOverdue > 1 ? "s" : ""}.`;
+    if (emarValidation) return `Validar ${emarValidation} controlado${emarValidation > 1 ? "s" : ""} antes de cerrar turno.`;
+    if (careOverdue) return `Cerrar ${careOverdue} tarea${careOverdue > 1 ? "s" : ""} de cuidado vencida${careOverdue > 1 ? "s" : ""}.`;
+    if (carePending) return `Completar ${carePending} tarea${carePending > 1 ? "s" : ""} de cuidado pendiente${carePending > 1 ? "s" : ""}.`;
     if (urgent) return `Priorizar ${urgent} residente${urgent > 1 ? "s" : ""} con signos críticos.`;
     if (sinSignos) return `Completar controles de ${sinSignos} residente${sinSignos > 1 ? "s" : ""}.`;
     if (seguimientos) return `Revisar ${seguimientos} seguimiento${seguimientos > 1 ? "s" : ""} pendiente${seguimientos > 1 ? "s" : ""}.`;
@@ -117,6 +125,24 @@ export default function TurnoBuilder() {
       ) : summary && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <section className="space-y-4">
+            <SummarySection title="eMAR por validar" empty="No hay medicamentos controlados pendientes de validación.">
+              {summary.emar?.por_validar?.map((item) => (
+                <MedicationRow key={item.id} item={item} tone="sky" />
+              ))}
+            </SummarySection>
+
+            <SummarySection title="Medicamentos pendientes" empty="Sin administraciones pendientes para este turno.">
+              {summary.emar?.pendientes?.map((item) => (
+                <MedicationRow key={item.id} item={item} />
+              ))}
+            </SummarySection>
+
+            <SummarySection title="Tareas de cuidado" empty="Sin tareas de cuidado pendientes para este turno.">
+              {summary.tareas_cuidado?.pendientes?.map((item) => (
+                <CareRow key={item.id} item={item} />
+              ))}
+            </SummarySection>
+
             <SummarySection title="Alertas clínicas" empty="Sin signos críticos o en atención.">
               {summary.signos_atencion?.map((item) => (
                 <AlertRow key={item.id} item={item} />
@@ -183,6 +209,8 @@ export default function TurnoBuilder() {
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <SmallMetric label="Signos" value={summary.actividad_turno?.signos ?? 0} />
                 <SmallMetric label="Observaciones" value={summary.actividad_turno?.observaciones ?? 0} />
+                <SmallMetric label="Tareas" value={summary.actividad_turno?.tareas_cuidado_pendientes ?? 0} />
+                <SmallMetric label="eMAR pend." value={(summary.actividad_turno?.medicamentos_pendientes ?? 0) + (summary.actividad_turno?.medicamentos_por_validar ?? 0)} />
                 <SmallMetric label="Residentes" value={summary.residentes_activos ?? 0} />
                 <SmallMetric label="Fecha" value={turnoLabel(summary.turno)} />
               </div>
@@ -261,6 +289,38 @@ function TextRow({ item }) {
     <div className="rounded-2xl border border-slate-200 p-3">
       <div className="text-sm font-semibold text-slate-950">{item.residente?.nombre ?? "Residente"}</div>
       <p className="mt-1 text-sm leading-6 text-slate-600">{item.descripcion}</p>
+    </div>
+  );
+}
+
+function MedicationRow({ item, tone = "amber" }) {
+  const classes = tone === "sky" ? "border-sky-200 bg-sky-50" : item.vencida ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50";
+  return (
+    <div className={`rounded-2xl border p-3 ${classes}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-950">{item.medicamento}</div>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
+          {item.hora?.slice(0, 5) ?? "--:--"}{item.controlado ? " · controlado" : ""}
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-slate-600">
+        {item.residente?.nombre ?? "Residente"}{item.dosis ? ` · ${item.dosis}` : ""}{item.via ? ` · vía ${item.via}` : ""}
+      </p>
+    </div>
+  );
+}
+
+function CareRow({ item }) {
+  return (
+    <div className={`rounded-2xl border p-3 ${item.vencida ? "border-rose-200 bg-rose-50" : "border-slate-200"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-950">{item.titulo}</div>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
+          {item.hora?.slice(0, 5) ?? "--:--"} · {item.prioridad}
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-slate-600">{item.residente?.nombre ?? "Residente"}</p>
+      {item.instrucciones && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{item.instrucciones}</p>}
     </div>
   );
 }

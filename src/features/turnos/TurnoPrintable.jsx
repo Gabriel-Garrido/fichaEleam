@@ -67,10 +67,12 @@ export default function TurnoPrintable() {
         </div>
       ) : (
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print:border-0 print:shadow-none">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-5">
             <PrintMetric label="Residentes activos" value={item.resumen_json?.residentes_activos ?? 0} />
             <PrintMetric label="Sin signos hoy" value={item.resumen_json?.sin_signos_hoy?.length ?? 0} />
             <PrintMetric label="Alertas clínicas" value={item.resumen_json?.signos_atencion?.length ?? 0} />
+            <PrintMetric label="Tareas pendientes" value={item.resumen_json?.tareas_cuidado?.resumen?.pendiente ?? 0} />
+            <PrintMetric label="eMAR pendiente" value={(item.resumen_json?.emar?.resumen?.pendiente ?? 0) + (item.resumen_json?.emar?.resumen?.pendiente_validacion ?? 0)} />
           </div>
 
           <PrintableSection title="Pendientes para siguiente turno">
@@ -80,6 +82,18 @@ export default function TurnoPrintable() {
           <PrintableSection title="Notas del turno">
             {item.notas || "Sin notas manuales."}
           </PrintableSection>
+
+          <PrintableList title="eMAR por validar" items={item.resumen_json?.emar?.por_validar} render={(row) => (
+            <div><strong>{row.residente?.nombre}</strong> · {row.medicamento}{row.dosis ? ` · ${row.dosis}` : ""}</div>
+          )} />
+
+          <PrintableList title="Medicamentos pendientes" items={item.resumen_json?.emar?.pendientes} render={(row) => (
+            <div><strong>{row.residente?.nombre}</strong> · {row.medicamento}{row.hora ? ` · ${row.hora.slice(0, 5)}` : ""}</div>
+          )} />
+
+          <PrintableList title="Tareas de cuidado pendientes" items={item.resumen_json?.tareas_cuidado?.pendientes} render={(row) => (
+            <div><strong>{row.residente?.nombre}</strong> · {row.titulo}{row.hora ? ` · ${row.hora.slice(0, 5)}` : ""}</div>
+          )} />
 
           <PrintableList title="Alertas clínicas" items={item.resumen_json?.signos_atencion} render={(row) => (
             <div>
@@ -147,4 +161,3 @@ function PrintableList({ title, items = [], render }) {
     </section>
   );
 }
-

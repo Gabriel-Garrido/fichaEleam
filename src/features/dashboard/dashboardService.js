@@ -4,6 +4,8 @@ import {
   getObservaciones,
   buildResumen,
 } from "../accreditation/accreditationService";
+import { currentTurno, getCareTaskSummary, todayIso } from "../carePlans/carePlansService";
+import { getEmarSummary } from "../emar/emarService";
 
 // Resumen para el dashboard del ELEAM: porcentaje global, por ámbito,
 // totales clave y un puñado de alertas.
@@ -201,6 +203,16 @@ async function getRecentIncidents() {
   return data ?? [];
 }
 
+async function getOperationalTurnSummary() {
+  const fecha = todayIso();
+  const turno = currentTurno();
+  const [care, emar] = await Promise.all([
+    getCareTaskSummary({ fecha, turno }),
+    getEmarSummary({ fecha, turno }),
+  ]);
+  return { fecha, turno, care, emar };
+}
+
 // Requisitos de acreditación próximos a vencer (30 días) — modelo v9.
 // Se lee desde acred_requisitos_eleam joined con el catálogo.
 export async function getExpiringDocuments(daysAhead = 30) {
@@ -233,6 +245,7 @@ export async function loadDashboard() {
     incidentsResult,
     expiringResult,
     acreditacionResult,
+    operationalResult,
   ] = await Promise.allSettled([
     getResidentStats(),
     getTodayVitalSignsCount(),
@@ -243,6 +256,7 @@ export async function loadDashboard() {
     getRecentIncidents(),
     getExpiringDocuments(30),
     getAccreditationSummary(),
+    getOperationalTurnSummary(),
   ]);
 
   const ok = (r) => r.status === "fulfilled";
@@ -257,6 +271,7 @@ export async function loadDashboard() {
     recentIncidents:      ok(incidentsResult)        ? incidentsResult.value        : [],
     expiringDocuments:    ok(expiringResult)         ? expiringResult.value         : [],
     acreditacionSummary:  ok(acreditacionResult)     ? acreditacionResult.value     : null,
+    operationalSummary:   ok(operationalResult)      ? operationalResult.value      : null,
     errors: {
       residentStats:    !ok(residentStatsResult),
       actividad:        !ok(signosHoyResult) || !ok(observacionesHoyResult),
@@ -266,6 +281,7 @@ export async function loadDashboard() {
       incidents:        !ok(incidentsResult),
       expiring:         !ok(expiringResult),
       acreditacion:     !ok(acreditacionResult),
+      operational:       !ok(operationalResult),
     },
   };
 }
