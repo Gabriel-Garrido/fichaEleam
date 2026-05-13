@@ -523,7 +523,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Email**: Regex estricto en `validateEmail()`.
 - **UUID**: `isValidUUID()` antes de usarlo en queries; rechazo silencioso de inválidos.
 - **RUT**: `validateRut()` con módulo-11; campo opcional → true si vacío.
-- **Archivos**: MIME whitelist + tamaño ≤10 MB en `AccreditationUpload.jsx`.
+- **Archivos**: Extensión + MIME type whitelist + tamaño ≤10 MB en `accreditationService.js` (`validateFile()`). `ALLOWED_EXTENSIONS` y `ALLOWED_MIME` se validan juntos; extensión primero, luego `file.type` si está presente.
 - **Nombres de archivo**: `sanitizeFilename()` → elimina `..`, `/`, `\`, especiales; whitelist de extensiones.
 
 ### Validación servidor (RLS)
@@ -535,6 +535,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Superadmin**: Función `is_superadmin()` en todas las RLS; bypass seguro.
 - **Storage path scoped**: `acreditacion/{eleamId}/...`; RLS filtra por `split_part(name, '/', 2)`.
 - **Permisos granulares**: `funcionario_permisos` con checks en UI + RLS.
+- **Defense-in-depth en accreditationService**: `setRequisitoEstado`, `archiveDocumento` y el reemplazo de documentos incluyen `.eq("eleam_id", eleamId)` además de la protección RLS.
 
 ### Headers
 
@@ -657,9 +658,16 @@ El proyecto usa **Tailwind CSS 4 puro** sin CSS variables de colores. No hay `va
 
 ### Iconografía
 
-- **Heroicons outline** (SVG inline). NO emojis en UI de la aplicación.
+- **Heroicons outline** (SVG inline). NO emojis en UI de la aplicación (excepción: íconos médicos en `VITAL_DEFS.icon` con `aria-hidden`).
 - Patrón de icono en empty states: caja teal-50 + icono teal-600, 12×12px, `rounded-xl`.
 - Iconos de navegación: centralizados en `NavIcon.jsx`.
+
+### Accesibilidad
+
+- Todos los `<button>` con `onClick` tienen `type="button"` explícito (o `type="submit"` en formularios).
+- Elementos clickeables no-button (artículos, divs) tienen `role="button"`, `tabIndex={0}` y `onKeyDown` con Enter/Space.
+- Labels de formulario usan `htmlFor` + `id` para asociación semántica (screen readers).
+- Tooltips sobre texto truncado vía `title` attribute.
 
 ### Componentes base
 
