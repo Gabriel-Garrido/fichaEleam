@@ -287,7 +287,7 @@ function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
             </span>
           )}
         </div>
-        <p className="text-sm font-semibold text-slate-800 truncate">{doc.archivo_nombre}</p>
+        <p className="text-sm font-semibold text-slate-800 truncate" title={doc.archivo_nombre}>{doc.archivo_nombre}</p>
         <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 mt-1">
           {doc.fecha_emision && <span>Emisión: {formatDate(doc.fecha_emision)}</span>}
           {doc.fecha_vencimiento && <span>Vence: {formatDate(doc.fecha_vencimiento)}</span>}

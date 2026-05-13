@@ -2,6 +2,14 @@ import { supabase } from "../../services/supabaseConfig";
 
 const SIGNED_URL_EXPIRY = 60 * 60; // 1 hora
 const ALLOWED_EXTENSIONS = new Set(["pdf", "doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png", "webp"]);
+const ALLOWED_MIME = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "image/jpeg", "image/png", "image/webp",
+]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 // Estados visuales de un requisito
@@ -44,6 +52,9 @@ export function validateFile(file) {
   const ext = (file.name.split(".").pop() ?? "").toLowerCase();
   if (!ALLOWED_EXTENSIONS.has(ext)) {
     return "Formato no permitido. Usa PDF, DOC/DOCX, XLS/XLSX, JPG, PNG o WEBP.";
+  }
+  if (file.type && !ALLOWED_MIME.has(file.type)) {
+    return "Tipo MIME no permitido. Usa PDF, DOC/DOCX, XLS/XLSX, JPG, PNG o WEBP.";
   }
   return null;
 }
@@ -187,7 +198,7 @@ async function markExpired(eleamIdOverride = null) {
 // ─────────────────────────────────────────────────────────────
 
 export async function setRequisitoEstado(reId, payload) {
-  const { userId } = await getMyContext();
+  const { userId, eleamId } = await getMyContext();
 
   const update = {
     ...payload,
@@ -200,6 +211,7 @@ export async function setRequisitoEstado(reId, payload) {
     .from("acred_requisitos_eleam")
     .update(update)
     .eq("id", reId)
+    .eq("eleam_id", eleamId)
     .select()
     .single();
   if (error) throw error;
@@ -327,7 +339,8 @@ export async function uploadEvidence({ reId, file, fechaEmision, fechaVencimient
         reemplazado_por_id: data.id,
         reemplazado_en: new Date().toISOString(),
       })
-      .eq("id", toReplaceId);
+      .eq("id", toReplaceId)
+      .eq("eleam_id", eleamId);
   }
 
   // Si el documento trae fecha de vencimiento, sincronizarla en el requisito
@@ -356,10 +369,12 @@ export async function uploadEvidence({ reId, file, fechaEmision, fechaVencimient
 
 // Borrado físico (solo admin); preferimos vigente=false para mantener historial.
 export async function archiveDocumento(docId) {
+  const { eleamId } = await getMyContext();
   const { error } = await supabase
     .from("acred_documentos")
     .update({ vigente: false, reemplazado_en: new Date().toISOString() })
-    .eq("id", docId);
+    .eq("id", docId)
+    .eq("eleam_id", eleamId);
   if (error) throw error;
   await logAudit({ entidad: "documento", entidadId: docId, accion: "archive" });
 }
