@@ -1,0 +1,71 @@
+# FichaEleam
+
+> Software de gestión clínica y acreditación SEREMI para ELEAM (Establecimientos de Larga Estadía para Adultos Mayores) en Chile.
+
+FichaEleam es el único software diseñado exclusivamente para ELEAM en Chile. Cubre los 14 ámbitos del DS 14/2017 con fichas clínicas digitales, registro de signos vitales con alertas para adultos mayores, observaciones de turno con 12 categorías, carpeta SEREMI lista para fiscalización y portal de acceso para familias de residentes.
+
+**Web**: https://app.fichaeleam.cl
+**Blog**: https://app.fichaeleam.cl/blog
+**Demo**: https://app.fichaeleam.cl (formulario de solicitud en la página principal)
+
+---
+
+## Producto
+
+- [Inicio](https://app.fichaeleam.cl/): Landing page con información completa del producto, planes de suscripción y formulario para solicitar demo gratuito.
+- [Planes y precios](https://app.fichaeleam.cl/pago): Tres planes según número de residentes: hasta 14 ($50.000 CLP/mes), hasta 24 ($80.000 CLP/mes) y hasta 34 ($120.000 CLP/mes). Pago mensual por MercadoPago.
+
+### Funcionalidades principales
+
+- **Ficha clínica digital**: Registro completo de cada residente (diagnósticos, alergias, medicamentos, índice Barthel, nivel de dependencia).
+- **Signos vitales**: Registro por turno con rangos clínicos validados para adultos mayores y alertas de valores críticos.
+- **Observaciones de turno**: 12 tipos de observaciones diarias (alimentación, higiene, comportamiento, caídas, medicamentos, etc.).
+- **Carpeta SEREMI DS 14/2017**: Los 14 ámbitos y más de 70 requisitos pre-cargados. Subida de evidencias, control de vencimientos y trazabilidad de auditorías.
+- **Portal para familias**: Acceso al residente asignado, últimos signos vitales y registro de visitas.
+- **Gestión de equipo**: Creación de cuentas para funcionarios con permisos granulares y familiares vinculados a residentes.
+
+---
+
+## Blog — Recursos para ELEAM en Chile
+
+Artículos prácticos para directores y personal de Establecimientos de Larga Estadía para Adultos Mayores:
+
+- [Blog FichaEleam](https://app.fichaeleam.cl/blog): Índice completo de artículos
+
+### Artículos publicados
+
+- [Cómo preparar un ELEAM pequeño para la fiscalización SEREMI](https://app.fichaeleam.cl/blog/preparar-eleam-pequeno-fiscalizacion-seremi): Guía paso a paso para organizar documentación, registros y evidencias antes de una visita de la SEREMI.
+- [Checklist de documentos básicos que todo ELEAM debe tener al día](https://app.fichaeleam.cl/blog/checklist-documentos-basicos-eleam): Lista completa de documentos exigidos por el DS 14/2017 organizados por ámbito de acreditación.
+- [Los errores más frecuentes en los registros diarios de un ELEAM](https://app.fichaeleam.cl/blog/errores-registros-diarios-eleam): Errores comunes en el registro de signos vitales, medicamentos y observaciones de turno, y cómo evitarlos.
+- [Kardex de medicamentos en ELEAM pequeños: guía paso a paso](https://app.fichaeleam.cl/blog/kardex-medicamentos-eleam-pequeno): Cómo implementar un Kardex de medicamentos correcto según los estándares SEREMI.
+- [Registro de caídas e incidentes en ELEAM: requisitos y buenas prácticas](https://app.fichaeleam.cl/blog/registro-caidas-incidentes-eleam): Protocolo para registrar y gestionar caídas de residentes según el DS 14/2017.
+- [Comunicación con familias en ELEAM: derechos del residente y buenas prácticas](https://app.fichaeleam.cl/blog/comunicacion-familias-eleam-derechos): Ley 20.584 y obligaciones de información a familiares de residentes.
+- [Por qué el papel y el Excel ya no alcanzan para gestionar un ELEAM](https://app.fichaeleam.cl/blog/papel-excel-sistema-digital-eleam): Comparativa entre gestión manual y digital para ELEAM en términos de cumplimiento normativo.
+- [Protección de datos personales en ELEAM: qué exige la Ley N°19.628](https://app.fichaeleam.cl/blog/proteccion-datos-personales-eleam): Obligaciones de confidencialidad y tratamiento de datos de residentes según la legislación chilena.
+- [Organización de tareas por turno en ELEAM: guía práctica](https://app.fichaeleam.cl/blog/organizacion-tareas-turno-eleam): Cómo estructurar los turnos de trabajo y garantizar la continuidad del cuidado.
+- [Trazabilidad en ELEAM: qué es, por qué importa y cómo implementarla](https://app.fichaeleam.cl/blog/trazabilidad-eleam-guia-directores): Concepto de trazabilidad clínica y documental para directores de ELEAM.
+
+---
+
+## Marco regulatorio (Chile)
+
+FichaEleam está diseñado en conformidad con el marco regulatorio chileno para ELEAM:
+
+- **DS 14/2017** (Decreto Supremo del Ministerio de Salud): Reglamento de establecimientos de larga estadía para adultos mayores. Define los 14 ámbitos de acreditación y los requisitos documentales para la fiscalización SEREMI. FichaEleam tiene todos los ámbitos y requisitos pre-cargados.
+- **Ley N°20.584**: Regula los derechos y deberes de los pacientes en establecimientos de salud, incluyendo ELEAM. Incluye derecho a la información, privacidad y acceso a registros clínicos.
+- **Ley N°19.628**: Protección de datos personales. Aplica al tratamiento de información de residentes, diagnósticos y datos de salud en ELEAM.
+- **SENAMA** (Servicio Nacional del Adulto Mayor): Organismo que promueve la calidad de vida del adulto mayor y supervisa los establecimientos.
+- **SEREMI de Salud**: Secretaría Regional Ministerial que fiscaliza y acredita los ELEAM en cada región de Chile.
+
+---
+
+## Glosario
+
+- **ELEAM**: Establecimiento de Larga Estadía para Adultos Mayores. Residencia con atención 24/7 para personas mayores que requieren cuidados continuos.
+- **SEREMI**: Secretaría Regional Ministerial de Salud. Fiscaliza y acredita los ELEAM.
+- **DS 14/2017**: Decreto Supremo N°14/2017 del Ministerio de Salud. Define los 14 ámbitos de acreditación para ELEAM y sus requisitos documentales.
+- **Carpeta SEREMI**: Conjunto de documentos, registros y evidencias exigidos por la SEREMI para acreditar el cumplimiento del DS 14/2017.
+- **Ficha clínica**: Registro digital de la historia clínica de cada residente: diagnósticos, medicamentos, signos vitales y observaciones de turno.
+- **Índice de Barthel**: Escala de valoración funcional de 0 a 100 puntos que mide la independencia del adulto mayor en actividades de la vida diaria.
+- **Nivel de dependencia**: Clasificación según índice de Barthel: leve (61-99), moderado (41-60), severo (21-40), total (0-20).
+- **Turno**: Jornada de trabajo del personal clínico (mañana, tarde, noche). Los registros de signos vitales y observaciones se asocian al turno correspondiente.

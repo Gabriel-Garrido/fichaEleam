@@ -2,11 +2,13 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getPublishedPosts } from "./blogService";
 import Loading from "../../components/Loading";
-import { useSEO, breadcrumbJsonLd } from "../../utils/seo";
+import { useSEO, breadcrumbJsonLd, blogListJsonLd } from "../../utils/seo";
+import { formatDate } from "../../utils/dateUtils";
 import DemoRequestModal from "../landing/DemoRequestModal";
 import { trackEvent } from "../landing/landingAnalytics";
 
-function formatDate(iso) {
+// Formatea fechas con mes en texto largo para tarjetas del blog
+function formatDateLong(iso) {
   if (!iso) return "";
   try {
     return new Date(iso).toLocaleDateString("es-CL", { day: "2-digit", month: "long", year: "numeric" });
@@ -33,7 +35,7 @@ function PostCard({ post, featured = false }) {
       )}
       <div className="p-5">
         <div className="flex items-center gap-2 text-[11px] text-slate-400 mb-2">
-          <time dateTime={post.publicado_en}>{formatDate(post.publicado_en)}</time>
+          <time dateTime={post.publicado_en}>{formatDateLong(post.publicado_en)}</time>
           <span>·</span>
           <span>{post.tiempo_lectura_min ?? 5} min de lectura</span>
         </div>
@@ -71,19 +73,7 @@ export default function PublicBlogList() {
         { name: "Inicio", url: "/" },
         { name: "Blog",   url: "/blog" },
       ]),
-      {
-        "@context": "https://schema.org",
-        "@type": "Blog",
-        name: "Blog FichaEleam",
-        description: "Recursos para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile: gestión clínica, DS 14/2017 y acreditación SEREMI.",
-        url: "https://app.fichaeleam.cl/blog",
-        publisher: {
-          "@type": "Organization",
-          name: "FichaEleam",
-          url: "https://app.fichaeleam.cl",
-        },
-        inLanguage: "es-CL",
-      },
+      blogListJsonLd(posts),
     ],
   });
 
