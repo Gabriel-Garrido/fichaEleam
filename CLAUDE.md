@@ -30,7 +30,6 @@ npx supabase functions deploy  # despliega todas las Edge Functions
 ```
 src/
 ├── components/
-│   ├── Navbar.jsx              # Nav responsivo; oculta items según rol/pago
 │   ├── ProtectedRoute.jsx      # Guard: sesión, pago activo, rol, cambio de clave
 │   ├── SuperAdminRoute.jsx     # Guard: solo superadmin
 │   ├── Button.jsx, Input.jsx   # Base UI consistente
@@ -55,6 +54,13 @@ src/
 │   ├── team/                   # TeamManagement (crear funcionarios/familiares) + ChangePasswordPage
 │   ├── familiar/               # Portal restringido + registro de visitas
 │   ├── demo/                   # Demo guiado por token, datos mock y guía interactiva
+│   ├── onboarding/             # Sistema de onboarding adaptativo por rol/permisos
+│   │   ├── onboardingConfig.js # ROLE_CONFIG por rol + COLOR_CLASSES (Tailwind estático)
+│   │   ├── OnboardingContext.jsx  # Provider: estado localStorage, auto-complete, detección nuevos permisos
+│   │   ├── OnboardingWelcomeModal.jsx  # Modal primer ingreso con highlights filtrados por permiso
+│   │   ├── OnboardingChecklist.jsx    # Widget flotante con progress ring y lista de pasos
+│   │   ├── OnboardingBanner.jsx       # Barra contextual en la ruta del paso activo
+│   │   └── index.js            # Barrel exports
 │   ├── superadmin/             # Dashboard CRM + blog editor + gestión de pagos + LeadsPanel
 │   │   └── blog/               # BlogManagement, BlogEditor (solo para superadmin)
 │   └── utils/                  # Markdown renderer, customer health, etc.
@@ -516,9 +522,9 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Storage path scoped**: `acreditacion/{eleamId}/...`; RLS filtra por `split_part(name, '/', 2)`.
 - **Permisos granulares**: `funcionario_permisos` con checks en UI + RLS.
 
-### Headers (Vite)
+### Headers
 
-`vite.config.js` inyecta: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=()`.
+`vite.config.js` inyecta los headers en el servidor de desarrollo. En **producción** los headers se configuran en `public/_headers` (Netlify / Cloudflare Pages) y deben también configurarse en el servidor web / CDN del host: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, `X-XSS-Protection: 1; mode=block`.
 
 ### ErrorBoundary
 
@@ -599,14 +605,43 @@ update public.profiles set rol = 'superadmin' where email = 'tu-email@gmail.com'
 
 ---
 
+## Onboarding Adaptativo
+
+Sistema de guía de primeros pasos en `src/features/onboarding/`. Montado en `AppShell.jsx` via `<OnboardingProvider>`.
+
+### Tres capas
+
+| Componente | Cuándo se muestra |
+|-----------|-------------------|
+| `OnboardingWelcomeModal` | Primer ingreso: `!seenWelcome && availableSteps.length > 0` |
+| `OnboardingChecklist` | Siempre visible (widget flotante) mientras `isActive && !dismissed` |
+| `OnboardingBanner` | Solo en la ruta que corresponde al paso pendiente actual |
+
+### Adaptación por rol y permisos
+
+- Los pasos de funcionario tienen `requiredPermission` (e.g. `crear_signos_vitales`).
+- `availableSteps` se computa en `OnboardingContext` filtrando con `can()` + `canFeature()`, esperando a que `profileLoading = false`.
+- Si a un usuario se le otorgan nuevos permisos en una sesión posterior, el sistema detecta los pasos "recién visibles" mediante `knownAvailableIds` en localStorage y reactiva el onboarding (`dismissed: false`).
+
+### Estado
+
+Persistido en localStorage con clave `fichaeleam_onboarding_v2_{userId}`. Campos: `role`, `seenWelcome`, `steps: { [stepId]: bool }`, `knownAvailableIds`, `dismissed`, `completedAt`.
+
+### Colores (por rol)
+
+`COLOR_CLASSES` en `onboardingConfig.js` mapea nombre de color a clases Tailwind **estáticas** (no dinámicas) para que Tailwind las incluya en el bundle. Roles: `teal` (admin_eleam), `violet` (funcionario), `rose` (familiar), `slate` (superadmin).
+
+---
+
 ## Qué Hacer Ahora
 
-1. **Revisar rutas reales** vs documentación — ya están sincronizadas en este archivo.
-2. **Permisos granulares de funcionario**: Si necesitas más permisos o cambiar defaults, edita la lógica en `useAuth()` + `funcionario_permisos` tabla.
+1. **Permisos granulares de funcionario**: Si necesitas más permisos o cambiar defaults, edita la lógica en `useAuth()` + `funcionario_permisos` tabla.
+2. **Onboarding**: Para agregar pasos, edita `ROLE_CONFIG` en `onboardingConfig.js` (sin cambiar los componentes). Las clases Tailwind del color deben ser estáticas en `COLOR_CLASSES`.
 3. **Acreditación**: Si el modelo v9 requiere cambios (ámbitos, requisitos, estados), edita `supabase_schema.sql` + servicios.
 4. **Blog/CRM**: Editable desde UI; no requiere cambios de código.
 5. **MercadoPago**: Secrets en Edge Functions; pruebas con TEST token.
 6. **SEO**: Valida sitemap + JSON-LD con Google Search Console.
+7. **Headers en producción**: Configurar los security headers en el servidor / CDN que sirve `/dist`. El archivo `public/_headers` cubre Netlify y Cloudflare Pages.
 
 ---
 
@@ -617,3 +652,6 @@ update public.profiles set rol = 'superadmin' where email = 'tu-email@gmail.com'
 - `src/context/AuthContext.jsx` — useAuth(), helpers, derivados.
 - `src/components/ProtectedRoute.jsx` — Guarding de sesión, pago, rol.
 - `src/features/vitalSigns/vitalRanges.js` — Rangos clínicos.
+- `src/features/onboarding/onboardingConfig.js` — Pasos y colores del onboarding por rol.
+- `src/features/onboarding/OnboardingContext.jsx` — Lógica de estado, permisos y auto-complete.
+- `public/_headers` — Security headers para Netlify / Cloudflare Pages.

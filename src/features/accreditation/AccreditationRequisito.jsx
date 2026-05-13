@@ -25,6 +25,7 @@ import {
   validateFile,
 } from "./accreditationService";
 import { isValidUUID } from "../../utils/validators";
+import { friendlyError } from "../../utils/errorMessages";
 
 function StatePill({ estado }) {
   const m = estadoMeta(estado);
@@ -439,7 +440,7 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
       setDescripcion(""); setAcciones(""); setFechaCompromiso(""); setOrigen("interna");
       onCreated?.();
     } catch (err) {
-      toast(err.message || "Error", "error");
+      toast(friendlyError(err, "No se pudo registrar la observación. Intenta de nuevo."), "error");
     } finally {
       setBusy(false);
     }
@@ -575,7 +576,7 @@ export default function AccreditationRequisito() {
       setObservaciones(o);
       setAudit(a);
     } catch (e) {
-      toast(e.message || "Error al cargar", "error");
+      toast(friendlyError(e, "No se pudo cargar el requisito. Recarga la página e intenta de nuevo."), "error");
     } finally {
       setLoading(false);
     }
@@ -595,7 +596,7 @@ export default function AccreditationRequisito() {
       toast("Estado actualizado", "success");
       await loadAll();
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudo actualizar el estado. Intenta de nuevo."), "error");
     }
   };
 
@@ -612,7 +613,7 @@ export default function AccreditationRequisito() {
       toast("Documento archivado", "info");
       await loadAll();
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudo archivar el documento. Intenta de nuevo."), "error");
     }
   };
 
@@ -627,7 +628,7 @@ export default function AccreditationRequisito() {
       toast("Te asignaste como responsable", "success");
       await loadAll();
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudo asignar el responsable. Intenta de nuevo."), "error");
     }
   };
 
@@ -637,7 +638,7 @@ export default function AccreditationRequisito() {
       toast("Observación cerrada", "success");
       await loadAll();
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudo cerrar la observación. Intenta de nuevo."), "error");
     }
   };
 
@@ -776,7 +777,7 @@ export default function AccreditationRequisito() {
                   onView={handleViewDoc}
                   onArchive={handleArchive}
                   isAdmin={can("archivar_acreditacion")}
-                  isVigente
+                  isVigente={d.vigente}
                 />
               ))}
             </div>

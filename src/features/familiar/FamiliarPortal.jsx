@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { friendlyError } from "../../utils/errorMessages";
 import Loading from "../../components/Loading";
 import {
   getMyResidentes,
@@ -193,7 +194,7 @@ export default function FamiliarPortal() {
       setObs(o);
       setVisitas(vis);
     } catch (e) {
-      toast(e.message || "Error cargando información", "error");
+      toast(friendlyError(e, "No se pudo cargar la información del residente. Intenta de nuevo."), "error");
     } finally {
       setLoading(false);
     }
@@ -213,7 +214,7 @@ export default function FamiliarPortal() {
       })
       .catch((e) => {
         if (mounted) {
-          toast(e.message || "Error", "error");
+          toast(friendlyError(e, "No se pudo cargar la información. Recarga la página."), "error");
           setLoading(false);
         }
       });
@@ -229,7 +230,7 @@ export default function FamiliarPortal() {
       const fresh = await getVisits(activeId, 10);
       setVisitas(fresh);
     } catch (e) {
-      toast(e.message || "No se pudo registrar la visita", "error");
+      toast(friendlyError(e, "No se pudo registrar la visita. Intenta de nuevo."), "error");
     } finally {
       setLogging(false);
     }

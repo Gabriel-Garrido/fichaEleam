@@ -60,11 +60,10 @@ Deno.serve(async (req) => {
         500,
       );
     }
-    // back_url es controlado: solo aceptamos paths internos que empiecen
-    // con "/" pero NO con "//" (evita redirección a otro origen
-    // tipo //evil.com). Si no calza, usamos el default seguro.
+    // back_url es controlado: solo aceptamos paths internos que empiecen con "/"
+    // seguido de un carácter que no sea "/" ni "\" (bloquea //evil.com y /\evil.com).
     const requestedReturn = String(body.back_url ?? "/pago/return");
-    const isSafePath = /^\/[^/]/.test(requestedReturn);
+    const isSafePath = /^\/[^/\\]/.test(requestedReturn);
     const safeReturn = isSafePath ? requestedReturn : "/pago/return";
     const back_url = `${backOrigin}${safeReturn}`;
 
@@ -96,6 +95,19 @@ Deno.serve(async (req) => {
       return jsonResponse(
         req,
         { error: "El ELEAM ya tiene una suscripción activa" },
+        409,
+      );
+    }
+
+    // Evitar crear múltiples preapprovals: si ya existe uno pendiente, rechazar
+    // para no generar suscripciones huérfanas en MercadoPago.
+    if (eleam.subscription_status === "pendiente" && eleam.mp_preapproval_id) {
+      return jsonResponse(
+        req,
+        {
+          error: "Ya hay un proceso de pago en curso. Espera a que se complete o contacta a soporte.",
+          preapproval_id: eleam.mp_preapproval_id,
+        },
         409,
       );
     }

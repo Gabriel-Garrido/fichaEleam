@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useToast } from "../../components/Toast";
 import Loading from "../../components/Loading";
+import { friendlyError } from "../../utils/errorMessages";
 import {
   getAmbitoByCodigo,
   getRequisitosEleam,
@@ -160,7 +161,7 @@ export default function AccreditationAmbito() {
         setAmbito(a);
         setRequisitos((r ?? []).filter((x) => x.requisito?.ambito?.codigo === codigo));
       })
-      .catch((e) => active && toast(e.message || "Error", "error"))
+      .catch((e) => active && toast(friendlyError(e, "No se pudo cargar el ámbito. Recarga la página."), "error"))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [codigo, toast]);

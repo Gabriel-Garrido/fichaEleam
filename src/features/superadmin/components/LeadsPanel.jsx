@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useToast } from "../../../components/Toast";
 import Modal from "../../../components/Modal";
+import { friendlyError } from "../../../utils/errorMessages";
 
 const ESTADO_LABELS = {
   nuevo:         { txt: "Nuevo",          cls: "bg-sky-100 text-sky-700" },
@@ -99,7 +100,7 @@ export default function LeadsPanel({
         "success",
       );
     } catch (e) {
-      toast(e.message || "Error otorgando acceso", "error");
+      toast(friendlyError(e, "No se pudo activar el acceso demo. Intenta de nuevo o contacta soporte."), "error");
     }
   }
 
@@ -108,7 +109,7 @@ export default function LeadsPanel({
       await onUpdateLead(leadId, { estado: newEstado });
       toast("Estado actualizado", "success");
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudo actualizar el estado. Intenta de nuevo."), "error");
     }
   }
 
@@ -118,7 +119,7 @@ export default function LeadsPanel({
       toast("Notas guardadas", "success");
       setEditNotes((p) => ({ ...p, [leadId]: undefined }));
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudieron guardar las notas. Intenta de nuevo."), "error");
     }
   }
 

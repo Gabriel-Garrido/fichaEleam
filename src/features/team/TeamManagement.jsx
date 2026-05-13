@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { friendlyError } from "../../utils/errorMessages";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
@@ -25,102 +26,7 @@ import {
   getFuncionarioPermisos,
   updateFuncionarioPermisos,
 } from "./teamService";
-
-// ─── Constantes ────────────────────────────────────────────────────────────
-
-const ROLE_LABEL = {
-  admin_eleam: { txt: "Administrador", cls: "bg-indigo-100 text-indigo-700" },
-  funcionario: { txt: "Funcionario",   cls: "bg-emerald-100 text-emerald-700" },
-  familiar:    { txt: "Familiar",      cls: "bg-sky-100 text-sky-700" },
-  superadmin:  { txt: "Superadmin",    cls: "bg-amber-100 text-amber-800" },
-};
-
-const PERM_GROUPS = [
-  {
-    label: "Residentes",
-    perms: [
-      { key: "crear_residentes",    label: "Crear" },
-      { key: "editar_residentes",   label: "Editar" },
-      { key: "eliminar_residentes", label: "Eliminar" },
-    ],
-  },
-  {
-    label: "Signos Vitales",
-    perms: [
-      { key: "crear_signos_vitales",    label: "Registrar" },
-      { key: "editar_signos_vitales",   label: "Editar" },
-      { key: "eliminar_signos_vitales", label: "Eliminar" },
-    ],
-  },
-  {
-    label: "Observaciones",
-    perms: [
-      { key: "crear_observaciones",    label: "Registrar" },
-      { key: "editar_observaciones",   label: "Editar" },
-      { key: "eliminar_observaciones", label: "Eliminar" },
-    ],
-  },
-  {
-    label: "Acreditación",
-    perms: [
-      { key: "subir_acreditacion",    label: "Subir documentos" },
-      { key: "editar_acreditacion",   label: "Editar estado" },
-      { key: "archivar_acreditacion", label: "Archivar" },
-    ],
-  },
-  {
-    label: "Visitas familiares",
-    perms: [
-      { key: "registrar_visitas", label: "Registrar visitas" },
-    ],
-  },
-];
-
-const DEFAULT_PERMS = {
-  crear_residentes: true,    editar_residentes: true,    eliminar_residentes: false,
-  crear_signos_vitales: true, editar_signos_vitales: true, eliminar_signos_vitales: false,
-  crear_observaciones: true,  editar_observaciones: true,  eliminar_observaciones: false,
-  subir_acreditacion: true,   editar_acreditacion: true,   archivar_acreditacion: false,
-  registrar_visitas: true,
-};
-
-const PLANTILLAS_CARGO = {
-  "Enfermero/a": {
-    crear_residentes: false,  editar_residentes: true,   eliminar_residentes: false,
-    crear_signos_vitales: true, editar_signos_vitales: true, eliminar_signos_vitales: false,
-    crear_observaciones: true, editar_observaciones: true, eliminar_observaciones: false,
-    subir_acreditacion: true,  editar_acreditacion: false, archivar_acreditacion: false,
-    registrar_visitas: true,
-  },
-  "Kinesiólogo/a": {
-    crear_residentes: false,  editar_residentes: true,   eliminar_residentes: false,
-    crear_signos_vitales: true, editar_signos_vitales: true, eliminar_signos_vitales: false,
-    crear_observaciones: true, editar_observaciones: true, eliminar_observaciones: false,
-    subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
-    registrar_visitas: false,
-  },
-  "Médico/a": {
-    crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
-    crear_signos_vitales: true, editar_signos_vitales: true, eliminar_signos_vitales: false,
-    crear_observaciones: true, editar_observaciones: true, eliminar_observaciones: false,
-    subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
-    registrar_visitas: false,
-  },
-  "Auxiliar ATD": {
-    crear_residentes: false,  editar_residentes: false,  eliminar_residentes: false,
-    crear_signos_vitales: true, editar_signos_vitales: false, eliminar_signos_vitales: false,
-    crear_observaciones: true, editar_observaciones: false, eliminar_observaciones: false,
-    subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
-    registrar_visitas: true,
-  },
-  "Administrativo/a": {
-    crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
-    crear_signos_vitales: false, editar_signos_vitales: false, eliminar_signos_vitales: false,
-    crear_observaciones: false, editar_observaciones: false, eliminar_observaciones: false,
-    subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: true,
-    registrar_visitas: false,
-  },
-};
+import { ROLE_LABEL, PERM_GROUPS, DEFAULT_PERMS, PLANTILLAS_CARGO } from "./teamConstants";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -238,7 +144,7 @@ export default function TeamManagement() {
       setResidentes(res);
       setFamiliares(fam);
     } catch (e) {
-      toast(e.message || "Error cargando equipo", "error");
+      toast(friendlyError(e, "No se pudo cargar el equipo. Recarga la página."), "error");
     } finally {
       setLoading(false);
     }
@@ -294,19 +200,24 @@ export default function TeamManagement() {
         residenteId: createForm.rol === "familiar" ? createForm.residenteId || null : null,
       });
       // Aplicar permisos personalizados si es funcionario
+      const permWarnings = [];
       if (createForm.rol === "funcionario" && result.profile_id) {
         try { await updateFuncionarioPermisos(result.profile_id, createPerms); }
-        catch { /* no bloquear: los permisos se pueden editar después */ }
+        catch { permWarnings.push("permisos de módulo"); }
       }
       if ((createForm.rol === "funcionario" || createForm.rol === "familiar") && result.profile_id) {
         try { await saveProfileFeaturePermissions(result.profile_id, createForm.rol, createFeaturePerms); }
-        catch { /* no bloquear: se puede editar después */ }
+        catch { permWarnings.push("permisos de funcionalidad"); }
       }
       setCreatedUser(result);
-      toast("Usuario creado correctamente", "success");
+      if (permWarnings.length > 0) {
+        toast(`Usuario creado. Algunos ${permWarnings.join(" y ")} no se aplicaron; puedes editarlos desde el panel de permisos.`, "warning");
+      } else {
+        toast("Usuario creado correctamente", "success");
+      }
       await refresh();
     } catch (err) {
-      toast(err.message || "No se pudo crear el usuario", "error");
+      toast(friendlyError(err, "No se pudo crear el usuario. Verifica los datos e intenta de nuevo."), "error");
     } finally {
       setCreating(false);
     }
@@ -362,7 +273,7 @@ export default function TeamManagement() {
       toast("Permisos actualizados", "success");
       setPermModal(null);
     } catch (err) {
-      toast(err.message || "No se pudo guardar", "error");
+      toast(friendlyError(err, "No se pudieron guardar los permisos. Intenta de nuevo."), "error");
     } finally {
       setSavingPerms(false);
     }
@@ -381,7 +292,7 @@ export default function TeamManagement() {
       setDeleteConfirm(null);
       await refresh();
     } catch (err) {
-      toast(err.message || "No se pudo eliminar", "error");
+      toast(friendlyError(err, "No se pudo eliminar el usuario. Intenta de nuevo."), "error");
     } finally {
       setDeleting(false);
     }
@@ -395,7 +306,7 @@ export default function TeamManagement() {
       toast("Invitación eliminada", "info");
       await refresh();
     } catch (e) {
-      toast(e.message || "Error", "error");
+      toast(friendlyError(e, "No se pudo cancelar la invitación. Intenta de nuevo."), "error");
     }
   };
 

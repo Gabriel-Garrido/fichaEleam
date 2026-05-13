@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../../components/Toast";
 import Loading from "../../../components/Loading";
+import { friendlyError } from "../../../utils/errorMessages";
 import {
   getAllPosts,
   deletePost,
@@ -36,7 +37,7 @@ export default function BlogManagement() {
     try {
       setPosts(await getAllPosts());
     } catch (e) {
-      toast(e.message ?? "Error cargando posts", "error");
+      toast(friendlyError(e, "No se pudieron cargar los artículos. Recarga la página."), "error");
     } finally {
       setLoading(false);
     }
@@ -50,7 +51,7 @@ export default function BlogManagement() {
       await deletePost(post.id);
       toast("Post eliminado.", "success");
       load();
-    } catch (e) { toast(e.message ?? "Error", "error"); }
+    } catch (e) { toast(friendlyError(e, "No se pudo eliminar el artículo. Intenta de nuevo."), "error"); }
   };
 
   const handleTogglePublish = async (post) => {
@@ -58,7 +59,7 @@ export default function BlogManagement() {
       await publishPost(post.id, post.estado !== "publicado");
       toast(post.estado === "publicado" ? "Post movido a borrador." : "Post publicado.", "success");
       load();
-    } catch (e) { toast(e.message ?? "Error", "error"); }
+    } catch (e) { toast(friendlyError(e, "No se pudo cambiar el estado del artículo. Intenta de nuevo."), "error"); }
   };
 
   const filtered = posts.filter((p) => {

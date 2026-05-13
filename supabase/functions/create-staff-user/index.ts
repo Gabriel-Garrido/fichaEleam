@@ -27,6 +27,7 @@ import {
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const GMAIL_RE = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function eleamHasAccess(eleam: {
   subscription_status?: string | null;
@@ -150,6 +151,9 @@ Deno.serve(async (req) => {
     }
     if (rol === "familiar" && !residenteId) {
       return jsonResponse(req, { error: "Para crear un familiar debes seleccionar un residente" }, 400);
+    }
+    if (residenteId && !UUID_RE.test(residenteId)) {
+      return jsonResponse(req, { error: "residente_id tiene formato inválido" }, 400);
     }
 
     const sb = adminClient();

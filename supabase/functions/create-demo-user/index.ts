@@ -138,6 +138,24 @@ Deno.serve(async (req) => {
         }, 409);
       }
 
+      // Verificar que el ELEAM del admin no esté en producción activa antes de
+      // sobreescribir sus datos con modo demo — evitar borrar suscripciones reales.
+      const { data: eleamCheck } = await sb
+        .from("eleams")
+        .select("plan, subscription_status")
+        .eq("id", existingProfile.eleam_id)
+        .maybeSingle();
+
+      if (
+        eleamCheck &&
+        eleamCheck.plan !== "demo" &&
+        (eleamCheck.subscription_status === "activo" || eleamCheck.subscription_status === "en_gracia")
+      ) {
+        return jsonResponse(req, {
+          error: "El ELEAM de este admin ya tiene una suscripción activa de producción. No se puede sobreescribir con modo demo.",
+        }, 409);
+      }
+
       await sb.from("eleams").update({
         nombre: eleamNombre,
         plan: "demo",

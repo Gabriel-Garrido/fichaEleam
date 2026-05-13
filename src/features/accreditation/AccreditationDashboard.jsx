@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import HelpTooltip from "../../components/HelpTooltip";
+import { friendlyError } from "../../utils/errorMessages";
 import PageLayout from "../../layout/PageLayout";
 import {
   getRequisitosEleam,
@@ -362,7 +363,7 @@ export default function AccreditationDashboard() {
         setRequisitos(r);
         setObservaciones(o);
       })
-      .catch((e) => active && toast(e.message || "Error", "error"))
+      .catch((e) => active && toast(friendlyError(e, "No se pudo cargar el panel de acreditación. Recarga la página."), "error"))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [toast, sinEleam]);

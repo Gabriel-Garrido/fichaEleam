@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Modal from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
+import { friendlyError } from "../../../utils/errorMessages";
 
 const empty = { eleam_id: "", monto: "", plan: "mensual", metodo_pago: "", notas: "" };
 
@@ -37,7 +38,7 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
       toast("Pago registrado y ELEAM activado.", "success");
       onClose();
     } catch (err) {
-      toast(err.message || "No se pudo registrar el pago.", "error");
+      toast(friendlyError(err, "No se pudo registrar el pago. Verifica los datos e intenta de nuevo."), "error");
     } finally {
       setSaving(false);
     }
