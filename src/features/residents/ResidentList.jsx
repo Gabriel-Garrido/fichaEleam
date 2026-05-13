@@ -6,35 +6,7 @@ import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
-
-const ESTADO_CONFIG = {
-  activo:        { label: "Activo",        badge: "bg-emerald-100 text-emerald-800 border-emerald-200", dot: "bg-emerald-500" },
-  hospitalizado: { label: "Hospitalizado", badge: "bg-amber-100 text-amber-800 border-amber-200",       dot: "bg-amber-500"   },
-  egresado:      { label: "Egresado",      badge: "bg-gray-100 text-gray-700 border-gray-200",          dot: "bg-gray-400"    },
-  fallecido:     { label: "Fallecido",     badge: "bg-rose-100 text-rose-800 border-rose-200",          dot: "bg-rose-500"    },
-};
-
-const DEPENDENCIA_TONE = {
-  leve:     "bg-emerald-50 text-emerald-700 border-emerald-200",
-  moderado: "bg-amber-50 text-amber-700 border-amber-200",
-  severo:   "bg-orange-50 text-orange-700 border-orange-200",
-  total:    "bg-rose-50 text-rose-700 border-rose-200",
-};
-
-function initials(nombre = "", apellido = "") {
-  return ((nombre[0] || "") + (apellido[0] || "")).toUpperCase() || "?";
-}
-
-function calcAge(fechaNacimiento) {
-  if (!fechaNacimiento) return null;
-  const fn = new Date(fechaNacimiento);
-  if (isNaN(fn)) return null;
-  const today = new Date();
-  let age = today.getFullYear() - fn.getFullYear();
-  const m = today.getMonth() - fn.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < fn.getDate())) age--;
-  return age;
-}
+import { ESTADO_CONFIG, DEPENDENCIA_TONE, initials, calcAge } from "./residentUtils";
 
 export default function ResidentList() {
   const navigate = useNavigate();

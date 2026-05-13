@@ -43,10 +43,10 @@ src/
 │   └── AuthContext.jsx         # useAuth() + useLoading()
 ├── features/
 │   ├── auth/                   # Login, Register, RecuperarAcceso, ResetPassword, authService
-│   ├── landing/                # LandingPage (CTA demo, sin auto-registro público)
-│   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService
+│   ├── landing/                # LandingPage (calm-inspired, CTA demo, sin auto-registro público); DemoRequestModal, landingAnalytics
+│   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService (diseño consistente con landing: nav/footer dark slate-950)
 │   ├── dashboard/              # AdminDashboard (rol-aware: admin_eleam muestra gestión, funcionario muestra clínica)
-│   ├── residents/              # CRUD residentes + detalles
+│   ├── residents/              # CRUD residentes + detalles; residentUtils.js exporta ESTADO_CONFIG, ESTADO_BADGE, DEPENDENCIA_TONE, TIPO_LABEL, TIPO_BADGE, initials(), calcAge()
 │   ├── vitalSigns/             # Formulario + lista + rangos clínicos
 │   ├── observations/           # 12 tipos de observaciones diarias
 │   ├── accreditation/          # Modelo v9: ámbitos, requisitos, evidencias, observaciones, auditoría
@@ -69,7 +69,6 @@ src/
 ├── services/
 │   └── supabaseConfig.js       # Cliente Supabase singleton
 └── utils/
-    ├── constants.js
     ├── dateUtils.js
     ├── validators.js           # Email, UUID, RUT, phone
     └── seo.js                  # Hook useSEO + JSON-LD builders
@@ -80,7 +79,7 @@ supabase/functions/
 ├── create-demo-user/           # Crea usuario real cuando superadmin aprueba demo lead
 ├── create-staff-user/          # Crea funcionario/familiar con contraseña temporal
 ├── delete-staff-user/          # Elimina staff/familiar desde Auth + cascadas
-├── invite-funcionario/         # Flujo antiguo (invitación por email con token)
+├── invite-funcionario/         # Legacy: invitación por token. Edge Function activa para tokens existentes; teamService.js ya no lo llama (usa create-staff-user)
 ├── mp-create-subscription/
 ├── mp-webhook/
 └── mp-cancel-subscription/
@@ -476,7 +475,7 @@ Los datos clínicos del demo viven en `src/features/demo/demoData.js`; no escrib
 
 **Editor superadmin**: `/superadmin/blog` (lista), `/superadmin/blog/new` (crear), `/superadmin/blog/:id/edit` (editar).
 
-**SEO**: Meta tags (description, OG, Twitter), JSON-LD (Article, Organization, SoftwareApplication, FAQ, Breadcrumb), `robots.txt` (GPTBot, ClaudeBot, PerplexityBot, etc.), `sitemap.xml`.
+**SEO / LLM**: Meta tags (description, OG, Twitter), JSON-LD (Article, Organization, SoftwareApplication, FAQPage, Breadcrumb, Blog schema con publisher), `robots.txt` (GPTBot, ClaudeBot, PerplexityBot, etc.), `sitemap.xml`. La landing incluye JSON-LD SoftwareApplication + Organization además de FAQPage para maximizar visibilidad en LLMs.
 
 **Hook**: `useSEO({title, description, path, image, type, keywords, jsonLd})` inyecta meta tags + JSON-LD sin librerías externas.
 

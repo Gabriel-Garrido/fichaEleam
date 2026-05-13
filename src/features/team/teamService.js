@@ -35,18 +35,6 @@ export async function getPendingInvitations(eleamId) {
   return data ?? [];
 }
 
-// Crea invitación llamando a la Edge Function.
-// rol: 'funcionario' | 'familiar'. Si es familiar, residenteId obligatorio.
-export async function inviteMember({ email, rol = "funcionario", residenteId = null }) {
-  const sb = ensureSupabase();
-  const { data, error } = await sb.functions.invoke("invite-funcionario", {
-    body: { email, rol, residente_id: residenteId },
-  });
-  if (error) await throwEdgeFunctionError(error, "No se pudo invitar");
-  if (data?.error) throw new Error(data.error);
-  return data;
-}
-
 // Lista los residentes activos del ELEAM, para asociar familiares.
 export async function getEleamResidentes(eleamId) {
   if (!eleamId) return [];
