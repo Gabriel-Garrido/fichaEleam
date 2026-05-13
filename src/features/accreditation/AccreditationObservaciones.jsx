@@ -157,7 +157,6 @@ function ObsRow({ obs, onCerrar, onIr, isAdmin }) {
         {r && (
           <button
             type="button"
-
             onClick={() => onIr(obs.requisito_eleam_id)}
             className="text-xs text-teal-700 hover:underline"
           >
@@ -262,7 +261,6 @@ export default function AccreditationObservaciones() {
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
       <button
         type="button"
-
         onClick={() => navigate("/accreditation")}
         className="text-sm text-slate-500 hover:text-slate-800"
       >
@@ -299,7 +297,6 @@ export default function AccreditationObservaciones() {
           {FILTROS_ESTADO.map((f) => (
             <button
               type="button"
-
               key={f.key}
               onClick={() => setFiltroEstado(f.key)}
               className={`text-sm px-3 py-1.5 rounded-full border ${
@@ -316,7 +313,6 @@ export default function AccreditationObservaciones() {
           {FILTROS_ORIGEN.map((f) => (
             <button
               type="button"
-
               key={f.key}
               onClick={() => setFiltroOrigen(f.key)}
               className={`text-sm px-3 py-1.5 rounded-full border ${

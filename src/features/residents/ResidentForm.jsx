@@ -317,7 +317,6 @@ export default function ResidentForm() {
       <div className="flex items-center gap-3 mb-6">
         <button
           type="button"
-
           onClick={() => navigate(-1)}
           className="text-teal-700 hover:underline text-sm"
         >
@@ -472,7 +471,8 @@ export default function ResidentForm() {
                   </div>
                 </div>
                 <div className="flex gap-3 mt-3">
-                  <button                    type="button"
+                  <button
+                    type="button"
                     onClick={() => {
                       setFamiliarForm({
                         nombre: familiarActual.profiles?.nombre ?? "",
@@ -486,7 +486,8 @@ export default function ResidentForm() {
                   >
                     Cambiar familiar
                   </button>
-                  <button                    type="button"
+                  <button
+                    type="button"
                     onClick={handleUnlinkFamiliar}
                     className="text-sm text-rose-600 hover:underline"
                     disabled={savingFamiliar}
@@ -498,7 +499,8 @@ export default function ResidentForm() {
             ) : !familiarActual && !showFamiliarEdit ? (
               <div>
                 <p className="text-sm text-slate-400 mb-3">Sin familiar vinculado.</p>
-                <button                  type="button"
+                <button
+                  type="button"
                   onClick={() => { setFamiliarForm(FAMILIAR_EMPTY); setShowFamiliarEdit(true); }}
                   className="text-sm text-teal-700 hover:underline font-medium"
                 >

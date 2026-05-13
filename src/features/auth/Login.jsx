@@ -41,7 +41,6 @@ function SinSupabase() {
         <p className="text-slate-500 text-sm mb-6">{message}</p>
         <button
           type="button"
-
           onClick={() => navigate("/")}
           className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
         >
@@ -147,7 +146,6 @@ export default function Login() {
         {/* Google OAuth */}
         <button
           type="button"
-
           onClick={handleGoogle}
           disabled={googleLoading}
           className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-xl py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors mb-5 disabled:opacity-50"
@@ -209,7 +207,8 @@ export default function Login() {
                 required
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
               />
-              <button                type="button"
+              <button
+                type="button"
                 onClick={() => setShowPw((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 tabIndex={-1}
@@ -257,7 +256,6 @@ export default function Login() {
             </div>
             <button
               type="button"
-
               onClick={() => navigate("/")}
               className="shrink-0 text-sm bg-teal-700 text-white px-4 py-2 rounded-xl font-semibold hover:bg-teal-800 transition-colors"
             >

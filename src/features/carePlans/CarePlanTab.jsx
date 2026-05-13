@@ -228,7 +228,8 @@ export default function CarePlanTab({ resident }) {
             <p className="text-sm text-slate-500">Cada actividad genera tareas según su frecuencia y turno.</p>
           </div>
           {plan && canCreate && (
-            <button              type="button"
+            <button
+              type="button"
               onClick={() => setActivityModal({ activity: INITIAL_ACTIVITY, schedule: INITIAL_SCHEDULE })}
               className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
             >
@@ -278,7 +279,8 @@ export default function CarePlanTab({ resident }) {
                   </div>
                   {canEdit && (
                     <div className="flex shrink-0 gap-2">
-                      <button                        type="button"
+                      <button
+                        type="button"
                         onClick={() => {
                           const schedule = (activity.horarios ?? [])[0] ?? INITIAL_SCHEDULE;
                           setActivityModal({ activity, schedule });
@@ -287,7 +289,8 @@ export default function CarePlanTab({ resident }) {
                       >
                         Editar
                       </button>
-                      <button                        type="button"
+                      <button
+                        type="button"
                         onClick={() => handleDeactivate(activity)}
                         disabled={saving}
                         className="rounded-xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
@@ -304,7 +307,8 @@ export default function CarePlanTab({ resident }) {
 
         {pausedActivities.length > 0 && (
           <div className="mt-4 border-t border-slate-100 pt-4">
-            <button              type="button"
+            <button
+              type="button"
               onClick={() => setShowPaused((prev) => !prev)}
               className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-600"
             >

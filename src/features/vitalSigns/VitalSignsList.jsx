@@ -218,7 +218,6 @@ export default function VitalSignsList() {
             <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch">
               <button
                 type="button"
-
                 onClick={() => setView("cards")}
                 aria-pressed={view === "cards"}
                 className={`flex-1 px-3 py-2 text-xs font-medium ${
@@ -231,7 +230,6 @@ export default function VitalSignsList() {
               </button>
               <button
                 type="button"
-
                 onClick={() => setView("table")}
                 aria-pressed={view === "table"}
                 className={`flex-1 px-3 py-2 text-xs font-medium border-l border-slate-200 ${
@@ -250,7 +248,6 @@ export default function VitalSignsList() {
             </p>
             <button
               type="button"
-
               onClick={clearFilters}
               className="self-start text-sm text-slate-500 hover:text-slate-700 underline"
             >
@@ -296,7 +293,8 @@ const TONE = {
 function StatChip({ active, onClick, label, value, tone }) {
   const t = TONE[tone];
   return (
-    <button      type="button"
+    <button
+      type="button"
       onClick={onClick}
       className={`text-left rounded-xl border border-slate-100 ${t.bg} px-4 py-3 shadow-sm transition-all hover:shadow-md ${
         active ? `ring-2 ${t.ring}` : ""
@@ -350,7 +348,6 @@ function VitalRecordCard({ record, onDelete }) {
         {onDelete && (
           <button
             type="button"
-
             onClick={onDelete}
             className="self-start text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors"
           >
@@ -503,7 +500,6 @@ function VitalRecordsTable({ records, onDelete }) {
                 <td className="px-4 py-3 text-right">
                   <button
                     type="button"
-
                     onClick={() => onDelete(r.id)}
                     className="text-rose-400 hover:text-rose-600 text-xs"
                   >

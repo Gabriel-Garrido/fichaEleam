@@ -67,7 +67,6 @@ function ResidentDetails() {
     <div className="max-w-5xl mx-auto px-4 py-8">
       <button
         type="button"
-
         onClick={() => navigate("/residents")}
         className="text-teal-700 hover:underline text-sm mb-4 inline-flex items-center gap-1"
       >
@@ -110,7 +109,6 @@ function ResidentDetails() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-
                 onClick={() => navigate(`/residents/${id}/edit`)}
                 className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 shadow-sm"
               >
@@ -118,7 +116,6 @@ function ResidentDetails() {
               </button>
               <button
                 type="button"
-
                 onClick={() => navigate(`/vital-signs/new?residenteId=${id}`)}
                 className="rounded-xl bg-white text-teal-700 border border-teal-600 px-4 py-2 text-sm font-semibold hover:bg-teal-50"
               >
@@ -126,7 +123,6 @@ function ResidentDetails() {
               </button>
               <button
                 type="button"
-
                 onClick={() => navigate(`/observations/new?residenteId=${id}`)}
                 className="rounded-xl bg-white text-teal-700 border border-teal-600 px-4 py-2 text-sm font-semibold hover:bg-teal-50"
               >
@@ -182,7 +178,6 @@ function ResidentDetails() {
         {tabs.map((t) => (
           <button
             type="button"
-
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -347,7 +342,6 @@ function SignosTab({ residenteId, navigate }) {
           </button>
           <button
             type="button"
-
             onClick={() => navigate(`/vital-signs?residenteId=${residenteId}`)}
             className="text-xs text-teal-700 hover:underline"
           >
@@ -372,7 +366,6 @@ function SignosTab({ residenteId, navigate }) {
           <p className="text-sm text-slate-500 mb-3">No hay registros de signos vitales.</p>
           <button
             type="button"
-
             onClick={() => navigate(`/vital-signs/new?residenteId=${residenteId}`)}
             className="text-sm bg-teal-700 text-white px-4 py-2 rounded-xl hover:bg-teal-800"
           >
@@ -568,7 +561,6 @@ function ObservacionesTab({ residenteId, navigate }) {
           </button>
           <button
             type="button"
-
             onClick={() => navigate(`/observations?residenteId=${residenteId}`)}
             className="text-xs text-teal-700 hover:underline"
           >
@@ -593,7 +585,6 @@ function ObservacionesTab({ residenteId, navigate }) {
           <p className="text-sm text-slate-500 mb-3">No hay observaciones registradas.</p>
           <button
             type="button"
-
             onClick={() => navigate(`/observations/new?residenteId=${residenteId}`)}
             className="text-sm bg-teal-700 text-white px-4 py-2 rounded-xl hover:bg-teal-800"
           >

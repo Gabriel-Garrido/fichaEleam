@@ -141,7 +141,6 @@ export default function OnboardingChecklist() {
             </div>
             <button
               type="button"
-
               onClick={() => setChecklistOpen(false)}
               className="w-7 h-7 rounded-full bg-white/80 hover:bg-white flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
               aria-label="Cerrar panel"
@@ -162,7 +161,6 @@ export default function OnboardingChecklist() {
                 <li key={step.id}>
                   <button
                     type="button"
-
                     onClick={() => !done && handleStepClick(step)}
                     disabled={done}
                     aria-label={done ? `${step.label} — completado` : `Ir a: ${step.label}`}
@@ -234,7 +232,6 @@ export default function OnboardingChecklist() {
             ) : null}
             <button
               type="button"
-
               onClick={dismiss}
               className="w-full text-xs text-slate-400 hover:text-slate-600 text-center py-1.5 transition-colors rounded-xl hover:bg-slate-50"
             >
@@ -248,7 +245,6 @@ export default function OnboardingChecklist() {
       {isComplete ? (
         <button
           type="button"
-
           onClick={() => setChecklistOpen((v) => !v)}
           className="flex items-center gap-2 rounded-full px-4 py-2.5 text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-900/20 border border-white/20 transition-all active:scale-[0.97]"
           aria-label="Guía completada — abrir resumen"
@@ -261,7 +257,6 @@ export default function OnboardingChecklist() {
       ) : (
         <button
           type="button"
-
           onClick={() => setChecklistOpen((v) => !v)}
           className={`flex items-center gap-2.5 rounded-full pl-2 pr-4 py-2 text-white shadow-lg shadow-slate-900/20 border border-white/20 transition-all hover:opacity-95 active:scale-[0.97] ${colors.pill}`}
           aria-label={`Guía de inicio — ${progress}% completado`}

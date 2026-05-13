@@ -148,7 +148,6 @@ export default function PaymentPage() {
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
             type="button"
-
             onClick={() => navigate("/")}
             className="text-xl font-black text-teal-700 tracking-tight"
           >
@@ -252,7 +251,6 @@ export default function PaymentPage() {
               {pagoActivo && isAdminEleam && (
                 <button
                   type="button"
-
                   onClick={handleCancel}
                   disabled={loadingAction}
                   className="text-xs text-rose-600 hover:underline disabled:opacity-50"
@@ -332,7 +330,6 @@ export default function PaymentPage() {
                     ) : (
                       <button
                         type="button"
-
                         onClick={() => handleStart(p.codigo)}
                         disabled={loadingAction || (user && !isAdminEleam)}
                         className={`w-full font-semibold py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${

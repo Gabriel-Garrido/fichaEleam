@@ -74,7 +74,8 @@ export default function EleamFilters({ filters, setFilters, count }) {
 
       <div className="md:col-span-5 flex items-center justify-between flex-wrap gap-2 pt-1">
         <span className="text-xs text-slate-500">{count} ELEAM(s) coinciden</span>
-        <button          type="button"
+        <button
+          type="button"
           onClick={() => setFilters({})}
           className="text-xs text-slate-600 hover:underline"
         >

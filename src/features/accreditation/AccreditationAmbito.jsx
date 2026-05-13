@@ -38,7 +38,6 @@ function RequisitoRow({ re, onClick }) {
   return (
     <button
       type="button"
-
       onClick={onClick}
       className="w-full text-left bg-white border border-slate-100 rounded-xl shadow-sm p-4 hover:shadow-md transition-all"
     >
@@ -130,7 +129,8 @@ function FocusRequirement({ requisito, onOpen }) {
             )}
           </div>
         </div>
-        <button          type="button"
+        <button
+          type="button"
           onClick={onOpen}
           className="w-full sm:w-auto rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
         >
@@ -195,7 +195,6 @@ export default function AccreditationAmbito() {
         <h1 className="text-xl font-bold mb-2">Ámbito no encontrado</h1>
         <button
           type="button"
-
           onClick={() => navigate("/accreditation")}
           className="text-sm text-teal-700 hover:underline"
         >
@@ -209,7 +208,6 @@ export default function AccreditationAmbito() {
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
       <button
         type="button"
-
         onClick={() => navigate("/accreditation")}
         className="text-sm text-slate-500 hover:text-slate-800"
       >
@@ -240,7 +238,6 @@ export default function AccreditationAmbito() {
         {FILTROS.map((f) => (
           <button
             type="button"
-
             key={f.key}
             onClick={() => setFiltro(f.key)}
             className={`shrink-0 px-3 py-1.5 text-sm rounded-full border whitespace-nowrap transition-colors ${

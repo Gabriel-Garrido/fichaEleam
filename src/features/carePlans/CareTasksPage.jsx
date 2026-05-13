@@ -117,7 +117,8 @@ export default function CareTasksPage() {
       eyebrow="Plan de cuidado"
       description="Cumplimiento de actividades no farmacológicas por residente y turno."
       actions={
-        <button          type="button"
+        <button
+          type="button"
           onClick={load}
           disabled={loading}
           className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
@@ -239,13 +240,15 @@ export default function CareTasksPage() {
                   </div>
                   {task.estado === "pendiente" && canComplete && (
                     <div className="flex shrink-0 gap-2">
-                      <button                        type="button"
+                      <button
+                        type="button"
                         onClick={() => setModal({ action: "cumplida", task })}
                         className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"
                       >
                         Cumplir
                       </button>
-                      <button                        type="button"
+                      <button
+                        type="button"
                         onClick={() => setModal({ action: "omitida", task })}
                         className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
                       >
@@ -353,7 +356,8 @@ function CareTaskModal({ modal, saving, onClose, onSubmit }) {
         </label>
 
         <div className="flex justify-end gap-2">
-          <button            type="button"
+          <button
+            type="button"
             onClick={onClose}
             disabled={saving}
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"

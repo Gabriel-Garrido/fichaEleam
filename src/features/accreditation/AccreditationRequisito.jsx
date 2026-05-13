@@ -299,7 +299,6 @@ function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
       <div className="flex flex-col gap-1 shrink-0">
         <button
           type="button"
-
           onClick={() => onView(doc)}
           className="text-xs text-teal-700 hover:underline font-semibold"
         >
@@ -308,7 +307,6 @@ function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
         {isAdmin && (
           <button
             type="button"
-
             onClick={() => onArchive(doc)}
             className="text-xs text-rose-600 hover:underline"
           >
@@ -422,7 +420,6 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
     return (
       <button
         type="button"
-
         onClick={() => setOpen(true)}
         className="text-sm text-teal-700 hover:underline font-semibold"
       >
@@ -657,7 +654,6 @@ export default function AccreditationRequisito() {
         <h1 className="text-xl font-bold mb-2">Requisito no encontrado</h1>
         <button
           type="button"
-
           onClick={() => navigate("/accreditation")}
           className="text-sm text-teal-700 hover:underline"
         >
@@ -676,7 +672,6 @@ export default function AccreditationRequisito() {
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
       <button
         type="button"
-
         onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
         className="text-sm text-slate-500 hover:text-slate-800"
       >
@@ -753,7 +748,6 @@ export default function AccreditationRequisito() {
         ].map((t) => (
           <button
             type="button"
-
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
@@ -802,7 +796,6 @@ export default function AccreditationRequisito() {
             <div className="pt-3">
               <button
                 type="button"
-
                 onClick={() => setShowHistorial((s) => !s)}
                 className="text-sm text-slate-500 hover:underline"
               >

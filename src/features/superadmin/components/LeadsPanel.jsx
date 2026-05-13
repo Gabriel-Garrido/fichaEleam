@@ -42,7 +42,7 @@ export default function LeadsPanel({
   const [editNotes, setEditNotes] = useState({});
   const [credenciales, setCredenciales] = useState(null); // { email, temp_password, email_sent, email_error }
 
-  useEffect(() => { onLoadLeads({ estado: filterEstado || undefined, search }); }, []);
+  useEffect(() => { onLoadLeads(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeIds    = new Set(activeInDemo.map((a) => a.id));
   const contactIds   = new Set(contactRequests.map((c) => c.id));
@@ -159,7 +159,6 @@ export default function LeadsPanel({
                   </p>
                   <button
                     type="button"
-
                     onClick={() => { copyToClipboard(credenciales.temp_password); toast("Copiada", "success"); }}
                     className="text-xs text-slate-500 hover:text-slate-700 border border-slate-300 rounded px-2 py-1"
                   >
@@ -192,7 +191,6 @@ export default function LeadsPanel({
               {credenciales.temp_password && (
                 <button
                   type="button"
-
                   onClick={() => { copyToClipboard(`Correo: ${credenciales.email}\nContraseña temporal: ${credenciales.temp_password}`); toast("Credenciales copiadas", "success"); }}
                   className="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm hover:bg-slate-50"
                 >
@@ -201,7 +199,6 @@ export default function LeadsPanel({
               )}
               <button
                 type="button"
-
                 onClick={() => setCredenciales(null)}
                 className="bg-teal-700 text-white px-4 py-2 rounded-xl text-sm hover:opacity-90"
               >
@@ -256,7 +253,6 @@ export default function LeadsPanel({
         </select>
         <button
           type="button"
-
           onClick={() => onLoadLeads({ estado: filterEstado || undefined, search })}
           className="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm hover:bg-slate-50"
         >
@@ -396,7 +392,6 @@ export default function LeadsPanel({
                       {!lead.demo_user_id && !lead.demo_token ? (
                         <button
                           type="button"
-
                           onClick={() => handleGrant(lead)}
                           className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 font-semibold"
                         >
@@ -411,7 +406,6 @@ export default function LeadsPanel({
                       {editNotes[lead.id] !== undefined && (
                         <button
                           type="button"
-
                           onClick={() => handleSaveNotes(lead.id)}
                           className="bg-slate-700 text-white text-sm px-4 py-2 rounded-xl hover:bg-slate-800"
                         >
@@ -422,7 +416,6 @@ export default function LeadsPanel({
                       {lead.solicita_contacto && (
                         <button
                           type="button"
-
                           onClick={() => onUpdateLead(lead.id, { solicita_contacto: false }).then(() =>
                             toast("Marcado como contactado", "success")
                           )}

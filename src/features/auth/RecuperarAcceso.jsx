@@ -65,7 +65,6 @@ export default function RecuperarAcceso() {
             <p className="text-xs text-slate-400">El link expira en 1 hora. Revisa también tu carpeta de spam.</p>
             <button
               type="button"
-
               onClick={() => navigate("/login")}
               className="mt-4 text-sm text-teal-700 hover:underline font-medium"
             >

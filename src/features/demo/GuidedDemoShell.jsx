@@ -177,7 +177,6 @@ function ResidentsPanel() {
         {DEMO_RESIDENTES.map((r) => (
           <button
             type="button"
-
             key={r.id}
             onClick={() => setSel(r)}
             className="text-left bg-white rounded-xl border border-slate-100 p-4 hover:border-teal-200 hover:shadow-sm transition-all flex items-center justify-between gap-4"
@@ -213,7 +212,6 @@ function VitalsPanel({ showForm = false }) {
         {!sf && (
           <button
             type="button"
-
             onClick={() => setForm(true)}
             className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 shrink-0"
           >
@@ -296,7 +294,6 @@ function ObservationsPanel({ showForm = false }) {
         {!sf && (
           <button
             type="button"
-
             onClick={() => setForm(true)}
             className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 shrink-0"
           >
@@ -500,7 +497,6 @@ function VisitasPanel() {
         <SectionTitle sub="Historial de visitas a tu familiar">Mis Visitas</SectionTitle>
         <button
           type="button"
-
           onClick={() => setShowForm(true)}
           className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 shrink-0"
         >
@@ -635,7 +631,6 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
           {ROLES.map((r) => (
             <button
               type="button"
-
               key={r.id}
               onClick={() => handleRoleChange(r.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -658,7 +653,6 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
           </div>
           <button
             type="button"
-
             onClick={() => setShowModal(true)}
             className="bg-teal-600 text-white text-xs px-3 py-1.5 rounded-xl hover:bg-teal-700 font-semibold hidden sm:block"
           >
@@ -685,7 +679,6 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
         {!guideVisible && (
           <button
             type="button"
-
             onClick={() => setGuideVisible(true)}
             className="w-9 shrink-0 bg-white border-r border-slate-100 flex items-center justify-center hover:bg-slate-50 text-slate-400 hover:text-teal-600"
             title="Mostrar guía"
@@ -710,7 +703,6 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
           <div className="flex gap-2">
             <button
               type="button"
-
               onClick={() => setShowModal(true)}
               className="flex-1 bg-teal-600 text-white text-sm py-2 rounded-xl font-semibold hover:bg-teal-700"
             >
@@ -718,7 +710,6 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
             </button>
             <button
               type="button"
-
               onClick={() => setShowModal(true)}
               className="flex-1 border border-teal-600 text-teal-700 text-sm py-2 rounded-xl font-semibold hover:bg-teal-50"
             >

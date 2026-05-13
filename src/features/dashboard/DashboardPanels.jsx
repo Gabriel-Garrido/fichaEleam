@@ -154,7 +154,8 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
             <h2 className="text-lg font-bold text-slate-900 mt-1">{nextAction.label}</h2>
             <p className="text-sm text-slate-500 mt-1">{nextAction.hint}</p>
           </div>
-          <button            type="button"
+          <button
+            type="button"
             onClick={() => navigate(nextAction.path)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 ${nextAction.tone === "rose" ? "bg-rose-100 text-rose-700 focus:ring-rose-200" : nextAction.tone === "amber" ? "bg-amber-100 text-amber-800 focus:ring-amber-200" : "bg-emerald-100 text-emerald-700 focus:ring-emerald-200"}`}
           >
@@ -344,7 +345,6 @@ function ClinicalRow({ r, navigate }) {
       ) : (
         <button
           type="button"
-
           onClick={(e) => { e.stopPropagation(); navigate(`/vital-signs/new?residenteId=${r.id}`); }}
           className="text-xs text-teal-700 hover:underline shrink-0"
         >

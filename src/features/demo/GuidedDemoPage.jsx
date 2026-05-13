@@ -81,7 +81,6 @@ export default function GuidedDemoPage() {
           <div className="flex flex-col gap-3">
             <button
               type="button"
-
               onClick={() => setShowModal(true)}
               className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl text-sm"
             >
@@ -89,7 +88,6 @@ export default function GuidedDemoPage() {
             </button>
             <button
               type="button"
-
               onClick={() => navigate("/")}
               className="text-sm text-slate-500 hover:underline"
             >

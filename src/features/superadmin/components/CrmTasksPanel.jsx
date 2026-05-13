@@ -156,7 +156,6 @@ function TaskRow({ task, onComplete }) {
       {isPendiente && (
         <button
           type="button"
-
           onClick={() => onComplete(task.id)}
           className="shrink-0 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-xl hover:bg-emerald-700"
         >
@@ -197,7 +196,6 @@ export default function CrmTasksPanel({
         {showCreate && (
           <button
             type="button"
-
             onClick={() => setCreating((s) => !s)}
             className="text-xs bg-slate-700 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800"
           >
@@ -225,7 +223,6 @@ export default function CrmTasksPanel({
           ].map((f) => (
             <button
               type="button"
-
               key={f.key}
               onClick={() => setFiltro(f.key)}
               className={`text-[11px] px-3 py-1 rounded-full border whitespace-nowrap ${

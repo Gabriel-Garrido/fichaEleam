@@ -153,13 +153,15 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
       </div>
 
       <div className="flex gap-3 justify-end pt-3">
-        <button          type="button"
+        <button
+          type="button"
           onClick={onClose}
           className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-sm hover:bg-slate-50"
         >
           Cancelar
         </button>
-        <button          type="button"
+        <button
+          type="button"
           onClick={handleSave}
           disabled={saving}
           className="px-4 py-2 bg-slate-700 text-white rounded-xl text-sm hover:bg-slate-800 disabled:opacity-50"

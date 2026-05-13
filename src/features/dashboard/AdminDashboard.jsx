@@ -113,13 +113,15 @@ export default function AdminDashboard() {
       description={`${eleam?.nombre ? `${eleam.nombre}. ` : ""}${loading ? "Cargando actividad del día..." : `${data?.signosHoy ?? 0} signos vitales y ${data?.observacionesHoy ?? 0} observaciones registradas hoy${cobertura ? ` · ${cobertura.pct}% de cobertura` : ""}.`}`}
       actions={
         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-          <button            type="button"
+          <button
+            type="button"
             onClick={() => navigate("/turnos/nueva")}
             className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
           >
             Entrega de turno
           </button>
-          <button            type="button"
+          <button
+            type="button"
             onClick={() => navigate("/vital-signs/new")}
             className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
@@ -371,7 +373,8 @@ function OperationalCard({ title, value, sub, tone, action, onClick }) {
   }[tone] ?? "border-slate-200 bg-white text-slate-900";
 
   return (
-    <button      type="button"
+    <button
+      type="button"
       onClick={onClick}
       className={`rounded-2xl border p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${toneClass}`}
     >

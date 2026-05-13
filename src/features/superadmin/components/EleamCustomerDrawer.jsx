@@ -139,7 +139,6 @@ export default function EleamCustomerDrawer({
           </div>
           <button
             type="button"
-
             onClick={onClose}
             className="text-slate-400 hover:text-slate-700 text-2xl leading-none mt-0.5"
             aria-label="Cerrar"
@@ -158,7 +157,6 @@ export default function EleamCustomerDrawer({
             <div className="flex gap-2 flex-wrap">
               <button
                 type="button"
-
                 onClick={() => onEdit(eleam)}
                 className="text-sm bg-slate-700 text-white px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors"
               >
@@ -166,7 +164,6 @@ export default function EleamCustomerDrawer({
               </button>
               <button
                 type="button"
-
                 onClick={() => onRegisterPayment(eleam.id)}
                 className="text-sm bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 transition-colors"
               >

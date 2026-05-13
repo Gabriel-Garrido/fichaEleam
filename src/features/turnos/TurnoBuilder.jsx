@@ -78,7 +78,8 @@ export default function TurnoBuilder() {
       eyebrow="Entrega de turno"
       description="Revisa lo importante, agrega notas breves y deja pendientes accionables."
       actions={
-        <button          type="button"
+        <button
+          type="button"
           onClick={handleSave}
           disabled={saving || loading || !summary}
           className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"

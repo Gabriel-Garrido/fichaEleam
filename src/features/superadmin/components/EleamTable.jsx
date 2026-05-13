@@ -92,7 +92,6 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                   <td className="px-3 py-2.5 font-semibold text-slate-800 w-40">
                     <button
                       type="button"
-
                       onClick={() => onOpen(e)}
                       className="hover:underline text-left hover:text-teal-700 transition-colors leading-tight"
                     >
@@ -150,7 +149,6 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     <button
                       type="button"
-
                       onClick={() => onOpen(e)}
                       className="text-teal-700 hover:underline text-xs mr-3 font-medium"
                     >
@@ -158,7 +156,6 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                     </button>
                     <button
                       type="button"
-
                       onClick={() => onEdit(e)}
                       className="text-slate-500 hover:underline text-xs"
                     >

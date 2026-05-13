@@ -91,7 +91,8 @@ function ObservationForm() {
           <p className="text-sm text-amber-800 mt-1">
             Primero agrega un residente activo para asociar el registro de turno.
           </p>
-          <button            type="button"
+          <button
+            type="button"
             onClick={() => navigate("/residents/new")}
             className="mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-xl hover:bg-amber-100"
           >

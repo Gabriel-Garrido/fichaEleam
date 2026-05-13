@@ -119,7 +119,8 @@ export default function EmarTurnPage() {
       eyebrow="Medicamentos"
       description="Administración del turno, stock y controlados con doble validación."
       actions={
-        <button          type="button"
+        <button
+          type="button"
           onClick={load}
           disabled={loading}
           className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
@@ -247,13 +248,15 @@ export default function EmarTurnPage() {
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {row.estado === "pendiente" && canAdminister && (
                       <>
-                        <button                          type="button"
+                        <button
+                          type="button"
                           onClick={() => setModal({ action: "administrado", row })}
                           className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"
                         >
                           Administrar
                         </button>
-                        <button                          type="button"
+                        <button
+                          type="button"
                           onClick={() => setModal({ action: "omitido", row })}
                           className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
                         >
@@ -262,7 +265,8 @@ export default function EmarTurnPage() {
                       </>
                     )}
                     {row.estado === "pendiente_validacion" && canValidate && (
-                      <button                        type="button"
+                      <button
+                        type="button"
                         onClick={() => setModal({ action: "validar", row })}
                         className="rounded-xl bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800"
                       >

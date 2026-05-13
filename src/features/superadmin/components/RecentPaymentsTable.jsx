@@ -30,7 +30,6 @@ export default function RecentPaymentsTable({ payments, onSelectEleam }) {
                   {onSelectEleam && p.eleam_id ? (
                     <button
                       type="button"
-
                       onClick={() => onSelectEleam(p.eleam_id)}
                       className="hover:underline text-left"
                     >

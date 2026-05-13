@@ -73,7 +73,6 @@ export default function AccreditationCarpeta() {
           <div className="flex gap-2">
             <button
               type="button"
-
               onClick={() => window.print()}
               className="bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-teal-800"
             >

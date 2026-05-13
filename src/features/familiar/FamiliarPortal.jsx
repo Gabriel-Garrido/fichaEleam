@@ -239,7 +239,6 @@ export default function FamiliarPortal() {
           {residentes.map((r) => (
             <button
               type="button"
-
               key={r.id}
               onClick={() => { setActiveId(r.id); fetchAll(r.id); }}
               className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${
@@ -277,7 +276,6 @@ export default function FamiliarPortal() {
           <div className="flex gap-2">
             <button
               type="button"
-
               onClick={() => navigate("/familiar/visitas")}
               className="text-sm text-teal-700 hover:underline"
             >
@@ -285,7 +283,6 @@ export default function FamiliarPortal() {
             </button>
             <button
               type="button"
-
               onClick={handleLogVisit}
               disabled={logging}
               className="bg-teal-700 text-white text-sm font-semibold px-4 py-1.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"

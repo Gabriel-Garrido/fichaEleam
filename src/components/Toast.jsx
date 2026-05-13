@@ -48,7 +48,6 @@ export function ToastProvider({ children }) {
             <span className="flex-1 text-sm leading-snug">{t.message}</span>
             <button
               type="button"
-
               onClick={() => dismiss(t.id)}
               className="text-white/70 hover:text-white text-lg leading-none ml-1"
               aria-label="Cerrar"

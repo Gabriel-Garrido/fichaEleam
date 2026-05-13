@@ -34,7 +34,8 @@ function MetricCard({
       <p className="mt-2 text-3xl font-bold tabular-nums">{value}</p>
       {sub && <p className="mt-1 min-h-[18px] text-xs text-slate-500">{sub}</p>}
       {onClick && (
-        <button          type="button"
+        <button
+          type="button"
           onClick={onClick}
           className="mt-3 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50"
         >

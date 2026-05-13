@@ -195,7 +195,6 @@ function ObservationList() {
             </p>
             <button
               type="button"
-
               onClick={clearFilters}
               className="self-start text-sm text-slate-500 hover:text-slate-700 underline"
             >
@@ -255,7 +254,6 @@ function ObservationList() {
                   {canDelete && (
                     <button
                       type="button"
-
                       onClick={() => handleDelete(r.id)}
                       className="text-rose-400 hover:text-rose-600 text-xs"
                     >

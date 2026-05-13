@@ -28,7 +28,8 @@ export default function MobileMoreDrawer({
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
-      <button        type="button"
+      <button
+        type="button"
         className="absolute inset-0 bg-slate-950/35"
         aria-label="Cerrar menú"
         onClick={onClose}
@@ -108,7 +109,8 @@ export default function MobileMoreDrawer({
           </div>
         ))}
 
-        <button          type="button"
+        <button
+          type="button"
           onClick={onLogout}
           className="mb-2 flex w-full items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
         >
