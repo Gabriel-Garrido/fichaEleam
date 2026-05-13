@@ -160,10 +160,11 @@ export default function FamiliarVisitas() {
           </div>
         </div>
         <div>
-          <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
+          <label htmlFor="visita-notas" className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
             Notas (opcional)
           </label>
           <textarea
+            id="visita-notas"
             className="w-full rounded-xl border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
             rows={3}
             placeholder="¿Cómo encontraste a tu familiar? ¿Algo que el equipo deba saber?"
