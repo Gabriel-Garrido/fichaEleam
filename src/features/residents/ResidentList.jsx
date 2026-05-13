@@ -260,6 +260,10 @@ function ResidentCard({ resident: r, onView, onEdit, onDelete }) {
     <article
       className="group bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md hover:border-teal-200 transition-all flex flex-col cursor-pointer"
       onClick={onView}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onView(); } }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Ver ficha de ${r.nombre} ${r.apellido}`}
     >
       <div className="h-2 bg-gradient-to-r from-teal-400 via-teal-600 to-teal-700" />
       <div className="p-5 flex-1 flex flex-col">
@@ -382,6 +386,10 @@ function ResidentRow({ resident: r, onView, onEdit, onDelete }) {
   return (
     <div
       onClick={onView}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onView(); } }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Ver ficha de ${r.nombre} ${r.apellido}`}
       className="bg-white rounded-xl shadow-sm border border-slate-100 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 hover:shadow-md hover:border-teal-200 transition-all cursor-pointer"
     >
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 text-white font-bold">

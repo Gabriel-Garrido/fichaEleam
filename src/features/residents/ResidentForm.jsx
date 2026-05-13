@@ -153,7 +153,7 @@ export default function ResidentForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); setFamiliarErrors(errs); return; }
+    if (Object.keys(errs).length) { setErrors(errs); return; }
     setSaving(true);
     try {
       const payload = {
