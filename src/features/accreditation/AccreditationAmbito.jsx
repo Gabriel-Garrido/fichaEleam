@@ -7,9 +7,9 @@ import {
   getAmbitoByCodigo,
   getRequisitosEleam,
   estadoMeta,
-  formatDate,
   diasHasta,
 } from "./accreditationService";
+import { formatDate } from "../../utils/dateUtils";
 
 const FILTROS = [
   { key: "all",       label: "Todos" },

@@ -10,9 +10,9 @@ import {
   getObservaciones,
   buildResumen,
   estadoMeta,
-  formatDate,
   diasHasta,
 } from "./accreditationService";
+import { formatDate } from "../../utils/dateUtils";
 
 function Bar({ pct, tone = "emerald" }) {
   const colorClass =

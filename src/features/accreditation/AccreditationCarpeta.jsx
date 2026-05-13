@@ -9,8 +9,8 @@ import {
   getObservaciones,
   buildResumen,
   estadoMeta,
-  formatDate,
 } from "./accreditationService";
+import { formatDate } from "../../utils/dateUtils";
 
 // Carpeta SEREMI imprimible. La idea es ser una vista limpia, sin nav,
 // optimizada para impresión a PDF (Ctrl+P → Guardar como PDF).

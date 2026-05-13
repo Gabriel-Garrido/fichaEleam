@@ -601,12 +601,3 @@ export function diasHasta(fechaIso) {
   f.setHours(0, 0, 0, 0);
   return Math.ceil((f - today) / 86400000);
 }
-
-export function formatDate(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
-  } catch { return "—"; }
-}

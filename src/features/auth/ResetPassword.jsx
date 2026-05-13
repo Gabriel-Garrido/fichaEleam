@@ -4,6 +4,7 @@ import { supabase } from "../../services/supabaseConfig";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import { authErrorMessage } from "./authService";
+import { validatePassword } from "../../utils/passwordValidation";
 
 function strengthLabel(pw) {
   if (!pw) return null;
@@ -55,13 +56,6 @@ export default function ResetPassword() {
     };
   }, []);
 
-  const validatePassword = () => {
-    if (password.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
-    if (!/[A-Z]/.test(password)) return "Debe incluir al menos una letra mayúscula.";
-    if (!/[0-9]/.test(password)) return "Debe incluir al menos un número.";
-    if (password !== confirm) return "Las contraseñas no coinciden.";
-    return null;
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -70,7 +64,7 @@ export default function ResetPassword() {
       setError("Supabase no está configurado.");
       return;
     }
-    const pwError = validatePassword();
+    const pwError = validatePassword(password, confirm);
     if (pwError) { setError(pwError); return; }
 
     setSubmitting(true);

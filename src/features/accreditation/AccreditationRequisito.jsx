@@ -20,11 +20,11 @@ import {
   crearObservacion,
   cerrarObservacion,
   estadoMeta,
-  formatDate,
   diasHasta,
   validateFile,
 } from "./accreditationService";
 import { isValidUUID } from "../../utils/validators";
+import { formatDate } from "../../utils/dateUtils";
 import { friendlyError } from "../../utils/errorMessages";
 
 function StatePill({ estado }) {

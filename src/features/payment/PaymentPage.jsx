@@ -12,6 +12,7 @@ import {
   cancelSubscription,
   getMyPayments,
 } from "./paymentService";
+import { formatDate } from "../../utils/dateUtils";
 
 const INCLUYE = [
   "Fichas clínicas digitales para todos tus residentes",
@@ -31,15 +32,6 @@ function formatCLP(monto) {
   } catch {
     return `$${monto.toLocaleString("es-CL")}`;
   }
-}
-
-function formatDate(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
-  } catch { return "—"; }
 }
 
 const SUBSCRIPTION_LABEL = {

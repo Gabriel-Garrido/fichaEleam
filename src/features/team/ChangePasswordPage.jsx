@@ -7,6 +7,7 @@ import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
 import { authErrorMessage } from "../auth/authService";
+import { validatePassword } from "../../utils/passwordValidation";
 
 function strengthLabel(pw) {
   if (!pw) return null;
@@ -102,18 +103,10 @@ export default function ChangePasswordPage() {
     }
   };
 
-  const validatePassword = () => {
-    if (password.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
-    if (!/[A-Z]/.test(password)) return "Debe incluir al menos una letra mayúscula.";
-    if (!/[0-9]/.test(password)) return "Debe incluir al menos un número.";
-    if (password !== confirm) return "Las contraseñas no coinciden.";
-    return null;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    const pwError = validatePassword();
+    const pwError = validatePassword(password, confirm);
     if (pwError) { setError(pwError); return; }
 
     setSubmitting(true);

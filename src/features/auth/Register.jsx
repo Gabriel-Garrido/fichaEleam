@@ -6,6 +6,7 @@ import { useLoading, useAuth } from "../../context/AuthContext";
 import Loading from "../../components/Loading";
 import { authErrorMessage, register, validateInvitationToken } from "./authService";
 import { validateEmail } from "../../utils/validators";
+import { validatePassword } from "../../utils/passwordValidation";
 
 // El registro está restringido a usuarios con invitación válida.
 // Los nuevos administradores ingresan a la plataforma solo a través del
@@ -149,14 +150,6 @@ function Register() {
     setUserData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const validatePassword = () => {
-    const { password, confirmPassword } = userData;
-    if (password.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
-    if (!/[A-Z]/.test(password)) return "La contraseña debe incluir al menos una letra mayúscula.";
-    if (!/[0-9]/.test(password)) return "La contraseña debe incluir al menos un número.";
-    if (password !== confirmPassword) return "Las contraseñas no coinciden.";
-    return null;
-  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -169,7 +162,7 @@ function Register() {
       setError("El correo electrónico no es válido.");
       return;
     }
-    const passwordError = validatePassword();
+    const passwordError = validatePassword(userData.password, userData.confirmPassword);
     if (passwordError) { setError(passwordError); return; }
 
     setLoading(true);

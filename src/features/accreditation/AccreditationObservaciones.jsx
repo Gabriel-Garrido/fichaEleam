@@ -10,8 +10,8 @@ import {
   getObservaciones,
   crearObservacion,
   cerrarObservacion,
-  formatDate,
 } from "./accreditationService";
+import { formatDate } from "../../utils/dateUtils";
 
 const FILTROS_ESTADO = [
   { key: "abiertas",  label: "Abiertas" },
