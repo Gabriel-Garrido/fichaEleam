@@ -103,7 +103,7 @@ export default function PublicBlogPost() {
     <div className="min-h-screen bg-white">
       <nav className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur border-b border-white/5">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-          <button onClick={() => navigate("/")} className="text-lg font-bold text-white tracking-tight">
+          <button type="button" onClick={() => navigate("/")} className="text-lg font-bold text-white tracking-tight">
             Ficha<span className="text-teal-400">Eleam</span>
           </button>
           <div className="flex items-center gap-1">
@@ -113,13 +113,13 @@ export default function PublicBlogPost() {
             >
               Blog
             </Link>
-            <button
+            <button type="button"
               onClick={() => navigate("/login")}
               className="text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-lg hover:border-white/40 hover:text-white transition-all ml-1"
             >
               Iniciar sesión
             </button>
-            <button
+            <button type="button"
               onClick={() => { setModal(true); trackEvent("cta_click", "blog_post_nav_demo"); }}
               className="hidden sm:inline-flex text-sm bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
             >
@@ -205,7 +205,7 @@ export default function PublicBlogPost() {
               Carpeta SEREMI con DS&nbsp;14/2017, fichas clínicas digitales y portal para familias.
             </p>
             <div className="flex flex-wrap gap-2">
-              <button
+              <button type="button"
                 onClick={() => { setModal(true); trackEvent("cta_click", "blog_post_article_demo"); }}
                 className="bg-teal-500 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-teal-400 transition-all text-sm"
               >
@@ -255,7 +255,7 @@ export default function PublicBlogPost() {
               <p className="text-xs text-slate-400 mb-4 leading-relaxed">
                 DS&nbsp;14/2017 completo, fichas clínicas y portal para familias.
               </p>
-              <button
+              <button type="button"
                 onClick={() => { setModal(true); trackEvent("cta_click", "blog_post_sidebar_demo"); }}
                 className="w-full bg-teal-500 text-white font-bold py-2 rounded-xl text-sm hover:bg-teal-400 transition-all"
               >
@@ -288,7 +288,7 @@ export default function PublicBlogPost() {
 
       <footer className="bg-slate-950 border-t border-white/5 py-10 px-5 text-center mt-8">
         <div className="max-w-6xl mx-auto">
-          <button onClick={() => navigate("/")} className="text-lg font-bold text-white tracking-tight">
+          <button type="button" onClick={() => navigate("/")} className="text-lg font-bold text-white tracking-tight">
             Ficha<span className="text-teal-400">Eleam</span>
           </button>
           <p className="mt-2 text-xs text-slate-600">

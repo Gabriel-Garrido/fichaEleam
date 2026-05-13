@@ -103,6 +103,8 @@ export default function SuperAdminPermisos() {
           <div className="mt-4 max-h-[60vh] space-y-1 overflow-y-auto">
             {filteredEleams.map((eleam) => (
               <button
+                type="button"
+
                 key={eleam.id}
                 type="button"
                 onClick={() => handlePickEleam(eleam.id)}
@@ -125,6 +127,8 @@ export default function SuperAdminPermisos() {
               <div className="flex flex-wrap gap-2">
                 {FEATURE_ROLES.map((role) => (
                   <button
+                    type="button"
+
                     key={role}
                     type="button"
                     onClick={() => setActiveRole(role)}

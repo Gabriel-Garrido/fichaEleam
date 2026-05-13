@@ -26,8 +26,7 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
     <>
       {quickOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
+          <button            type="button"
             className="absolute inset-0 bg-slate-950/30"
             aria-label="Cerrar acciones rápidas"
             onClick={() => setQuickOpen(false)}
@@ -38,6 +37,8 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
             <div className="grid grid-cols-2 gap-2">
               {quickActions.map((item) => (
                 <button
+                  type="button"
+
                   key={item.id}
                   type="button"
                   onClick={() => go(item.path)}
@@ -60,8 +61,7 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
           {items.slice(0, 2).map((item) => (
             <NavButton key={item.id} item={item} active={isActive(item.path, location.pathname)} onClick={() => go(item.path)} />
           ))}
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => quickActions.length ? setQuickOpen(true) : setMoreOpen(true)}
             className="mx-auto -mt-7 grid h-16 w-16 place-items-center rounded-full bg-teal-700 text-white shadow-lg shadow-teal-900/25 ring-4 ring-white"
             aria-label="Registrar"
@@ -73,8 +73,7 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
             <NavButton key={item.id} item={item} active={isActive(item.path, location.pathname)} onClick={() => go(item.path)} />
           ))}
           {items.length < 4 && (
-            <button
-              type="button"
+            <button              type="button"
               onClick={() => setMoreOpen(true)}
               className="rounded-2xl px-1 py-1.5 text-center text-[11px] font-medium text-slate-600"
             >
@@ -83,8 +82,7 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
             </button>
           )}
           {items.length >= 4 && (
-            <button
-              type="button"
+            <button              type="button"
               onClick={() => setMoreOpen(true)}
               className="rounded-2xl px-1 py-1.5 text-center text-[11px] font-medium text-slate-600"
             >
@@ -109,8 +107,7 @@ export default function MobileBottomNav({ items, sections, quickActions, auth, o
 
 function NavButton({ item, active, onClick }) {
   return (
-    <button
-      type="button"
+    <button      type="button"
       onClick={onClick}
       className={`rounded-2xl px-1 py-1.5 text-center text-[11px] font-medium ${
         active ? "text-teal-800" : "text-slate-600"

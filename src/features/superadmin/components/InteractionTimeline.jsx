@@ -66,6 +66,8 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-slate-700">Historial de interacciones</h3>
         <button
+          type="button"
+
           onClick={() => setCreating((s) => !s)}
           className="text-xs bg-slate-700 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800"
         >

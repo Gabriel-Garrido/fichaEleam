@@ -10,7 +10,7 @@ export const ESTADOS_REQUISITO = {
   pendiente:  { label: "Pendiente",     cls: "bg-amber-100 text-amber-800 border-amber-200",       dot: "bg-amber-500",   priority: 1 },
   observado:  { label: "Observado",     cls: "bg-orange-100 text-orange-800 border-orange-200",    dot: "bg-orange-500",  priority: 2 },
   vencido:    { label: "Vencido",       cls: "bg-rose-100 text-rose-800 border-rose-200",          dot: "bg-rose-500",    priority: 3 },
-  no_cumple:  { label: "No cumple",     cls: "bg-red-100 text-red-700 border-red-200",             dot: "bg-red-500",     priority: 4 },
+  no_cumple:  { label: "No cumple",     cls: "bg-rose-100 text-rose-700 border-rose-200",             dot: "bg-rose-500",     priority: 4 },
   no_aplica:  { label: "No aplica",     cls: "bg-slate-100 text-slate-600 border-slate-200",       dot: "bg-slate-400",   priority: 5 },
 };
 

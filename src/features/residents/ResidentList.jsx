@@ -84,9 +84,10 @@ export default function ResidentList() {
     >
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 flex justify-between">
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4 flex justify-between">
           <span>{error}</span>
-          <button onClick={fetchResidents} className="underline text-sm ml-2">Reintentar</button>
+          <button type="button"
+ onClick={fetchResidents} className="underline text-sm ml-2">Reintentar</button>
         </div>
       )}
 
@@ -147,6 +148,8 @@ export default function ResidentList() {
         </div>
         <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch md:self-auto">
           <button
+            type="button"
+
             onClick={() => setView("grid")}
             aria-pressed={view === "grid"}
             className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium ${
@@ -158,6 +161,8 @@ export default function ResidentList() {
             Tarjetas
           </button>
           <button
+            type="button"
+
             onClick={() => setView("list")}
             aria-pressed={view === "list"}
             className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium border-l border-slate-200 ${
@@ -235,8 +240,7 @@ const TONE = {
 function StatChip({ label, value, tone, active, onClick }) {
   const t = TONE[tone];
   return (
-    <button
-      type="button"
+    <button      type="button"
       onClick={onClick}
       className={`text-left rounded-xl border border-slate-100 ${t.bg} px-4 py-3 shadow-sm transition-all hover:shadow-md ${
         active ? `ring-2 ${t.ring}` : ""
@@ -335,6 +339,8 @@ function ResidentCard({ resident: r, onView, onEdit, onDelete }) {
 
         <div className="mt-auto pt-4 flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
           <button
+            type="button"
+
             onClick={onEdit}
             className="text-xs text-slate-600 hover:text-teal-700 hover:bg-slate-50 px-2.5 py-1.5 rounded-xl transition-colors"
           >
@@ -342,8 +348,10 @@ function ResidentCard({ resident: r, onView, onEdit, onDelete }) {
           </button>
           {onDelete && (
             <button
+              type="button"
+
               onClick={onDelete}
-              className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1.5 rounded-xl transition-colors"
+              className="text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition-colors"
             >
               Eliminar
             </button>
@@ -421,7 +429,7 @@ function ResidentRow({ resident: r, onView, onEdit, onDelete }) {
         {onDelete && (
           <Button
             onClick={onDelete}
-            className="col-span-2 sm:col-span-1 text-sm bg-white text-red-500 border border-red-200 px-4 py-1.5 rounded-xl hover:bg-red-50 transition-all"
+            className="col-span-2 sm:col-span-1 text-sm bg-white text-rose-500 border border-rose-200 px-4 py-1.5 rounded-xl hover:bg-rose-50 transition-all"
           >
             Eliminar
           </Button>

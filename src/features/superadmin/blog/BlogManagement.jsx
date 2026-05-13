@@ -65,7 +65,7 @@ export default function BlogManagement() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
         <div>
-          <button onClick={() => navigate("/superadmin")} className="text-sm text-slate-500 hover:underline">
+          <button type="button" onClick={() => navigate("/superadmin")} className="text-sm text-slate-500 hover:underline">
             ← Volver a Superadmin
           </button>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-800 mt-2">Blog · Gestión</h1>
@@ -73,7 +73,7 @@ export default function BlogManagement() {
             Crea, edita, publica o archiva los artículos del blog público.
           </p>
         </div>
-        <button
+        <button type="button"
           onClick={() => navigate("/superadmin/blog/new")}
           className="bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg hover:bg-slate-800 text-sm"
         >
@@ -91,7 +91,7 @@ export default function BlogManagement() {
         />
         <div className="flex gap-1">
           {["todos","publicado","borrador","archivado"].map((f) => (
-            <button
+            <button type="button"
               key={f}
               onClick={() => setFilter(f)}
               className={`text-xs px-3 py-1.5 rounded-full border ${
@@ -145,13 +145,13 @@ export default function BlogManagement() {
                     <td className="px-3 py-2 text-center font-semibold tabular-nums">{p.views ?? 0}</td>
                     <td className="px-3 py-2 text-center text-slate-400 text-xs">{formatDate(p.actualizado_en)}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
-                      <button
+                      <button type="button"
                         onClick={() => navigate(`/superadmin/blog/${p.id}/edit`)}
                         className="text-slate-700 hover:underline text-xs mr-2"
                       >
                         Editar
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => handleTogglePublish(p)}
                         className={`text-xs mr-2 ${p.estado === "publicado" ? "text-amber-700" : "text-emerald-700"} hover:underline`}
                       >
@@ -167,7 +167,7 @@ export default function BlogManagement() {
                           Ver
                         </a>
                       )}
-                      <button
+                      <button type="button"
                         onClick={() => handleDelete(p)}
                         className="text-rose-600 hover:underline text-xs"
                       >

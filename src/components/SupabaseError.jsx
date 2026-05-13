@@ -21,6 +21,8 @@ export default function SupabaseError() {
         </p>
         <div className="flex flex-col gap-3">
           <button
+            type="button"
+
             onClick={() => window.location.reload()}
             className="w-full rounded-xl bg-teal-700 text-white py-2.5 text-sm font-semibold hover:bg-teal-800 transition-colors"
           >

@@ -147,6 +147,8 @@ export default function PaymentPage() {
       <nav className="bg-white border-b border-slate-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
+            type="button"
+
             onClick={() => navigate("/")}
             className="text-xl font-black text-teal-700 tracking-tight"
           >
@@ -154,16 +156,19 @@ export default function PaymentPage() {
           </button>
           <div className="flex items-center gap-3">
             {user && pagoActivo && (
-              <button onClick={() => navigate("/dashboard")} className="text-sm text-teal-700 hover:underline">
+              <button type="button"
+ onClick={() => navigate("/dashboard")} className="text-sm text-teal-700 hover:underline">
                 Ir al panel
               </button>
             )}
             {user ? (
-              <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700">
+              <button type="button"
+ onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700">
                 Cerrar sesión
               </button>
             ) : (
-              <button onClick={() => navigate("/login")} className="text-sm text-teal-700 hover:underline">
+              <button type="button"
+ onClick={() => navigate("/login")} className="text-sm text-teal-700 hover:underline">
                 Ya tengo cuenta
               </button>
             )}
@@ -246,6 +251,8 @@ export default function PaymentPage() {
               </span>
               {pagoActivo && isAdminEleam && (
                 <button
+                  type="button"
+
                   onClick={handleCancel}
                   disabled={loadingAction}
                   className="text-xs text-rose-600 hover:underline disabled:opacity-50"
@@ -324,6 +331,8 @@ export default function PaymentPage() {
                       </span>
                     ) : (
                       <button
+                        type="button"
+
                         onClick={() => handleStart(p.codigo)}
                         disabled={loadingAction || (user && !isAdminEleam)}
                         className={`w-full font-semibold py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -347,8 +356,8 @@ export default function PaymentPage() {
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {INCLUYE.map((item, i) => (
               <li key={i} className="flex items-center gap-3 text-sm text-slate-600">
-                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center shrink-0">
-                  <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-5 h-5 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
+                  <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>

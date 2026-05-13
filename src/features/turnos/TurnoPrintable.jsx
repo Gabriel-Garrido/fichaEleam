@@ -42,15 +42,13 @@ export default function TurnoPrintable() {
       description={item ? `${turnoLabel(item.turno)} · ${formatDate(item.fecha)}` : ""}
       actions={
         <div className="flex gap-2 print:hidden">
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => navigate("/turnos")}
             className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Volver
           </button>
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => window.print()}
             className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
           >

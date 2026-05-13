@@ -119,7 +119,7 @@ export default function BlogEditor() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       <header className="flex items-end justify-between gap-3 mb-6 flex-wrap">
         <div>
-          <button onClick={() => navigate("/superadmin/blog")} className="text-sm text-slate-500 hover:underline">
+          <button type="button" onClick={() => navigate("/superadmin/blog")} className="text-sm text-slate-500 hover:underline">
             ← Volver al listado
           </button>
           <h1 className="text-2xl font-black text-slate-800 mt-2">
@@ -127,20 +127,20 @@ export default function BlogEditor() {
           </h1>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button
+          <button type="button"
             onClick={() => setPreview((s) => !s)}
             className="border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm hover:bg-slate-50"
           >
             {previewing ? "Editor" : "Vista previa"}
           </button>
-          <button
+          <button type="button"
             onClick={() => save(false)}
             disabled={saving}
             className="bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-50"
           >
             {saving ? "Guardando…" : "Guardar borrador"}
           </button>
-          <button
+          <button type="button"
             onClick={() => save(true)}
             disabled={saving}
             className="bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50"

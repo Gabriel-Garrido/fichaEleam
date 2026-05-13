@@ -29,6 +29,8 @@ export default function RecentPaymentsTable({ payments, onSelectEleam }) {
                 <td className="px-3 py-2 font-medium text-slate-800">
                   {onSelectEleam && p.eleam_id ? (
                     <button
+                      type="button"
+
                       onClick={() => onSelectEleam(p.eleam_id)}
                       className="hover:underline text-left"
                     >

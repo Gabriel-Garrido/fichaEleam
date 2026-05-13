@@ -103,7 +103,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 Te enviamos tu enlace personalizado en menos de 24 horas.
               </p>
             </div>
-            <button
+            <button type="button"
               onClick={onClose}
               className="text-teal-200 hover:text-white ml-4 mt-1"
               aria-label="Cerrar"
@@ -126,7 +126,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
             <p className="text-slate-600 text-sm leading-relaxed">
               En menos de 24 horas te enviaremos el enlace para acceder a tu demo personalizado de FichaEleam.
             </p>
-            <button
+            <button type="button"
               onClick={onClose}
               className="mt-6 bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700"
             >

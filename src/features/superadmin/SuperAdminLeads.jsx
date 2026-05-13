@@ -61,6 +61,8 @@ export default function SuperAdminLeads() {
           ["metricas", "Métricas landing"],
         ].map(([key, label]) => (
           <button
+            type="button"
+
             key={key}
             type="button"
             onClick={() => setTab(key)}

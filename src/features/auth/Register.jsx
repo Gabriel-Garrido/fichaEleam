@@ -75,7 +75,8 @@ function Register() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
         <div className="mb-6 text-center">
-          <button onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
+          <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
             FichaEleam
           </button>
           <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
@@ -92,12 +93,16 @@ function Register() {
           </p>
           <div className="space-y-3 pt-2">
             <button
+              type="button"
+
               onClick={() => navigate("/login")}
               className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
             >
               Iniciar sesión
             </button>
             <button
+              type="button"
+
               onClick={() => navigate("/")}
               className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl font-semibold text-sm hover:bg-slate-50 transition-colors"
             >
@@ -113,7 +118,8 @@ function Register() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
         <div className="mb-6 text-center">
-          <button onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
+          <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
             FichaEleam
           </button>
           <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
@@ -128,12 +134,16 @@ function Register() {
           <p className="text-sm text-slate-500">{inviteError}</p>
           <div className="space-y-3 pt-2">
             <button
+              type="button"
+
               onClick={() => navigate("/login")}
               className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
             >
               Iniciar sesión
             </button>
             <button
+              type="button"
+
               onClick={() => navigate("/")}
               className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl font-semibold text-sm hover:bg-slate-50 transition-colors"
             >
@@ -190,7 +200,8 @@ function Register() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
         <div className="mb-6 text-center">
-          <button onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
+          <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
             FichaEleam
           </button>
           <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
@@ -206,6 +217,8 @@ function Register() {
             Ya puedes iniciar sesión con <span className="font-medium text-slate-700">{userData.email}</span>.
           </p>
           <button
+            type="button"
+
             onClick={() => navigate("/login")}
             className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
           >
@@ -219,7 +232,8 @@ function Register() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
       <div className="mb-6 text-center">
-        <button onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
+        <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
           FichaEleam
         </button>
         <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
@@ -285,8 +299,7 @@ function Register() {
                 required
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
               />
-              <button
-                type="button"
+              <button                type="button"
                 onClick={() => setShowPw((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 tabIndex={-1}
@@ -319,7 +332,7 @@ function Register() {
           </div>
 
           {error && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-xl px-3 py-2" role="alert">
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert">
               {error}
             </p>
           )}
@@ -334,7 +347,8 @@ function Register() {
 
         <p className="text-sm text-center text-slate-400 mt-5">
           ¿Ya tienes cuenta?{" "}
-          <button onClick={() => navigate("/login")} className="text-teal-700 hover:underline">
+          <button type="button"
+ onClick={() => navigate("/login")} className="text-teal-700 hover:underline">
             Inicia sesión
           </button>
         </p>

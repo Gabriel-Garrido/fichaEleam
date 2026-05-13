@@ -50,8 +50,7 @@ export default function TurnosDashboard() {
       eyebrow="Cuidado diario"
       description="Resumen breve para que el siguiente equipo parta con prioridades claras."
       actions={
-        <button
-          type="button"
+        <button          type="button"
           onClick={() => navigate("/turnos/nueva")}
           className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
         >
@@ -87,8 +86,7 @@ export default function TurnosDashboard() {
               <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-slate-500">
                 Puedes crear la primera con datos automáticos. Si no hay registros todavía, quedará como checklist inicial.
               </p>
-              <button
-                type="button"
+              <button                type="button"
                 onClick={() => navigate("/turnos/nueva")}
                 className="mt-4 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
               >
@@ -99,6 +97,8 @@ export default function TurnosDashboard() {
             <div className="divide-y divide-slate-100">
               {items.map((item) => (
                 <button
+                  type="button"
+
                   key={item.id}
                   type="button"
                   onClick={() => navigate(`/turnos/${item.id}`)}

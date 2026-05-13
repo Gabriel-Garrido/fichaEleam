@@ -16,7 +16,7 @@ function strengthLabel(pw) {
   const long     = pw.length >= 8;
   const veryLong = pw.length >= 12;
   const score    = [hasUpper, hasNum, long, veryLong].filter(Boolean).length;
-  if (score <= 1) return { txt: "Débil",    cls: "bg-red-500",    bar: "w-1/4" };
+  if (score <= 1) return { txt: "Débil",    cls: "bg-rose-500",    bar: "w-1/4" };
   if (score === 2) return { txt: "Regular",  cls: "bg-amber-400",  bar: "w-2/4" };
   if (score === 3) return { txt: "Buena",    cls: "bg-blue-500",   bar: "w-3/4" };
   return              { txt: "Muy fuerte", cls: "bg-emerald-500", bar: "w-full" };
@@ -150,7 +150,7 @@ export default function ChangePasswordPage() {
           </div>
 
           {error && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-center">
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 text-center">
               {error}
             </p>
           )}
@@ -200,8 +200,7 @@ export default function ChangePasswordPage() {
                 disabled={submitting}
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
               />
-              <button
-                type="button"
+              <button                type="button"
                 onClick={() => setShowPw((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 tabIndex={-1}
@@ -244,7 +243,7 @@ export default function ChangePasswordPage() {
           </div>
 
           {error && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
               {error}
             </p>
           )}

@@ -8,6 +8,7 @@ import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 import VitalCard from "./VitalCard";
 import PageLayout from "../../layout/PageLayout";
+import { turnoLabel } from "../turnos/turnosService";
 import {
   VITAL_DEFS,
   STATUS,
@@ -126,9 +127,10 @@ export default function VitalSignsList() {
     >
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 flex justify-between items-center">
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4 flex justify-between items-center">
           <span>{error}</span>
-          <button onClick={fetchRecords} className="underline text-sm ml-2">
+          <button type="button"
+ onClick={fetchRecords} className="underline text-sm ml-2">
             Reintentar
           </button>
         </div>
@@ -215,6 +217,8 @@ export default function VitalSignsList() {
             </div>
             <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch">
               <button
+                type="button"
+
                 onClick={() => setView("cards")}
                 aria-pressed={view === "cards"}
                 className={`flex-1 px-3 py-2 text-xs font-medium ${
@@ -226,6 +230,8 @@ export default function VitalSignsList() {
                 Tarjetas
               </button>
               <button
+                type="button"
+
                 onClick={() => setView("table")}
                 aria-pressed={view === "table"}
                 className={`flex-1 px-3 py-2 text-xs font-medium border-l border-slate-200 ${
@@ -243,6 +249,8 @@ export default function VitalSignsList() {
               Tarjetas es la vista recomendada en móvil; tabla queda para revisión compacta.
             </p>
             <button
+              type="button"
+
               onClick={clearFilters}
               className="self-start text-sm text-slate-500 hover:text-slate-700 underline"
             >
@@ -288,8 +296,7 @@ const TONE = {
 function StatChip({ active, onClick, label, value, tone }) {
   const t = TONE[tone];
   return (
-    <button
-      type="button"
+    <button      type="button"
       onClick={onClick}
       className={`text-left rounded-xl border border-slate-100 ${t.bg} px-4 py-3 shadow-sm transition-all hover:shadow-md ${
         active ? `ring-2 ${t.ring}` : ""
@@ -310,8 +317,6 @@ function VitalRecordCard({ record, onDelete }) {
     dateStyle: "medium",
     timeStyle: "short",
   });
-
-  const turnoLabel = { mañana: "Mañana", tarde: "Tarde", noche: "Noche" };
 
   return (
     <article className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -334,7 +339,7 @@ function VitalRecordCard({ record, onDelete }) {
             <span>{fecha}</span>
             {record.turno && (
               <span className="capitalize">
-                {turnoLabel[record.turno] ?? record.turno}
+                {turnoLabel(record.turno)}
               </span>
             )}
             {record.estado_conciencia && (
@@ -344,8 +349,10 @@ function VitalRecordCard({ record, onDelete }) {
         </div>
         {onDelete && (
           <button
+            type="button"
+
             onClick={onDelete}
-            className="self-start text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+            className="self-start text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors"
           >
             Eliminar
           </button>
@@ -495,8 +502,10 @@ function VitalRecordsTable({ records, onDelete }) {
               {onDelete && (
                 <td className="px-4 py-3 text-right">
                   <button
+                    type="button"
+
                     onClick={() => onDelete(r.id)}
-                    className="text-red-400 hover:text-red-600 text-xs"
+                    className="text-rose-400 hover:text-rose-600 text-xs"
                   >
                     Eliminar
                   </button>

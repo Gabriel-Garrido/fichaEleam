@@ -34,6 +34,8 @@ function AmbitoCard({ ambito, onClick }) {
   const tone = ambito.porcentaje >= 80 ? "emerald" : ambito.porcentaje >= 50 ? "amber" : "rose";
   return (
     <button
+      type="button"
+
       onClick={onClick}
       className="text-left bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition-all flex flex-col"
     >
@@ -89,6 +91,8 @@ function AlertItem({ requisito_eleam, kind = "vencido" }) {
   const r = requisito_eleam.requisito;
   return (
     <button
+      type="button"
+
       onClick={() => navigate(`/accreditation/requisito/${requisito_eleam.id}`)}
       className={`w-full text-left ${tone.box} border rounded-xl p-3 hover:shadow-sm transition-all flex items-center justify-between gap-3`}
     >
@@ -114,6 +118,8 @@ function ObservacionItem({ obs }) {
   const r = obs.requisito_eleam?.requisito;
   return (
     <button
+      type="button"
+
       onClick={() => obs.requisito_eleam_id
         ? navigate(`/accreditation/requisito/${obs.requisito_eleam_id}`)
         : navigate(`/accreditation/observaciones`)}
@@ -222,8 +228,7 @@ function AccreditationNextStep({ resumen, observaciones, navigate }) {
           <h2 className="text-lg font-bold mt-1">{step.title}</h2>
           <p className="text-sm mt-1 opacity-90">{step.text}</p>
         </div>
-        <button
-          type="button"
+        <button          type="button"
           onClick={() => navigate(step.path)}
           className="w-full sm:w-auto rounded-xl bg-white/80 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-white"
         >
@@ -253,32 +258,28 @@ function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => navigate(firstRequirementPath(resumen.sinEvidencia))}
             className="rounded-xl border border-teal-100 bg-teal-50 px-3 py-3 text-left"
           >
             <p className="text-2xl font-black text-teal-700 tabular-nums">{resumen.evidenciasVigentes}</p>
             <p className="text-[11px] font-semibold text-teal-800">Evidencias</p>
           </button>
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => navigate("/accreditation")}
             className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3 text-left"
           >
             <p className="text-2xl font-black text-amber-700 tabular-nums">{pendienteTotal}</p>
             <p className="text-[11px] font-semibold text-amber-800">Pendientes</p>
           </button>
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => navigate("/accreditation")}
             className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3 text-left"
           >
             <p className="text-2xl font-black text-rose-700 tabular-nums">{resumen.vencidos.length}</p>
             <p className="text-[11px] font-semibold text-rose-800">Vencidos</p>
           </button>
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => navigate("/accreditation/observaciones")}
             className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-3 text-left"
           >
@@ -404,12 +405,16 @@ export default function AccreditationDashboard() {
       actions={
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto">
           <button
+            type="button"
+
             onClick={() => navigate("/accreditation/observaciones")}
             className="border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl hover:bg-slate-50 text-sm"
           >
             Observaciones
           </button>
           <button
+            type="button"
+
             onClick={() => navigate("/accreditation/carpeta")}
             className="bg-teal-700 text-white font-semibold px-4 py-2 rounded-xl hover:bg-teal-800 text-sm"
           >
@@ -489,6 +494,8 @@ export default function AccreditationDashboard() {
                   ))}
                   {observaciones.length > 5 && (
                     <button
+                      type="button"
+
                       onClick={() => navigate("/accreditation/observaciones")}
                       className="text-xs text-teal-700 hover:underline"
                     >
@@ -513,6 +520,8 @@ export default function AccreditationDashboard() {
           </h2>
           {isAdminEleam && (
             <button
+              type="button"
+
               onClick={() => navigate("/accreditation/observaciones?nuevo=1")}
               className="text-sm text-teal-700 hover:underline font-semibold"
             >

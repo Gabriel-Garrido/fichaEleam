@@ -298,6 +298,8 @@ function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
       </div>
       <div className="flex flex-col gap-1 shrink-0">
         <button
+          type="button"
+
           onClick={() => onView(doc)}
           className="text-xs text-teal-700 hover:underline font-semibold"
         >
@@ -305,6 +307,8 @@ function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
         </button>
         {isAdmin && (
           <button
+            type="button"
+
             onClick={() => onArchive(doc)}
             className="text-xs text-rose-600 hover:underline"
           >
@@ -374,7 +378,8 @@ function ObservacionItem({ obs, onCerrar, isAdmin }) {
       )}
       {isAbierta && isAdmin && (
         !open ? (
-          <button onClick={() => setOpen(true)} className="text-xs text-teal-700 hover:underline mt-2 font-semibold">
+          <button type="button"
+ onClick={() => setOpen(true)} className="text-xs text-teal-700 hover:underline mt-2 font-semibold">
             Cerrar observación
           </button>
         ) : (
@@ -387,7 +392,8 @@ function ObservacionItem({ obs, onCerrar, isAdmin }) {
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
             />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:underline">Cancelar</button>
+              <button type="button"
+ onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:underline">Cancelar</button>
               <Button
                 onClick={submit}
                 disabled={busy}
@@ -415,6 +421,8 @@ function NewObservacionForm({ reId, onCreated, isAdmin }) {
   if (!open) {
     return (
       <button
+        type="button"
+
         onClick={() => setOpen(true)}
         className="text-sm text-teal-700 hover:underline font-semibold"
       >
@@ -648,6 +656,8 @@ export default function AccreditationRequisito() {
       <div className="max-w-3xl mx-auto px-4 py-12 text-center">
         <h1 className="text-xl font-bold mb-2">Requisito no encontrado</h1>
         <button
+          type="button"
+
           onClick={() => navigate("/accreditation")}
           className="text-sm text-teal-700 hover:underline"
         >
@@ -665,6 +675,8 @@ export default function AccreditationRequisito() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
       <button
+        type="button"
+
         onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
         className="text-sm text-slate-500 hover:text-slate-800"
       >
@@ -708,7 +720,8 @@ export default function AccreditationRequisito() {
                 <span className="text-slate-500">({re.responsable.rol})</span>
               </p>
             ) : (
-              <button onClick={handleAssignSelf} className="text-teal-700 hover:underline">
+              <button type="button"
+ onClick={handleAssignSelf} className="text-teal-700 hover:underline">
                 + Asignarme
               </button>
             )}
@@ -739,6 +752,8 @@ export default function AccreditationRequisito() {
           { key: "historial", label: `Historial (${audit.length})` },
         ].map((t) => (
           <button
+            type="button"
+
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
@@ -786,6 +801,8 @@ export default function AccreditationRequisito() {
           {historial.filter((d) => !d.vigente).length > 0 && (
             <div className="pt-3">
               <button
+                type="button"
+
                 onClick={() => setShowHistorial((s) => !s)}
                 className="text-sm text-slate-500 hover:underline"
               >

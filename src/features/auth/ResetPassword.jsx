@@ -13,7 +13,7 @@ function strengthLabel(pw) {
   const long     = pw.length >= 8;
   const veryLong = pw.length >= 12;
   const score    = [hasUpper, hasNum, long, veryLong].filter(Boolean).length;
-  if (score <= 1) return { txt: "Débil",   cls: "bg-red-500",    bar: "w-1/4" };
+  if (score <= 1) return { txt: "Débil",   cls: "bg-rose-500",    bar: "w-1/4" };
   if (score === 2) return { txt: "Regular", cls: "bg-amber-400",  bar: "w-2/4" };
   if (score === 3) return { txt: "Buena",   cls: "bg-blue-500",   bar: "w-3/4" };
   return              { txt: "Muy fuerte", cls: "bg-emerald-500", bar: "w-full" };
@@ -96,6 +96,8 @@ export default function ResetPassword() {
           <h2 className="text-lg font-bold text-slate-800">Supabase no configurado</h2>
           <p className="text-sm text-slate-500">No es posible restablecer contraseñas hasta configurar las variables de entorno.</p>
           <button
+            type="button"
+
             onClick={() => navigate("/login")}
             className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
           >
@@ -112,8 +114,8 @@ export default function ResetPassword() {
         <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
           {linkExpired ? (
             <>
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-                <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
@@ -122,12 +124,15 @@ export default function ResetPassword() {
                 Este link de recuperación ya no es válido. Los links expiran en 1 hora.
               </p>
               <button
+                type="button"
+
                 onClick={() => navigate("/recuperar-acceso")}
                 className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
               >
                 Solicitar nuevo link
               </button>
-              <button onClick={() => navigate("/login")} className="text-sm text-slate-400 hover:text-slate-600">
+              <button type="button"
+ onClick={() => navigate("/login")} className="text-sm text-slate-400 hover:text-slate-600">
                 ← Volver al inicio de sesión
               </button>
             </>
@@ -166,7 +171,8 @@ export default function ResetPassword() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
       <div className="mb-6 text-center">
-        <button onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
+        <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
           FichaEleam
         </button>
       </div>
@@ -196,8 +202,7 @@ export default function ResetPassword() {
                 disabled={submitting}
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
               />
-              <button
-                type="button"
+              <button                type="button"
                 onClick={() => setShowPw((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 tabIndex={-1}
@@ -238,7 +243,7 @@ export default function ResetPassword() {
           </div>
 
           {error && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-xl px-3 py-2" role="alert">
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert">
               {error}
             </p>
           )}

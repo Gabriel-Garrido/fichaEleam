@@ -59,6 +59,8 @@ export default function OnboardingBanner() {
       {/* Actions */}
       <div className="flex items-center gap-2 shrink-0">
         <button
+          type="button"
+
           onClick={() => setChecklistOpen(true)}
           className={`hidden sm:inline-flex items-center gap-1 text-xs font-bold ${colors.text} hover:opacity-70 transition-opacity`}
         >
@@ -69,6 +71,8 @@ export default function OnboardingBanner() {
         </button>
 
         <button
+          type="button"
+
           onClick={() => setHidden(true)}
           className="w-7 h-7 rounded-full bg-white/60 hover:bg-white flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
           aria-label="Ocultar sugerencia"

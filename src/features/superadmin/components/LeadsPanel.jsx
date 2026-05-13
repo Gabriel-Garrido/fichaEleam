@@ -8,7 +8,7 @@ const ESTADO_LABELS = {
   nuevo:         { txt: "Nuevo",          cls: "bg-sky-100 text-sky-700" },
   contactado:    { txt: "Contactado",      cls: "bg-blue-100 text-blue-700" },
   demo_activo:   { txt: "Demo activo",     cls: "bg-teal-100 text-teal-700" },
-  demo_completado:{ txt: "Demo completado", cls: "bg-green-100 text-green-700" },
+  demo_completado:{ txt: "Demo completado", cls: "bg-emerald-100 text-emerald-700" },
   descartado:    { txt: "Descartado",      cls: "bg-slate-100 text-slate-500" },
   convertido:    { txt: "Convertido",      cls: "bg-emerald-100 text-emerald-700" },
 };
@@ -158,6 +158,8 @@ export default function LeadsPanel({
                     </span>
                   </p>
                   <button
+                    type="button"
+
                     onClick={() => { copyToClipboard(credenciales.temp_password); toast("Copiada", "success"); }}
                     className="text-xs text-slate-500 hover:text-slate-700 border border-slate-300 rounded px-2 py-1"
                   >
@@ -189,6 +191,8 @@ export default function LeadsPanel({
             <div className="flex justify-end gap-2">
               {credenciales.temp_password && (
                 <button
+                  type="button"
+
                   onClick={() => { copyToClipboard(`Correo: ${credenciales.email}\nContraseña temporal: ${credenciales.temp_password}`); toast("Credenciales copiadas", "success"); }}
                   className="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm hover:bg-slate-50"
                 >
@@ -196,6 +200,8 @@ export default function LeadsPanel({
                 </button>
               )}
               <button
+                type="button"
+
                 onClick={() => setCredenciales(null)}
                 className="bg-teal-700 text-white px-4 py-2 rounded-xl text-sm hover:opacity-90"
               >
@@ -207,13 +213,13 @@ export default function LeadsPanel({
       )}
       {/* Alerts */}
       {contactRequests.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-3">
-          <span className="text-red-500 font-bold text-xl shrink-0">!</span>
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-center gap-3">
+          <span className="text-rose-500 font-bold text-xl shrink-0">!</span>
           <div>
-            <p className="font-semibold text-red-800 text-sm">
+            <p className="font-semibold text-rose-800 text-sm">
               {contactRequests.length} lead{contactRequests.length > 1 ? "s solicitan" : " solicita"} contacto
             </p>
-            <p className="text-xs text-red-600">Aparecen al inicio de la tabla.</p>
+            <p className="text-xs text-rose-600">Aparecen al inicio de la tabla.</p>
           </div>
         </div>
       )}
@@ -249,6 +255,8 @@ export default function LeadsPanel({
           ))}
         </select>
         <button
+          type="button"
+
           onClick={() => onLoadLeads({ estado: filterEstado || undefined, search })}
           className="border border-slate-300 text-slate-600 px-4 py-2 rounded-xl text-sm hover:bg-slate-50"
         >
@@ -276,7 +284,7 @@ export default function LeadsPanel({
               <div
                 key={lead.id}
                 className={`bg-white rounded-xl border shadow-sm overflow-hidden ${
-                  wantsContact ? "border-red-300" : isActive ? "border-teal-300" : "border-slate-100"
+                  wantsContact ? "border-rose-300" : isActive ? "border-teal-300" : "border-slate-100"
                 }`}
               >
                 <div
@@ -286,7 +294,7 @@ export default function LeadsPanel({
                   {/* Status dots */}
                   <div className="flex flex-col gap-1 pt-1 shrink-0">
                     {wantsContact && (
-                      <span className="w-2 h-2 rounded-full bg-red-500" title="Solicita contacto" />
+                      <span className="w-2 h-2 rounded-full bg-rose-500" title="Solicita contacto" />
                     )}
                     {isActive && (
                       <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" title="En demo ahora" />
@@ -305,7 +313,7 @@ export default function LeadsPanel({
                           {estado.txt}
                         </span>
                         {wantsContact && (
-                          <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                          <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full font-semibold">
                             Solicita contacto
                           </span>
                         )}
@@ -345,10 +353,10 @@ export default function LeadsPanel({
                 {isExpanded && (
                   <div className="border-t border-slate-100 p-4 space-y-4 bg-slate-50">
                     {wantsContact && lead.solicita_contacto_mensaje && (
-                      <div className="bg-red-50 border border-red-100 rounded-xl p-3">
-                        <p className="text-xs font-semibold text-red-800 mb-1">Mensaje del prospecto:</p>
-                        <p className="text-sm text-red-700">{lead.solicita_contacto_mensaje}</p>
-                        <p className="text-xs text-red-400 mt-1">{formatDateTime(lead.solicita_contacto_en)}</p>
+                      <div className="bg-rose-50 border border-rose-100 rounded-xl p-3">
+                        <p className="text-xs font-semibold text-rose-800 mb-1">Mensaje del prospecto:</p>
+                        <p className="text-sm text-rose-700">{lead.solicita_contacto_mensaje}</p>
+                        <p className="text-xs text-rose-400 mt-1">{formatDateTime(lead.solicita_contacto_en)}</p>
                       </div>
                     )}
 
@@ -387,6 +395,8 @@ export default function LeadsPanel({
                           Check both demo_user_id (new flow) and demo_token (legacy) to avoid duplicates. */}
                       {!lead.demo_user_id && !lead.demo_token ? (
                         <button
+                          type="button"
+
                           onClick={() => handleGrant(lead)}
                           className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 font-semibold"
                         >
@@ -400,6 +410,8 @@ export default function LeadsPanel({
 
                       {editNotes[lead.id] !== undefined && (
                         <button
+                          type="button"
+
                           onClick={() => handleSaveNotes(lead.id)}
                           className="bg-slate-700 text-white text-sm px-4 py-2 rounded-xl hover:bg-slate-800"
                         >
@@ -409,10 +421,12 @@ export default function LeadsPanel({
 
                       {lead.solicita_contacto && (
                         <button
+                          type="button"
+
                           onClick={() => onUpdateLead(lead.id, { solicita_contacto: false }).then(() =>
                             toast("Marcado como contactado", "success")
                           )}
-                          className="bg-green-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-green-700"
+                          className="bg-emerald-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-emerald-700"
                         >
                           Marcar contactado
                         </button>

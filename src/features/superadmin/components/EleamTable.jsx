@@ -20,7 +20,7 @@ const COL_TIPS = {
   salud:
     "Indicador calculado en el cliente combinando:\n• eleams.pago_activo y subscription_status\n• Días hasta eleams.fecha_vencimiento_suscripcion (≤14d = alerta)\n• Días desde eleams.ultimo_contacto (>60d sin contacto = alerta)\n• eleams.riesgo_churn\n• Tareas CRM vencidas (crm_tasks con fecha_vencimiento pasada)\nPasa el cursor sobre el badge para ver los motivos detallados.",
   vencimiento:
-    "eleams.fecha_vencimiento_suscripcion — Fecha límite del acceso.\n🟢 Verde: vigente · 🟡 Ámbar: vence en ≤14 días · 🔴 Rojo: ya venció.",
+    "eleams.fecha_vencimiento_suscripcion — Fecha límite del acceso.\nVerde: vigente · Ámbar: vence en ≤14 días · Rojo: ya venció.",
   ultimoContacto:
     "eleams.ultimo_contacto — Se actualiza automáticamente al crear una interacción CRM. Sin contacto en más de 60 días hace que 'Salud' baje a 'Atención'. 'Sin contacto' en rojo = nunca hubo interacción registrada.",
   proxAccion:
@@ -91,6 +91,8 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                 <tr key={e.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-3 py-2.5 font-semibold text-slate-800 w-40">
                     <button
+                      type="button"
+
                       onClick={() => onOpen(e)}
                       className="hover:underline text-left hover:text-teal-700 transition-colors leading-tight"
                     >
@@ -147,12 +149,16 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                   </td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     <button
+                      type="button"
+
                       onClick={() => onOpen(e)}
                       className="text-teal-700 hover:underline text-xs mr-3 font-medium"
                     >
                       Ficha
                     </button>
                     <button
+                      type="button"
+
                       onClick={() => onEdit(e)}
                       className="text-slate-500 hover:underline text-xs"
                     >

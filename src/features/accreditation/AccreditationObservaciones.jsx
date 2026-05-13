@@ -156,6 +156,8 @@ function ObsRow({ obs, onCerrar, onIr, isAdmin }) {
         <span className="text-xs text-slate-500">{formatDate(obs.fecha)}</span>
         {r && (
           <button
+            type="button"
+
             onClick={() => onIr(obs.requisito_eleam_id)}
             className="text-xs text-teal-700 hover:underline"
           >
@@ -182,7 +184,8 @@ function ObsRow({ obs, onCerrar, onIr, isAdmin }) {
         </p>
       )}
       {isAbierta && isAdmin && (!open ? (
-        <button onClick={() => setOpen(true)} className="text-xs text-teal-700 hover:underline mt-2 font-semibold">
+        <button type="button"
+ onClick={() => setOpen(true)} className="text-xs text-teal-700 hover:underline mt-2 font-semibold">
           Cerrar observación
         </button>
       ) : (
@@ -195,7 +198,8 @@ function ObsRow({ obs, onCerrar, onIr, isAdmin }) {
             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
           />
           <div className="flex gap-2 justify-end">
-            <button onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:underline">Cancelar</button>
+            <button type="button"
+ onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:underline">Cancelar</button>
             <Button
               onClick={submit}
               disabled={busy}
@@ -257,6 +261,8 @@ export default function AccreditationObservaciones() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
       <button
+        type="button"
+
         onClick={() => navigate("/accreditation")}
         className="text-sm text-slate-500 hover:text-slate-800"
       >
@@ -292,6 +298,8 @@ export default function AccreditationObservaciones() {
         <div className="flex gap-1">
           {FILTROS_ESTADO.map((f) => (
             <button
+              type="button"
+
               key={f.key}
               onClick={() => setFiltroEstado(f.key)}
               className={`text-sm px-3 py-1.5 rounded-full border ${
@@ -307,6 +315,8 @@ export default function AccreditationObservaciones() {
         <div className="flex gap-1">
           {FILTROS_ORIGEN.map((f) => (
             <button
+              type="button"
+
               key={f.key}
               onClick={() => setFiltroOrigen(f.key)}
               className={`text-sm px-3 py-1.5 rounded-full border ${

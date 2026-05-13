@@ -125,6 +125,8 @@ function VitalSignsForm() {
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center gap-4 mb-6">
         <button
+          type="button"
+
           onClick={() => navigate(-1)}
           className="text-teal-700 hover:underline text-sm"
         >
@@ -136,7 +138,7 @@ function VitalSignsForm() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4">
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4">
           {error}
         </div>
       )}
@@ -147,8 +149,7 @@ function VitalSignsForm() {
           <p className="text-sm text-amber-800 mt-1">
             Agrega un residente activo o cambia el estado de una ficha existente antes de registrar controles.
           </p>
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => navigate("/residents/new")}
             className="mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-xl hover:bg-amber-100"
           >

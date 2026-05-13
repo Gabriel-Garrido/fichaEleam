@@ -51,5 +51,5 @@ export const PLAN_BADGE = {
   demo:     "bg-slate-100 text-slate-600",
   mensual:  "bg-blue-100 text-blue-700",
   anual:    "bg-purple-100 text-purple-700",
-  inactivo: "bg-red-100 text-red-600",
+  inactivo: "bg-rose-100 text-rose-600",
 };

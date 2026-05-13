@@ -154,8 +154,7 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
             <h2 className="text-lg font-bold text-slate-900 mt-1">{nextAction.label}</h2>
             <p className="text-sm text-slate-500 mt-1">{nextAction.hint}</p>
           </div>
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => navigate(nextAction.path)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 ${nextAction.tone === "rose" ? "bg-rose-100 text-rose-700 focus:ring-rose-200" : nextAction.tone === "amber" ? "bg-amber-100 text-amber-800 focus:ring-amber-200" : "bg-emerald-100 text-emerald-700 focus:ring-emerald-200"}`}
           >
@@ -280,7 +279,8 @@ export function ClinicalBoard({ list, loading, error, navigate }) {
       title="Estado clínico actual"
       subtitle="Último signo vital de cada residente activo"
       action={
-        <button onClick={() => navigate("/vital-signs/new")} className="text-xs text-teal-700 hover:underline">
+        <button type="button"
+ onClick={() => navigate("/vital-signs/new")} className="text-xs text-teal-700 hover:underline">
           + Registrar →
         </button>
       }
@@ -343,6 +343,8 @@ function ClinicalRow({ r, navigate }) {
         <MiniVitals s={r.ultimoSigno} status={status} />
       ) : (
         <button
+          type="button"
+
           onClick={(e) => { e.stopPropagation(); navigate(`/vital-signs/new?residenteId=${r.id}`); }}
           className="text-xs text-teal-700 hover:underline shrink-0"
         >
@@ -472,7 +474,8 @@ export function FollowUpsCard({ items, navigate }) {
       subtitle={`${items.length} observaci${items.length === 1 ? "ón" : "ones"} con seguimiento`}
       tone="amber"
       action={items.length > 0 && (
-        <button onClick={() => navigate("/observations")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
+        <button type="button"
+ onClick={() => navigate("/observations")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
       )}
     >
       {items.length === 0 ? (
@@ -506,7 +509,8 @@ export function IncidentsCard({ items, navigate }) {
       subtitle="Últimos 7 días"
       tone="rose"
       action={items.length > 0 && (
-        <button onClick={() => navigate("/observations")} className="text-xs text-rose-700 hover:underline">Ver todos →</button>
+        <button type="button"
+ onClick={() => navigate("/observations")} className="text-xs text-rose-700 hover:underline">Ver todos →</button>
       )}
     >
       {items.length === 0 ? (
@@ -540,7 +544,8 @@ export function ExpiringDocsCard({ items, navigate }) {
       subtitle="Próximos 30 días"
       tone="amber"
       action={items.length > 0 && (
-        <button onClick={() => navigate("/accreditation")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
+        <button type="button"
+ onClick={() => navigate("/accreditation")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
       )}
     >
       {items.length === 0 ? (
@@ -600,7 +605,8 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
                          a.porcentaje >= 50 ? "border-amber-200 bg-amber-50" :
                                               "border-rose-200 bg-rose-50";
             return (
-              <button key={a.codigo} onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
+              <button type="button"
+ key={a.codigo} onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
                 className={`text-left rounded-xl border p-2 hover:shadow-sm transition-all ${tone}`}
               >
                 <p className="text-[10px] font-mono text-slate-500">{a.codigo}</p>
@@ -612,10 +618,12 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
         </div>
       )}
       <div className="flex items-center justify-between mt-4">
-        <button onClick={() => navigate("/accreditation")} className="text-xs font-semibold text-teal-700 hover:underline">
+        <button type="button"
+ onClick={() => navigate("/accreditation")} className="text-xs font-semibold text-teal-700 hover:underline">
           Abrir Carpeta SEREMI →
         </button>
-        <button onClick={() => navigate("/accreditation/observaciones")} className="text-xs text-slate-500 hover:underline">
+        <button type="button"
+ onClick={() => navigate("/accreditation/observaciones")} className="text-xs text-slate-500 hover:underline">
           Observaciones
         </button>
       </div>

@@ -77,8 +77,7 @@ export default function DesktopSidebar({
       }`}
     >
       <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
-        <button
-          type="button"
+        <button          type="button"
           onClick={() => navigate(auth.homePath || "/dashboard")}
           className="min-w-0 text-left"
           title="Inicio"
@@ -89,8 +88,7 @@ export default function DesktopSidebar({
           {expanded && <div className="text-xs text-slate-500">Gestión ELEAM</div>}
         </button>
         {isPinnedOpen && (
-          <button
-            type="button"
+          <button            type="button"
             onClick={onToggle}
             className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
             aria-label="Contraer menú"
@@ -133,6 +131,8 @@ export default function DesktopSidebar({
 
                 return (
                   <button
+                    type="button"
+
                     key={item.id}
                     type="button"
                     onClick={() => navigate(item.path)}
@@ -169,8 +169,7 @@ export default function DesktopSidebar({
             </>
           )}
         </div>
-        <button
-          type="button"
+        <button          type="button"
           onClick={onLogout}
           className={`flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-950 ${
             expanded ? "justify-between" : "justify-center"

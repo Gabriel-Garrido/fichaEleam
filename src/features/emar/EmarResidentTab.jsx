@@ -218,8 +218,7 @@ export default function EmarResidentTab({ resident }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {canCreateIndication && (
-              <button
-                type="button"
+              <button                type="button"
                 onClick={() => setIndicationModal({ indication: INITIAL_INDICATION, schedule: { ...INITIAL_SCHEDULE, turno: currentTurno() } })}
                 className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
               >
@@ -227,8 +226,7 @@ export default function EmarResidentTab({ resident }) {
               </button>
             )}
             {canAdjustStock && (
-              <button
-                type="button"
+              <button                type="button"
                 onClick={() => setLotModal({ lot: INITIAL_LOT, indication: activeIndications[0] ?? null })}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
@@ -275,8 +273,7 @@ export default function EmarResidentTab({ resident }) {
               <p className="text-sm text-slate-500">Entradas, salidas y ajustes quedan auditados por movimiento.</p>
             </div>
             {canAdjustStock && data.lotes.length > 0 && (
-              <button
-                type="button"
+              <button                type="button"
                 onClick={() => setMovementModal({ lot: data.lotes[0], tipo: "recepcion" })}
                 className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
@@ -316,6 +313,8 @@ export default function EmarResidentTab({ resident }) {
               <div className="mt-3 space-y-2">
                 {pendingReconciliations.slice(0, 3).map((item) => (
                   <button
+                    type="button"
+
                     key={item.id}
                     type="button"
                     disabled={!canValidate}
@@ -582,6 +581,8 @@ function ScheduleFields({ schedule, setSchedule, saving }) {
           <div className="flex flex-wrap gap-2">
             {WEEK_DAYS.map(([day, label]) => (
               <button
+                type="button"
+
                 key={day}
                 type="button"
                 onClick={() => toggleDay(day)}

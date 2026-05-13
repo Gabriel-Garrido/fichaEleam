@@ -28,6 +28,8 @@ export default function ContactSpecialistButton({ token }) {
   return (
     <>
       <button
+        type="button"
+
         onClick={() => { if (status !== "sent") setOpen(true); }}
         className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3 rounded-full shadow-xl font-semibold text-sm transition-all ${
           status === "sent"
@@ -73,12 +75,16 @@ export default function ContactSpecialistButton({ token }) {
             />
             <div className="flex gap-3">
               <button
+                type="button"
+
                 onClick={() => setOpen(false)}
                 className="flex-1 border border-slate-300 text-slate-700 py-2 rounded-xl text-sm hover:bg-slate-50"
               >
                 Cancelar
               </button>
               <button
+                type="button"
+
                 onClick={handleSend}
                 disabled={status === "sending"}
                 className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-2 rounded-xl text-sm"

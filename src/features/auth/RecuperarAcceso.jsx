@@ -43,7 +43,8 @@ export default function RecuperarAcceso() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
       <div className="mb-6 text-center">
-        <button onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
+        <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
           FichaEleam
         </button>
         <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
@@ -63,6 +64,8 @@ export default function RecuperarAcceso() {
             </p>
             <p className="text-xs text-slate-400">El link expira en 1 hora. Revisa también tu carpeta de spam.</p>
             <button
+              type="button"
+
               onClick={() => navigate("/login")}
               className="mt-4 text-sm text-teal-700 hover:underline font-medium"
             >
@@ -98,7 +101,7 @@ export default function RecuperarAcceso() {
               </div>
 
               {error && (
-                <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-xl px-3 py-2" role="alert">
+                <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert">
                   {error}
                 </p>
               )}
@@ -113,7 +116,8 @@ export default function RecuperarAcceso() {
             </form>
 
             <p className="text-sm text-center text-slate-400 mt-6">
-              <button onClick={() => navigate("/login")} className="text-teal-700 hover:underline">
+              <button type="button"
+ onClick={() => navigate("/login")} className="text-teal-700 hover:underline">
                 ← Volver al inicio de sesión
               </button>
             </p>

@@ -51,6 +51,8 @@ export function KpiCard({ title, value, sub, icon, tone = "primary", onClick, he
 export function QuickAction({ iconId, label, onClick }) {
   return (
     <button
+      type="button"
+
       onClick={onClick}
       className="flex flex-col items-center gap-2 bg-white rounded-xl border border-slate-100 p-4 hover:shadow-md hover:border-teal-300 hover:-translate-y-0.5 transition-all"
     >
@@ -67,8 +69,7 @@ export function QuickAction({ iconId, label, onClick }) {
 export function AlertChip({ label, value, tone, onClick, hint }) {
   const t = ALERT_TONE[tone];
   return (
-    <button
-      type="button"
+    <button      type="button"
       onClick={onClick}
       disabled={!onClick}
       className={`text-left ${t.bg} border ${t.border} rounded-xl p-3 ${
@@ -89,8 +90,7 @@ export function AlertChip({ label, value, tone, onClick, hint }) {
 
 export function FilterPill({ active, onClick, label, tone }) {
   return (
-    <button
-      type="button"
+    <button      type="button"
       onClick={onClick}
       className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-all ${FILTER_TONE[tone]} ${
         active ? "ring-2 ring-offset-1 ring-teal-300" : ""
@@ -157,8 +157,7 @@ export function MiniVitals({ s }) {
 
 export function SetupAction({ label, sub, onClick }) {
   return (
-    <button
-      type="button"
+    <button      type="button"
       onClick={onClick}
       className="text-left rounded-xl border border-slate-100 bg-slate-50 hover:bg-teal-50 hover:border-teal-200 px-4 py-3 transition-colors"
     >

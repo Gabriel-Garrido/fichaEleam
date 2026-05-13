@@ -316,6 +316,8 @@ export default function ResidentForm() {
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center gap-3 mb-6">
         <button
+          type="button"
+
           onClick={() => navigate(-1)}
           className="text-teal-700 hover:underline text-sm"
         >
@@ -470,8 +472,7 @@ export default function ResidentForm() {
                   </div>
                 </div>
                 <div className="flex gap-3 mt-3">
-                  <button
-                    type="button"
+                  <button                    type="button"
                     onClick={() => {
                       setFamiliarForm({
                         nombre: familiarActual.profiles?.nombre ?? "",
@@ -485,8 +486,7 @@ export default function ResidentForm() {
                   >
                     Cambiar familiar
                   </button>
-                  <button
-                    type="button"
+                  <button                    type="button"
                     onClick={handleUnlinkFamiliar}
                     className="text-sm text-rose-600 hover:underline"
                     disabled={savingFamiliar}
@@ -498,8 +498,7 @@ export default function ResidentForm() {
             ) : !familiarActual && !showFamiliarEdit ? (
               <div>
                 <p className="text-sm text-slate-400 mb-3">Sin familiar vinculado.</p>
-                <button
-                  type="button"
+                <button                  type="button"
                   onClick={() => { setFamiliarForm(FAMILIAR_EMPTY); setShowFamiliarEdit(true); }}
                   className="text-sm text-teal-700 hover:underline font-medium"
                 >
@@ -605,10 +604,10 @@ function Field({ label, name, type = "text", value, onChange, onBlur, required, 
         min={min}
         max={max}
         className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 transition-colors ${
-          error ? "border-red-400 bg-red-50" : "border-slate-300"
+          error ? "border-rose-400 bg-rose-50" : "border-slate-300"
         }`}
       />
-      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {error && <p className="text-xs text-rose-600 mt-1">{error}</p>}
     </div>
   );
 }

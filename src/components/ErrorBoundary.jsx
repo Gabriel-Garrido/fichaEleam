@@ -12,7 +12,6 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.error("ErrorBoundary:", error, info.componentStack);
     }
   }
@@ -37,6 +36,8 @@ class ErrorBoundary extends React.Component {
               </pre>
             )}
             <button
+              type="button"
+
               onClick={() => window.location.reload()}
               className="rounded-xl bg-teal-700 text-white px-6 py-2 hover:bg-teal-800 transition-all text-sm font-semibold"
             >

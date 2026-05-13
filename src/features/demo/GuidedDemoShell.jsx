@@ -115,7 +115,8 @@ function ResidentsPanel() {
     const r = sel;
     return (
       <div className="space-y-4">
-        <button onClick={() => setSel(null)} className="text-sm text-teal-600 hover:underline flex items-center gap-1">
+        <button type="button"
+ onClick={() => setSel(null)} className="text-sm text-teal-600 hover:underline flex items-center gap-1">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
@@ -175,6 +176,8 @@ function ResidentsPanel() {
       <div className="grid gap-3">
         {DEMO_RESIDENTES.map((r) => (
           <button
+            type="button"
+
             key={r.id}
             onClick={() => setSel(r)}
             className="text-left bg-white rounded-xl border border-slate-100 p-4 hover:border-teal-200 hover:shadow-sm transition-all flex items-center justify-between gap-4"
@@ -209,6 +212,8 @@ function VitalsPanel({ showForm = false }) {
         <SectionTitle sub="Registros con rangos clínicos para adultos mayores">Signos Vitales</SectionTitle>
         {!sf && (
           <button
+            type="button"
+
             onClick={() => setForm(true)}
             className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 shrink-0"
           >
@@ -240,7 +245,8 @@ function VitalsPanel({ showForm = false }) {
             ))}
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setForm(false)} className="text-sm text-slate-500 hover:underline">Cancelar</button>
+            <button type="button"
+ onClick={() => setForm(false)} className="text-sm text-slate-500 hover:underline">Cancelar</button>
             <button className="bg-teal-600 text-white text-sm px-5 py-2 rounded-xl hover:bg-teal-700">Guardar (demo)</button>
           </div>
         </div>
@@ -289,6 +295,8 @@ function ObservationsPanel({ showForm = false }) {
         <SectionTitle sub="12 tipos de observaciones diarias">Observaciones de Turno</SectionTitle>
         {!sf && (
           <button
+            type="button"
+
             onClick={() => setForm(true)}
             className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 shrink-0"
           >
@@ -322,7 +330,8 @@ function ObservationsPanel({ showForm = false }) {
             <textarea rows={3} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-400" placeholder="Describe la observación..." />
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setForm(false)} className="text-sm text-slate-500 hover:underline">Cancelar</button>
+            <button type="button"
+ onClick={() => setForm(false)} className="text-sm text-slate-500 hover:underline">Cancelar</button>
             <button className="bg-teal-600 text-white text-sm px-5 py-2 rounded-xl hover:bg-teal-700">Guardar (demo)</button>
           </div>
         </div>
@@ -490,6 +499,8 @@ function VisitasPanel() {
       <div className="flex items-start justify-between">
         <SectionTitle sub="Historial de visitas a tu familiar">Mis Visitas</SectionTitle>
         <button
+          type="button"
+
           onClick={() => setShowForm(true)}
           className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 shrink-0"
         >
@@ -514,7 +525,8 @@ function VisitasPanel() {
             <textarea rows={2} className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none" placeholder="¿Cómo estuvo la visita?" />
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:underline">Cancelar</button>
+            <button type="button"
+ onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:underline">Cancelar</button>
             <button className="bg-teal-600 text-white text-sm px-5 py-2 rounded-xl hover:bg-teal-700">Guardar (demo)</button>
           </div>
         </div>
@@ -622,6 +634,8 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
         <div className="flex items-center gap-1">
           {ROLES.map((r) => (
             <button
+              type="button"
+
               key={r.id}
               onClick={() => handleRoleChange(r.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -643,6 +657,8 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
             <span className="text-xs text-slate-500">{totalProgress}%</span>
           </div>
           <button
+            type="button"
+
             onClick={() => setShowModal(true)}
             className="bg-teal-600 text-white text-xs px-3 py-1.5 rounded-xl hover:bg-teal-700 font-semibold hidden sm:block"
           >
@@ -668,6 +684,8 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
 
         {!guideVisible && (
           <button
+            type="button"
+
             onClick={() => setGuideVisible(true)}
             className="w-9 shrink-0 bg-white border-r border-slate-100 flex items-center justify-center hover:bg-slate-50 text-slate-400 hover:text-teal-600"
             title="Mostrar guía"
@@ -691,12 +709,16 @@ export default function GuidedDemoShell({ token, onProgresoUpdate }) {
           <p className="text-sm text-slate-600 mb-4">¿Listo para activar tu ELEAM?</p>
           <div className="flex gap-2">
             <button
+              type="button"
+
               onClick={() => setShowModal(true)}
               className="flex-1 bg-teal-600 text-white text-sm py-2 rounded-xl font-semibold hover:bg-teal-700"
             >
               Hablar con especialista
             </button>
             <button
+              type="button"
+
               onClick={() => setShowModal(true)}
               className="flex-1 border border-teal-600 text-teal-700 text-sm py-2 rounded-xl font-semibold hover:bg-teal-50"
             >

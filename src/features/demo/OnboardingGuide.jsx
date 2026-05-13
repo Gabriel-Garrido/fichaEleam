@@ -149,6 +149,8 @@ export default function OnboardingGuide({
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Guía del demo</span>
           <button
+            type="button"
+
             onClick={onDismiss}
             className="text-xs text-slate-400 hover:text-slate-600 underline"
           >
@@ -174,6 +176,8 @@ export default function OnboardingGuide({
           const active  = step.panel === activePanel;
           return (
             <button
+              type="button"
+
               key={step.id}
               onClick={() => onGoToStep(step.panel)}
               className={`w-full text-left rounded-xl p-3 transition-all flex items-start gap-3 ${
@@ -212,6 +216,8 @@ export default function OnboardingGuide({
       <div className="p-4 border-t border-slate-100">
         {currentIndex < steps.length - 1 ? (
           <button
+            type="button"
+
             onClick={onNext}
             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
           >

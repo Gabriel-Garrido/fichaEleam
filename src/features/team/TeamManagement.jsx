@@ -336,6 +336,8 @@ export default function TeamManagement() {
           { key: "familiares",   label: `Familiares (${familiares.length})` },
         ].map((t) => (
           <button
+            type="button"
+
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
@@ -403,12 +405,16 @@ export default function TeamManagement() {
                     {m.rol === "funcionario" && (
                       <div className="flex gap-3 items-center shrink-0">
                         <button
+                          type="button"
+
                           onClick={() => openPermModal(m.id, "funcionario")}
                           className="text-sm text-teal-700 hover:underline font-medium"
                         >
                           Permisos
                         </button>
                         <button
+                          type="button"
+
                           onClick={() => setDeleteConfirm({ id: m.id, nombre: m.nombre || m.email || "este usuario" })}
                           className="text-sm text-rose-600 hover:underline"
                         >
@@ -433,7 +439,8 @@ export default function TeamManagement() {
                       <p className="font-semibold text-slate-800 truncate">{inv.email}</p>
                       <p className="text-xs text-slate-500">Expira {formatDate(inv.expira_en)}</p>
                     </div>
-                    <button onClick={() => handleRevoke(inv.id)}
+                    <button type="button"
+ onClick={() => handleRevoke(inv.id)}
                       className="text-rose-600 text-sm hover:underline shrink-0">Cancelar</button>
                   </li>
                 ))}
@@ -496,12 +503,16 @@ export default function TeamManagement() {
                     </div>
                     <div className="flex gap-3 items-center shrink-0">
                       <button
+                        type="button"
+
                         onClick={() => openPermModal(row.profile_id, "familiar")}
                         className="text-sm text-teal-700 hover:underline font-medium"
                       >
                         Permisos
                       </button>
                       <button
+                        type="button"
+
                         onClick={() => setDeleteConfirm({ id: row.profile_id, nombre: row.profiles?.nombre || row.profiles?.email || "este familiar" })}
                         className="text-rose-600 text-sm hover:underline"
                       >
@@ -530,7 +541,8 @@ export default function TeamManagement() {
                           Expira {formatDate(inv.expira_en)}
                         </p>
                       </div>
-                      <button onClick={() => handleRevoke(inv.id)}
+                      <button type="button"
+ onClick={() => handleRevoke(inv.id)}
                         className="text-rose-600 text-sm hover:underline shrink-0">Cancelar</button>
                     </li>
                   );
@@ -596,8 +608,7 @@ export default function TeamManagement() {
                       <code className="flex-1 font-mono text-xl tracking-widest text-slate-800 select-all">
                         {createdUser.temp_password}
                       </code>
-                      <button
-                        type="button"
+                      <button                        type="button"
                         onClick={() => copyText(createdUser.temp_password)}
                         className="text-teal-700 font-semibold text-xs hover:underline shrink-0"
                       >
@@ -698,6 +709,8 @@ export default function TeamManagement() {
                       <div className="flex flex-wrap gap-2">
                         {Object.keys(PLANTILLAS_CARGO).map((cargo) => (
                           <button
+                            type="button"
+
                             key={cargo}
                             type="button"
                             onClick={() => {
@@ -718,8 +731,7 @@ export default function TeamManagement() {
                     </div>
 
                     <div>
-                      <button
-                        type="button"
+                      <button                        type="button"
                         onClick={() => setShowPermSection((v) => !v)}
                         disabled={creating}
                         className="text-xs text-teal-700 hover:underline font-medium flex items-center gap-1"

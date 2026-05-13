@@ -42,8 +42,7 @@ export default function CrmPipeline({ eleams, onPickState, activeState }) {
           </p>
         </div>
         {activeState && (
-          <button
-            type="button"
+          <button            type="button"
             onClick={() => onPickState(null)}
             className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-white"
           >
@@ -88,8 +87,7 @@ export default function CrmPipeline({ eleams, onPickState, activeState }) {
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="text-xs text-slate-500">{pct}% de cartera</span>
-                <button
-                  type="button"
+                <button                  type="button"
                   onClick={() => onPickState(active ? null : s.key)}
                   className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50"
                 >

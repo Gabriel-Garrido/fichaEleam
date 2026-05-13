@@ -113,9 +113,10 @@ function ObservationList() {
     >
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 flex justify-between items-center">
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4 flex justify-between items-center">
           <span>{error}</span>
-          <button onClick={fetchRecords} className="underline text-sm ml-2">Reintentar</button>
+          <button type="button"
+ onClick={fetchRecords} className="underline text-sm ml-2">Reintentar</button>
         </div>
       )}
 
@@ -193,6 +194,8 @@ function ObservationList() {
               Usa "Solo seguimientos" para preparar la entrega de turno.
             </p>
             <button
+              type="button"
+
               onClick={clearFilters}
               className="self-start text-sm text-slate-500 hover:text-slate-700 underline"
             >
@@ -251,8 +254,10 @@ function ObservationList() {
                   </span>
                   {canDelete && (
                     <button
+                      type="button"
+
                       onClick={() => handleDelete(r.id)}
-                      className="text-red-400 hover:text-red-600 text-xs"
+                      className="text-rose-400 hover:text-rose-600 text-xs"
                     >
                       Eliminar
                     </button>

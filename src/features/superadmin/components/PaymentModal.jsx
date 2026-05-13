@@ -110,8 +110,7 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
         </p>
 
         <div className="flex gap-3 justify-end pt-1">
-          <button
-            type="button" onClick={onClose}
+          <button            type="button" onClick={onClose}
             className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-sm hover:bg-slate-50"
           >
             Cancelar

@@ -102,6 +102,8 @@ export default function FamiliarVisitas() {
           </p>
         </div>
         <button
+          type="button"
+
           onClick={() => navigate("/familiar")}
           className="text-sm text-teal-700 hover:underline"
         >
@@ -113,6 +115,8 @@ export default function FamiliarVisitas() {
         <div className="flex flex-wrap gap-2">
           {residentes.map((r) => (
             <button
+              type="button"
+
               key={r.id}
               onClick={() => { setActiveId(r.id); loadVisits(r.id); }}
               className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${

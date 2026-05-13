@@ -154,7 +154,7 @@ function FaqItem({ q, a }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={`border transition-all duration-200 overflow-hidden rounded-2xl ${open ? "border-teal-100 bg-teal-50/30" : "border-slate-100 bg-white"}`}>
-      <button
+      <button type="button"
         onClick={() => setOpen((p) => !p)}
         className="w-full text-left px-6 py-5 flex justify-between items-center gap-4"
         aria-expanded={open}
@@ -238,25 +238,25 @@ export default function LandingPage() {
             Ficha<span className="text-teal-400">Eleam</span>
           </span>
           <div className="flex items-center gap-1">
-            <button
+            <button type="button"
               onClick={() => { navigate("/blog"); trackEvent("nav_click", "blog"); }}
               className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all"
             >
               Blog
             </button>
-            <button
+            <button type="button"
               onClick={() => { document.getElementById("precios")?.scrollIntoView({ behavior: "smooth" }); trackEvent("nav_click", "precios"); }}
               className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all"
             >
               Precios
             </button>
-            <button
+            <button type="button"
               onClick={() => { navigate("/login"); trackEvent("nav_click", "login"); }}
               className="text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-lg hover:border-white/40 hover:text-white transition-all ml-1"
             >
               Iniciar sesión
             </button>
-            <button
+            <button type="button"
               onClick={() => openModal("nav_demo")}
               className="hidden sm:inline-flex text-sm bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
             >
@@ -296,13 +296,13 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center mb-10">
-            <button
+            <button type="button"
               onClick={() => openModal("hero_primary")}
               className="bg-teal-500 text-white font-bold py-4 px-10 rounded-xl hover:bg-teal-400 hover:-translate-y-0.5 transition-all shadow-lg shadow-teal-500/25 text-base"
             >
               Solicitar Demo Gratuito
             </button>
-            <button
+            <button type="button"
               onClick={() => { document.getElementById("como-funciona")?.scrollIntoView({ behavior: "smooth" }); trackEvent("cta_click", "hero_how"); }}
               className="border border-white/15 text-slate-300 font-semibold py-4 px-8 rounded-xl hover:bg-white/5 hover:border-white/25 transition-all text-base"
             >
@@ -354,7 +354,7 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center mt-12">
-            <button
+            <button type="button"
               onClick={() => openModal("features_cta")}
               className="bg-slate-900 text-white font-bold py-3.5 px-10 rounded-xl hover:bg-slate-800 transition-all"
             >
@@ -394,7 +394,7 @@ export default function LandingPage() {
           </ul>
 
           <div className="mt-10 text-center">
-            <button
+            <button type="button"
               onClick={() => openModal("challenge_cta")}
               className="inline-flex items-center gap-2 text-teal-600 text-sm font-semibold hover:text-teal-500 transition-colors"
             >
@@ -531,7 +531,7 @@ export default function LandingPage() {
                 <p className={`text-xs mb-1 ${featured ? "text-teal-200" : "text-slate-400"}`}>CLP / mes</p>
                 <p className={`text-[11px] mb-6 ${featured ? "text-teal-300" : "text-slate-400"}`}>{sub}</p>
                 <div className="mt-auto">
-                  <button
+                  <button type="button"
                     onClick={() => openModal(`pricing_plan${i + 1}`)}
                     className={`w-full font-semibold py-2.5 rounded-xl text-sm transition-all ${
                       featured
@@ -550,7 +550,7 @@ export default function LandingPage() {
               <p className="text-xl font-black text-slate-900 mb-0.5">Institucional</p>
               <p className="text-xs text-slate-400 mb-6">Cotización a medida</p>
               <div className="mt-auto">
-                <button
+                <button type="button"
                   onClick={() => openModal("pricing_institucional")}
                   className="w-full font-semibold py-2.5 rounded-xl text-sm border border-teal-600 text-teal-700 hover:bg-teal-50 transition-all"
                 >
@@ -566,7 +566,7 @@ export default function LandingPage() {
               <p className="font-bold text-base mb-1">30 días de prueba gratuita en todos los planes</p>
               <p className="text-sm text-slate-400 mb-1">Sin tarjeta de crédito. Sin compromiso.</p>
               <p className="text-xs text-slate-500 mb-5">Si en 30 días no es para tu ELEAM, cancelas sin preguntas.</p>
-              <button
+              <button type="button"
                 onClick={() => openModal("pricing_trial")}
                 className="bg-teal-500 text-white font-semibold text-sm px-8 py-2.5 rounded-xl hover:bg-teal-400 transition-all shadow-lg shadow-teal-500/25"
               >
@@ -591,7 +591,7 @@ export default function LandingPage() {
           </div>
           <div className="mt-12 text-center">
             <p className="text-sm text-slate-500 mb-4">¿Tienes otra pregunta?</p>
-            <button
+            <button type="button"
               onClick={() => openModal("faq_cta")}
               className="bg-teal-600 text-white font-semibold px-8 py-3 rounded-xl text-sm hover:bg-teal-500 transition-all"
             >
@@ -625,7 +625,7 @@ export default function LandingPage() {
             Un especialista te envía tu acceso y te acompaña durante la exploración.
           </p>
 
-          <button
+          <button type="button"
             onClick={() => openModal("final_cta")}
             className="bg-teal-500 text-white font-bold py-4 px-12 rounded-2xl shadow-2xl shadow-teal-500/25 hover:bg-teal-400 hover:-translate-y-0.5 transition-all text-base"
           >
@@ -666,7 +666,7 @@ export default function LandingPage() {
                 { label: "Blog",            action: () => navigate("/blog") },
               ].map(({ label, action }) => (
                 <li key={label}>
-                  <button onClick={action} className="hover:text-white transition-colors">
+                  <button type="button" onClick={action} className="hover:text-white transition-colors">
                     {label}
                   </button>
                 </li>
