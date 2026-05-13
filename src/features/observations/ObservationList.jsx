@@ -7,33 +7,12 @@ import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
-
-const TIPO_BADGE = {
-  caida:                      "bg-rose-100 text-rose-700",
-  incidente:                  "bg-orange-100 text-orange-700",
-  visita_medica:              "bg-blue-100 text-blue-700",
-  curacion:                   "bg-purple-100 text-purple-700",
-  administracion_medicamento: "bg-amber-100 text-amber-700",
-  observacion_general:        "bg-gray-100 text-gray-700",
-};
+import { TIPO_LABEL, TIPO_BADGE } from "../residents/residentUtils";
 
 const TIPOS = [
   ["", "Todos los tipos"],
-  ["observacion_general", "General"],
-  ["caida", "Caída"],
-  ["incidente", "Incidente"],
-  ["curacion", "Curación"],
-  ["visita_medica", "Visita médica"],
-  ["administracion_medicamento", "Medicamento"],
-  ["cambio_posicion", "Cambio posición"],
-  ["higiene", "Higiene"],
-  ["alimentacion", "Alimentación"],
-  ["eliminacion", "Eliminación"],
-  ["actividad", "Actividad"],
-  ["otro", "Otro"],
+  ...Object.entries(TIPO_LABEL),
 ];
-
-const TIPO_LABEL = Object.fromEntries(TIPOS.filter(([v]) => v));
 
 function firstOfMonth() {
   const d = new Date();

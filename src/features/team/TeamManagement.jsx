@@ -10,6 +10,7 @@ import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
 import FeaturePermissionMatrix from "../permissions/FeaturePermissionMatrix";
 import { featureDefaultMap } from "../permissions/featureCatalog";
+import { formatDate } from "../../utils/dateUtils";
 import {
   getEleamFeaturePermissions,
   getProfileFeaturePermissions,
@@ -29,15 +30,6 @@ import {
 import { ROLE_LABEL, PERM_GROUPS, DEFAULT_PERMS, PLANTILLAS_CARGO } from "./teamConstants";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
-
-function formatDate(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
-  } catch { return "—"; }
-}
 
 function RoleBadge({ rol }) {
   const r = ROLE_LABEL[rol] ?? { txt: rol, cls: "bg-gray-100 text-gray-700" };

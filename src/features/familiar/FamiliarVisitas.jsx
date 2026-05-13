@@ -10,16 +10,7 @@ import {
   getVisits,
   logVisit,
 } from "./familiarService";
-
-function formatDateTime(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return "—"; }
-}
+import { formatDateTime } from "../../utils/dateUtils";
 
 function localNowForInput() {
   const d = new Date();

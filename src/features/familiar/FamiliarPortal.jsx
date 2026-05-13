@@ -12,41 +12,8 @@ import {
   logVisit,
 } from "./familiarService";
 import { VITAL_DEFS, recordOverallStatus, STATUS } from "../vitalSigns/vitalRanges";
-
-const TIPO_LABEL = {
-  observacion_general: "Observación general",
-  caida: "Caída",
-  incidente: "Incidente",
-  curacion: "Curación",
-  visita_medica: "Visita médica",
-  administracion_medicamento: "Medicamento",
-  cambio_posicion: "Cambio de posición",
-  higiene: "Higiene",
-  alimentacion: "Alimentación",
-  eliminacion: "Eliminación",
-  actividad: "Actividad",
-  otro: "Otro",
-};
-
-function formatDateTime(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return "—"; }
-}
-
-function calcAge(fecha) {
-  if (!fecha) return null;
-  const d = new Date(fecha);
-  const today = new Date();
-  let age = today.getFullYear() - d.getFullYear();
-  const m = today.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-  return age;
-}
+import { TIPO_LABEL, calcAge } from "../residents/residentUtils";
+import { formatDateTime } from "../../utils/dateUtils";
 
 function ResidentBadgeRow({ res }) {
   const age = calcAge(res.fecha_nacimiento);

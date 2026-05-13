@@ -3,20 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../../../components/Toast";
 import Loading from "../../../components/Loading";
 import { friendlyError } from "../../../utils/errorMessages";
-import {
-  getAllPosts,
-  deletePost,
-  publishPost,
-} from "../../blog/blogService";
-
-function formatDate(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
-  } catch { return "—"; }
-}
+import { getAllPosts, deletePost, publishPost } from "../../blog/blogService";
+import { formatDate } from "../../../utils/dateUtils";
 
 const ESTADO_BADGE = {
   publicado:   "bg-emerald-100 text-emerald-700",

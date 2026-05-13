@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useToast } from "../../../components/Toast";
 import Modal from "../../../components/Modal";
 import { friendlyError } from "../../../utils/errorMessages";
+import { formatDate, formatDateTime } from "../../../utils/dateUtils";
 
 const ESTADO_LABELS = {
   nuevo:         { txt: "Nuevo",          cls: "bg-sky-100 text-sky-700" },
@@ -13,25 +14,6 @@ const ESTADO_LABELS = {
 };
 
 const ESTADOS = Object.keys(ESTADO_LABELS);
-
-function formatDateTime(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "2-digit",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return "—"; }
-}
-
-function formatDate(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "2-digit",
-    });
-  } catch { return "—"; }
-}
 
 function demoPct(progreso) {
   if (!progreso) return 0;

@@ -17,6 +17,7 @@ import {
 } from "./demoData";
 import { trackEvent } from "../landing/landingAnalytics";
 import DemoRequestModal from "../landing/DemoRequestModal";
+import { formatDate, formatDateTime } from "../../utils/dateUtils";
 
 const ROLES = [
   { id: "admin",      label: "Vista Admin",       badge: "Administrador" },
@@ -51,18 +52,6 @@ function SectionTitle({ children, sub }) {
       {sub && <p className="text-sm text-gray-500">{sub}</p>}
     </div>
   );
-}
-
-function formatDate(iso) {
-  try { return new Date(iso).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }); }
-  catch { return "—"; }
-}
-function formatDateTime(iso) {
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return "—"; }
 }
 
 // ── Panel components ──────────────────────────────────────────
