@@ -13,6 +13,7 @@ export default function OnboardingBanner() {
     currentRouteStepIndex,
     config,
     totalCount,
+    isMobile,
     setChecklistOpen,
   } = useOnboarding();
 
@@ -31,6 +32,11 @@ export default function OnboardingBanner() {
   const colors = COLOR_CLASSES[config.color] ?? COLOR_CLASSES.teal;
   // 1-based display index
   const displayIndex = currentRouteStepIndex >= 0 ? currentRouteStepIndex + 1 : '?';
+
+  // Pick the appropriate tip text based on device type
+  const tipText = isMobile
+    ? (currentRouteStep.mobileTip ?? currentRouteStep.desktopTip ?? currentRouteStep.description)
+    : (currentRouteStep.desktopTip ?? currentRouteStep.description);
 
   return (
     <div
@@ -52,7 +58,7 @@ export default function OnboardingBanner() {
           Paso {displayIndex} de {totalCount}
         </p>
         <p className={`text-sm font-semibold ${colors.textStrong} leading-snug`}>
-          {currentRouteStep.tip ?? currentRouteStep.description}
+          {tipText}
         </p>
       </div>
 
@@ -61,9 +67,9 @@ export default function OnboardingBanner() {
         <button
           type="button"
           onClick={() => setChecklistOpen(true)}
-          className={`hidden sm:inline-flex items-center gap-1 text-xs font-bold ${colors.text} hover:opacity-70 transition-opacity`}
+          className={`inline-flex items-center gap-1 text-xs font-bold ${colors.text} hover:opacity-70 transition-opacity`}
         >
-          Ver todos
+          <span className="hidden sm:inline">Ver todos</span>
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>

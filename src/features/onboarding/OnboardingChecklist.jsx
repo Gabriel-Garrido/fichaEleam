@@ -151,8 +151,8 @@ export default function OnboardingChecklist() {
             </button>
           </div>
 
-          {/* Steps list */}
-          <ul className="p-3 space-y-1" role="list">
+          {/* Steps list — scrollable on small screens */}
+          <ul className="p-3 space-y-1 max-h-[70vh] overflow-y-auto" role="list">
             {steps.map((step, index) => {
               const done = state?.steps[step.id] ?? false;
               const isNext = step.id === nextPending?.id;
@@ -243,38 +243,69 @@ export default function OnboardingChecklist() {
 
       {/* ── Floating trigger ───────────────────────────────────────────── */}
       {isComplete ? (
-        <button
-          type="button"
-          onClick={() => setChecklistOpen((v) => !v)}
-          className="flex items-center gap-2 rounded-full px-4 py-2.5 text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-900/20 border border-white/20 transition-all active:scale-[0.97]"
-          aria-label="Guía completada — abrir resumen"
-        >
-          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-          </svg>
-          <span className="text-sm font-black">¡Completado!</span>
-        </button>
+        <>
+          {/* Mobile: compact circle */}
+          <button
+            type="button"
+            onClick={() => setChecklistOpen((v) => !v)}
+            className="flex sm:hidden w-12 h-12 items-center justify-center rounded-full text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-900/20 border border-white/20 transition-all active:scale-[0.97]"
+            aria-label="Guía completada — abrir resumen"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+          {/* Desktop: full pill */}
+          <button
+            type="button"
+            onClick={() => setChecklistOpen((v) => !v)}
+            className="hidden sm:flex items-center gap-2 rounded-full px-4 py-2.5 text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-900/20 border border-white/20 transition-all active:scale-[0.97]"
+            aria-label="Guía completada — abrir resumen"
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="text-sm font-black">¡Completado!</span>
+          </button>
+        </>
       ) : (
-        <button
-          type="button"
-          onClick={() => setChecklistOpen((v) => !v)}
-          className={`flex items-center gap-2.5 rounded-full pl-2 pr-4 py-2 text-white shadow-lg shadow-slate-900/20 border border-white/20 transition-all hover:opacity-95 active:scale-[0.97] ${colors.pill}`}
-          aria-label={`Guía de inicio — ${progress}% completado`}
-        >
-          {/* Mini progress ring inside button */}
-          <div className="relative w-9 h-9 shrink-0">
-            <ProgressRing percent={progress} stroke="rgba(255,255,255,0.85)" size={36} trackWidth={2.5} />
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black">
-              {doneCount}/{totalCount}
-            </span>
-          </div>
-          <div className="text-left leading-tight">
-            <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">
-              Primeros pasos
-            </p>
-            <p className="text-xs font-black">{progress}% completado</p>
-          </div>
-        </button>
+        <>
+          {/* Mobile: compact progress ring circle */}
+          <button
+            type="button"
+            onClick={() => setChecklistOpen((v) => !v)}
+            className={`flex sm:hidden w-12 h-12 items-center justify-center rounded-full text-white shadow-lg shadow-slate-900/20 border border-white/20 transition-all hover:opacity-95 active:scale-[0.97] ${colors.pill}`}
+            aria-label={`Guía de inicio — ${progress}% completado`}
+          >
+            <div className="relative w-9 h-9 shrink-0">
+              <ProgressRing percent={progress} stroke="rgba(255,255,255,0.85)" size={36} trackWidth={2.5} />
+              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black">
+                {doneCount}/{totalCount}
+              </span>
+            </div>
+          </button>
+          {/* Desktop: full pill with text */}
+          <button
+            type="button"
+            onClick={() => setChecklistOpen((v) => !v)}
+            className={`hidden sm:flex items-center gap-2.5 rounded-full pl-2 pr-4 py-2 text-white shadow-lg shadow-slate-900/20 border border-white/20 transition-all hover:opacity-95 active:scale-[0.97] ${colors.pill}`}
+            aria-label={`Guía de inicio — ${progress}% completado`}
+          >
+            {/* Mini progress ring inside button */}
+            <div className="relative w-9 h-9 shrink-0">
+              <ProgressRing percent={progress} stroke="rgba(255,255,255,0.85)" size={36} trackWidth={2.5} />
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black">
+                {doneCount}/{totalCount}
+              </span>
+            </div>
+            <div className="text-left leading-tight">
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+                Primeros pasos
+              </p>
+              <p className="text-xs font-black">{progress}% completado</p>
+            </div>
+          </button>
+        </>
       )}
     </div>
   );
