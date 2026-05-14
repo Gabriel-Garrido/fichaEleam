@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import {
   CRM_STATE_MAP, RIESGO_MAP, PLAN_LABEL,
-  formatCLP, formatDate,
+  formatCLP, formatDate, daysUntil,
 } from "../utils/superadminFormatters";
 import CustomerHealthBadge from "./CustomerHealthBadge";
 import InteractionTimeline from "./InteractionTimeline";
@@ -153,6 +153,43 @@ export default function EleamCustomerDrawer({
           </div>
         ) : (
           <div className="p-4 space-y-4">
+            {/* Banner demo activo */}
+            {eleam.plan === "demo" && (() => {
+              const d = daysUntil(eleam.fecha_vencimiento_suscripcion);
+              const expired = d != null && d < 0;
+              const urgent  = !expired && d != null && d <= 7;
+              return (
+                <div className={`rounded-xl border p-4 ${expired ? "bg-rose-50 border-rose-200" : urgent ? "bg-amber-50 border-amber-200" : "bg-amber-50 border-amber-200"}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`shrink-0 mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center ${expired ? "bg-rose-100" : "bg-amber-100"}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-4 h-4 ${expired ? "text-rose-600" : "text-amber-700"}`}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-xs font-bold uppercase tracking-wide ${expired ? "text-rose-700" : "text-amber-800"}`}>
+                        {expired ? "Demo vencido" : "Acceso demo activo"}
+                      </p>
+                      <p className={`text-sm mt-0.5 ${expired ? "text-rose-700" : "text-amber-900"}`}>
+                        {d == null
+                          ? "Sin fecha de vencimiento configurada."
+                          : expired
+                            ? `El período demo venció hace ${Math.abs(d)} día${Math.abs(d) !== 1 ? "s" : ""}. El acceso ya no está activo.`
+                            : d === 0
+                              ? "El período demo vence hoy."
+                              : `Quedan ${d} día${d !== 1 ? "s" : ""} de demo (hasta ${formatDate(eleam.fecha_vencimiento_suscripcion)}).`}
+                      </p>
+                      {!expired && (
+                        <p className="text-xs text-amber-700 mt-1">
+                          Registra un pago manual o espera que el cliente se suscriba desde su panel.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Acciones rápidas */}
             <div className="flex gap-2 flex-wrap">
               <button
@@ -187,15 +224,15 @@ export default function EleamCustomerDrawer({
             </section>
 
             {/* Suscripción */}
-            <section className="bg-white border border-slate-100 rounded-xl p-4">
-              <SectionBlock title="Suscripción y acceso" cols={3}>
+            <section className={`border rounded-xl p-4 ${eleam.plan === "demo" ? "bg-amber-50/50 border-amber-100" : "bg-white border-slate-100"}`}>
+              <SectionBlock title={eleam.plan === "demo" ? "Demo y acceso" : "Suscripción y acceso"} cols={3}>
                 <Stat
                   label="Plan"
                   value={<span className="capitalize">{PLAN_LABEL[eleam.plan] ?? eleam.plan ?? "—"}</span>}
                   tip={TIPS.plan}
                 />
                 <Stat
-                  label="Estado suscripción"
+                  label="Estado"
                   value={<SubscriptionStatusPill status={eleam.subscription_status} />}
                   tip={TIPS.subscription_status}
                 />
@@ -205,15 +242,17 @@ export default function EleamCustomerDrawer({
                   tip={TIPS.pago}
                 />
                 <Stat
-                  label="Vence"
+                  label={eleam.plan === "demo" ? "Demo vence" : "Vence"}
                   value={formatDate(eleam.fecha_vencimiento_suscripcion)}
                   tip={TIPS.vence}
                 />
-                <Stat
-                  label="Próximo cobro MP"
-                  value={formatDate(eleam.proximo_cobro_en)}
-                  tip={TIPS.proximo_cobro}
-                />
+                {eleam.plan !== "demo" && (
+                  <Stat
+                    label="Próximo cobro MP"
+                    value={formatDate(eleam.proximo_cobro_en)}
+                    tip={TIPS.proximo_cobro}
+                  />
+                )}
                 <Stat
                   label="Registrado"
                   value={formatDate(eleam.creado_en)}

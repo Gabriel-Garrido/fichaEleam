@@ -482,6 +482,18 @@ Ruta pública: `/demo/:token`. Guarda progreso en `demo_leads.demo_progreso`, ac
 
 Los datos clínicos del demo viven en `src/features/demo/demoData.js`; no escriben tablas clínicas reales.
 
+### Detección de plan demo en el frontend
+
+**Patrón canónico**: `eleam.plan === "demo"` (NO `!pago_activo` — un demo puede tener `pago_activo=true` mientras no haya vencido).
+
+**Superadmin (EleamTable)**: Filas demo reciben fondo `bg-amber-50/40`, badge "Demo" junto al nombre, celda Pago muestra "Demo" en amber (no "Inactivo"), VencimientoCell muestra días restantes `({d}d)` y título contextual "Demo vence en X días".
+
+**Superadmin (EleamCustomerDrawer)**: Banner amber/rose encima de la sección de suscripción mostrando días restantes o estado vencido; sección de suscripción toma fondo amber; oculta fila "Próximo cobro MP" para demos.
+
+**Superadmin (SuperAdminMetrics)**: Métrica "En demo" cuenta `plan = 'demo'` (no `!pago_activo`). Tono amber, diferenciada de "Activos" (emerald) y "En riesgo" (rose).
+
+**PaymentPage (admin_eleam)**: Cuando `isAdminEleam && eleam.plan === "demo"`, muestra banner prominente con días restantes y fecha de vencimiento en lugar de la tarjeta de suscripción normal. Botón de plan dice "Activar plan" en lugar de "Suscribirme". Funcionarios y familiares **no ven** información de demo (solo el banner genérico de acceso limitado que ya existía).
+
 ---
 
 ## Blog Público
@@ -502,7 +514,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 
 ### Funcionalidades
 
-- **Métricas**: ELEAMs totales, activos, demos, nuevos este mes, residentes, MRR (CLP).
+- **Métricas**: ELEAMs totales, activos, demos (`plan='demo'`), nuevos este mes, residentes, MRR (CLP), leads últimos 7 días, sesiones demo activas.
 - **Tabla de ELEAMs**: Búsqueda, filtro por estado, plan, vencimiento. Edición inline: activar/desactivar, cambiar plan, max_residentes, fecha_vencimiento, notas.
 - **Registrar pago**: Monto, plan, método, fecha inicio/fin → RPC transaccional `registrar_pago_y_activar_eleam`.
 - **Historial de pagos**: Últimos 20 con ELEAM, monto, plan, estado.

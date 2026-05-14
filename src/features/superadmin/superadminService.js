@@ -38,7 +38,8 @@ export async function getMetrics() {
   return {
     totalEleams:         eleams.length,
     activeSubscriptions: eleams.filter((e) => e.pago_activo).length,
-    demoEleams:          eleams.filter((e) => !e.pago_activo).length,
+    demoEleams:          eleams.filter((e) => e.plan === "demo").length,
+    sinPago:             eleams.filter((e) => !e.pago_activo).length,
     leads:               eleams.filter((e) => leadStates.has(e.crm_estado)).length,
     enRiesgo:            eleams.filter((e) => e.riesgo_churn === "alto" || e.crm_estado === "cliente_riesgo").length,
     newEleamsThisMonth:  eleams.filter((e) => new Date(e.creado_en) >= thisMonth).length,

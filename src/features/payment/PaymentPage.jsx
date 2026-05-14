@@ -14,6 +14,16 @@ import {
 } from "./paymentService";
 import { formatDate } from "../../utils/dateUtils";
 
+function daysUntil(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.valueOf())) return null;
+  d.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((d - today) / 86400000);
+}
+
 const INCLUYE = [
   "Fichas clínicas digitales para todos tus residentes",
   "Registro diario de signos vitales por turno",
@@ -138,6 +148,10 @@ export default function PaymentPage() {
 
   const statusInfo = SUBSCRIPTION_LABEL[subscriptionStatus] ?? SUBSCRIPTION_LABEL.inactivo;
   const proximo = eleam?.proximo_cobro_en ?? eleam?.fecha_vencimiento_suscripcion ?? null;
+  const isDemo = isAdminEleam && eleam?.plan === "demo";
+  const demoExpiry = eleam?.fecha_vencimiento_suscripcion ?? null;
+  const demoDaysLeft = daysUntil(demoExpiry);
+  const demoExpired = demoDaysLeft != null && demoDaysLeft < 0;
   const showPublicNav = !user;
 
   return (
@@ -225,7 +239,37 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {user && eleam && (
+        {/* Banner demo activo — solo para admin_eleam en plan demo */}
+        {isDemo && (
+          <div className={`rounded-2xl border p-6 mb-8 ${demoExpired ? "bg-rose-50 border-rose-200" : "bg-amber-50 border-amber-200"}`}>
+            <div className="flex items-start gap-4">
+              <div className={`shrink-0 mt-0.5 w-10 h-10 rounded-xl flex items-center justify-center ${demoExpired ? "bg-rose-100" : "bg-amber-100"}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${demoExpired ? "text-rose-600" : "text-amber-700"}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className={`font-bold mb-1 ${demoExpired ? "text-rose-800" : "text-amber-900"}`}>
+                  {demoExpired ? "Tu período de prueba ha vencido" : "Tu período de prueba está activo"}
+                </h3>
+                <p className={`text-sm ${demoExpired ? "text-rose-700" : "text-amber-800"}`}>
+                  {demoDaysLeft == null
+                    ? "Estás en modo demo. Elige un plan para activar tu suscripción completa."
+                    : demoExpired
+                      ? `El acceso demo venció hace ${Math.abs(demoDaysLeft)} día${Math.abs(demoDaysLeft) !== 1 ? "s" : ""}. Activa un plan para recuperar el acceso.`
+                      : demoDaysLeft === 0
+                        ? "Tu demo vence hoy. Elige un plan a continuación para continuar sin interrupciones."
+                        : `Tienes ${demoDaysLeft} día${demoDaysLeft !== 1 ? "s" : ""} restante${demoDaysLeft !== 1 ? "s" : ""} de prueba${demoExpiry ? ` (hasta el ${formatDate(demoExpiry)})` : ""}. Elige un plan a continuación para continuar sin interrupciones.`}
+                </p>
+                <p className={`text-xs mt-2 font-medium ${demoExpired ? "text-rose-600" : "text-amber-700"}`}>
+                  {eleam.nombre} · Período demo
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {user && eleam && !isDemo && (
           <div className="bg-white border border-slate-100 rounded-2xl p-5 mb-8 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Cuenta conectada</p>
@@ -264,10 +308,14 @@ export default function PaymentPage() {
 
         <div className="mb-8 max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-            Suscripción
+            {isDemo ? "Planes disponibles" : "Suscripción"}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
-            {blockedNonAdmin ? "Acceso pendiente del ELEAM" : "Activa tu ELEAM"}
+            {blockedNonAdmin
+              ? "Acceso pendiente del ELEAM"
+              : isDemo
+                ? "Elige el plan para continuar"
+                : "Activa tu ELEAM"}
             {!blockedNonAdmin && (
               <HelpTooltip className="ml-2" label="Ayuda sobre activación">
                 Elige el plan según residentes activos. El pago lo procesa MercadoPago y el acceso se habilita automáticamente cuando el webhook confirma el cobro.
@@ -277,7 +325,9 @@ export default function PaymentPage() {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {blockedNonAdmin
               ? "Tu cuenta fue creada correctamente, pero la habilitación del establecimiento la gestiona el administrador ELEAM."
-              : "Un precio mensual por establecimiento. Sin cobros por usuario. Todos tus funcionarios acceden incluidos."}
+              : isDemo
+                ? "Un precio mensual por establecimiento. Tu historial clínico y toda la configuración se mantienen al activar."
+                : "Un precio mensual por establecimiento. Sin cobros por usuario. Todos tus funcionarios acceden incluidos."}
           </p>
         </div>
 
@@ -338,7 +388,7 @@ export default function PaymentPage() {
                             : "bg-teal-700 text-white hover:bg-teal-800"
                         }`}
                       >
-                        {loadingAction ? "Procesando..." : (user && !isAdminEleam ? "Solo admin ELEAM" : user ? "Suscribirme" : "Solicitar demo")}
+                        {loadingAction ? "Procesando..." : (user && !isAdminEleam ? "Solo admin ELEAM" : isDemo ? "Activar plan" : user ? "Suscribirme" : "Solicitar demo")}
                       </button>
                     )}
                   </div>
