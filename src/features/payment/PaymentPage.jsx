@@ -239,69 +239,172 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* Banner demo activo — solo para admin_eleam en plan demo */}
+        {/* ── Demo status banner ─────────────────────────────── */}
         {isDemo && (
-          <div className={`rounded-2xl border p-6 mb-8 ${demoExpired ? "bg-rose-50 border-rose-200" : "bg-amber-50 border-amber-200"}`}>
-            <div className="flex items-start gap-4">
-              <div className={`shrink-0 mt-0.5 w-10 h-10 rounded-xl flex items-center justify-center ${demoExpired ? "bg-rose-100" : "bg-amber-100"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 ${demoExpired ? "text-rose-600" : "text-amber-700"}`}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className={`font-bold mb-1 ${demoExpired ? "text-rose-800" : "text-amber-900"}`}>
-                  {demoExpired ? "Tu período de prueba ha vencido" : "Tu período de prueba está activo"}
-                </h3>
-                <p className={`text-sm ${demoExpired ? "text-rose-700" : "text-amber-800"}`}>
-                  {demoDaysLeft == null
-                    ? "Estás en modo demo. Elige un plan para activar tu suscripción completa."
-                    : demoExpired
-                      ? `El acceso demo venció hace ${Math.abs(demoDaysLeft)} día${Math.abs(demoDaysLeft) !== 1 ? "s" : ""}. Activa un plan para recuperar el acceso.`
-                      : demoDaysLeft === 0
-                        ? "Tu demo vence hoy. Elige un plan a continuación para continuar sin interrupciones."
-                        : `Tienes ${demoDaysLeft} día${demoDaysLeft !== 1 ? "s" : ""} restante${demoDaysLeft !== 1 ? "s" : ""} de prueba${demoExpiry ? ` (hasta el ${formatDate(demoExpiry)})` : ""}. Elige un plan a continuación para continuar sin interrupciones.`}
-                </p>
-                <p className={`text-xs mt-2 font-medium ${demoExpired ? "text-rose-600" : "text-amber-700"}`}>
-                  {eleam.nombre} · Período demo
-                </p>
+          <div className={`rounded-2xl border mb-8 overflow-hidden ${demoExpired ? "border-rose-200" : "border-amber-200"}`}>
+            {/* Top accent strip */}
+            <div className={`h-1.5 ${demoExpired ? "bg-rose-500" : "bg-amber-400"}`} />
+            <div className={`p-5 sm:p-6 ${demoExpired ? "bg-rose-50" : "bg-amber-50"}`}>
+              <div className="flex items-start gap-4">
+                <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${demoExpired ? "bg-rose-100" : "bg-amber-100"}`}>
+                  <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`h-5 w-5 ${demoExpired ? "text-rose-600" : "text-amber-700"}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h3 className={`font-bold text-base ${demoExpired ? "text-rose-900" : "text-amber-900"}`}>
+                      {demoExpired ? "Período de prueba vencido" : "Período de prueba activo"}
+                    </h3>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${demoExpired ? "bg-rose-200 text-rose-800" : "bg-amber-200 text-amber-900"}`}>
+                      DEMO
+                    </span>
+                  </div>
+                  <p className={`text-sm leading-relaxed ${demoExpired ? "text-rose-700" : "text-amber-800"}`}>
+                    {demoDaysLeft == null
+                      ? "Estás en modo demo. Elige un plan para activar tu suscripción completa."
+                      : demoExpired
+                        ? `El acceso demo venció hace ${Math.abs(demoDaysLeft)} día${Math.abs(demoDaysLeft) !== 1 ? "s" : ""}. Activa un plan para recuperar el acceso completo.`
+                        : demoDaysLeft === 0
+                          ? "Tu demo vence hoy. Elige un plan a continuación para continuar sin interrupciones."
+                          : `Tienes ${demoDaysLeft} día${demoDaysLeft !== 1 ? "s" : ""} restante${demoDaysLeft !== 1 ? "s" : ""} de prueba${demoExpiry ? ` · vence el ${formatDate(demoExpiry)}` : ""}. Elige un plan para continuar.`}
+                  </p>
+                  <p className={`mt-2 text-xs font-semibold ${demoExpired ? "text-rose-600" : "text-amber-700"}`}>
+                    {eleam.nombre}
+                  </p>
+                  {/* Countdown bar */}
+                  {!demoExpired && demoDaysLeft != null && demoDaysLeft >= 0 && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Tiempo restante</p>
+                        <p className="text-[10px] font-bold text-amber-800">{demoDaysLeft}d / 30d</p>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-amber-200/70 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-amber-500 transition-all"
+                          style={{ width: `${Math.max(2, Math.min(100, (demoDaysLeft / 30) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {user && eleam && !isDemo && (
-          <div className="bg-white border border-slate-100 rounded-2xl p-5 mb-8 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Cuenta conectada</p>
-              <h2 className="font-bold text-slate-800">{eleam.nombre}</h2>
-              <p className="text-sm text-slate-500">{accountEmail}</p>
-              {eleam.planes?.nombre && (
-                <p className="text-sm text-slate-600 mt-1">
-                  Plan actual: <span className="font-semibold">{eleam.planes.nombre}</span>
-                  {" — "}
-                  {formatCLP(eleam.planes.precio_clp)} / mes
-                </p>
-              )}
-              {proximo && pagoActivo && (
-                <p className="text-xs text-slate-500 mt-1">
-                  Próximo cobro: {formatDate(proximo)}
-                </p>
-              )}
+        {/* ── Active subscription card (non-demo admin) ──────── */}
+        {user && eleam && !isDemo && isAdminEleam && (
+          <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+            {/* Status stripe */}
+            <div className={`h-1 ${pagoActivo ? "bg-emerald-500" : subscriptionStatus === "en_gracia" ? "bg-amber-400" : "bg-rose-400"}`} />
+            <div className="p-5 sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                {/* Left: details */}
+                <div className="min-w-0 flex-1">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Suscripción</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusInfo.cls}`}>
+                      {statusInfo.txt}
+                    </span>
+                  </div>
+
+                  <h2 className="text-lg font-bold leading-tight text-slate-900">{eleam.nombre}</h2>
+
+                  {eleam.planes?.nombre ? (
+                    <p className="mt-1 text-sm text-slate-600">
+                      Plan{" "}
+                      <span className="font-semibold text-slate-800">{eleam.planes.nombre}</span>
+                      {eleam.planes.precio_clp != null && (
+                        <>
+                          {" · "}
+                          <span className="font-semibold text-slate-800">{formatCLP(eleam.planes.precio_clp)}</span>
+                          <span className="text-slate-400"> / mes</span>
+                        </>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500">{accountEmail}</p>
+                  )}
+
+                  {/* Renewal / expiration */}
+                  {proximo && (
+                    <div className="mt-2 flex items-center gap-1.5 text-xs">
+                      <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 9v7.5" />
+                      </svg>
+                      <span className="text-slate-500">
+                        {pagoActivo ? "Próximo cobro:" : "Acceso hasta:"}
+                        {" "}
+                        <span className="font-semibold text-slate-700">{formatDate(proximo)}</span>
+                      </span>
+                      {(() => {
+                        const days = daysUntil(proximo);
+                        if (days == null) return null;
+                        if (days < 0) return <span className="font-semibold text-rose-600">(vencido)</span>;
+                        if (days <= 7) return <span className="font-semibold text-amber-600">({days} días)</span>;
+                        return <span className="text-slate-400">({days} días)</span>;
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Plan limits */}
+                  {(eleam.max_residentes || eleam.max_funcionarios) && (
+                    <div className="mt-3 flex flex-wrap gap-4">
+                      {eleam.max_residentes && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                          <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                          </svg>
+                          Hasta{" "}
+                          <span className="font-semibold text-slate-700">{eleam.max_residentes}</span>
+                          {" "}residentes
+                        </div>
+                      )}
+                      {eleam.max_funcionarios && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                          <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                          Hasta{" "}
+                          <span className="font-semibold text-slate-700">{eleam.max_funcionarios}</span>
+                          {" "}funcionarios
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: actions */}
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  {pagoActivo && (
+                    <button
+                      type="button"
+                      onClick={handleCancel}
+                      disabled={loadingAction}
+                      className="text-xs font-medium text-rose-500 transition-colors hover:text-rose-700 disabled:opacity-50"
+                    >
+                      Cancelar suscripción
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col items-start sm:items-end gap-2">
+          </div>
+        )}
+
+        {/* Subscription card for non-admin with an eleam (funcionario / familiar) */}
+        {user && eleam && !isDemo && !isAdminEleam && (
+          <div className="mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1">Estado de acceso</p>
+                <h2 className="font-bold text-slate-900">{eleam.nombre}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{accountEmail}</p>
+              </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusInfo.cls}`}>
                 {statusInfo.txt}
               </span>
-              {pagoActivo && isAdminEleam && (
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  disabled={loadingAction}
-                  className="text-xs text-rose-600 hover:underline disabled:opacity-50"
-                >
-                  Cancelar suscripción
-                </button>
-              )}
             </div>
           </div>
         )}
