@@ -41,6 +41,7 @@ export const ROLE_CONFIG = {
         route: '/dashboard',
         matchRoutes: ['/dashboard'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 2,
         desktopTip:
           'Aquí verás alertas críticas, residentes sin control reciente y actividad del turno. El dashboard cambia según el rol del usuario.',
         mobileTip: 'Alertas críticas y actividad del turno actual.',
@@ -53,6 +54,7 @@ export const ROLE_CONFIG = {
         route: '/residents/new',
         matchRoutes: ['/residents'],
         autoCompleteAfter: 8000,
+        estimatedMinutes: 3,
         desktopTip:
           'Cada residente tiene diagnóstico principal, Índice Barthel, alergias, habitación, cama e historial clínico completo. El nivel de dependencia se calcula automáticamente.',
         mobileTip: 'Completa la ficha básica: nombre, RUT, diagnóstico y Barthel.',
@@ -65,6 +67,7 @@ export const ROLE_CONFIG = {
         route: '/equipo',
         matchRoutes: ['/equipo'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 3,
         desktopTip:
           'Crea cuentas para enfermeras, kinesiólogos, auxiliares y familiares. Cada funcionario recibe un email con su contraseña temporal.',
         mobileTip: 'Agrega personal clínico y familiares con acceso propio.',
@@ -77,6 +80,7 @@ export const ROLE_CONFIG = {
         route: '/equipo',
         matchRoutes: ['/equipo/permisos'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 2,
         desktopTip:
           'Define permisos granulares por funcionario: qué módulos puede ver, qué puede registrar y qué puede eliminar. Usa las plantillas por cargo para agilizar la configuración.',
         mobileTip: 'Ajusta los permisos de cada miembro del equipo.',
@@ -89,6 +93,7 @@ export const ROLE_CONFIG = {
         route: '/vital-signs/new',
         matchRoutes: ['/vital-signs'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 2,
         desktopTip:
           'El formulario valida cada valor contra rangos clínicos para adultos mayores. Si un parámetro está fuera del rango normal, la alerta aparece de inmediato y queda registrada.',
         mobileTip: 'Ingresa PA, FC, temperatura y saturación con validación automática.',
@@ -101,6 +106,7 @@ export const ROLE_CONFIG = {
         route: '/accreditation',
         matchRoutes: ['/accreditation'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 2,
         desktopTip:
           'Sube evidencias PDF o Word, gestiona estados de cada requisito y genera la carpeta imprimible lista para la visita del fiscalizador.',
         mobileTip: 'Revisa el estado de cumplimiento y sube evidencias SEREMI.',
@@ -143,6 +149,7 @@ export const ROLE_CONFIG = {
         route: '/dashboard',
         matchRoutes: ['/dashboard'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 1,
         desktopTip:
           'Verás alertas clínicas activas, residentes que requieren atención hoy y el resumen del turno. El dashboard prioriza la información más urgente.',
         mobileTip: 'Alertas clínicas y residentes prioritarios de este turno.',
@@ -155,6 +162,7 @@ export const ROLE_CONFIG = {
         route: '/vital-signs/new',
         matchRoutes: ['/vital-signs'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 2,
         desktopTip:
           'Si un valor está fuera del rango clínico para adultos mayores, la alerta aparece de inmediato en el formulario y queda registrada en el historial.',
         mobileTip: 'Ingresa los valores y ve las alertas clínicas al instante.',
@@ -168,6 +176,7 @@ export const ROLE_CONFIG = {
         route: '/observations/new',
         matchRoutes: ['/observations'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 2,
         desktopTip:
           'Selecciona el tipo de observación, escribe tu nota y queda registrada con timestamp, turno y tu firma. Puedes marcarla para seguimiento.',
         mobileTip: 'Selecciona el tipo, escribe la nota y guarda con tu firma.',
@@ -181,6 +190,7 @@ export const ROLE_CONFIG = {
         route: '/accreditation',
         matchRoutes: ['/accreditation'],
         autoCompleteAfter: 8000,
+        estimatedMinutes: 3,
         desktopTip:
           'Sube PDF, imágenes o Word como evidencia de los requisitos SEREMI. Cada archivo queda versionado y asociado al requisito correspondiente.',
         mobileTip: 'Sube PDF o imágenes como evidencia de requisitos SEREMI.',
@@ -218,6 +228,7 @@ export const ROLE_CONFIG = {
         route: '/familiar',
         matchRoutes: ['/familiar'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 1,
         desktopTip:
           'Aquí verás el resumen de salud de tu familiar: los últimos signos vitales con su estado (normal, alerta, crítico) y las observaciones recientes del equipo.',
         mobileTip: 'Signos vitales recientes y notas clínicas de tu familiar.',
@@ -230,6 +241,7 @@ export const ROLE_CONFIG = {
         route: '/familiar/visitas',
         matchRoutes: ['/familiar/visitas'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 2,
         desktopTip:
           'Registra la duración de la visita, agrega notas y queda guardado en el historial del establecimiento. Puedes ver todas tus visitas anteriores.',
         mobileTip: 'Anota la duración y una nota breve de tu visita.',
@@ -260,6 +272,7 @@ export const ROLE_CONFIG = {
         route: '/superadmin',
         matchRoutes: ['/superadmin'],
         autoCompleteAfter: 8000,
+        estimatedMinutes: 2,
         desktopTip:
           'Verás MRR, ELEAMs activos, demos en curso, leads sin respuesta y el estado de churn de cada cliente. Haz clic en cualquier fila para abrir la ficha 360.',
         mobileTip: 'MRR, ELEAMs activos y leads en tiempo real.',
@@ -272,6 +285,7 @@ export const ROLE_CONFIG = {
         route: '/superadmin/blog',
         matchRoutes: ['/superadmin/blog'],
         autoCompleteAfter: 6000,
+        estimatedMinutes: 2,
         desktopTip:
           'Editor con soporte Markdown, cover image, meta SEO, keywords y estado de publicación. Los posts publicados aparecen en /blog con JSON-LD para LLMs.',
         mobileTip: 'Crea y publica posts con Markdown y SEO integrado.',
