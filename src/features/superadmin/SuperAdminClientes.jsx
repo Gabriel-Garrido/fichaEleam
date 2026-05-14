@@ -79,11 +79,11 @@ export default function SuperAdminClientes() {
   }, [eleams, filters]);
 
   const taskOverdueByEleam = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayStr = new Date().toISOString().slice(0, 10);
     const out = {};
     for (const task of tasks) {
       if (!task.eleam_id || task.estado === "completada" || task.estado === "cancelada" || !task.fecha_vencimiento) continue;
-      if (new Date(task.fecha_vencimiento) < today) out[task.eleam_id] = (out[task.eleam_id] ?? 0) + 1;
+      if (task.fecha_vencimiento < todayStr) out[task.eleam_id] = (out[task.eleam_id] ?? 0) + 1;
     }
     return out;
   }, [tasks]);
