@@ -1,6 +1,19 @@
 import { supabase } from "../../services/supabaseConfig";
 import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
 
+const PLAN_SELECT = `
+  id, codigo, nombre, descripcion, precio_clp,
+  max_residentes, max_funcionarios,
+  frequency, frequency_type, activo, orden, destacado, creado_en
+`;
+
+const PAYMENT_SELECT = `
+  id, eleam_id, plan_id, monto, moneda, plan,
+  fecha_pago, fecha_inicio, fecha_fin, metodo_pago,
+  referencia_externa, estado, notas,
+  mp_payment_id, mp_preapproval_id, mp_authorized_payment_id, creado_en
+`;
+
 function ensureSupabase() {
   if (!supabase) throw new Error("Supabase no está configurado.");
   return supabase;
@@ -11,7 +24,7 @@ export async function getActivePlans() {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("planes")
-    .select("*")
+    .select(PLAN_SELECT)
     .eq("activo", true)
     .order("orden", { ascending: true });
   if (error) throw error;
@@ -47,7 +60,7 @@ export async function getMyPayments() {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("pagos")
-    .select("*")
+    .select(PAYMENT_SELECT)
     .order("fecha_pago", { ascending: false });
   if (error) throw error;
   return data ?? [];

@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     // Cargar plan
     const { data: plan, error: planErr } = await admin
       .from("planes")
-      .select("*")
+      .select("id, codigo, nombre, precio_clp, frequency, frequency_type, activo")
       .eq("codigo", planCodigo)
       .eq("activo", true)
       .maybeSingle();
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     // Cargar ELEAM y validar estado
     const { data: eleam, error: eleamErr } = await admin
       .from("eleams")
-      .select("*")
+      .select("id, nombre, subscription_status, mp_preapproval_id")
       .eq("id", profile.eleam_id)
       .maybeSingle();
     if (eleamErr || !eleam) {

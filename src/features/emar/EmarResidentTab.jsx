@@ -35,6 +35,8 @@ const INITIAL_INDICATION = {
   es_controlado: false,
   tipo_controlado: "psicotropico",
   requiere_stock: true,
+  visible_familiar: false,
+  resumen_familiar: "",
   instrucciones: "",
 };
 
@@ -681,6 +683,28 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
           <Field label="Fin" type="date" value={indication.fecha_fin ?? ""} onChange={(value) => setIndication((p) => ({ ...p, fecha_fin: value }))} disabled={saving} />
           <div className="col-span-2">
             <TextArea label="Instrucciones" value={indication.instrucciones ?? ""} onChange={(value) => setIndication((p) => ({ ...p, instrucciones: value }))} disabled={saving} />
+          </div>
+          <div className="col-span-2 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={indication.visible_familiar === true}
+                disabled={saving}
+                onChange={(e) => setIndication((p) => ({ ...p, visible_familiar: e.target.checked }))}
+                className="h-4 w-4 accent-teal-700"
+              />
+              Mostrar esta indicación en el portal familiar
+            </label>
+            {indication.visible_familiar && (
+              <div className="mt-3">
+                <TextArea
+                  label="Resumen para familia"
+                  value={indication.resumen_familiar ?? ""}
+                  onChange={(value) => setIndication((p) => ({ ...p, resumen_familiar: value }))}
+                  disabled={saving}
+                />
+              </div>
+            )}
           </div>
         </div>
 

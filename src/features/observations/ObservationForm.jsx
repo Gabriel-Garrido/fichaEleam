@@ -37,6 +37,8 @@ function ObservationForm() {
     descripcion: "",
     acciones_tomadas: "",
     requiere_seguimiento: false,
+    visible_familiar: false,
+    resumen_familiar: "",
   });
   const [residents, setResidents] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -162,6 +164,22 @@ function ObservationForm() {
                 className="w-4 h-4 accent-teal-700" />
               <span className="text-sm text-slate-700">Requiere seguimiento</span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="visible_familiar" checked={form.visible_familiar} onChange={handleChange}
+                className="w-4 h-4 accent-teal-700" />
+              <span className="text-sm text-slate-700">Publicar resumen en portal familiar</span>
+            </label>
+            {form.visible_familiar && (
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Resumen para familia</label>
+                <textarea name="resumen_familiar" value={form.resumen_familiar} onChange={handleChange} rows={3}
+                  placeholder="Escribe una versión clara y apropiada para familiares..."
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                <p className="mt-1 text-xs text-slate-500">
+                  Si lo dejas vacío, se mostrará la descripción completa marcada como visible.
+                </p>
+              </div>
+            )}
           </div>
         </section>
 

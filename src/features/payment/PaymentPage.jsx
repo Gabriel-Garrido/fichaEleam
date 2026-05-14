@@ -153,6 +153,20 @@ export default function PaymentPage() {
   const demoDaysLeft = daysUntil(demoExpiry);
   const demoExpired = demoDaysLeft != null && demoDaysLeft < 0;
   const showPublicNav = !user;
+  const accessBlockTitle = demoExpired
+    ? "Tu demo venció"
+    : blockedNonAdmin
+      ? "Tu acceso está suspendido por estado del ELEAM"
+      : user
+        ? "Tu cuenta existe, pero el ELEAM aún no está habilitado"
+        : "Tu ELEAM no tiene suscripción activa";
+  const accessBlockMessage = demoExpired
+    ? "El período de prueba terminó. Para recuperar el acceso, el administrador debe activar una suscripción o contactar al equipo FichaEleam."
+    : blockedNonAdmin
+      ? "Tu usuario está creado, pero solo podrás usar la plataforma cuando el demo esté aprobado y vigente o exista una suscripción activa."
+      : user
+        ? "El establecimiento todavía no tiene demo aprobado o suscripción vigente para entrar al panel."
+        : "Selecciona el plan que corresponde al tamaño de tu residencia o solicita una demo para revisar tu caso.";
 
   return (
     <div className={showPublicNav ? "min-h-screen bg-slate-50" : ""}>
@@ -196,17 +210,11 @@ export default function PaymentPage() {
             <div className="text-amber-500 text-2xl shrink-0">!</div>
             <div>
               <h3 className="font-bold text-amber-800 mb-1">
-                {blockedNonAdmin
-                  ? "Tu acceso está suspendido por estado de suscripción"
-                  : user
-                    ? "Tu sesión está activa, falta activar el ELEAM"
-                    : "Tu ELEAM no tiene suscripción activa"}
+                {accessBlockTitle}
               </h3>
               <p className="text-sm text-amber-700">
-                {blockedNonAdmin
-                  ? "Tu usuario existe, pero el ELEAM debe tener demo aprobada o suscripción vigente para usar la plataforma."
-                  : "Para acceder al panel de gestión, el establecimiento debe quedar habilitado."}
-                {user && accountEmail ? ` Estás conectado como ${accountEmail}.` : " Selecciona el plan que corresponde al tamaño de tu residencia."}
+                {accessBlockMessage}
+                {user && accountEmail ? ` Estás conectado como ${accountEmail}.` : ""}
               </p>
             </div>
           </div>

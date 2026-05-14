@@ -1,138 +1,304 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
-import { friendlyError } from "../../utils/errorMessages";
+import Button from "../../components/Button";
 import Loading from "../../components/Loading";
-import {
-  getMyResidentes,
-  getRecentVitals,
-  getRecentObservations,
-  getVisits,
-  logVisit,
-} from "./familiarService";
-import { VITAL_DEFS, recordOverallStatus, STATUS } from "../vitalSigns/vitalRanges";
-import { TIPO_LABEL, calcAge } from "../residents/residentUtils";
+import PageLayout from "../../layout/PageLayout";
 import { formatDateTime } from "../../utils/dateUtils";
+import { TIPO_LABEL, calcAge } from "../residents/residentUtils";
+import { VITAL_DEFS, recordOverallStatus, STATUS } from "../vitalSigns/vitalRanges";
+import { logVisit } from "./familiarService";
+import { summarizeFamilySnapshot } from "./familiarUtils";
+import { useFamiliarResidentData } from "./useFamiliarResidentData";
 
-function ResidentBadgeRow({ res }) {
-  const age = calcAge(res.fecha_nacimiento);
+function EmptyState({ title, children }) {
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-teal-700 text-white flex items-center justify-center font-black text-lg">
-          {(res.nombre?.[0] ?? "") + (res.apellido?.[0] ?? "")}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="font-black text-slate-800 text-xl truncate">
-            {res.nombre} {res.apellido}
-          </h2>
-          <p className="text-sm text-slate-500">
-            {age != null && <>{age} años · </>}
-            {res.parentesco ? <>Tu vínculo: <span className="font-semibold">{res.parentesco}</span></> : "Familiar autorizado"}
-          </p>
-          {(res.habitacion || res.cama) && (
-            <p className="text-xs text-slate-400 mt-0.5">
-              Habitación {res.habitacion ?? "—"} · Cama {res.cama ?? "—"}
-            </p>
-          )}
-        </div>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-          res.estado === "activo"        ? "bg-emerald-100 text-emerald-700" :
-          res.estado === "hospitalizado" ? "bg-amber-100 text-amber-800" :
-                                          "bg-slate-100 text-slate-600"
-        }`}>
-          {res.estado ?? "—"}
-        </span>
-      </div>
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+      <p className="font-semibold text-slate-800">{title}</p>
+      {children && <div className="mt-1">{children}</div>}
     </div>
   );
 }
 
-function VitalsBlock({ vitals }) {
+function Panel({ title, action, children }) {
+  return (
+    <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ResidentHeader({ resident, eleam }) {
+  const age = calcAge(resident?.fecha_nacimiento);
+  const initials = `${resident?.nombre?.[0] ?? ""}${resident?.apellido?.[0] ?? ""}` || "R";
+
+  return (
+    <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-teal-700 text-lg font-black text-white">
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-2xl font-semibold tracking-tight text-slate-950">
+              {resident?.nombre} {resident?.apellido}
+            </h2>
+            <p className="text-sm text-slate-500">
+              {age != null ? `${age} años · ` : ""}
+              {resident?.parentesco ? `Vínculo: ${resident.parentesco}` : "Familiar autorizado"}
+              {eleam?.nombre ? ` · ${eleam.nombre}` : ""}
+            </p>
+            {(resident?.habitacion || resident?.cama) && (
+              <p className="mt-1 text-xs text-slate-400">
+                Habitación {resident.habitacion ?? "-"} · Cama {resident.cama ?? "-"}
+              </p>
+            )}
+          </div>
+        </div>
+        <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
+          resident?.estado === "activo" ? "bg-emerald-50 text-emerald-700" :
+          resident?.estado === "hospitalizado" ? "bg-amber-50 text-amber-800" :
+          "bg-slate-100 text-slate-600"
+        }`}>
+          {resident?.estado ?? "Sin estado"}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function ResidentSelector({ residentes, activeId, onSelect }) {
+  if (residentes.length <= 1) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {residentes.map((resident) => (
+        <button
+          type="button"
+          key={resident.id}
+          onClick={() => onSelect(resident.id)}
+          className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+            resident.id === activeId
+              ? "border-teal-700 bg-teal-700 text-white"
+              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          {resident.nombre} {resident.apellido}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function VitalsPanel({ vitals }) {
   if (!vitals?.length) {
-    return <p className="text-sm text-slate-500">Sin registros de signos vitales aún.</p>;
+    return (
+      <Panel title="Salud reciente">
+        <EmptyState title="Sin signos vitales recientes">
+          El equipo aún no ha publicado registros visibles para este residente.
+        </EmptyState>
+      </Panel>
+    );
   }
+
   const latest = vitals[0];
   const overall = recordOverallStatus(latest);
   const overallStyle = STATUS[overall] ?? STATUS.unknown;
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-slate-500">
-          Último registro · {formatDateTime(latest.fecha_hora)}
-        </p>
-        <span className={`text-xs font-semibold rounded-full px-3 py-1 border ${overallStyle.badge}`}>
+    <Panel
+      title="Salud reciente"
+      action={
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${overallStyle.badge}`}>
           {overallStyle.label}
         </span>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      }
+    >
+      <p className="mb-3 text-sm text-slate-500">Último control · {formatDateTime(latest.fecha_hora)}</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {Object.entries(VITAL_DEFS).map(([key, def]) => {
           const status = def.statusFor(latest);
-          const s = STATUS[status] ?? STATUS.unknown;
+          const tone = STATUS[status] ?? STATUS.unknown;
+          const field = {
+            fc: "frecuencia_cardiaca",
+            fr: "frecuencia_respiratoria",
+            temp: "temperatura",
+            spo2: "saturacion_oxigeno",
+            glucosa: "glucosa",
+            dolor: "dolor_escala",
+          }[key] ?? key;
           const value = key === "presion"
             ? def.format(latest.presion_sistolica, latest.presion_diastolica)
-            : def.format(
-                latest[
-                  key === "fc"      ? "frecuencia_cardiaca" :
-                  key === "fr"      ? "frecuencia_respiratoria" :
-                  key === "temp"    ? "temperatura" :
-                  key === "spo2"    ? "saturacion_oxigeno" :
-                  key === "glucosa" ? "glucosa" :
-                  key === "dolor"   ? "dolor_escala" : key
-                ]
-              );
+            : def.format(latest[field]);
+
           return (
-            <div key={key} className={`rounded-xl border p-3 bg-white ${s.ring} ring-1`}>
-              <p className="text-[10px] uppercase font-semibold text-slate-400 tracking-wide truncate">
-                {def.icon} {def.label}
+            <div key={key} className={`rounded-xl border bg-white p-3 ring-1 ${tone.ring}`}>
+              <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                {def.label}
               </p>
-              <p className={`text-lg font-black truncate ${s.text}`}>
+              <p className={`mt-1 truncate text-lg font-black ${tone.text}`}>
                 {value} <span className="text-xs font-semibold text-slate-400">{def.unit}</span>
               </p>
             </div>
           );
         })}
       </div>
-    </>
+    </Panel>
   );
 }
 
-function ObservationsBlock({ obs }) {
-  if (!obs?.length) {
-    return <p className="text-sm text-slate-500">Sin observaciones recientes.</p>;
-  }
+function SnapshotMetric({ label, value, tone = "slate" }) {
+  const toneClass = {
+    emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    amber: "bg-amber-50 text-amber-800 border-amber-100",
+    rose: "bg-rose-50 text-rose-700 border-rose-100",
+    teal: "bg-teal-50 text-teal-700 border-teal-100",
+    slate: "bg-slate-50 text-slate-700 border-slate-100",
+  }[tone];
   return (
-    <ul className="divide-y">
-      {obs.map((o) => (
-        <li key={o.id} className="py-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm text-slate-700 line-clamp-3">
-                {o.descripcion}
-              </p>
-              {o.acciones_tomadas && (
-                <p className="text-xs text-slate-500 mt-1">
-                  Acciones: {o.acciones_tomadas}
-                </p>
-              )}
-            </div>
-            <div className="text-right shrink-0">
-              <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wide">
-                {TIPO_LABEL[o.tipo] ?? o.tipo}
-              </span>
-              <p className="text-xs text-slate-400 mt-0.5">{formatDateTime(o.fecha_hora)}</p>
-              {o.requiere_seguimiento && (
-                <span className="inline-block mt-1 text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-                  Seguimiento
-                </span>
-              )}
-            </div>
-          </div>
+    <div className={`rounded-2xl border p-4 ${toneClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</p>
+      <p className="mt-1 text-3xl font-bold tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function DailySummary({ care, medications }) {
+  const summary = summarizeFamilySnapshot({ care, medications });
+
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <SnapshotMetric label="Cuidados hechos" value={summary.careDone} tone={summary.careDone ? "emerald" : "slate"} />
+      <SnapshotMetric label="Cuidados pendientes" value={summary.carePending} tone={summary.carePending ? "amber" : "emerald"} />
+      <SnapshotMetric label="Medicamentos dados" value={summary.medicationsDone} tone={summary.medicationsDone ? "teal" : "slate"} />
+      <SnapshotMetric label="Medicamentos pendientes" value={summary.medicationsPending} tone={summary.medicationsPending ? "amber" : "emerald"} />
+    </div>
+  );
+}
+
+function StatusList({ items, emptyTitle, renderItem }) {
+  if (!items?.length) return <EmptyState title={emptyTitle} />;
+  return (
+    <ul className="divide-y divide-slate-100">
+      {items.map((item) => (
+        <li key={item.id} className="py-3 first:pt-0 last:pb-0">
+          {renderItem(item)}
         </li>
       ))}
     </ul>
+  );
+}
+
+function ObservationsPanel({ observations }) {
+  return (
+    <Panel title="Actualizaciones del equipo">
+      <StatusList
+        items={observations}
+        emptyTitle="Sin actualizaciones publicadas para familia"
+        renderItem={(item) => (
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="line-clamp-3 text-sm text-slate-700">{item.resumen}</p>
+              {item.requiere_seguimiento && (
+                <span className="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                  Seguimiento activo
+                </span>
+              )}
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                {TIPO_LABEL[item.tipo] ?? item.tipo}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">{formatDateTime(item.fecha_hora)}</p>
+            </div>
+          </div>
+        )}
+      />
+    </Panel>
+  );
+}
+
+function CarePanel({ care }) {
+  return (
+    <Panel title="Cuidados de hoy">
+      <StatusList
+        items={care}
+        emptyTitle="Sin cuidados publicados para familia hoy"
+        renderItem={(item) => (
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-800">{item.titulo}</p>
+              <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.resumen}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+              {item.estado}
+            </span>
+          </div>
+        )}
+      />
+    </Panel>
+  );
+}
+
+function MedicationPanel({ medications }) {
+  return (
+    <Panel title="Medicación de hoy">
+      <StatusList
+        items={medications}
+        emptyTitle="Sin medicación publicada para familia hoy"
+        renderItem={(item) => (
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-800">{item.resumen}</p>
+              <p className="mt-1 text-sm text-slate-500">{item.via ? `Vía ${item.via}` : "Indicación visible para familia"}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+              {item.estado}
+            </span>
+          </div>
+        )}
+      />
+    </Panel>
+  );
+}
+
+function VisitsPanel({ visits, onLogVisit, logging, onOpenVisits }) {
+  return (
+    <Panel
+      title="Visitas"
+      action={
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onOpenVisits} className="text-sm font-semibold text-teal-700 hover:underline">
+            Ver historial
+          </button>
+          <Button
+            onClick={onLogVisit}
+            disabled={logging}
+            className="min-h-8 bg-teal-700 px-3 py-1.5 text-xs text-white hover:bg-teal-800"
+          >
+            {logging ? "Guardando..." : "Registrar ahora"}
+          </Button>
+        </div>
+      }
+    >
+      <StatusList
+        items={visits?.slice(0, 5)}
+        emptyTitle="Aún no tienes visitas registradas"
+        renderItem={(visit) => (
+          <div>
+            <p className="text-sm font-semibold text-slate-700">
+              {formatDateTime(visit.fecha_hora)}
+              {visit.duracion_min ? <span className="font-normal text-slate-500"> · {visit.duracion_min} min</span> : null}
+            </p>
+            {visit.notas && <p className="mt-1 text-sm text-slate-500">{visit.notas}</p>}
+          </div>
+        )}
+      />
+    </Panel>
   );
 }
 
@@ -140,53 +306,25 @@ export default function FamiliarPortal() {
   const navigate = useNavigate();
   const toast = useToast();
   const { profile, eleam } = useAuth();
-  const [residentes, setResidentes] = useState([]);
-  const [activeId,   setActiveId]   = useState(null);
-  const [vitals,     setVitals]     = useState([]);
-  const [obs,        setObs]        = useState([]);
-  const [visitas,    setVisitas]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [logging,    setLogging]    = useState(false);
+  const [logging, setLogging] = useState(false);
+  const {
+    residentes,
+    activeId,
+    activeResident,
+    snapshot,
+    loading,
+    loadingSnapshot,
+    error,
+    selectResident,
+    reload,
+  } = useFamiliarResidentData({ toast });
 
-  const fetchAll = useCallback(async (id) => {
-    if (!id) return;
-    setLoading(true);
-    try {
-      const [v, o, vis] = await Promise.all([
-        getRecentVitals(id, 1),
-        getRecentObservations(id, 10),
-        getVisits(id, 10),
-      ]);
-      setVitals(v);
-      setObs(o);
-      setVisitas(vis);
-    } catch (e) {
-      toast(friendlyError(e, "No se pudo cargar la información del residente. Intenta de nuevo."), "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    getMyResidentes()
-      .then((r) => {
-        if (!mounted) return;
-        setResidentes(r);
-        const id = r[0]?.id ?? null;
-        setActiveId(id);
-        if (id) fetchAll(id);
-        else setLoading(false);
-      })
-      .catch((e) => {
-        if (mounted) {
-          toast(friendlyError(e, "No se pudo cargar la información. Recarga la página."), "error");
-          setLoading(false);
-        }
-      });
-    return () => { mounted = false; };
-  }, [fetchAll, toast]);
+  const resident = snapshot?.resident ?? activeResident;
+  const vitals = snapshot?.vitals ?? [];
+  const observations = snapshot?.observations ?? [];
+  const care = snapshot?.care ?? [];
+  const medications = snapshot?.medications ?? [];
+  const visits = snapshot?.visits ?? [];
 
   const handleLogVisit = async () => {
     if (!activeId) return;
@@ -194,10 +332,9 @@ export default function FamiliarPortal() {
     try {
       await logVisit({ residenteId: activeId });
       toast("Visita registrada", "success");
-      const fresh = await getVisits(activeId, 10);
-      setVisitas(fresh);
-    } catch (e) {
-      toast(friendlyError(e, "No se pudo registrar la visita. Intenta de nuevo."), "error");
+      await reload();
+    } catch {
+      toast("No se pudo registrar la visita. Intenta de nuevo.", "error");
     } finally {
       setLogging(false);
     }
@@ -209,102 +346,62 @@ export default function FamiliarPortal() {
 
   if (residentes.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">Sin residentes asignados</h1>
-        <p className="text-slate-500 mb-4">
-          Aún no estás vinculado a un residente. Pide al administrador del ELEAM
-          que cree el vínculo o vuelva a generar la invitación.
+      <div className="mx-auto max-w-2xl px-4 py-12 text-center">
+        <h1 className="mb-2 text-2xl font-bold text-slate-800">Sin residentes asignados</h1>
+        <p className="text-slate-500">
+          Aún no estás vinculado a un residente. Pide al administrador del ELEAM que cree el vínculo.
         </p>
       </div>
     );
   }
 
-  const activeRes = residentes.find((r) => r.id === activeId) ?? residentes[0];
-
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
-      <header>
-        <h1 className="text-2xl font-black text-slate-800">
-          Hola{profile?.nombre ? `, ${profile.nombre.split(" ")[0]}` : ""} 👋
-        </h1>
-        <p className="text-sm text-slate-500">
-          Aquí puedes ver el estado y los últimos registros de tu familiar
-          {eleam?.nombre ? <> en <span className="font-semibold">{eleam.nombre}</span></> : null}.
-        </p>
-      </header>
-
-      {/* Selector de residente (en caso de tener varios) */}
-      {residentes.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {residentes.map((r) => (
-            <button
-              type="button"
-              key={r.id}
-              onClick={() => { setActiveId(r.id); fetchAll(r.id); }}
-              className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${
-                r.id === activeId
-                  ? "bg-teal-700 text-white border-teal-700"
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              {r.nombre} {r.apellido}
-            </button>
-          ))}
+    <PageLayout
+      title={profile?.nombre ? `Hola, ${profile.nombre.split(" ")[0]}` : "Portal familiar"}
+      eyebrow="Portal familiar"
+      description={`Resumen autorizado de ${resident?.nombre ?? "tu familiar"}${eleam?.nombre ? ` en ${eleam.nombre}` : ""}.`}
+      size="lg"
+      actions={
+        <Button
+          onClick={() => navigate("/familiar/visitas")}
+          className="bg-white text-teal-700 border border-teal-200 hover:bg-teal-50"
+        >
+          Gestionar visitas
+        </Button>
+      }
+      className="space-y-5"
+    >
+      <ResidentSelector residentes={residentes} activeId={activeId} onSelect={selectResident} />
+      {error && (
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+      {resident && <ResidentHeader resident={resident} eleam={eleam} />}
+      {loadingSnapshot && snapshot && (
+        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
+          Actualizando información...
         </div>
       )}
 
-      <ResidentBadgeRow res={activeRes} />
+      <DailySummary care={care} medications={medications} />
 
-      {/* Signos vitales */}
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-slate-800">Signos vitales</h2>
-        </div>
-        <VitalsBlock vitals={vitals} />
-      </section>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <VitalsPanel vitals={vitals} />
+        <VisitsPanel
+          visits={visits}
+          onLogVisit={handleLogVisit}
+          logging={logging}
+          onOpenVisits={() => navigate("/familiar/visitas")}
+        />
+      </div>
 
-      {/* Observaciones */}
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <h2 className="font-bold text-slate-800 mb-3">Últimas observaciones</h2>
-        <ObservationsBlock obs={obs} />
-      </section>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <CarePanel care={care} />
+        <MedicationPanel medications={medications} />
+      </div>
 
-      {/* Visitas */}
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h2 className="font-bold text-slate-800">Mis visitas recientes</h2>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => navigate("/familiar/visitas")}
-              className="text-sm text-teal-700 hover:underline"
-            >
-              Ver todas
-            </button>
-            <button
-              type="button"
-              onClick={handleLogVisit}
-              disabled={logging}
-              className="bg-teal-700 text-white text-sm font-semibold px-4 py-1.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"
-            >
-              {logging ? "Guardando..." : "Registrar visita ahora"}
-            </button>
-          </div>
-        </div>
-        {visitas.length === 0 ? (
-          <p className="text-sm text-slate-500">Aún no tienes visitas registradas.</p>
-        ) : (
-          <ul className="divide-y">
-            {visitas.slice(0, 5).map((v) => (
-              <li key={v.id} className="py-2 text-sm">
-                <span className="font-semibold text-slate-700">{formatDateTime(v.fecha_hora)}</span>
-                {v.duracion_min ? <span className="text-slate-500"> · {v.duracion_min} min</span> : null}
-                {v.notas ? <p className="text-slate-500 text-xs mt-0.5">{v.notas}</p> : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
+      <ObservationsPanel observations={observations} />
+    </PageLayout>
   );
 }

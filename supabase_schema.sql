@@ -165,16 +165,25 @@ create table if not exists public.observaciones_diarias (
   descripcion           text not null,
   acciones_tomadas      text,
   requiere_seguimiento  boolean not null default false,
+  visible_familiar      boolean not null default false,
+  resumen_familiar      text,
   registrado_por        uuid references auth.users(id) on delete set null,
   creado_en             timestamptz not null default now(),
   actualizado_en        timestamptz not null default now()
 );
+
+alter table public.observaciones_diarias
+  add column if not exists visible_familiar boolean not null default false,
+  add column if not exists resumen_familiar text;
 
 create index if not exists idx_observaciones_residente_fecha on public.observaciones_diarias(residente_id, fecha_hora desc);
 create index if not exists idx_observaciones_tipo on public.observaciones_diarias(tipo);
 create index if not exists idx_observaciones_seguimiento
   on public.observaciones_diarias(residente_id, fecha_hora desc)
   where requiere_seguimiento = true;
+create index if not exists idx_observaciones_familiar
+  on public.observaciones_diarias(residente_id, fecha_hora desc)
+  where visible_familiar = true;
 
 create table if not exists public.turno_entregas (
   id              uuid primary key default gen_random_uuid(),
@@ -239,6 +248,8 @@ create table if not exists public.plan_cuidado_actividades (
   instrucciones         text,
   prioridad             text not null default 'media' check (prioridad in ('baja','media','alta','urgente')),
   requiere_observacion  boolean not null default false,
+  visible_familiar      boolean not null default false,
+  resumen_familiar      text,
   activo                boolean not null default true,
   creado_por            uuid references auth.users(id) on delete set null,
   actualizado_por       uuid references auth.users(id) on delete set null,
@@ -246,10 +257,17 @@ create table if not exists public.plan_cuidado_actividades (
   actualizado_en        timestamptz not null default now()
 );
 
+alter table public.plan_cuidado_actividades
+  add column if not exists visible_familiar boolean not null default false,
+  add column if not exists resumen_familiar text;
+
 create index if not exists idx_plan_actividades_plan
   on public.plan_cuidado_actividades(plan_id, activo);
 create index if not exists idx_plan_actividades_eleam_residente
   on public.plan_cuidado_actividades(eleam_id, residente_id, categoria);
+create index if not exists idx_plan_actividades_familiar
+  on public.plan_cuidado_actividades(residente_id, activo)
+  where visible_familiar = true;
 
 create table if not exists public.plan_cuidado_horarios (
   id                    uuid primary key default gen_random_uuid(),
@@ -350,6 +368,8 @@ create table if not exists public.medicamentos_indicaciones (
   tipo_controlado            text check (tipo_controlado in ('psicotropico','estupefaciente') or tipo_controlado is null),
   requiere_doble_validacion  boolean not null default false,
   requiere_stock             boolean not null default true,
+  visible_familiar           boolean not null default false,
+  resumen_familiar           text,
   instrucciones              text,
   creado_por                 uuid references auth.users(id) on delete set null,
   actualizado_por            uuid references auth.users(id) on delete set null,
@@ -358,10 +378,17 @@ create table if not exists public.medicamentos_indicaciones (
   check (es_controlado = false or tipo_controlado is not null)
 );
 
+alter table public.medicamentos_indicaciones
+  add column if not exists visible_familiar boolean not null default false,
+  add column if not exists resumen_familiar text;
+
 create index if not exists idx_med_indicaciones_residente
   on public.medicamentos_indicaciones(residente_id, estado);
 create index if not exists idx_med_indicaciones_eleam_controlado
   on public.medicamentos_indicaciones(eleam_id, es_controlado, estado);
+create index if not exists idx_med_indicaciones_familiar
+  on public.medicamentos_indicaciones(residente_id, estado)
+  where visible_familiar = true;
 
 create table if not exists public.medicamentos_horarios (
   id                    uuid primary key default gen_random_uuid(),
@@ -1005,10 +1032,9 @@ as $$
     and public.eleam_has_access(r.eleam_id);
 $$;
 
-create or replace function public.validate_invitation_token(
-  p_token text,
-  p_email text default null
-)
+drop function if exists public.validate_invitation_token(text, text);
+
+create or replace function public.get_familiar_resident_snapshot(p_residente_id uuid)
 returns jsonb
 language plpgsql
 stable
@@ -1016,92 +1042,130 @@ security definer
 set search_path = public
 as $$
 declare
-  v_token text := nullif(trim(coalesce(p_token, '')), '');
-  v_email text := lower(nullif(trim(coalesce(p_email, '')), ''));
-  v_inv record;
+  v_residente jsonb;
+  v_vitales jsonb;
+  v_observaciones jsonb;
+  v_visitas jsonb;
+  v_cuidados jsonb;
+  v_medicacion jsonb;
 begin
-  if v_token is null then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'Invitacion invalida. Usa el link completo que recibiste por correo.'
-    );
+  if p_residente_id is null or not public.familiar_can_view_residente(p_residente_id) then
+    raise exception 'No autorizado a ver este residente' using errcode = '42501';
   end if;
 
-  select
-    i.id,
-    lower(i.email) as email,
-    i.rol,
-    i.expira_en,
-    i.usado,
-    i.eleam_id,
-    i.residente_id,
-    e.nombre as eleam_nombre,
-    r.nombre as residente_nombre,
-    r.apellido as residente_apellido,
-    r.estado as residente_estado
-  into v_inv
-  from public.funcionario_invitaciones i
-  join public.eleams e on e.id = i.eleam_id
-  left join public.residentes r on r.id = i.residente_id
-  where i.token = v_token
-  limit 1;
+  select jsonb_build_object(
+    'id', r.id,
+    'nombre', r.nombre,
+    'apellido', r.apellido,
+    'fecha_nacimiento', r.fecha_nacimiento,
+    'estado', r.estado,
+    'habitacion', r.habitacion,
+    'cama', r.cama,
+    'nivel_dependencia', r.nivel_dependencia,
+    'parentesco', fr.parentesco
+  )
+  into v_residente
+  from public.residentes r
+  left join public.familiar_residentes fr
+    on fr.residente_id = r.id
+   and fr.profile_id = (select auth.uid())
+  where r.id = p_residente_id;
 
-  if not found then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'Invitacion no encontrada. Pide al administrador que genere una nueva.'
-    );
-  end if;
+  select coalesce(jsonb_agg(to_jsonb(v) order by v.fecha_hora desc), '[]'::jsonb)
+  into v_vitales
+  from (
+    select
+      id, fecha_hora, turno, presion_sistolica, presion_diastolica,
+      frecuencia_cardiaca, frecuencia_respiratoria, temperatura,
+      saturacion_oxigeno, glucosa, dolor_escala
+    from public.signos_vitales
+    where residente_id = p_residente_id
+    order by fecha_hora desc
+    limit 5
+  ) v;
 
-  if v_inv.usado then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'Esta invitacion ya fue usada. Inicia sesion o solicita una nueva.'
-    );
-  end if;
+  select coalesce(jsonb_agg(to_jsonb(o) order by o.fecha_hora desc), '[]'::jsonb)
+  into v_observaciones
+  from (
+    select
+      id,
+      fecha_hora,
+      tipo,
+      coalesce(nullif(trim(resumen_familiar), ''), descripcion) as resumen,
+      requiere_seguimiento
+    from public.observaciones_diarias
+    where residente_id = p_residente_id
+      and visible_familiar = true
+    order by fecha_hora desc
+    limit 8
+  ) o;
 
-  if v_inv.expira_en <= now() then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'Esta invitacion expiro. Pide al administrador que genere una nueva.'
-    );
-  end if;
+  select coalesce(jsonb_agg(to_jsonb(c) order by c.hora asc), '[]'::jsonb)
+  into v_cuidados
+  from (
+    select
+      t.id,
+      t.fecha,
+      t.turno,
+      t.hora,
+      t.estado,
+      a.categoria,
+      a.titulo,
+      coalesce(nullif(trim(a.resumen_familiar), ''), a.descripcion, a.titulo) as resumen
+    from public.tareas_cuidado t
+    join public.plan_cuidado_actividades a on a.id = t.actividad_id
+    where t.residente_id = p_residente_id
+      and t.fecha = current_date
+      and a.visible_familiar = true
+    order by t.hora asc
+    limit 12
+  ) c;
 
-  if v_email is not null and v_email <> v_inv.email then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'Esta invitacion fue emitida para otro correo.'
-    );
-  end if;
+  select coalesce(jsonb_agg(to_jsonb(m) order by m.hora asc), '[]'::jsonb)
+  into v_medicacion
+  from (
+    select
+      ma.id,
+      ma.fecha,
+      ma.turno,
+      ma.hora,
+      ma.estado,
+      i.via,
+      coalesce(nullif(trim(i.resumen_familiar), ''), i.medicamento_nombre) as resumen
+    from public.medicamentos_administraciones ma
+    join public.medicamentos_indicaciones i on i.id = ma.indicacion_id
+    where ma.residente_id = p_residente_id
+      and ma.fecha = current_date
+      and i.visible_familiar = true
+    order by ma.hora asc
+    limit 12
+  ) m;
 
-  if not public.eleam_has_access(v_inv.eleam_id) then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'El ELEAM asociado a esta invitacion no tiene acceso activo.'
-    );
-  end if;
-
-  if v_inv.rol = 'familiar' and (
-    v_inv.residente_id is null
-    or v_inv.residente_estado is distinct from 'activo'
-  ) then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'El residente asociado a esta invitacion ya no esta activo.'
-    );
-  end if;
+  select coalesce(jsonb_agg(to_jsonb(vis) order by vis.fecha_hora desc), '[]'::jsonb)
+  into v_visitas
+  from (
+    select id, fecha_hora, duracion_min, notas
+    from public.visitas_familiar
+    where residente_id = p_residente_id
+      and profile_id = (select auth.uid())
+    order by fecha_hora desc
+    limit 10
+  ) vis;
 
   return jsonb_build_object(
-    'ok', true,
-    'email', v_inv.email,
-    'rol', v_inv.rol,
-    'eleam_nombre', v_inv.eleam_nombre,
-    'residente_id', v_inv.residente_id,
-    'residente_nombre', nullif(trim(concat_ws(' ', v_inv.residente_nombre, v_inv.residente_apellido)), ''),
-    'expira_en', v_inv.expira_en
+    'resident', v_residente,
+    'vitals', v_vitales,
+    'observations', v_observaciones,
+    'care', v_cuidados,
+    'medications', v_medicacion,
+    'visits', v_visitas,
+    'generated_at', now()
   );
 end;
 $$;
+
+revoke all on function public.get_familiar_resident_snapshot(uuid) from public;
+grant execute on function public.get_familiar_resident_snapshot(uuid) to authenticated;
 
 create or replace function public.funcionario_can(perm text)
 returns boolean
@@ -1360,7 +1424,6 @@ declare
   v_nombre text;
   v_rol text := null;
   v_eleam_id uuid := null;
-  v_token text;
   v_invitacion record;
   v_residente_id uuid := null;
   v_invitado_por uuid := null;
@@ -1481,41 +1544,43 @@ begin
     return new;
   end if;
 
-  v_token := new.raw_user_meta_data->>'invite_token';
-  if v_token is not null and v_token <> '' then
-    select i.* into v_invitacion
+  -- Flujo Google OAuth: aceptar si el email coincide con un acceso
+  -- pendiente generado por create-staff-user para usuarios Gmail.
+  if new.raw_app_meta_data->>'provider' = 'google'
+     or (new.raw_app_meta_data->'providers') @> '["google"]'::jsonb then
+
+    select i.id, lower(i.email) as email, i.rol, i.expira_en, i.usado, i.eleam_id, i.residente_id, i.creado_por
+    into v_invitacion
     from public.funcionario_invitaciones i
-    where i.token = v_token
-      and lower(i.email) = v_email
+    where lower(i.email) = v_email
       and i.usado = false
       and i.expira_en > now()
+    order by i.creado_en desc
     limit 1;
 
     if found then
-      v_eleam_id := v_invitacion.eleam_id;
-      v_rol := coalesce(v_invitacion.rol, 'funcionario');
+      v_eleam_id     := v_invitacion.eleam_id;
+      v_rol          := coalesce(v_invitacion.rol, 'funcionario');
       v_residente_id := v_invitacion.residente_id;
       v_invitado_por := v_invitacion.creado_por;
 
       if not public.eleam_has_access(v_eleam_id) then
-        raise exception 'La invitacion pertenece a un ELEAM sin acceso activo'
+        raise exception 'El acceso pendiente pertenece a un ELEAM sin acceso activo'
           using errcode = '42501';
       end if;
 
       if v_rol = 'familiar' then
         if v_residente_id is null then
-          raise exception 'Invitacion familiar sin residente asociado'
+          raise exception 'Acceso familiar sin residente asociado'
             using errcode = '42501';
         end if;
-
         if not exists (
-          select 1
-          from public.residentes r
+          select 1 from public.residentes r
           where r.id = v_residente_id
             and r.eleam_id = v_eleam_id
             and r.estado = 'activo'
         ) then
-          raise exception 'El residente asociado a la invitacion ya no esta activo'
+          raise exception 'El residente asociado al acceso ya no esta activo'
             using errcode = '42501';
         end if;
       end if;
@@ -1523,112 +1588,41 @@ begin
       update public.funcionario_invitaciones
       set usado = true, usado_en = now()
       where id = v_invitacion.id;
-    else
-      raise exception 'Invitacion invalida, vencida o usada'
+
+      insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
+      values (new.id, v_nombre, new.email, v_rol, v_eleam_id, false)
+      on conflict (id) do update set
+        nombre              = excluded.nombre,
+        email               = excluded.email,
+        rol                 = excluded.rol,
+        eleam_id            = excluded.eleam_id,
+        must_reset_password = false;
+
+      if v_rol = 'familiar' and v_residente_id is not null then
+        insert into public.familiar_residentes (profile_id, residente_id, creado_por)
+        values (new.id, v_residente_id, v_invitado_por)
+        on conflict do nothing;
+      end if;
+
+      return new;
+    end if;
+
+    if exists (
+      select 1
+      from public.demo_leads dl
+      where lower(dl.email) = v_email
+        and dl.demo_user_id is null
+        and dl.estado in ('nuevo','contactado','demo_activo','demo_completado')
+      order by dl.creado_en desc
+      limit 1
+    ) then
+      raise exception 'DEMO_PENDING: Tu demo esta registrado, pero el login se habilita cuando el equipo apruebe tu cuenta. Te avisaremos cuando el acceso este listo.'
         using errcode = '42501';
     end if;
   end if;
 
-  if v_token is null or v_token = '' then
-    -- Flujo Google OAuth: aceptar si el email coincide con una invitacion vigente.
-    -- Permite que usuarios Gmail creados via create-staff-user ingresen con Google
-    -- sin necesidad de contrasena temporal ni vinculacion manual.
-    if new.raw_app_meta_data->>'provider' = 'google'
-       or (new.raw_app_meta_data->'providers') @> '["google"]'::jsonb then
-
-      select i.id, lower(i.email) as email, i.rol, i.expira_en, i.usado, i.eleam_id, i.residente_id, i.creado_por
-      into v_invitacion
-      from public.funcionario_invitaciones i
-      where lower(i.email) = v_email
-        and i.usado = false
-        and i.expira_en > now()
-      order by i.creado_en desc
-      limit 1;
-
-      if found then
-        v_eleam_id     := v_invitacion.eleam_id;
-        v_rol          := coalesce(v_invitacion.rol, 'funcionario');
-        v_residente_id := v_invitacion.residente_id;
-        v_invitado_por := v_invitacion.creado_por;
-
-        if not public.eleam_has_access(v_eleam_id) then
-          raise exception 'La invitacion pertenece a un ELEAM sin acceso activo'
-            using errcode = '42501';
-        end if;
-
-        if v_rol = 'familiar' then
-          if v_residente_id is null then
-            raise exception 'Invitacion familiar sin residente asociado'
-              using errcode = '42501';
-          end if;
-          if not exists (
-            select 1 from public.residentes r
-            where r.id = v_residente_id
-              and r.eleam_id = v_eleam_id
-              and r.estado = 'activo'
-          ) then
-            raise exception 'El residente asociado a la invitacion ya no esta activo'
-              using errcode = '42501';
-          end if;
-        end if;
-
-        update public.funcionario_invitaciones
-        set usado = true, usado_en = now()
-        where id = v_invitacion.id;
-
-        insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
-        values (new.id, v_nombre, new.email, v_rol, v_eleam_id, false)
-        on conflict (id) do update set
-          nombre              = excluded.nombre,
-          email               = excluded.email,
-          rol                 = excluded.rol,
-          eleam_id            = excluded.eleam_id,
-          must_reset_password = false;
-
-        if v_rol = 'familiar' and v_residente_id is not null then
-          insert into public.familiar_residentes (profile_id, residente_id, creado_por)
-          values (new.id, v_residente_id, v_invitado_por)
-          on conflict do nothing;
-        end if;
-
-        return new;
-      end if;
-
-      if exists (
-        select 1
-        from public.demo_leads dl
-        where lower(dl.email) = v_email
-          and dl.demo_user_id is null
-          and dl.demo_token is null
-          and dl.estado in ('nuevo','contactado')
-        order by dl.creado_en desc
-        limit 1
-      ) then
-        raise exception 'DEMO_PENDING: Tu demo ya fue solicitado y esta pendiente de habilitacion. Te avisaremos cuando el acceso este listo.'
-          using errcode = '42501';
-      end if;
-    end if;
-
-    raise exception 'Cuenta no autorizada. Debe ser aprobada por superadmin o creada por un ELEAM activo.'
-      using errcode = '42501';
-  end if;
-
-  insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
-  values (new.id, v_nombre, new.email, v_rol, v_eleam_id, false)
-  on conflict (id) do update set
-    nombre   = excluded.nombre,
-    email    = excluded.email,
-    rol      = excluded.rol,
-    eleam_id = excluded.eleam_id;
-    -- must_reset_password no se toca aqui para preservar el estado si ya existia
-
-  if v_rol = 'familiar' and v_residente_id is not null then
-    insert into public.familiar_residentes (profile_id, residente_id, creado_por)
-    values (new.id, v_residente_id, v_invitado_por)
-    on conflict do nothing;
-  end if;
-
-  return new;
+  raise exception 'Cuenta no autorizada. Debe ser aprobada por superadmin o creada por un ELEAM activo.'
+    using errcode = '42501';
 end;
 $$;
 
@@ -2935,6 +2929,7 @@ create policy "sv_select" on public.signos_vitales
     or (
       public.my_rol() = 'familiar'
       and residente_id in (select public.my_familiar_residente_ids())
+      and visible_familiar = true
     )
   );
 

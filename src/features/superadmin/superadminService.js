@@ -8,6 +8,42 @@ import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
 //  • registerPayment usa la RPC transaccional registrar_pago_y_activar_eleam
 //    para garantizar consistencia (pago + activación + interacción).
 
+const ELEAM_SELECT = `
+  id, nombre, rut_empresa, email_admin, telefono,
+  pago_activo, plan, plan_id, fecha_pago, fecha_vencimiento_suscripcion,
+  proximo_cobro_en, cancelado_en, mp_preapproval_id, mp_payer_email,
+  max_residentes, max_funcionarios, notas_admin,
+  subscription_status, crm_estado, origen_lead, ultimo_contacto,
+  proxima_accion_fecha, responsable_comercial, riesgo_churn, creado_en
+`;
+
+const PAYMENT_SELECT = `
+  id, eleam_id, plan_id, monto, moneda, plan,
+  fecha_pago, fecha_inicio, fecha_fin, metodo_pago,
+  referencia_externa, estado, notas, registrado_por,
+  mp_payment_id, mp_preapproval_id, mp_authorized_payment_id,
+  raw, creado_en
+`;
+
+const CRM_TASK_SELECT = `
+  id, eleam_id, titulo, descripcion, tipo, estado, prioridad,
+  fecha_vencimiento, creado_por, completado_por,
+  creado_en, completado_en, actualizado_en
+`;
+
+const CRM_INTERACTION_SELECT = `
+  id, eleam_id, tipo, canal, resumen, resultado,
+  proxima_accion, creado_por, creado_en
+`;
+
+const DEMO_LEAD_SELECT = `
+  id, nombre, cargo, eleam_nombre, email, telefono, num_residentes,
+  utm_source, utm_medium, utm_campaign, pagina_origen, referrer,
+  estado, notas_admin, demo_token, demo_access_granted_at, demo_expires_at,
+  demo_ultimo_ping, demo_progreso, solicita_contacto, solicita_contacto_en,
+  solicita_contacto_mensaje, demo_user_id, creado_en
+`;
+
 // ─────────────────────────────────────────────────────────────
 // Métricas
 // ─────────────────────────────────────────────────────────────
@@ -56,7 +92,7 @@ export async function getAllEleams() {
   const { data, error } = await supabase
     .from("eleams")
     .select(`
-      *,
+      ${ELEAM_SELECT},
       responsable:profiles!eleams_responsable_comercial_fkey(id, nombre, email)
     `)
     .order("creado_en", { ascending: false });
@@ -69,7 +105,7 @@ export async function getEleamDetail(eleamId) {
   const { data, error } = await supabase
     .from("eleams")
     .select(`
-      *,
+      ${ELEAM_SELECT},
       responsable:profiles!eleams_responsable_comercial_fkey(id, nombre, email)
     `)
     .eq("id", eleamId)
@@ -84,7 +120,7 @@ export async function updateEleam(id, payload) {
     .update(payload)
     .eq("id", id)
     .select(`
-      *,
+      ${ELEAM_SELECT},
       responsable:profiles!eleams_responsable_comercial_fkey(id, nombre, email)
     `)
     .single();
@@ -107,7 +143,7 @@ export async function getEleamResidentCount(eleamId) {
 export async function getRecentPayments(limit = 20) {
   const { data, error } = await supabase
     .from("pagos")
-    .select("*, eleams(nombre)")
+    .select(`${PAYMENT_SELECT}, eleams(nombre)`)
     .order("fecha_pago", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -118,7 +154,7 @@ export async function getEleamPayments(eleamId, limit = 50) {
   if (!eleamId) return [];
   const { data, error } = await supabase
     .from("pagos")
-    .select("*")
+    .select(PAYMENT_SELECT)
     .eq("eleam_id", eleamId)
     .order("fecha_pago", { ascending: false })
     .limit(limit);
@@ -160,7 +196,7 @@ export async function getCrmTasks({ eleamId = null, soloPendientes = false, limi
   let q = supabase
     .from("crm_tasks")
     .select(`
-      *,
+      ${CRM_TASK_SELECT},
       eleam:eleams(id, nombre),
       autor:profiles!crm_tasks_creado_por_fkey(id, nombre),
       cierre:profiles!crm_tasks_completado_por_fkey(id, nombre)
@@ -189,7 +225,7 @@ export async function createCrmTask(payload) {
       fecha_vencimiento:  payload.fecha_vencimiento || null,
       creado_por:         user?.id ?? null,
     })
-    .select()
+    .select(CRM_TASK_SELECT)
     .single();
   if (error) throw error;
   return data;
@@ -200,7 +236,7 @@ export async function updateCrmTask(id, payload) {
     .from("crm_tasks")
     .update(payload)
     .eq("id", id)
-    .select()
+    .select(CRM_TASK_SELECT)
     .single();
   if (error) throw error;
   return data;
@@ -216,7 +252,7 @@ export async function completeCrmTask(id) {
       completado_por: user?.id ?? null,
     })
     .eq("id", id)
-    .select()
+    .select(CRM_TASK_SELECT)
     .single();
   if (error) throw error;
   return data;
@@ -230,7 +266,7 @@ export async function getEleamInteractions(eleamId, limit = 100) {
   const { data, error } = await supabase
     .from("crm_interactions")
     .select(`
-      *,
+      ${CRM_INTERACTION_SELECT},
       autor:profiles!crm_interactions_creado_por_fkey(id, nombre)
     `)
     .eq("eleam_id", eleamId)
@@ -246,7 +282,7 @@ export async function getEleamInteractions(eleamId, limit = 100) {
 export async function getLeads({ estado = null, search = "", limit = 200 } = {}) {
   let q = supabase
     .from("demo_leads")
-    .select("*")
+    .select(DEMO_LEAD_SELECT)
     .order("creado_en", { ascending: false })
     .limit(limit);
   if (estado) q = q.eq("estado", estado);
@@ -264,7 +300,7 @@ export async function updateLead(id, payload) {
     .from("demo_leads")
     .update(payload)
     .eq("id", id)
-    .select()
+    .select(DEMO_LEAD_SELECT)
     .single();
   if (error) throw error;
   return data;
@@ -277,12 +313,16 @@ export async function grantDemoAccess(leadId) {
     body: { lead_id: leadId },
   });
   if (error) await throwEdgeFunctionError(error, "Error al crear usuario demo");
-  if (data?.error) throw new Error(data.error);
+  if (data?.ok === false || data?.error) {
+    const normalized = new Error(data.message || data.error || "No se pudo activar el acceso demo.");
+    normalized.code = data.code || "demo_grant_error";
+    throw normalized;
+  }
 
   // Leer el lead actualizado para reflejar el estado en la UI
   const { data: lead, error: leadErr } = await supabase
     .from("demo_leads")
-    .select("*")
+    .select(DEMO_LEAD_SELECT)
     .eq("id", leadId)
     .single();
   if (leadErr) throw leadErr;
@@ -290,6 +330,8 @@ export async function grantDemoAccess(leadId) {
   // Adjuntar credenciales al objeto retornado (no se persisten en BD)
   return {
     ...lead,
+    _code: data.code || null,
+    _message: data.message || null,
     _temp_password: data.temp_password,
     _email_sent: data.email_sent === true,
     _email_error: data.email_error || null,
@@ -314,7 +356,7 @@ export async function getActiveInDemo() {
 export async function getContactRequests() {
   const { data, error } = await supabase
     .from("demo_leads")
-    .select("*")
+    .select(DEMO_LEAD_SELECT)
     .eq("solicita_contacto", true)
     .order("solicita_contacto_en", { ascending: false })
     .limit(50);
@@ -390,7 +432,7 @@ export async function createEleamInteraction(payload) {
       proxima_accion: payload.proxima_accion?.trim() || null,
       creado_por:     user?.id ?? null,
     })
-    .select()
+    .select(CRM_INTERACTION_SELECT)
     .single();
   if (error) throw error;
 

@@ -3,11 +3,16 @@ import { useToast } from "../../../components/Toast";
 import Modal from "../../../components/Modal";
 import { friendlyError } from "../../../utils/errorMessages";
 import { formatDate, formatDateTime } from "../../../utils/dateUtils";
+import {
+  demoAccessToneClasses,
+  demoGrantResultMessage,
+  getDemoLeadAccessState,
+} from "../utils/demoAccess";
 
 const ESTADO_LABELS = {
   nuevo:           { txt: "Nuevo",           cls: "bg-sky-100 text-sky-700" },
   contactado:      { txt: "Contactado",       cls: "bg-blue-100 text-blue-700" },
-  demo_activo:     { txt: "Demo activo",      cls: "bg-teal-100 text-teal-700" },
+  demo_activo:     { txt: "Demo en curso",    cls: "bg-teal-100 text-teal-700" },
   demo_completado: { txt: "Demo completado",  cls: "bg-emerald-100 text-emerald-700" },
   descartado:      { txt: "Descartado",       cls: "bg-slate-100 text-slate-500" },
   convertido:      { txt: "Convertido",       cls: "bg-emerald-100 text-emerald-700" },
@@ -60,6 +65,7 @@ export default function LeadsPanel({
   const [expanded, setExpanded]   = useState(null);
   const [editNotes, setEditNotes] = useState({});
   const [credenciales, setCredenciales] = useState(null);
+  const [grantingLeadId, setGrantingLeadId] = useState(null);
 
   useEffect(() => { onLoadLeads(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -81,8 +87,15 @@ export default function LeadsPanel({
   });
 
   async function handleGrant(lead) {
+    if (grantingLeadId) return;
+    setGrantingLeadId(lead.id);
     try {
       const updated = await onGrantDemo(lead.id);
+      const resultMessage = demoGrantResultMessage({
+        ...updated,
+        code: updated._code,
+        message: updated._message,
+      });
       setCredenciales({
         email:                      updated.email ?? lead.email,
         temp_password:              updated._temp_password,
@@ -93,15 +106,14 @@ export default function LeadsPanel({
         already_active:             updated._already_active,
         repaired_existing_auth_user:updated._repaired_existing_auth_user,
         nombre:                     lead.nombre,
+        result_message:             resultMessage,
       });
-      toast(
-        updated._reused_existing_user || updated._already_active || updated._repaired_existing_auth_user
-          ? "Demo activado para una cuenta existente"
-          : "Usuario demo creado correctamente",
-        "success",
-      );
+      toast(resultMessage.toast, "success");
     } catch (e) {
-      toast(friendlyError(e, "No se pudo activar el acceso demo. Intenta de nuevo o contacta soporte."), "error");
+      const resultMessage = demoGrantResultMessage({ code: e.code, message: e.message });
+      toast(resultMessage.toast, "error");
+    } finally {
+      setGrantingLeadId(null);
     }
   }
 
@@ -131,25 +143,14 @@ export default function LeadsPanel({
         <Modal
           isOpen={true}
           onClose={() => setCredenciales(null)}
-          title={credenciales.temp_password ? "Usuario demo creado" : "Demo activado"}
+          title={credenciales.result_message?.title ?? (credenciales.temp_password ? "Usuario demo creado" : "Demo activado")}
         >
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              {credenciales.temp_password ? (
-                <>
-                  {credenciales.repaired_existing_auth_user
-                    ? <>Se reparó una cuenta Auth existente para <strong>{credenciales.nombre}</strong>.</>
-                    : <>Se creó una cuenta para <strong>{credenciales.nombre}</strong>.</>}
-                  {credenciales.email_sent
-                    ? " Le enviamos las credenciales por correo."
-                    : " Comparte estas credenciales manualmente."}
-                </>
-              ) : (
-                <>
-                  {credenciales.repaired_existing_auth_user
-                    ? <>Demo activo para <strong>{credenciales.nombre}</strong> reparando cuenta existente. Se generó contraseña temporal.</>
-                    : <>Demo activo para <strong>{credenciales.nombre}</strong> usando cuenta existente. No se generó contraseña.</>}
-                </>
+              <strong>{credenciales.nombre}</strong>: {credenciales.result_message?.body ?? (
+                credenciales.temp_password
+                  ? "Cuenta demo habilitada. Comparte las credenciales si el correo no fue enviado."
+                  : "Cuenta existente habilitada para demo. No se genero contrasena nueva."
               )}
             </p>
 
@@ -188,7 +189,7 @@ export default function LeadsPanel({
             <p className="text-xs text-slate-400">
               {credenciales.temp_password
                 ? "El usuario deberá cambiar esta contraseña en su primer acceso. Si tiene Gmail, puede vincular Google desde /cambiar-clave."
-                : "El usuario accede con su contraseña actual o con Google si ya tenía ese método configurado."}
+                : "El usuario accede con su contraseña actual, Google si ya estaba configurado, o puede usar recuperar acceso."}
             </p>
 
             <div className="flex justify-end gap-2">
@@ -294,6 +295,8 @@ export default function LeadsPanel({
             const pct          = demoPct(lead.demo_progreso);
             const isExpanded   = expanded === lead.id;
             const notesVal     = editNotes[lead.id] !== undefined ? editNotes[lead.id] : (lead.notas_admin ?? "");
+            const accessState  = getDemoLeadAccessState(lead);
+            const isGranting   = grantingLeadId === lead.id;
 
             return (
               <div
@@ -345,6 +348,9 @@ export default function LeadsPanel({
                             En demo
                           </span>
                         )}
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold border ${demoAccessToneClasses(accessState.tone)}`}>
+                          {accessState.label}
+                        </span>
                       </div>
                     </div>
 
@@ -354,9 +360,9 @@ export default function LeadsPanel({
                         {lead.utm_source ? ` · ${lead.utm_source}` : ""}
                         {lead.num_residentes ? ` · ${lead.num_residentes} res.` : ""}
                       </span>
-                      {lead.demo_token && (
+                      {lead.demo_token && !lead.demo_user_id && (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-slate-400">Demo</span>
+                          <span className="text-[11px] text-slate-400">Demo guiado</span>
                           <div className="w-16 bg-slate-100 rounded-full h-1.5">
                             <div className="bg-teal-500 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
                           </div>
@@ -383,10 +389,11 @@ export default function LeadsPanel({
 
                     {/* Stats grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {[
+                      {[ 
                         { label: "Cargo", value: lead.cargo },
                         { label: "Residentes", value: lead.num_residentes ?? "—" },
                         { label: "Origen", value: lead.utm_source ?? lead.referrer ?? "Directo" },
+                        { label: "Acceso demo", value: accessState.label },
                         { label: "Demo expira", value: formatDate(lead.demo_expires_at) },
                       ].map(({ label, value }) => (
                         <div key={label} className="bg-white rounded-lg border border-slate-100 px-2.5 py-2">
@@ -422,20 +429,21 @@ export default function LeadsPanel({
                         ))}
                       </select>
 
-                      {!lead.demo_user_id && !lead.demo_token ? (
+                      {accessState.canGrant ? (
                         <button
                           type="button"
                           onClick={() => handleGrant(lead)}
-                          className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 font-semibold transition-colors"
+                          disabled={isGranting || Boolean(grantingLeadId)}
+                          className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 font-semibold transition-colors disabled:opacity-60"
                         >
-                          Dar acceso a demo
+                          {isGranting ? "Aprobando..." : accessState.actionLabel}
                         </button>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-teal-700 bg-teal-50 border border-teal-200 px-3 py-2 rounded-xl font-medium">
+                        <span className={`inline-flex items-center gap-1.5 text-xs border px-3 py-2 rounded-xl font-medium ${demoAccessToneClasses(accessState.tone)}`}>
                           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                           </svg>
-                          Demo activo
+                          {accessState.actionLabel}
                         </span>
                       )}
 

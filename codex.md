@@ -42,7 +42,7 @@ src/
 ├── components/      # UI: Button, Input, Modal, Toast, Loading, ProtectedRoute, etc.
 ├── context/         # AuthContext → useAuth(), useLoading()
 ├── features/
-│   ├── auth/       # Login, Register
+│   ├── auth/       # Login, recuperación y cambio de contraseña
 │   ├── landing/    # LandingPage
 │   ├── blog/       # Blog público
 │   ├── dashboard/  # AdminDashboard
@@ -68,6 +68,7 @@ src/
 npm run dev      # Desarrollo
 npm run build    # Build producción (/dist)
 npm run lint     # ESLint
+npm run test:run # Tests unitarios Vitest
 npm run preview  # Preview build
 npx supabase functions deploy  # Deploy Edge Functions
 ```
@@ -79,7 +80,7 @@ npx supabase functions deploy  # Deploy Edge Functions
 | Ruta | Guard | Componente |
 |------|-------|-----------|
 | `/` | — | LandingPage |
-| `/login`, `/register` | — | Auth (público) |
+| `/login` | — | Auth (público) |
 | `/demo/:token` | — | Demo guiado por token |
 | `/pago`, `/pago/return` | — | MercadoPago |
 | `/blog`, `/blog/:slug` | — | Blog público |
@@ -126,7 +127,7 @@ const {
 
 ### Alta de cuentas
 
-No hay auto-registro público. `handle_new_user` solo acepta superadmin plataforma, demo aprobada por superadmin, usuarios creados por Edge Functions con `app_metadata` de Admin API o invitación legacy con token válido. Google OAuth no autoriza cuentas nuevas: solo sirve si el correo ya tiene perfil habilitado o fue vinculado desde `/cambiar-clave`.
+No hay auto-registro público. `handle_new_user` solo acepta superadmin plataforma, demo aprobada por superadmin, usuarios creados por Edge Functions con `app_metadata` de Admin API o accesos pendientes Gmail creados por `create-staff-user`. Google OAuth no autoriza cuentas públicas nuevas.
 
 ### ProtectedRoute
 
@@ -215,8 +216,7 @@ Admin contrata en `/pago` → Edge Function crea preapproval → checkout MP →
 - `mp-create-subscription` — Crea preapproval
 - `mp-webhook` — Valida HMAC, actualiza BD
 - `mp-cancel-subscription` — Cancela
-- `invite-funcionario` — Invitación legacy; admin invita staff/familiares y funcionario solo familiares
-- `create-demo-user` — Superadmin crea, reutiliza o repara admin ELEAM demo
+- `create-demo-user` — Superadmin aprueba lead y crea/reutiliza/repara admin ELEAM demo con respuesta `{ ok, code, message, ... }`
 - `create-staff-user` — Admin crea o repara funcionario/familiar; funcionario crea familiar vinculado
 - `delete-staff-user` — Admin elimina staff/familiar
 
@@ -254,11 +254,13 @@ Ver **[README.md — Panel Superadmin](./README.md#panel-superadmin-superadmin)*
 
 ## Demo
 
-Ruta `/demo/:token` — demo guiado para leads aprobados.
+Ruta `/demo/:token` — demo guiado para leads con token vigente.
 
 - Datos mock en frontend (`src/features/demo/demoData.js`).
 - Progreso y pings guardados en `demo_leads`.
 - Solicitudes de contacto visibles para superadmin.
+- El token de demo guiado no equivale a cuenta de login; Google devuelve `DEMO_PENDING` hasta que exista `demo_user_id`.
+- `LeadsPanel` distingue solicitud pendiente, demo guiado, demo vencido y cuenta demo aprobada.
 - `create-demo-user` crea el ELEAM demo y una cuenta `admin_eleam` con `app_metadata` server-side, reutiliza una existente compatible o repara un usuario Auth huérfano del mismo correo asignando contraseña temporal nueva.
 
 ---
@@ -299,6 +301,10 @@ Tabla `funcionario_permisos` con columnas bool:
 | `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones` | Observaciones |
 | `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación |
 | `registrar_visitas` | Visitas familiares |
+
+### Portal familiar
+
+`/familiar` usa `get_familiar_resident_snapshot(residente_id)` para leer un resumen seguro. Solo se publican observaciones, actividades de cuidado e indicaciones eMAR con `visible_familiar=true`; `resumen_familiar` permite mostrar una versión apropiada para familia.
 
 Default: el schema crea fila para funcionarios nuevos y existentes. Sin fila, `public.funcionario_can()` deniega en backend.
 

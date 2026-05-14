@@ -1,6 +1,9 @@
 import { supabase } from "../../services/supabaseConfig";
 import { featureDefaultMap, featuresForRole } from "./featureCatalog";
 
+const ELEAM_PERMISSION_SELECT = "id, eleam_id, rol, feature_id, enabled, actualizado_por, actualizado_en";
+const PROFILE_PERMISSION_SELECT = "id, profile_id, feature_id, enabled, actualizado_por, actualizado_en";
+
 function rowsToMap(rows = []) {
   return Object.fromEntries((rows ?? []).map((row) => [row.feature_id, row.enabled !== false]));
 }
@@ -47,7 +50,7 @@ export async function saveEleamRoleFeaturePermissions(eleamId, role, permissions
   const { data, error } = await supabase
     .from("eleam_feature_permissions")
     .upsert(rows, { onConflict: "eleam_id,rol,feature_id" })
-    .select();
+    .select(ELEAM_PERMISSION_SELECT);
   if (error) throw error;
   return data ?? [];
 }
@@ -73,8 +76,7 @@ export async function saveProfileFeaturePermissions(profileId, role, permissions
   const { data, error } = await supabase
     .from("profile_feature_permissions")
     .upsert(rows, { onConflict: "profile_id,feature_id" })
-    .select();
+    .select(PROFILE_PERMISSION_SELECT);
   if (error) throw error;
   return data ?? [];
 }
-

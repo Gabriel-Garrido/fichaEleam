@@ -61,17 +61,6 @@ export async function getEleamFamiliares(eleamId) {
   return (data ?? []).filter((row) => row.residentes?.eleam_id === eleamId);
 }
 
-// Quita el vínculo familiar↔residente.
-export async function unlinkFamiliarResidente(profileId, residenteId) {
-  const sb = ensureSupabase();
-  const { error } = await sb
-    .from("familiar_residentes")
-    .delete()
-    .eq("profile_id", profileId)
-    .eq("residente_id", residenteId);
-  if (error) throw error;
-}
-
 // Elimina una invitación pendiente.
 export async function revokeInvitation(id) {
   const sb = ensureSupabase();
@@ -110,7 +99,16 @@ export async function getFuncionarioPermisos(profileId) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("funcionario_permisos")
-    .select("*")
+    .select(`
+      profile_id, crear_residentes, editar_residentes, eliminar_residentes,
+      crear_signos_vitales, editar_signos_vitales, eliminar_signos_vitales,
+      crear_observaciones, editar_observaciones, eliminar_observaciones,
+      crear_planes_cuidado, editar_planes_cuidado, completar_tareas_cuidado,
+      crear_indicaciones_medicamentos, editar_indicaciones_medicamentos,
+      administrar_medicamentos, validar_medicamentos_controlados,
+      ajustar_stock_medicamentos, subir_acreditacion, editar_acreditacion,
+      archivar_acreditacion, registrar_visitas, actualizado_en
+    `)
     .eq("profile_id", profileId)
     .maybeSingle();
   if (error) throw error;

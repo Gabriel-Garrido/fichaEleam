@@ -11,6 +11,24 @@ const ALLOWED_MIME = new Set([
   "image/jpeg", "image/png", "image/webp",
 ]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const AMBITO_SELECT = "id, codigo, nombre, descripcion, icono, orden";
+const REQUISITO_ELEAM_SELECT = `
+  id, eleam_id, requisito_id, estado, fecha_vencimiento,
+  no_aplica_motivo, responsable_id, notas,
+  ultima_revision_en, ultima_revision_por, creado_en, actualizado_en
+`;
+const ACRED_DOCUMENT_SELECT = `
+  id, eleam_id, requisito_eleam_id, version, vigente,
+  storage_path, archivo_nombre, archivo_tipo, archivo_tamanio,
+  fecha_emision, fecha_vencimiento, notas,
+  reemplazado_por_id, reemplazado_en, subido_por, creado_en
+`;
+const ACRED_OBSERVATION_SELECT = `
+  id, eleam_id, requisito_eleam_id, origen, descripcion,
+  acciones_subsanacion, responsable_id, fecha, fecha_compromiso,
+  estado, cerrada_en, cerrada_por, cerrada_nota,
+  creado_por, creado_en, actualizado_en
+`;
 
 // Estados visuales de un requisito
 export const ESTADOS_REQUISITO = {
@@ -101,7 +119,7 @@ async function logAudit({ entidad, entidadId, accion, detalle = null }) {
 export async function getAmbitos() {
   const { data, error } = await supabase
     .from("acred_ambitos")
-    .select("*")
+    .select(AMBITO_SELECT)
     .order("orden", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -110,7 +128,7 @@ export async function getAmbitos() {
 export async function getAmbitoByCodigo(codigo) {
   const { data, error } = await supabase
     .from("acred_ambitos")
-    .select("*")
+    .select(AMBITO_SELECT)
     .eq("codigo", codigo)
     .maybeSingle();
   if (error) throw error;
@@ -212,7 +230,7 @@ export async function setRequisitoEstado(reId, payload) {
     .update(update)
     .eq("id", reId)
     .eq("eleam_id", eleamId)
-    .select()
+    .select(REQUISITO_ELEAM_SELECT)
     .single();
   if (error) throw error;
 
@@ -321,7 +339,7 @@ export async function uploadEvidence({ reId, file, fechaEmision, fechaVencimient
       notas:              notas?.trim() || null,
       subido_por:         userId,
     })
-    .select()
+    .select(ACRED_DOCUMENT_SELECT)
     .single();
 
   if (error) {
@@ -421,7 +439,7 @@ export async function crearObservacion({ requisitoEleamId, origen, descripcion, 
       responsable_id:       responsableId || null,
       creado_por:           userId,
     })
-    .select()
+    .select(ACRED_OBSERVATION_SELECT)
     .single();
   if (error) throw error;
 
@@ -448,7 +466,7 @@ export async function actualizarObservacion(id, payload) {
     .from("acred_observaciones")
     .update({ ...payload, actualizado_en: new Date().toISOString() })
     .eq("id", id)
-    .select()
+    .select(ACRED_OBSERVATION_SELECT)
     .single();
   if (error) throw error;
   await logAudit({ entidad: "observacion", entidadId: id, accion: "update", detalle: payload });
@@ -467,7 +485,7 @@ export async function cerrarObservacion(id, nota) {
       actualizado_en: new Date().toISOString(),
     })
     .eq("id", id)
-    .select(`*, requisito_eleam_id`)
+    .select(ACRED_OBSERVATION_SELECT)
     .single();
   if (error) throw error;
 

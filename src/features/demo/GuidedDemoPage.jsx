@@ -20,7 +20,7 @@ export default function GuidedDemoPage() {
     let cancelled = false;
     supabase
       .from("demo_leads")
-      .select("id, demo_token, demo_expires_at, demo_progreso, nombre")
+      .select("id, demo_token, demo_expires_at, demo_progreso, nombre, demo_user_id")
       .eq("demo_token", token)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -75,8 +75,8 @@ export default function GuidedDemoPage() {
           </h1>
           <p className="text-slate-500 text-sm mb-6 leading-relaxed">
             {status === "expired"
-              ? "El período de acceso a este demo ha expirado. Solicita un nuevo enlace para continuar."
-              : "Este enlace de demo no existe o ya fue utilizado. Solicita acceso para recibir tu enlace personalizado."}
+              ? "El período de acceso a este demo guiado ha expirado. Solicita una nueva revisión para continuar."
+              : "Este enlace de demo no existe o no está disponible. Solicita acceso para que revisemos tu caso."}
           </p>
           <div className="flex flex-col gap-3">
             <button
@@ -84,7 +84,7 @@ export default function GuidedDemoPage() {
               onClick={() => setShowModal(true)}
               className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl text-sm"
             >
-              Solicitar nuevo acceso
+              Solicitar revisión de acceso
             </button>
             <button
               type="button"
@@ -101,10 +101,29 @@ export default function GuidedDemoPage() {
   }
 
   return (
-    <GuidedDemoShell
-      token={token}
-      leadId={lead?.id}
-      onProgresoUpdate={handleProgresoUpdate}
-    />
+    <div className="min-h-screen bg-slate-50">
+      {!lead?.demo_user_id && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              Este es un demo guiado. El inicio de sesión se habilita cuando el equipo aprueba una cuenta demo para tu correo.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowModal(true)}
+              className="shrink-0 rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950"
+            >
+              Solicitar cuenta demo
+            </button>
+          </div>
+        </div>
+      )}
+      <GuidedDemoShell
+        token={token}
+        leadId={lead?.id}
+        onProgresoUpdate={handleProgresoUpdate}
+      />
+      <DemoRequestModal isOpen={showModal} onClose={() => setShowModal(false)} defaultCta="guided_demo_login_request" />
+    </div>
   );
 }

@@ -1,60 +1,55 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-
-import Login            from "../features/auth/Login";
-import Register         from "../features/auth/Register";
-import RecuperarAcceso  from "../features/auth/RecuperarAcceso";
-import ResetPassword    from "../features/auth/ResetPassword";
-import LandingPage      from "../features/landing/LandingPage";
-import GuidedDemoPage  from "../features/demo/GuidedDemoPage";
-import PaymentPage      from "../features/payment/PaymentPage";
-import PaymentReturn    from "../features/payment/PaymentReturn";
-import TeamManagement      from "../features/team/TeamManagement";
-import ChangePasswordPage  from "../features/team/ChangePasswordPage";
-
-import ResidentList    from "../features/residents/ResidentList";
-import ResidentForm    from "../features/residents/ResidentForm";
-import ResidentDetails from "../features/residents/ResidentDetails";
-
-import VitalSignsList from "../features/vitalSigns/VitalSignsList";
-import VitalSignsForm from "../features/vitalSigns/VitalSignsForm";
-
-import ObservationList from "../features/observations/ObservationList";
-import ObservationForm from "../features/observations/ObservationForm";
-
-import TurnosDashboard from "../features/turnos/TurnosDashboard";
-import TurnoBuilder from "../features/turnos/TurnoBuilder";
-import TurnoPrintable from "../features/turnos/TurnoPrintable";
-import CareTasksPage from "../features/carePlans/CareTasksPage";
-import EmarTurnPage from "../features/emar/EmarTurnPage";
-
-import AccreditationDashboard      from "../features/accreditation/AccreditationDashboard";
-import AccreditationAmbito         from "../features/accreditation/AccreditationAmbito";
-import AccreditationRequisito      from "../features/accreditation/AccreditationRequisito";
-import AccreditationObservaciones  from "../features/accreditation/AccreditationObservaciones";
-import AccreditationCarpeta        from "../features/accreditation/AccreditationCarpeta";
-
-import AdminDashboard      from "../features/dashboard/AdminDashboard";
-import SuperAdminDashboard from "../features/superadmin/SuperAdminDashboard";
-import SuperAdminClientes  from "../features/superadmin/SuperAdminClientes";
-import SuperAdminLeads     from "../features/superadmin/SuperAdminLeads";
-import SuperAdminPagos     from "../features/superadmin/SuperAdminPagos";
-import SuperAdminTareas    from "../features/superadmin/SuperAdminTareas";
-import SuperAdminPermisos  from "../features/superadmin/SuperAdminPermisos";
-import BlogManagement      from "../features/superadmin/blog/BlogManagement";
-import BlogEditor          from "../features/superadmin/blog/BlogEditor";
-
-import FamiliarPortal  from "../features/familiar/FamiliarPortal";
-import FamiliarVisitas from "../features/familiar/FamiliarVisitas";
-
-import PublicBlogList from "../features/blog/PublicBlogList";
-import PublicBlogPost from "../features/blog/PublicBlogPost";
-
 import AppShell        from "../layout/AppShell";
 import ProtectedRoute  from "../components/ProtectedRoute";
 import SuperAdminRoute from "../components/SuperAdminRoute";
 import Loading         from "../components/Loading";
+
+const Login = lazy(() => import("../features/auth/Login"));
+const RecuperarAcceso = lazy(() => import("../features/auth/RecuperarAcceso"));
+const ResetPassword = lazy(() => import("../features/auth/ResetPassword"));
+const LandingPage = lazy(() => import("../features/landing/LandingPage"));
+const GuidedDemoPage = lazy(() => import("../features/demo/GuidedDemoPage"));
+const PaymentPage = lazy(() => import("../features/payment/PaymentPage"));
+const PaymentReturn = lazy(() => import("../features/payment/PaymentReturn"));
+const TeamManagement = lazy(() => import("../features/team/TeamManagement"));
+const ChangePasswordPage = lazy(() => import("../features/team/ChangePasswordPage"));
+
+const ResidentList = lazy(() => import("../features/residents/ResidentList"));
+const ResidentForm = lazy(() => import("../features/residents/ResidentForm"));
+const ResidentDetails = lazy(() => import("../features/residents/ResidentDetails"));
+const VitalSignsList = lazy(() => import("../features/vitalSigns/VitalSignsList"));
+const VitalSignsForm = lazy(() => import("../features/vitalSigns/VitalSignsForm"));
+const ObservationList = lazy(() => import("../features/observations/ObservationList"));
+const ObservationForm = lazy(() => import("../features/observations/ObservationForm"));
+
+const TurnosDashboard = lazy(() => import("../features/turnos/TurnosDashboard"));
+const TurnoBuilder = lazy(() => import("../features/turnos/TurnoBuilder"));
+const TurnoPrintable = lazy(() => import("../features/turnos/TurnoPrintable"));
+const CareTasksPage = lazy(() => import("../features/carePlans/CareTasksPage"));
+const EmarTurnPage = lazy(() => import("../features/emar/EmarTurnPage"));
+
+const AccreditationDashboard = lazy(() => import("../features/accreditation/AccreditationDashboard"));
+const AccreditationAmbito = lazy(() => import("../features/accreditation/AccreditationAmbito"));
+const AccreditationRequisito = lazy(() => import("../features/accreditation/AccreditationRequisito"));
+const AccreditationObservaciones = lazy(() => import("../features/accreditation/AccreditationObservaciones"));
+const AccreditationCarpeta = lazy(() => import("../features/accreditation/AccreditationCarpeta"));
+
+const AdminDashboard = lazy(() => import("../features/dashboard/AdminDashboard"));
+const SuperAdminDashboard = lazy(() => import("../features/superadmin/SuperAdminDashboard"));
+const SuperAdminClientes = lazy(() => import("../features/superadmin/SuperAdminClientes"));
+const SuperAdminLeads = lazy(() => import("../features/superadmin/SuperAdminLeads"));
+const SuperAdminPagos = lazy(() => import("../features/superadmin/SuperAdminPagos"));
+const SuperAdminTareas = lazy(() => import("../features/superadmin/SuperAdminTareas"));
+const SuperAdminPermisos = lazy(() => import("../features/superadmin/SuperAdminPermisos"));
+const BlogManagement = lazy(() => import("../features/superadmin/blog/BlogManagement"));
+const BlogEditor = lazy(() => import("../features/superadmin/blog/BlogEditor"));
+
+const FamiliarPortal = lazy(() => import("../features/familiar/FamiliarPortal"));
+const FamiliarVisitas = lazy(() => import("../features/familiar/FamiliarVisitas"));
+const PublicBlogList = lazy(() => import("../features/blog/PublicBlogList"));
+const PublicBlogPost = lazy(() => import("../features/blog/PublicBlogPost"));
 
 // Roles abreviados para legibilidad de las rutas
 const STAFF = ["admin_eleam", "funcionario"];
@@ -70,11 +65,12 @@ function AppRouter() {
   const fallbackPath = user ? homePath : "/";
 
   return (
-    <Routes>
+    <Suspense fallback={<Loading message="Cargando vista..." />}>
+      <Routes>
         {/* ── Públicas ──────────────────────────────────────── */}
         <Route path="/"            element={<LandingPage />} />
         <Route path="/login"             element={user ? signedInRedirect : <Login />} />
-        <Route path="/register"          element={user ? signedInRedirect : <Register />} />
+        <Route path="/register"          element={<Navigate to="/login" replace />} />
         <Route path="/recuperar-acceso"  element={<RecuperarAcceso />} />
         <Route path="/reset-password"    element={<ResetPassword />} />
         <Route path="/demo/:token"      element={<GuidedDemoPage />} />
@@ -190,6 +186,7 @@ function AppRouter() {
         {/* ── Fallback ───────────────────────────────────────────── */}
         <Route path="*" element={<Navigate to={fallbackPath} replace />} />
       </Routes>
+    </Suspense>
   );
 }
 

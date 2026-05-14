@@ -22,6 +22,33 @@ import {
 } from "../_shared/authUsers.ts";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const AUTHORIZABLE_STATES = new Set(["nuevo", "contactado", "demo_activo", "demo_completado"]);
+
+function success(req: Request, code: string, message: string, payload: Record<string, unknown> = {}) {
+  return jsonResponse(req, {
+    ok: true,
+    code,
+    message,
+    email_sent: false,
+    ...payload,
+  });
+}
+
+function fail(
+  req: Request,
+  code: string,
+  message: string,
+  status = 400,
+  payload: Record<string, unknown> = {},
+) {
+  return jsonResponse(req, {
+    ok: false,
+    code,
+    message,
+    email_sent: false,
+    ...payload,
+  }, status);
+}
 
 function generatePassword(): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -64,22 +91,22 @@ Deno.serve(async (req) => {
   if (pre) return pre;
 
   if (req.method !== "POST") {
-    return jsonResponse(req, { error: "Método no permitido" }, 405);
+    return fail(req, "method_not_allowed", "Método no permitido", 405);
   }
 
   try {
     const { user, profile, error } = await getCallerProfile(req);
     if (error || !user || !profile) {
-      return jsonResponse(req, { error: "No autenticado" }, 401);
+      return fail(req, "unauthenticated", "No autenticado", 401);
     }
     if (profile.rol !== "superadmin") {
-      return jsonResponse(req, { error: "Solo superadmin puede crear usuarios demo" }, 403);
+      return fail(req, "forbidden", "Solo superadmin puede crear usuarios demo", 403);
     }
 
     const body = await req.json().catch(() => ({}));
     const leadId = String(body.lead_id ?? "").trim();
     if (!leadId) {
-      return jsonResponse(req, { error: "lead_id es obligatorio" }, 400);
+      return fail(req, "validation_error", "lead_id es obligatorio", 400);
     }
 
     const sb = adminClient();
@@ -87,28 +114,37 @@ Deno.serve(async (req) => {
     // Obtener datos del lead
     const { data: lead, error: leadErr } = await sb
       .from("demo_leads")
-      .select("id, nombre, email, eleam_nombre, demo_token, demo_user_id")
+      .select("id, nombre, email, eleam_nombre, estado, demo_token, demo_expires_at, demo_user_id")
       .eq("id", leadId)
       .maybeSingle();
 
     if (leadErr || !lead) {
-      return jsonResponse(req, { error: "Lead no encontrado" }, 404);
+      return fail(req, "not_found", "Lead no encontrado", 404);
     }
+
+    if (!AUTHORIZABLE_STATES.has(String(lead.estado ?? ""))) {
+      return fail(
+        req,
+        "blocked_state",
+        "Este lead no puede recibir acceso demo desde su estado actual.",
+        409,
+        { status: lead.estado ?? null },
+      );
+    }
+
     const cleanEmail = String(lead.email ?? "").trim().toLowerCase();
     if (!cleanEmail || !EMAIL_RE.test(cleanEmail)) {
-      return jsonResponse(req, { error: "El lead no tiene email válido" }, 400);
+      return fail(req, "email_invalid", "El lead no tiene un correo válido. Corrígelo antes de aprobar el demo.", 400);
     }
 
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const eleamNombre = lead.eleam_nombre || "Demo ELEAM";
 
     if (lead.demo_user_id) {
-      return jsonResponse(req, {
-        ok: true,
+      return success(req, "already_active", "Este lead ya tiene acceso demo aprobado.", {
         already_active: true,
         profile_id: lead.demo_user_id,
         email: cleanEmail,
-        email_sent: false,
       });
     }
 
@@ -123,7 +159,7 @@ Deno.serve(async (req) => {
 
     if (existingErr) {
       console.error("profiles lookup", existingErr);
-      return jsonResponse(req, { error: "No se pudo validar el correo del lead." }, 500);
+      return fail(req, "internal_error", "No se pudo validar el correo del lead. Intenta nuevamente.", 500);
     }
 
     const reusableProfile = (existingProfiles ?? [])
@@ -133,9 +169,12 @@ Deno.serve(async (req) => {
     const existingProfile = reusableProfile ?? null;
     if (existingProfile) {
       if (hasIncompatibleProfile) {
-        return jsonResponse(req, {
-          error: "Este correo ya tiene más de un perfil o pertenece a otra cuenta de FichaEleam. Revisa el usuario antes de crear el demo.",
-        }, 409);
+        return fail(
+          req,
+          "conflict",
+          "Este correo ya pertenece a otra cuenta de FichaEleam. Revisa el usuario antes de aprobar el demo.",
+          409,
+        );
       }
 
       // Verificar que el ELEAM del admin no esté en producción activa antes de
@@ -151,12 +190,15 @@ Deno.serve(async (req) => {
         eleamCheck.plan !== "demo" &&
         (eleamCheck.subscription_status === "activo" || eleamCheck.subscription_status === "en_gracia")
       ) {
-        return jsonResponse(req, {
-          error: "El ELEAM de este admin ya tiene una suscripción activa de producción. No se puede sobreescribir con modo demo.",
-        }, 409);
+        return fail(
+          req,
+          "production_account",
+          "Este correo ya administra un ELEAM con acceso productivo. No se modificó para demo.",
+          409,
+        );
       }
 
-      await sb.from("eleams").update({
+      const { error: eleamUpdateErr } = await sb.from("eleams").update({
         nombre: eleamNombre,
         plan: "demo",
         subscription_status: "activo",
@@ -166,35 +208,39 @@ Deno.serve(async (req) => {
         ultimo_contacto: new Date().toISOString(),
       }).eq("id", existingProfile.eleam_id);
 
-      await sb.from("demo_leads").update({
+      if (eleamUpdateErr) {
+        console.error("demo eleam reuse update", eleamUpdateErr);
+        return fail(req, "internal_error", "No se pudo activar el ELEAM demo. Intenta nuevamente.", 500);
+      }
+
+      const { error: leadUpdateErr } = await sb.from("demo_leads").update({
         demo_user_id: existingProfile.id,
         demo_access_granted_at: new Date().toISOString(),
         demo_expires_at: expiresAt,
         estado: "demo_activo",
       }).eq("id", leadId);
 
-      return jsonResponse(req, {
-        ok: true,
+      if (leadUpdateErr) {
+        console.error("demo lead reuse update", leadUpdateErr);
+        return fail(req, "internal_error", "La cuenta se habilitó, pero no se pudo actualizar el lead. Recarga y verifica.", 500);
+      }
+
+      return success(req, "reused_demo", "Demo activado usando una cuenta existente compatible.", {
         reused_existing_user: true,
         profile_id: existingProfile.id,
         eleam_id: existingProfile.eleam_id,
         email: cleanEmail,
-        email_sent: false,
       });
     }
 
     if ((existingProfiles ?? []).length > 0 && !existingProfile) {
-      return jsonResponse(req, {
-        error: "Este correo ya pertenece a otra cuenta de FichaEleam. Usa otro correo para crear el demo.",
-      }, 409);
+      return fail(req, "conflict", "Este correo ya pertenece a otra cuenta de FichaEleam. Usa otro correo para crear el demo.", 409);
     }
 
     const { user: existingAuthUser, error: authLookupErr } = await findAuthUserByEmail(sb, cleanEmail);
     if (authLookupErr) {
       console.error("auth user lookup", authLookupErr);
-      return jsonResponse(req, {
-        error: "No se pudo validar si el correo ya existe en Auth.",
-      }, 500);
+      return fail(req, "internal_error", "No se pudo validar si el correo ya existe. Intenta nuevamente.", 500);
     }
 
     const tempPassword = generatePassword();
@@ -217,7 +263,7 @@ Deno.serve(async (req) => {
 
     if (eleamCreateErr || !demoEleam) {
       console.error("demo eleam create", eleamCreateErr);
-      return jsonResponse(req, { error: "No se pudo crear el ELEAM demo." }, 500);
+      return fail(req, "internal_error", "No se pudo crear el ELEAM demo. Intenta nuevamente.", 500);
     }
 
     if (existingAuthUser) {
@@ -233,9 +279,7 @@ Deno.serve(async (req) => {
       if (profileInsert.error) {
         await sb.from("eleams").delete().eq("id", demoEleam.id);
         console.error("demo profile repair insert", profileInsert.error);
-        return jsonResponse(req, {
-          error: "El correo existe en Auth, pero no se pudo reparar su perfil. Revisa si ya tiene un perfil asociado.",
-        }, 409);
+        return fail(req, "conflict", "El correo existe en Auth, pero no se pudo reparar su perfil. Revisa el usuario antes de continuar.", 409);
       }
 
       const currentAppMetadata =
@@ -267,17 +311,22 @@ Deno.serve(async (req) => {
         await sb.from("profiles").delete().eq("id", existingAuthUser.id);
         await sb.from("eleams").delete().eq("id", demoEleam.id);
         console.error("demo auth repair update", updateAuthErr);
-        return jsonResponse(req, {
-          error: "El correo existe en Auth, pero no se pudo habilitar para el demo.",
-        }, 500);
+        return fail(req, "internal_error", "El correo existe en Auth, pero no se pudo habilitar para el demo.", 500);
       }
 
-      await sb.from("demo_leads").update({
+      const { error: leadUpdateErr } = await sb.from("demo_leads").update({
         demo_user_id: existingAuthUser.id,
         demo_access_granted_at: new Date().toISOString(),
         demo_expires_at: expiresAt,
         estado: "demo_activo",
       }).eq("id", leadId);
+
+      if (leadUpdateErr) {
+        await sb.from("profiles").delete().eq("id", existingAuthUser.id);
+        await sb.from("eleams").delete().eq("id", demoEleam.id);
+        console.error("demo repaired lead update", leadUpdateErr);
+        return fail(req, "internal_error", "No se pudo actualizar el lead con la cuenta reparada.", 500);
+      }
 
       const emailResult = await sendDemoCredentials({
         email: cleanEmail,
@@ -286,8 +335,7 @@ Deno.serve(async (req) => {
         eleamNombre,
       });
 
-      return jsonResponse(req, {
-        ok: true,
+      return success(req, "repaired_auth", "Cuenta Auth reparada y demo aprobado.", {
         repaired_existing_auth_user: true,
         profile_id: existingAuthUser.id,
         eleam_id: demoEleam.id,
@@ -319,11 +367,15 @@ Deno.serve(async (req) => {
     if (createError) {
       await sb.from("eleams").delete().eq("id", demoEleam.id);
       if (isDuplicateAuthUserError(createError)) {
-        return jsonResponse(req, {
-          error: "Este correo ya existe en Auth. Actualiza la lista y vuelve a intentarlo para reparar la cuenta, o revisa Auth > Users si el problema persiste.",
-        }, 409);
+        return fail(
+          req,
+          "conflict",
+          "Este correo ya existe en Auth. Actualiza la lista y vuelve a intentarlo para reparar la cuenta.",
+          409,
+        );
       }
-      return jsonResponse(req, { error: "No se pudo crear el usuario." }, 500);
+      console.error("demo auth create", createError);
+      return fail(req, "internal_error", "No se pudo crear el usuario demo. Intenta nuevamente.", 500);
     }
 
     const profileId = created.user.id;
@@ -349,12 +401,17 @@ Deno.serve(async (req) => {
     }
 
     // Actualizar lead con el profile_id del usuario creado
-    await sb.from("demo_leads").update({
+    const { error: leadUpdateErr } = await sb.from("demo_leads").update({
       demo_user_id: profileId,
       demo_access_granted_at: new Date().toISOString(),
       demo_expires_at: expiresAt,
       estado: "demo_activo",
     }).eq("id", leadId);
+
+    if (leadUpdateErr) {
+      console.error("demo created lead update", leadUpdateErr);
+      return fail(req, "internal_error", "El usuario se creó, pero no se pudo actualizar el lead. Recarga y verifica.", 500);
+    }
 
     const emailResult = await sendDemoCredentials({
       email: cleanEmail,
@@ -363,8 +420,7 @@ Deno.serve(async (req) => {
       eleamNombre,
     });
 
-    return jsonResponse(req, {
-      ok: true,
+    return success(req, "created", "Usuario demo creado correctamente.", {
       profile_id: profileId,
       eleam_id: eleamId,
       email: cleanEmail,
@@ -375,6 +431,6 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("create-demo-user", e);
-    return jsonResponse(req, { error: "Error interno", detail: String(e?.message ?? e) }, 500);
+    return fail(req, "internal_error", "Error interno al aprobar el demo. Intenta nuevamente.", 500);
   }
 });

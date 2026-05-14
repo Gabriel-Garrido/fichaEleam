@@ -37,9 +37,9 @@ function DemoPendingNotice({ onHome }) {
             </svg>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-amber-950">Tu solicitud de demo está en revisión</p>
+            <p className="text-sm font-bold text-amber-950">Tu demo está registrado</p>
             <p className="mt-1 text-sm leading-relaxed text-amber-900">
-              Ya recibimos este correo. El acceso con Google se habilita cuando el equipo aprueba la demo y deja listo tu entorno.
+              El inicio de sesión se habilita cuando el equipo aprueba una cuenta demo para este correo. No necesitas crear otra solicitud.
             </p>
           </div>
         </div>
@@ -61,7 +61,7 @@ function DemoPendingNotice({ onHome }) {
       </div>
 
       <div className="flex flex-col gap-2 border-t border-amber-200 bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-amber-900">No necesitas volver a registrarte. Revisa tu correo durante las próximas horas.</p>
+        <p className="text-xs text-amber-900">Si ya estás explorando el demo guiado, ese enlace no reemplaza el login con cuenta aprobada.</p>
         <button
           type="button"
           onClick={onHome}

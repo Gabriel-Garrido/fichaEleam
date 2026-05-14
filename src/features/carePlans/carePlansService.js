@@ -194,6 +194,33 @@ export const OMISSION_REASONS = [
   ["otro", "Otro"],
 ];
 
+const CARE_PLAN_SELECT = `
+  id, eleam_id, residente_id, titulo, objetivos,
+  pauta_alimentacion, pauta_hidratacion, restricciones,
+  riesgo_caidas, riesgo_up, estado, version,
+  creado_por, actualizado_por, creado_en, actualizado_en
+`;
+
+const CARE_ACTIVITY_SELECT = `
+  id, eleam_id, residente_id, plan_id, categoria, titulo,
+  descripcion, instrucciones, prioridad, requiere_observacion,
+  visible_familiar, resumen_familiar, activo,
+  creado_por, actualizado_por, creado_en, actualizado_en
+`;
+
+const CARE_SCHEDULE_SELECT = `
+  id, eleam_id, residente_id, actividad_id, frecuencia,
+  dias_semana, dias_mes, fecha_unica, hora, turno,
+  tolerancia_min, activo, creado_en, actualizado_en
+`;
+
+const CARE_TASK_SELECT = `
+  id, eleam_id, residente_id, plan_id, actividad_id, horario_id,
+  fecha, turno, hora, estado, motivo_omision, notas,
+  requiere_seguimiento, observacion_id, reprogramada_para,
+  cumplida_por, cumplida_en, creado_en, actualizado_en
+`;
+
 export function todayIso() {
   const now = new Date();
   const year = now.getFullYear();
@@ -210,7 +237,7 @@ export function currentTurno(date = new Date()) {
 }
 
 const TASK_SELECT = `
-  *,
+  ${CARE_TASK_SELECT},
   residentes(id, nombre, apellido, habitacion, cama, nivel_dependencia),
   actividad:plan_cuidado_actividades(id, titulo, categoria, prioridad, instrucciones, requiere_observacion)
 `;
@@ -261,10 +288,10 @@ export async function getResidentCarePlan(residenteId) {
   const { data, error } = await supabase
     .from("planes_cuidado")
     .select(`
-      *,
+      ${CARE_PLAN_SELECT},
       actividades:plan_cuidado_actividades(
-        *,
-        horarios:plan_cuidado_horarios(*)
+        ${CARE_ACTIVITY_SELECT},
+        horarios:plan_cuidado_horarios(${CARE_SCHEDULE_SELECT})
       )
     `)
     .eq("residente_id", residenteId)
@@ -292,7 +319,7 @@ export async function saveCarePlan(residenteId, payload = {}) {
       .from("planes_cuidado")
       .update(base)
       .eq("id", payload.id)
-      .select()
+      .select(CARE_PLAN_SELECT)
       .single();
     if (error) throw error;
     return data;
@@ -306,7 +333,7 @@ export async function saveCarePlan(residenteId, payload = {}) {
       residente_id: residenteId,
       creado_por: userId,
     })
-    .select()
+    .select(CARE_PLAN_SELECT)
     .single();
   if (error) throw error;
   return data;
@@ -324,6 +351,8 @@ export async function saveCareActivity({ plan, activity, schedule }) {
     instrucciones: activity.instrucciones?.trim() || null,
     prioridad: activity.prioridad || "media",
     requiere_observacion: activity.requiere_observacion === true,
+    visible_familiar: activity.visible_familiar === true,
+    resumen_familiar: activity.resumen_familiar?.trim() || null,
     activo: activity.activo !== false,
     actualizado_por: userId,
   };
@@ -336,7 +365,7 @@ export async function saveCareActivity({ plan, activity, schedule }) {
       .from("plan_cuidado_actividades")
       .update(payload)
       .eq("id", activity.id)
-      .select()
+      .select(CARE_ACTIVITY_SELECT)
       .single();
     if (error) throw error;
     saved = data;
@@ -345,7 +374,7 @@ export async function saveCareActivity({ plan, activity, schedule }) {
     const { data, error } = await supabase
       .from("plan_cuidado_actividades")
       .insert({ ...payload, creado_por: userId })
-      .select()
+      .select(CARE_ACTIVITY_SELECT)
       .single();
     if (error) throw error;
     saved = data;
@@ -416,7 +445,7 @@ export async function createCarePresetActivities({ plan, presetIds = [], existin
         creado_por: userId,
         actualizado_por: userId,
       })
-      .select()
+      .select(CARE_ACTIVITY_SELECT)
       .single();
     if (error) throw error;
 

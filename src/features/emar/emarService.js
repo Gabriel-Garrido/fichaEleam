@@ -38,8 +38,44 @@ export const OMISSION_REASONS = [
   ["otro", "Otro"],
 ];
 
+const INDICATION_SELECT = `
+  id, eleam_id, residente_id, medicamento_nombre, principio_activo, concentracion,
+  forma_farmaceutica, dosis, unidad_dosis, via, indicacion, prescriptor_nombre,
+  fecha_indicacion, fecha_inicio, fecha_fin, estado,
+  es_controlado, tipo_controlado, requiere_doble_validacion, requiere_stock,
+  visible_familiar, resumen_familiar, instrucciones,
+  creado_por, actualizado_por, creado_en, actualizado_en
+`;
+
+const SCHEDULE_SELECT = `
+  id, eleam_id, residente_id, indicacion_id, frecuencia,
+  dias_semana, dias_mes, fecha_unica, hora, turno,
+  tolerancia_min, activo, creado_en, actualizado_en
+`;
+
+const STOCK_LOT_SELECT = `
+  id, eleam_id, residente_id, indicacion_id, medicamento_nombre, lote,
+  fecha_vencimiento, cantidad_actual, unidad, ubicacion,
+  es_controlado, tipo_controlado, estado,
+  creado_por, actualizado_por, creado_en, actualizado_en
+`;
+
+const ADMINISTRATION_SELECT = `
+  id, eleam_id, residente_id, indicacion_id, horario_id, lote_id,
+  fecha, turno, hora, estado, dosis_administrada, unidad_dosis,
+  motivo_omision, notas, requiere_seguimiento, observacion_id,
+  administrado_por, administrado_en, validado_por, validado_en,
+  creado_en, actualizado_en
+`;
+
+const RECONCILIATION_SELECT = `
+  id, eleam_id, lote_id, cantidad_sistema, cantidad_fisica,
+  diferencia, motivo, estado, creado_por, validado_por,
+  creado_en, validado_en
+`;
+
 const ADMIN_SELECT = `
-  *,
+  ${ADMINISTRATION_SELECT},
   residentes(id, nombre, apellido, habitacion, cama),
   indicacion:medicamentos_indicaciones(
     id, medicamento_nombre, principio_activo, concentracion, dosis, unidad_dosis,
@@ -135,17 +171,17 @@ export async function getResidentEmar(residenteId) {
   const [indicaciones, lotes, administraciones] = await Promise.all([
     supabase
       .from("medicamentos_indicaciones")
-      .select("*, horarios:medicamentos_horarios(*)")
+      .select(`${INDICATION_SELECT}, horarios:medicamentos_horarios(${SCHEDULE_SELECT})`)
       .eq("residente_id", residenteId)
       .order("creado_en", { ascending: false }),
     supabase
       .from("medicamentos_stock_lotes")
-      .select("*")
+      .select(STOCK_LOT_SELECT)
       .eq("residente_id", residenteId)
       .order("creado_en", { ascending: false }),
     supabase
       .from("medicamentos_administraciones")
-      .select("*, indicacion:medicamentos_indicaciones(medicamento_nombre, dosis, via, es_controlado)")
+      .select(`${ADMINISTRATION_SELECT}, indicacion:medicamentos_indicaciones(medicamento_nombre, dosis, via, es_controlado)`)
       .eq("residente_id", residenteId)
       .order("fecha", { ascending: false })
       .order("hora", { ascending: false })
@@ -185,6 +221,8 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
     tipo_controlado: indication.es_controlado ? indication.tipo_controlado || "psicotropico" : null,
     requiere_doble_validacion: indication.es_controlado === true,
     requiere_stock: indication.requiere_stock !== false,
+    visible_familiar: indication.visible_familiar === true,
+    resumen_familiar: indication.resumen_familiar?.trim() || null,
     instrucciones: indication.instrucciones?.trim() || null,
     actualizado_por: userId,
   };
@@ -199,7 +237,7 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
       .from("medicamentos_indicaciones")
       .update(payload)
       .eq("id", indication.id)
-      .select()
+      .select(INDICATION_SELECT)
       .single();
     if (error) throw error;
     saved = data;
@@ -207,7 +245,7 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
     const { data, error } = await supabase
       .from("medicamentos_indicaciones")
       .insert({ ...payload, creado_por: userId })
-      .select()
+      .select(INDICATION_SELECT)
       .single();
     if (error) throw error;
     saved = data;
@@ -270,7 +308,7 @@ export async function saveStockLot({ residenteId, indication = null, lot }) {
       .from("medicamentos_stock_lotes")
       .update(metadataPayload)
       .eq("id", lot.id)
-      .select()
+      .select(STOCK_LOT_SELECT)
       .single();
     if (error) throw error;
     return data;
@@ -280,7 +318,7 @@ export async function saveStockLot({ residenteId, indication = null, lot }) {
   const { data, error } = await supabase
     .from("medicamentos_stock_lotes")
     .insert({ ...payload, cantidad_actual: 0, creado_por: userId })
-    .select()
+    .select(STOCK_LOT_SELECT)
     .single();
   if (error) throw error;
 
@@ -301,7 +339,7 @@ export async function saveStockLot({ residenteId, indication = null, lot }) {
 export async function listAvailableLots({ residenteId, indicacionId = null, controlado = null } = {}) {
   let query = supabase
     .from("medicamentos_stock_lotes")
-    .select("*")
+    .select(STOCK_LOT_SELECT)
     .eq("estado", "activo")
     .gt("cantidad_actual", 0)
     .order("fecha_vencimiento", { ascending: true, nullsFirst: false });
@@ -364,7 +402,7 @@ export async function reconcileControlledStock({ loteId, cantidadFisica, motivo,
 export async function listPendingControlledReconciliations() {
   const { data, error } = await supabase
     .from("medicamentos_conciliaciones")
-    .select("*, lote:medicamentos_stock_lotes(medicamento_nombre, lote, unidad, residente_id)")
+    .select(`${RECONCILIATION_SELECT}, lote:medicamentos_stock_lotes(medicamento_nombre, lote, unidad, residente_id)`)
     .eq("estado", "pendiente_validacion")
     .order("creado_en", { ascending: false });
   if (error) throw error;

@@ -26,6 +26,7 @@ La app queda disponible en `http://localhost:5173`.
 npm run dev       # Desarrollo con HMR
 npm run build     # Build de producción en /dist
 npm run lint      # ESLint
+npm run test:run  # Tests unitarios Vitest
 npm run preview   # Preview local del build
 ```
 
@@ -71,7 +72,6 @@ El sistema no envía correos desde SQL ni desde triggers de base de datos. Los c
 
 - `create-demo-user`: cuando el superadmin activa un demo y se genera una contraseña temporal.
 - `create-staff-user`: cuando un admin ELEAM crea o repara un funcionario/familiar y se genera una contraseña temporal.
-- `invite-funcionario`: flujo legado; genera link de invitación, pero no envía email automático.
 
 Para habilitarlos en producción:
 
@@ -136,7 +136,6 @@ Funciones deployables en `supabase/functions/`:
 | `create-demo-user` | sí | Superadmin aprueba lead y crea, reutiliza o repara admin ELEAM demo. |
 | `create-staff-user` | sí | Admin ELEAM crea/repara funcionarios/familiares; funcionario crea/repara familiares vinculados. |
 | `delete-staff-user` | sí | Admin ELEAM elimina usuario staff/familiar. |
-| `invite-funcionario` | sí | Flujo legado de invitación por token; admin invita staff/familiares y funcionario solo familiares. |
 
 `supabase/config.toml` define `verify_jwt`; no uses `--no-verify-jwt` manualmente salvo que cambies la configuración.
 
@@ -193,9 +192,9 @@ No existe auto-registro público. Una sesión solo debe quedar operativa si el u
 - Es funcionario creado por un admin ELEAM activo.
 - Es familiar creado por admin ELEAM o funcionario, siempre vinculado a un residente activo.
 
-Google OAuth no crea cuentas nuevas en FichaEleam. Si alguien intenta entrar con Google sin cuenta habilitada, el trigger `handle_new_user` rechaza el alta y la UI muestra un mensaje de acceso no autorizado.
+Google OAuth no crea cuentas públicas nuevas en FichaEleam. Solo se acepta si el correo ya tiene perfil habilitado, fue vinculado desde `/cambiar-clave` o tiene un acceso pendiente generado por `create-staff-user` para Gmail. El registro público por token fue retirado; `/register` redirige a `/login`.
 
-El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la invitación con la RPC `validate_invitation_token`. El servidor vuelve a validar en `handle_new_user`: la invitación no puede estar vencida/usada, el ELEAM debe mantener acceso activo y, si es familiar, el residente vinculado debe seguir activo.
+Si un correo ya tiene un lead abierto en `demo_leads` pero todavía no tiene `demo_user_id`, Google OAuth vuelve a `/login` con aviso informativo `DEMO_PENDING`: el demo está registrado, pero el login solo se habilita cuando el superadmin aprueba una cuenta demo.
 
 ### Superadmin
 
@@ -208,8 +207,9 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 
 1. Prospecto llena formulario de landing.
 2. Se inserta row en `demo_leads`.
-3. Superadmin presiona `Dar acceso a demo`.
-4. `create-demo-user`:
+3. El lead puede estar como solicitud pendiente, demo guiado por token, demo guiado vencido o cuenta demo aprobada (`demo_user_id`).
+4. Superadmin aprueba desde `LeadsPanel` con el botón contextual: crear cuenta demo, aprobar cuenta con login o aprobar demo vencido.
+5. `create-demo-user`:
    - crea el ELEAM demo antes de crear el usuario Auth;
    - envía `eleam_id_direct` y `rol_direct=admin_eleam` por `app_metadata` de Admin API;
    - crea un usuario `admin_eleam` con contraseña temporal si el email no existe;
@@ -217,9 +217,17 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
    - repara usuarios huérfanos de Auth creados por intentos OAuth/signUp previos, creando el perfil autorizado y asignando una contraseña temporal nueva;
    - activa el ELEAM por 30 días;
    - marca el lead como `demo_activo`;
-   - envía email vía Resend si `RESEND_API_KEY` existe.
-5. El usuario entra y completa `/cambiar-clave`.
-6. El demo guiado vive en `/demo/:token`.
+   - envía email vía Resend si `RESEND_API_KEY` existe;
+   - retorna `{ ok, code, message, profile_id?, eleam_id?, email, temp_password?, email_sent, email_error?, email_skipped? }`.
+6. El usuario entra y completa `/cambiar-clave`.
+7. El demo guiado vive en `/demo/:token`, pero ese token no equivale a una cuenta de login.
+
+Estados derivados usados por UI:
+
+- `pending_request`: sin `demo_token` ni `demo_user_id`.
+- `guided_demo`: con `demo_token`, sin `demo_user_id` y no vencido.
+- `expired_guided_demo`: con `demo_token` vencido y sin `demo_user_id`.
+- `account_demo`: con `demo_user_id`.
 
 ### Admin ELEAM
 
@@ -242,6 +250,8 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 
 - Accede a `/familiar` y `/familiar/visitas`.
 - Solo ve residentes vinculados por `familiar_residentes`.
+- El portal consume `get_familiar_resident_snapshot(residente_id)`: residente, signos recientes, visitas propias, cuidados y medicación del día marcados como visibles.
+- Observaciones, actividades de cuidado e indicaciones eMAR aparecen solo con `visible_familiar=true`; si existe `resumen_familiar`, ese texto reemplaza el detalle interno.
 - Requiere que el ELEAM tenga demo o suscripción vigente.
 - Sus features visibles también pueden restringirse por superadmin/admin ELEAM.
 
@@ -253,7 +263,6 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 |------|-------------|
 | `/` | Landing pública con formulario de demo. |
 | `/login` | Inicio de sesión. |
-| `/register` | Registro solo para invitaciones legado. |
 | `/recuperar-acceso` | Solicitar recuperación de contraseña. |
 | `/reset-password` | Definir nueva contraseña desde link de Supabase. |
 | `/demo/:token` | Demo guiado por token. |
@@ -302,7 +311,7 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 
 - Multi-tenant: `profiles`, `eleams`, `planes`.
 - Clínica: `residentes`, `signos_vitales`, `observaciones_diarias`, `turno_entregas`.
-- Equipo: `funcionario_invitaciones`, `funcionario_permisos`, `eleam_feature_permissions`, `profile_feature_permissions`, `familiar_residentes`, `visitas_familiar`.
+- Equipo: `funcionario_invitaciones` (accesos Google pendientes), `funcionario_permisos`, `eleam_feature_permissions`, `profile_feature_permissions`, `familiar_residentes`, `visitas_familiar`.
 - Pagos: `pagos`, `mp_webhook_events`.
 - Acreditación: `acred_ambitos`, `acred_requisitos`, `acred_requisitos_eleam`, `acred_documentos`, `acred_observaciones`, `acred_audit`.
 - CRM/blog: `crm_tasks`, `crm_interactions`, `blog_posts`.
@@ -357,6 +366,7 @@ Reglas:
 
 ```bash
 npm run lint
+npm run test:run
 npm run build
 npx supabase functions list
 ```
@@ -369,11 +379,16 @@ Después de cambios en autenticación/autorización:
 ```bash
 npx supabase functions deploy create-demo-user
 npx supabase functions deploy create-staff-user
-npx supabase functions deploy invite-funcionario
 ```
 
-Warnings conocidos:
+Smoke manual recomendado para demo/login:
 
-- `react-refresh/only-export-components` en algunos archivos que exportan helpers.
-- `react-hooks/exhaustive-deps` en `LeadsPanel` por carga inicial controlada.
-- Warning de tamaño de chunk en Vite.
+1. Solicitar demo desde landing y verificar que el mensaje diga que la aprobación es manual.
+2. Intentar Google login con correo de lead pendiente o demo guiado: debe mostrar aviso `DEMO_PENDING`, no error rojo.
+3. Aprobar un lead pendiente desde `LeadsPanel`; repetir la aprobación y confirmar que responde "ya aprobado".
+4. Aprobar un lead con `demo_token` vigente y otro vencido; ambos deben crear cuenta real si el estado no está cerrado.
+5. Simular fallo de email y verificar que el modal muestra credenciales para entrega manual.
+6. Iniciar sesión con contraseña temporal y confirmar redirect a `/cambiar-clave`.
+7. Entrar con demo vencido o ELEAM sin acceso y verificar mensaje diferenciado en `/pago?sinAcceso=1`.
+
+Si `npm run build` vuelve a mostrar un chunk grande, revisa primero `src/routes/AppRouter.jsx`: las pantallas pesadas deben seguir cargándose con `React.lazy`.

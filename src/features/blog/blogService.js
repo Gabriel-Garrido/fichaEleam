@@ -1,5 +1,12 @@
 import { supabase } from "../../services/supabaseConfig";
 
+const BLOG_POST_SELECT = `
+  id, slug, titulo, resumen, contenido_md,
+  cover_url, cover_alt, meta_title, meta_description,
+  keywords, estado, publicado_en, autor_nombre, autor_id,
+  tiempo_lectura_min, views, destacado, creado_en, actualizado_en
+`;
+
 // ─────────────────────────────────────────────────────────────
 // Lectura pública
 // ─────────────────────────────────────────────────────────────
@@ -43,7 +50,7 @@ export async function getPostBySlug(slug) {
   if (!slug) return null;
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("*")
+    .select(BLOG_POST_SELECT)
     .eq("slug", slug)
     .maybeSingle();
   if (error) throw error;
@@ -69,7 +76,7 @@ export async function incrementViews(slug) {
 export async function getAllPosts() {
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("*")
+    .select(BLOG_POST_SELECT)
     .order("creado_en", { ascending: false });
   if (error) throw error;
   return data ?? [];
@@ -79,7 +86,7 @@ export async function getPostById(id) {
   if (!id) return null;
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("*")
+    .select(BLOG_POST_SELECT)
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -90,7 +97,7 @@ export async function createPost(payload) {
   const { data, error } = await supabase
     .from("blog_posts")
     .insert(sanitizePayload(payload, { isCreate: true }))
-    .select()
+    .select(BLOG_POST_SELECT)
     .single();
   if (error) throw error;
   return data;
@@ -101,7 +108,7 @@ export async function updatePost(id, payload) {
     .from("blog_posts")
     .update(sanitizePayload(payload))
     .eq("id", id)
-    .select()
+    .select(BLOG_POST_SELECT)
     .single();
   if (error) throw error;
   return data;

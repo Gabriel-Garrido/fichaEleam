@@ -32,6 +32,8 @@ const INITIAL_ACTIVITY = {
   instrucciones: "",
   prioridad: "media",
   requiere_observacion: false,
+  visible_familiar: false,
+  resumen_familiar: "",
 };
 
 const INITIAL_SCHEDULE = {
@@ -556,6 +558,27 @@ function ActivityModal({ modal, saving, onClose, onSubmit }) {
         <Field label="Título" value={activity.titulo} onChange={(value) => setActivity((p) => ({ ...p, titulo: value }))} disabled={saving} />
         <TextArea label="Descripción" value={activity.descripcion ?? ""} onChange={(value) => setActivity((p) => ({ ...p, descripcion: value }))} disabled={saving} />
         <TextArea label="Instrucciones" value={activity.instrucciones ?? ""} onChange={(value) => setActivity((p) => ({ ...p, instrucciones: value }))} disabled={saving} />
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={activity.visible_familiar === true}
+              onChange={(e) => setActivity((p) => ({ ...p, visible_familiar: e.target.checked }))}
+              className="h-4 w-4 accent-teal-700"
+            />
+            Mostrar esta actividad en el portal familiar
+          </label>
+          {activity.visible_familiar && (
+            <div className="mt-3">
+              <TextArea
+                label="Resumen para familia"
+                value={activity.resumen_familiar ?? ""}
+                onChange={(value) => setActivity((p) => ({ ...p, resumen_familiar: value }))}
+                disabled={saving}
+              />
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm font-medium text-slate-700">
             Prioridad

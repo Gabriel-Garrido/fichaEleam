@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { supabase } from "../../services/supabaseConfig";
+import { isSupabaseConfigured, supabase } from "../../services/supabaseConfig";
 import { validateEmail } from "../../utils/validators";
 import { trackEvent } from "./landingAnalytics";
 
@@ -61,6 +61,11 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (!isSupabaseConfigured || !supabase) {
+      setErrorMsg("No pudimos conectar con el servidor. Intenta nuevamente en unos minutos.");
+      setStatus("error");
+      return;
+    }
     setStatus("submitting");
     try {
       const utms = getUtms();
@@ -78,8 +83,13 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
       if (error) throw error;
       trackEvent("form_submit", "demo_request_modal", defaultCta);
       setStatus("success");
-    } catch {
-      setErrorMsg("Hubo un error al enviar. Intenta nuevamente.");
+    } catch (error) {
+      const raw = String(error?.message || "").toLowerCase();
+      setErrorMsg(
+        raw.includes("network") || raw.includes("fetch")
+          ? "No pudimos enviar la solicitud por un problema de conexión. Revisa tu internet e intenta nuevamente."
+          : "No pudimos registrar la solicitud. Verifica los datos e intenta nuevamente.",
+      );
       setStatus("error");
     }
   }
@@ -100,7 +110,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
             <div>
               <h2 id="modal-title" className="text-xl font-bold">Solicitar Demo Gratuito</h2>
               <p className="text-teal-100 text-sm mt-1">
-                Te enviamos tu enlace personalizado en menos de 24 horas.
+                Revisaremos tu solicitud y te avisaremos cuando el acceso esté habilitado.
               </p>
             </div>
             <button type="button"
@@ -124,7 +134,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-2">¡Solicitud recibida!</h3>
             <p className="text-slate-600 text-sm leading-relaxed">
-              En menos de 24 horas te enviaremos el enlace para acceder a tu demo personalizado de FichaEleam.
+              Recibimos tus datos. El equipo revisará la solicitud y te enviaremos las instrucciones de acceso cuando tu demo esté aprobada.
             </p>
             <button type="button"
               onClick={onClose}
@@ -244,7 +254,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
             </button>
 
             <p className="text-center text-xs text-slate-400">
-              Sin compromiso · Respuesta en menos de 24 horas
+              Sin compromiso · Aprobación manual por el equipo FichaEleam
             </p>
           </form>
         )}

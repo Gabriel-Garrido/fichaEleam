@@ -72,7 +72,10 @@ export function AuthProvider({ children }) {
           subscription_status, pago_activo, mp_preapproval_id, mp_payer_email,
           proximo_cobro_en, cancelado_en, fecha_vencimiento_suscripcion,
           max_residentes, max_funcionarios, fecha_pago, creado_en,
-          planes ( * )
+          planes (
+            id, codigo, nombre, descripcion, precio_clp, max_residentes,
+            max_funcionarios, frequency, frequency_type, activo, orden, destacado
+          )
         )
       `;
       let { data, error } = await supabase
@@ -112,7 +115,7 @@ export function AuthProvider({ children }) {
       }
 
       if (!data) {
-        const message = "No encontramos una cuenta habilitada para este correo. Pide al superadmin que apruebe tu demo o al administrador de tu ELEAM que cree tu usuario.";
+        const message = "No encontramos una cuenta habilitada para este correo. Si solicitaste demo, el login se habilita cuando el equipo apruebe tu cuenta; si eres funcionario o familiar, pide que creen tu usuario.";
         storeAuthNotice(message);
         setAuthNotice(message);
         setProfile(null);
@@ -146,7 +149,16 @@ export function AuthProvider({ children }) {
       if (data.rol === "funcionario") {
         const { data: perms } = await supabase
           .from("funcionario_permisos")
-          .select("*")
+          .select(`
+            profile_id, crear_residentes, editar_residentes, eliminar_residentes,
+            crear_signos_vitales, editar_signos_vitales, eliminar_signos_vitales,
+            crear_observaciones, editar_observaciones, eliminar_observaciones,
+            subir_acreditacion, editar_acreditacion, archivar_acreditacion,
+            registrar_visitas, crear_planes_cuidado, editar_planes_cuidado,
+            completar_tareas_cuidado, crear_indicaciones_medicamentos,
+            editar_indicaciones_medicamentos, administrar_medicamentos,
+            validar_medicamentos_controlados, ajustar_stock_medicamentos
+          `)
           .eq("profile_id", data.id)
           .maybeSingle();
         setPermisos(perms ?? null);

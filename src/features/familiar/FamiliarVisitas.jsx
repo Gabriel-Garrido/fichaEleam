@@ -1,15 +1,13 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../components/Toast";
 import { friendlyError } from "../../utils/errorMessages";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
-import {
-  getMyResidentes,
-  getVisits,
-  logVisit,
-} from "./familiarService";
+import PageLayout from "../../layout/PageLayout";
+import { getVisits, logVisit } from "./familiarService";
+import { useFamiliarResidentData } from "./useFamiliarResidentData";
 import { formatDateTime } from "../../utils/dateUtils";
 
 function localNowForInput() {
@@ -21,11 +19,16 @@ function localNowForInput() {
 export default function FamiliarVisitas() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [residentes, setResidentes] = useState([]);
-  const [activeId, setActiveId]     = useState(null);
   const [visitas, setVisitas]       = useState([]);
-  const [loading, setLoading]       = useState(true);
+  const [loadingVisits, setLoadingVisits] = useState(false);
   const [saving, setSaving]         = useState(false);
+  const {
+    residentes,
+    activeId,
+    activeResident,
+    loading,
+    selectResident,
+  } = useFamiliarResidentData({ toast });
 
   const [form, setForm] = useState({
     fecha_hora: localNowForInput(),
@@ -35,29 +38,20 @@ export default function FamiliarVisitas() {
 
   const loadVisits = useCallback(async (id) => {
     if (!id) return;
+    setLoadingVisits(true);
     try {
       const v = await getVisits(id, 100);
       setVisitas(v);
     } catch (e) {
       toast(friendlyError(e, "No se pudieron cargar las visitas. Intenta de nuevo."), "error");
+    } finally {
+      setLoadingVisits(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    getMyResidentes()
-      .then(async (r) => {
-        if (!mounted) return;
-        setResidentes(r);
-        const id = r[0]?.id ?? null;
-        setActiveId(id);
-        if (id) await loadVisits(id);
-      })
-      .catch((e) => mounted && toast(friendlyError(e, "No se pudo cargar la información. Recarga la página."), "error"))
-      .finally(() => mounted && setLoading(false));
-    return () => { mounted = false; };
-  }, [loadVisits, toast]);
+    if (activeId) loadVisits(activeId);
+  }, [activeId, loadVisits]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,25 +84,22 @@ export default function FamiliarVisitas() {
     );
   }
 
-  const activeRes = residentes.find((r) => r.id === activeId) ?? residentes[0];
-
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800">Mis visitas</h1>
-          <p className="text-sm text-slate-500">
-            Registro de tus visitas a {activeRes?.nombre} {activeRes?.apellido}
-          </p>
-        </div>
-        <button
-          type="button"
+    <PageLayout
+      title="Mis visitas"
+      eyebrow="Portal familiar"
+      description={`Registro de tus visitas a ${activeResident?.nombre ?? "tu familiar"} ${activeResident?.apellido ?? ""}`}
+      size="lg"
+      actions={
+        <Button
           onClick={() => navigate("/familiar")}
-          className="text-sm text-teal-700 hover:underline"
+          className="bg-white text-teal-700 border border-teal-200 hover:bg-teal-50"
         >
-          ← Volver al portal
-        </button>
-      </header>
+          Volver al portal
+        </Button>
+      }
+      className="space-y-5"
+    >
 
       {residentes.length > 1 && (
         <div className="flex flex-wrap gap-2">
@@ -116,7 +107,7 @@ export default function FamiliarVisitas() {
             <button
               type="button"
               key={r.id}
-              onClick={() => { setActiveId(r.id); loadVisits(r.id); }}
+              onClick={() => selectResident(r.id)}
               className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${
                 r.id === activeId
                   ? "bg-teal-700 text-white border-teal-700"
@@ -185,7 +176,9 @@ export default function FamiliarVisitas() {
 
       <section className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
         <h2 className="font-bold text-slate-800 mb-3">Historial</h2>
-        {visitas.length === 0 ? (
+        {loadingVisits ? (
+          <p className="text-sm text-slate-500">Cargando historial...</p>
+        ) : visitas.length === 0 ? (
           <p className="text-sm text-slate-500">Aún no tienes visitas registradas.</p>
         ) : (
           <ul className="divide-y">
@@ -208,6 +201,6 @@ export default function FamiliarVisitas() {
           </ul>
         )}
       </section>
-    </div>
+    </PageLayout>
   );
 }

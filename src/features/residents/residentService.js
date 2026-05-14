@@ -1,6 +1,17 @@
 import { supabase } from "../../services/supabaseConfig";
 import { isValidUUID } from "../../utils/validators";
 
+const RESIDENT_SELECT = `
+  id, eleam_id, nombre, apellido, rut, fecha_nacimiento, sexo,
+  nacionalidad, estado_civil, direccion_anterior,
+  nombre_contacto, telefono_contacto, parentesco_contacto,
+  prevision, diagnostico_principal, diagnosticos_secundarios,
+  alergias, grupo_sanguineo, fecha_ingreso, fecha_egreso,
+  motivo_egreso, habitacion, cama, estado,
+  indice_barthel, escala_katz, nivel_dependencia,
+  creado_por, creado_en, actualizado_en
+`;
+
 // Obtiene el eleam_id del perfil del usuario autenticado actual
 async function getMyEleamId() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -18,7 +29,7 @@ export const getResidents = async (estado = null) => {
   // La RLS filtra automáticamente por eleam_id del usuario autenticado
   let query = supabase
     .from("residentes")
-    .select("*")
+    .select(RESIDENT_SELECT)
     .order("apellido", { ascending: true });
 
   if (estado) query = query.eq("estado", estado);
@@ -33,7 +44,7 @@ export const getResidentById = async (id) => {
   // La RLS garantiza que solo se devuelve si pertenece al ELEAM del usuario
   const { data, error } = await supabase
     .from("residentes")
-    .select("*")
+    .select(RESIDENT_SELECT)
     .eq("id", id)
     .single();
   if (error) throw error;
@@ -45,7 +56,7 @@ export const createResident = async (residentData) => {
   const { data, error } = await supabase
     .from("residentes")
     .insert({ ...residentData, creado_por: userId, eleam_id: eleamId })
-    .select()
+    .select(RESIDENT_SELECT)
     .single();
   if (error) throw error;
   return data;
@@ -64,7 +75,7 @@ export const createResidentsBatch = async (rows, onProgress = null) => {
       const { data, error } = await supabase
         .from("residentes")
         .insert({ ...row.payload, creado_por: userId, eleam_id: eleamId })
-        .select()
+        .select(RESIDENT_SELECT)
         .single();
       if (error) throw error;
       results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data });
@@ -90,7 +101,7 @@ export const updateResident = async (id, residentData) => {
     .from("residentes")
     .update({ ...residentData, actualizado_en: new Date().toISOString() })
     .eq("id", id)
-    .select()
+    .select(RESIDENT_SELECT)
     .single();
   if (error) throw error;
   return data;
