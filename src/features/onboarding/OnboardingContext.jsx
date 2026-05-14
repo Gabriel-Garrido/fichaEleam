@@ -13,19 +13,28 @@ import { ONBOARDING_STORAGE_PREFIX, ROLE_CONFIG } from './onboardingConfig';
 
 const OnboardingContext = createContext(null);
 
-// ─── Storage helpers ───────────────────────────────────────────────────────────
+// ─── Device detection ──────────────────────────────────────────────────────────
 
-function storageKey(userId) {
-  return `${ONBOARDING_STORAGE_PREFIX}${userId}`;
+function getDevice() {
+  return typeof window !== 'undefined' && window.innerWidth < 768
+    ? 'mobile'
+    : 'desktop';
 }
 
-function buildFreshState(role) {
+// ─── Storage helpers ───────────────────────────────────────────────────────────
+
+function storageKey(userId, device) {
+  return `${ONBOARDING_STORAGE_PREFIX}${userId}_${device}`;
+}
+
+function buildFreshState(role, device) {
   const config = ROLE_CONFIG[role];
   if (!config) return null;
   const steps = {};
   config.steps.forEach((s) => { steps[s.id] = false; });
   return {
     role,
+    device,
     seenWelcome: false,
     steps,
     // Tracks which step IDs were visible at the last session.
@@ -36,14 +45,14 @@ function buildFreshState(role) {
   };
 }
 
-function loadState(userId, role) {
+function loadState(userId, role, device) {
   try {
-    const raw = localStorage.getItem(storageKey(userId));
-    if (!raw) return buildFreshState(role);
+    const raw = localStorage.getItem(storageKey(userId, device));
+    if (!raw) return buildFreshState(role, device);
 
     const saved = JSON.parse(raw);
     // Role changed → full reset
-    if (saved.role !== role) return buildFreshState(role);
+    if (saved.role !== role) return buildFreshState(role, device);
 
     // Forward-compat: add any step IDs added to config after the user's last session
     ROLE_CONFIG[role]?.steps.forEach((s) => {
@@ -53,15 +62,18 @@ function loadState(userId, role) {
     // Forward-compat: field added in storage v2
     if (!Array.isArray(saved.knownAvailableIds)) saved.knownAvailableIds = [];
 
+    // Store device in state if missing (migration for existing records)
+    if (!saved.device) saved.device = device;
+
     return saved;
   } catch {
-    return buildFreshState(role);
+    return buildFreshState(role, device);
   }
 }
 
-function persist(userId, state) {
+function persist(userId, device, state) {
   try {
-    localStorage.setItem(storageKey(userId), JSON.stringify(state));
+    localStorage.setItem(storageKey(userId, device), JSON.stringify(state));
   } catch {
     // Local storage can be unavailable in private browsing or embedded contexts.
   }
@@ -73,6 +85,11 @@ export function OnboardingProvider({ children }) {
   const { user, rol, can, canFeature, profileLoading } = useAuth();
   const location = useLocation();
 
+  // Device is stable for the lifetime of this session (determined at mount).
+  // We intentionally do NOT react to resize events — the device type is the
+  // one the user opened the app on, not whatever they resize to later.
+  const [device] = useState(() => getDevice());
+
   const [state, setState] = useState(null);
   const [checklistOpen, setChecklistOpen] = useState(false);
   const timers = useRef({});
@@ -83,13 +100,13 @@ export function OnboardingProvider({ children }) {
       setState(null);
       return;
     }
-    setState(loadState(user.id, rol));
-  }, [user?.id, rol]);
+    setState(loadState(user.id, rol, device));
+  }, [user?.id, rol, device]);
 
   // ── 2. Persist every state change ────────────────────────────────────────
   useEffect(() => {
-    if (state && user?.id) persist(user.id, state);
-  }, [state, user?.id]);
+    if (state && user?.id) persist(user.id, device, state);
+  }, [state, user?.id, device]);
 
   // ── 3. Compute which steps are available given current permissions ────────
   //
@@ -210,8 +227,8 @@ export function OnboardingProvider({ children }) {
 
   const reset = useCallback(() => {
     if (!rol) return;
-    setState(buildFreshState(rol));
-  }, [rol]);
+    setState(buildFreshState(rol, device));
+  }, [rol, device]);
 
   // ── Derived UI flags ──────────────────────────────────────────────────────
 
@@ -241,10 +258,13 @@ export function OnboardingProvider({ children }) {
     : -1;
 
   const config = rol ? ROLE_CONFIG[rol] : null;
+  const isMobile = device === 'mobile';
 
   const value = {
     state,
     config,
+    device,
+    isMobile,
     // Only expose available (permission-filtered) steps to UI components
     steps: availableSteps,
     doneCount,

@@ -97,10 +97,11 @@ export default function EleamCustomerDrawer({
   const eleam = slot?.detail;
   const crm = eleam ? (CRM_STATE_MAP[eleam.crm_estado] ?? CRM_STATE_MAP.lead) : null;
   const riesgo = eleam ? (RIESGO_MAP[eleam.riesgo_churn] ?? RIESGO_MAP.desconocido) : null;
+  const todayStr = new Date().toISOString().slice(0, 10);
   const tasksOverdue = (slot?.tasks ?? []).filter((t) => {
     if (t.estado === "completada" || t.estado === "cancelada") return false;
     if (!t.fecha_vencimiento) return false;
-    return new Date(t.fecha_vencimiento) < new Date(new Date().setHours(0, 0, 0, 0));
+    return t.fecha_vencimiento < todayStr;
   }).length;
 
   return (

@@ -37,7 +37,7 @@ function MetricCard({
         <button
           type="button"
           onClick={onClick}
-          className="mt-3 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+          className="mt-3 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50"
         >
           {actionLabel}
         </button>

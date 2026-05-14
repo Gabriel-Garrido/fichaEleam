@@ -3,6 +3,9 @@ import { createPortal } from "react-dom";
 
 const GAP = 8;
 const MARGIN = 10;
+const OPEN_DELAY = 150;
+const CLOSE_DELAY = 80;
+const CLOSE_ANIM_MS = 160;
 
 function getPlacement(triggerRect, tipEl) {
   const vw = window.innerWidth;
@@ -14,7 +17,6 @@ function getPlacement(triggerRect, tipEl) {
   const spaceAbove = triggerRect.top - GAP;
   const below = spaceBelow >= tipH || spaceBelow >= spaceAbove;
 
-  // Center horizontally on trigger, clamp to viewport
   const triggerCX = triggerRect.left + triggerRect.width / 2;
   let left = triggerCX - tipW / 2;
   left = Math.max(MARGIN, Math.min(left, vw - tipW - MARGIN));
@@ -23,7 +25,6 @@ function getPlacement(triggerRect, tipEl) {
     ? triggerRect.bottom + GAP
     : triggerRect.top - tipH - GAP;
 
-  // Arrow offset: points at trigger center
   const arrowLeft = Math.round(
     Math.max(10, Math.min(triggerCX - left - 6, tipW - 22))
   );
@@ -38,16 +39,58 @@ export default function Tooltip({
   maxWidth = 288,
   wrapperClass = "",
 }) {
-  const [phase, setPhase] = useState("closed"); // "closed" | "measuring" | "open"
+  // "closed" | "measuring" | "open" | "closing"
+  const [phase, setPhase] = useState("closed");
   const [pos, setPos] = useState({ top: 0, left: 0, below: true, arrowLeft: 40 });
   const triggerRef = useRef(null);
   const tipRef = useRef(null);
+  const openTimer = useRef(null);
+  const closeTimer = useRef(null);
+  const closingTimer = useRef(null);
+  const phaseRef = useRef("closed");
 
-  const handleToggle = () => {
-    setPhase((p) => (p === "closed" ? "measuring" : "closed"));
-  };
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => () => { clearTimeout(openTimer.current); clearTimeout(closeTimer.current); clearTimeout(closingTimer.current); }, []);
 
-  // Two-pass: render hidden first → measure → position
+  function clearTimers() {
+    clearTimeout(openTimer.current);
+    clearTimeout(closeTimer.current);
+    clearTimeout(closingTimer.current);
+  }
+
+  function openNow() {
+    clearTimers();
+    setPhase("measuring");
+  }
+
+  function closeNow() {
+    clearTimers();
+    if (phaseRef.current === "open") {
+      setPhase("closing");
+      closingTimer.current = setTimeout(() => setPhase("closed"), CLOSE_ANIM_MS);
+    } else {
+      setPhase("closed");
+    }
+  }
+
+  function scheduleOpen() {
+    clearTimers();
+    openTimer.current = setTimeout(() => setPhase("measuring"), OPEN_DELAY);
+  }
+
+  function scheduleClose() {
+    clearTimers();
+    closeTimer.current = setTimeout(() => {
+      if (phaseRef.current === "open") {
+        setPhase("closing");
+        closingTimer.current = setTimeout(() => setPhase("closed"), CLOSE_ANIM_MS);
+      } else {
+        setPhase("closed");
+      }
+    }, CLOSE_DELAY);
+  }
+
+  // Two-pass: render hidden → measure → position
   useLayoutEffect(() => {
     if (phase !== "measuring" || !tipRef.current || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
@@ -55,38 +98,23 @@ export default function Tooltip({
     setPhase("open");
   }, [phase]);
 
+  // Close on Escape and scroll
   useEffect(() => {
     if (phase === "closed") return;
-    const onOutside = (e) => {
-      if (
-        triggerRef.current?.contains(e.target) ||
-        tipRef.current?.contains(e.target)
-      ) return;
-      setPhase("closed");
-    };
-    const onEsc = (e) => { if (e.key === "Escape") setPhase("closed"); };
-    const onScroll = () => setPhase("closed");
-    document.addEventListener("mousedown", onOutside, true);
-    document.addEventListener("touchstart", onOutside, true);
+    const onEsc = (e) => { if (e.key === "Escape") closeNow(); };
+    const onScroll = () => closeNow();
     document.addEventListener("keydown", onEsc);
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
     return () => {
-      document.removeEventListener("mousedown", onOutside, true);
-      document.removeEventListener("touchstart", onOutside, true);
       document.removeEventListener("keydown", onEsc);
       window.removeEventListener("scroll", onScroll, { capture: true });
     };
-  }, [phase]);
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isOpen = phase === "open";
+  const isVisible = phase !== "closed";
   const isMeasuring = phase === "measuring";
-  const isVisible = isOpen || isMeasuring;
-
-  const trigger = cloneElement(children, {
-    "aria-expanded": isOpen,
-    "aria-haspopup": "true",
-  });
-
+  const isOpen = phase === "open";
+  const isClosing = phase === "closing";
   const isDark = variant === "dark";
 
   const tooltip = isVisible
@@ -94,6 +122,8 @@ export default function Tooltip({
         <div
           ref={tipRef}
           role="tooltip"
+          onMouseEnter={clearTimers}
+          onMouseLeave={scheduleClose}
           style={{
             position: "fixed",
             top: isMeasuring ? -9999 : pos.top,
@@ -107,9 +137,9 @@ export default function Tooltip({
             "tooltip-popup",
             isDark ? "tooltip-dark" : "tooltip-light",
             isOpen ? "tooltip-open" : "",
+            isClosing ? "tooltip-closing" : "",
           ].join(" ")}
         >
-          {/* Arrow */}
           <span
             className={[
               "tooltip-arrow",
@@ -130,9 +160,19 @@ export default function Tooltip({
       <span
         ref={triggerRef}
         className={`inline-flex items-center ${wrapperClass}`}
-        onClick={handleToggle}
+        onMouseEnter={scheduleOpen}
+        onMouseLeave={scheduleClose}
+        onFocus={openNow}
+        onBlur={scheduleClose}
+        onClick={() => {
+          if (phase === "closed" || phase === "closing") openNow();
+          else closeNow();
+        }}
       >
-        {trigger}
+        {cloneElement(children, {
+          "aria-expanded": isOpen,
+          "aria-haspopup": "true",
+        })}
       </span>
       {tooltip}
     </>

@@ -221,13 +221,13 @@ export default function SuperAdminDashboard() {
   }).sort((a, b) => daysUntil(a.fecha_vencimiento_suscripcion) - daysUntil(b.fecha_vencimiento_suscripcion)), [eleams]);
 
   const overdueTasks = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayStr = new Date().toISOString().slice(0, 10);
     return tasks.filter((task) =>
       task.fecha_vencimiento &&
       task.estado !== "completada" &&
       task.estado !== "cancelada" &&
-      new Date(task.fecha_vencimiento) < today
-    ).sort((a, b) => new Date(a.fecha_vencimiento) - new Date(b.fecha_vencimiento));
+      task.fecha_vencimiento < todayStr
+    ).sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento));
   }, [tasks]);
 
   const alertItems = useMemo(() => {

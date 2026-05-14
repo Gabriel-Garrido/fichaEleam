@@ -40,6 +40,7 @@ export default function VitalSignsList() {
   const [filtroHasta, setFiltroHasta] = useState(today());
   const [filtroEstado, setFiltroEstado] = useState(""); // normal | warning | critical
   const [view, setView] = useState("cards"); // cards | table
+  const [filtersOpen, setFiltersOpen] = useState(!!preselectedId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -168,19 +169,33 @@ export default function VitalSignsList() {
         />
       </div>
 
-      {/* Filters */}
-      <details className="group bg-white rounded-xl border border-slate-100 shadow-sm mb-5">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">Filtros y vista</p>
+      {/* Filters — controlled open state so re-renders don't collapse the panel */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm mb-5">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="w-full flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+          aria-expanded={filtersOpen}
+        >
+          <div className="text-left">
+            <p className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              Filtros y vista
+              {filtroResidente && (
+                <span className="inline-flex h-2 w-2 rounded-full bg-teal-500" aria-label="Filtros activos" />
+              )}
+            </p>
             <p className="text-xs text-slate-500">
               {filtroResidente ? "Filtrando por residente" : "Mes actual por defecto"}
             </p>
           </div>
-          <span className="text-xs font-semibold text-teal-700 group-open:hidden">Ajustar</span>
-          <span className="hidden text-xs font-semibold text-slate-500 group-open:inline">Cerrar</span>
-        </summary>
-        <div className="border-t border-slate-100 p-4">
+          <span className={`flex items-center gap-1 text-xs font-semibold transition-colors ${filtersOpen ? "text-slate-500" : "text-teal-700"}`}>
+            {filtersOpen ? "Cerrar" : "Ajustar"}
+            <svg className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </span>
+        </button>
+        {filtersOpen && <div className="border-t border-slate-100 p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <div>
               <label className="block text-xs text-slate-500 mb-1">Residente</label>
@@ -254,8 +269,8 @@ export default function VitalSignsList() {
               Limpiar filtros
             </button>
           </div>
-        </div>
-      </details>
+        </div>}
+      </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-slate-500 bg-white rounded-xl border border-slate-100">
