@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Loading from "../../components/Loading";
 import EleamFilters from "./components/EleamFilters";
 import EleamTable from "./components/EleamTable";
@@ -20,9 +21,14 @@ import {
 } from "./superadminService";
 
 export default function SuperAdminClientes() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [eleams, setEleams] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [filters, setFilters] = useState({});
+  // Pre-populate crmEstado filter from ?estado= query param (sent by Dashboard pipeline cards)
+  const [filters, setFilters] = useState(() => {
+    const estado = searchParams.get("estado");
+    return estado ? { crmEstado: estado } : {};
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editEleam, setEditEleam] = useState(null);
@@ -50,7 +56,11 @@ export default function SuperAdminClientes() {
     }
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+    // Clear query param so refresh doesn't re-apply the filter
+    if (searchParams.get("estado")) setSearchParams({}, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const search = (filters.search ?? "").toLowerCase().trim();
