@@ -2722,9 +2722,6 @@ create trigger trg_acred_provision_on_eleam
 revoke all on function public.ensure_platform_superadmin() from public;
 grant execute on function public.ensure_platform_superadmin() to authenticated;
 
-revoke all on function public.validate_invitation_token(text, text) from public;
-grant execute on function public.validate_invitation_token(text, text) to anon, authenticated;
-
 revoke all on function public.acred_provision_requisitos(uuid) from public;
 grant execute on function public.acred_provision_requisitos(uuid) to authenticated;
 
