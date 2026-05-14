@@ -140,10 +140,12 @@ export default function EleamCustomerDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 text-2xl leading-none mt-0.5"
-            aria-label="Cerrar"
+            className="shrink-0 rounded-xl p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Cerrar panel"
           >
-            ×
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </header>
 
@@ -195,7 +197,7 @@ export default function EleamCustomerDrawer({
               <button
                 type="button"
                 onClick={() => onEdit(eleam)}
-                className="text-sm bg-slate-700 text-white px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors"
+                className="text-sm bg-teal-700 text-white px-4 py-2 rounded-xl hover:bg-teal-800 transition-colors"
               >
                 Editar ELEAM
               </button>
@@ -287,30 +289,38 @@ export default function EleamCustomerDrawer({
 
             {/* Historial de pagos */}
             <section className="bg-white border border-slate-100 rounded-xl p-4">
-              <h3 className="font-semibold text-slate-700 text-sm mb-2">
-                Historial de pagos
-                <span className="ml-2 text-[10px] text-slate-400 font-normal">tabla pagos — últimos 30</span>
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-slate-700 text-sm">Historial de pagos</h3>
+                {(slot.payments ?? []).length > 0 && (
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {slot.payments.length} registro{slot.payments.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
               {(slot.payments ?? []).length === 0 ? (
                 <p className="text-sm text-slate-400">Sin pagos registrados.</p>
               ) : (
-                <ul className="divide-y divide-slate-50">
+                <ul className="space-y-1.5">
                   {slot.payments.slice(0, 6).map((p) => (
-                    <li key={p.id} className="py-2.5 flex items-center justify-between text-sm gap-3">
+                    <li key={p.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5 gap-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-slate-800">
+                        <p className="text-sm font-semibold text-slate-800">
                           {formatCLP(p.monto)}
-                          <span className="text-slate-400 font-normal"> · {PLAN_LABEL[p.plan] ?? p.plan}</span>
+                          <span className="text-slate-400 font-normal text-xs"> · {PLAN_LABEL[p.plan] ?? p.plan}</span>
                         </p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-400 mt-0.5">
                           {formatDate(p.fecha_pago)}
                           {p.metodo_pago ? ` · ${p.metodo_pago}` : ""}
                         </p>
                       </div>
-                      <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                      <span className={`shrink-0 text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${
                         p.estado === "completado"
                           ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-500"
+                          : p.estado === "pendiente"
+                            ? "bg-amber-100 text-amber-700"
+                            : p.estado === "fallido"
+                              ? "bg-rose-100 text-rose-600"
+                              : "bg-slate-100 text-slate-500"
                       }`}>
                         {p.estado}
                       </span>

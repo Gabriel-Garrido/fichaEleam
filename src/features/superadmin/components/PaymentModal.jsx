@@ -3,6 +3,9 @@ import Modal from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
 import { friendlyError } from "../../../utils/errorMessages";
 
+const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100";
+const labelCls = "block text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-1";
+
 const empty = { eleam_id: "", monto: "", plan: "mensual", metodo_pago: "", notas: "" };
 
 export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId = "", onRegister }) {
@@ -10,10 +13,11 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
   const [form, setForm] = useState({ ...empty, eleam_id: defaultEleamId });
   const [saving, setSaving] = useState(false);
 
-  // Reset al abrir
   React.useEffect(() => {
     if (isOpen) setForm({ ...empty, eleam_id: defaultEleamId });
   }, [isOpen, defaultEleamId]);
+
+  const set = (patch) => setForm((p) => ({ ...p, ...patch }));
 
   const submit = async (e) => {
     e.preventDefault();
@@ -45,15 +49,27 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Registrar pago">
+    <Modal isOpen={isOpen} onClose={onClose} title="Registrar pago manual">
       <form onSubmit={submit} className="space-y-3">
+
+        {/* Info box */}
+        <div className="flex items-start gap-2.5 rounded-xl bg-teal-50 border border-teal-200 px-3.5 py-3">
+          <svg className="h-4 w-4 shrink-0 mt-0.5 text-teal-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+          </svg>
+          <p className="text-xs text-teal-800">
+            Esto activa la suscripción del ELEAM y registra una interacción CRM automáticamente. La fecha de vencimiento se calcula según el plan (30 días mensual, 365 anual).
+          </p>
+        </div>
+
         <div>
-          <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">ELEAM *</label>
+          <label htmlFor="pay-eleam" className={labelCls}>ELEAM *</label>
           <select
+            id="pay-eleam"
             value={form.eleam_id}
-            onChange={(e) => setForm((p) => ({ ...p, eleam_id: e.target.value }))}
+            onChange={(e) => set({ eleam_id: e.target.value })}
             required
-            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
+            className={inputCls}
           >
             <option value="">Seleccionar ELEAM…</option>
             {eleams.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
@@ -62,62 +78,68 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Monto CLP *</label>
+            <label htmlFor="pay-monto" className={labelCls}>Monto CLP *</label>
             <input
-              type="number" min="1"
+              id="pay-monto"
+              type="number"
+              min="1"
               value={form.monto}
-              onChange={(e) => setForm((p) => ({ ...p, monto: e.target.value }))}
-              required placeholder="50000"
-              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+              onChange={(e) => set({ monto: e.target.value })}
+              required
+              placeholder="50000"
+              className={inputCls}
             />
           </div>
           <div>
-            <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Plan *</label>
+            <label htmlFor="pay-plan" className={labelCls}>Plan *</label>
             <select
+              id="pay-plan"
               value={form.plan}
-              onChange={(e) => setForm((p) => ({ ...p, plan: e.target.value }))}
-              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
+              onChange={(e) => set({ plan: e.target.value })}
+              className={inputCls}
             >
-              <option value="mensual">Mensual</option>
-              <option value="anual">Anual</option>
+              <option value="mensual">Mensual (30 días)</option>
+              <option value="anual">Anual (365 días)</option>
             </select>
           </div>
         </div>
 
         <div>
-          <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Método de pago</label>
+          <label htmlFor="pay-metodo" className={labelCls}>Método de pago</label>
           <input
+            id="pay-metodo"
             type="text"
             value={form.metodo_pago}
-            onChange={(e) => setForm((p) => ({ ...p, metodo_pago: e.target.value }))}
+            onChange={(e) => set({ metodo_pago: e.target.value })}
             placeholder="Transferencia, tarjeta, efectivo…"
-            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+            className={inputCls}
           />
         </div>
 
         <div>
-          <label className="block text-xs uppercase font-semibold text-slate-500 mb-1">Notas</label>
+          <label htmlFor="pay-notas" className={labelCls}>Notas</label>
           <textarea
+            id="pay-notas"
             value={form.notas}
-            onChange={(e) => setForm((p) => ({ ...p, notas: e.target.value }))}
+            onChange={(e) => set({ notas: e.target.value })}
             rows={2}
-            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+            placeholder="Observaciones sobre el pago…"
+            className={`${inputCls} resize-none`}
           />
         </div>
 
-        <p className="text-[11px] text-slate-400 italic">
-          El registro activa la suscripción y agrega una interacción CRM automática.
-        </p>
-
-        <div className="flex gap-3 justify-end pt-1">
-          <button            type="button" onClick={onClose}
-            className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-sm hover:bg-slate-50"
+        <div className="flex gap-3 justify-end pt-1 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm hover:bg-slate-50 transition-colors"
           >
             Cancelar
           </button>
           <button
-            type="submit" disabled={saving}
-            className="px-4 py-2 bg-slate-700 text-white rounded-xl text-sm hover:bg-slate-800 disabled:opacity-50"
+            type="submit"
+            disabled={saving}
+            className="px-4 py-2 bg-teal-700 text-white rounded-xl text-sm font-semibold hover:bg-teal-800 disabled:opacity-50 transition-colors"
           >
             {saving ? "Registrando…" : "Registrar y activar"}
           </button>
