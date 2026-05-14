@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useToast } from "../../../components/Toast";
 import Modal from "../../../components/Modal";
 import { friendlyError } from "../../../utils/errorMessages";
@@ -67,12 +67,10 @@ export default function LeadsPanel({
   const [credenciales, setCredenciales] = useState(null);
   const [grantingLeadId, setGrantingLeadId] = useState(null);
 
-  useEffect(() => { onLoadLeads(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const activeIds  = useMemo(() => new Set(activeInDemo.map((a) => a.id)), [activeInDemo]);
+  const contactIds = useMemo(() => new Set(contactRequests.map((c) => c.id)), [contactRequests]);
 
-  const activeIds  = new Set(activeInDemo.map((a) => a.id));
-  const contactIds = new Set(contactRequests.map((c) => c.id));
-
-  const filtered = leads.filter((l) => {
+  const filtered = useMemo(() => leads.filter((l) => {
     if (filterEstado && l.estado !== filterEstado) return false;
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -84,7 +82,7 @@ export default function LeadsPanel({
     const bPri = contactIds.has(b.id) ? 0 : activeIds.has(b.id) ? 1 : 2;
     if (aPri !== bPri) return aPri - bPri;
     return new Date(b.creado_en) - new Date(a.creado_en);
-  });
+  }), [leads, filterEstado, search, activeIds, contactIds]);
 
   async function handleGrant(lead) {
     if (grantingLeadId) return;
@@ -269,7 +267,7 @@ export default function LeadsPanel({
         </select>
         <button
           type="button"
-          onClick={() => onLoadLeads({ estado: filterEstado || undefined, search })}
+          onClick={() => onLoadLeads({ estado: filterEstado || undefined, search }, true)}
           className="border border-slate-200 text-slate-600 px-3.5 py-2 rounded-xl text-sm hover:bg-slate-50 font-medium transition-colors"
         >
           Actualizar

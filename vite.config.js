@@ -15,14 +15,32 @@ export default defineConfig({
     },
   },
   build: {
-    // Evitar que los source maps expongan código fuente en producción
     sourcemap: false,
+    // Avisa si un chunk supera 800 KB (el default es 500 KB, genera ruido en dev)
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
-        // Separar vendor para cache más eficiente
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          supabase: ['@supabase/supabase-js'],
+        manualChunks(id) {
+          // Vendor: React + Router — se cachean juntos porque cambian a la par
+          if (id.includes('node_modules/react') ||
+              id.includes('node_modules/react-dom') ||
+              id.includes('node_modules/react-router')) {
+            return 'vendor-react';
+          }
+          // Supabase — SDK estable, cambia poco
+          if (id.includes('node_modules/@supabase')) {
+            return 'vendor-supabase';
+          }
+          // Excel / SheetJS — solo se usa en importación masiva (rutas admin)
+          if (id.includes('node_modules/xlsx') ||
+              id.includes('node_modules/exceljs') ||
+              id.includes('node_modules/sheetjs')) {
+            return 'vendor-excel';
+          }
+          // Resto de node_modules en un chunk genérico para que no contaminen vendor-react
+          if (id.includes('node_modules')) {
+            return 'vendor-misc';
+          }
         },
       },
     },
