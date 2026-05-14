@@ -139,7 +139,7 @@ export default function CrmPipeline({ eleams, onPickState, activeState }) {
       {activeState && (
         <div className="flex items-center justify-between rounded-xl bg-teal-50 border border-teal-200 px-4 py-2">
           <p className="text-xs text-teal-700 font-medium">
-            Filtrando cartera por: <strong>{CRM_STATES.find((s) => s.key === activeState)?.label}</strong>
+            Filtrando cartera por: <strong>{CRM_STATES.find((s) => s.key === activeState)?.label ?? activeState}</strong>
           </p>
           <button
             type="button"

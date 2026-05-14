@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getObservations, deleteObservation } from "./observationsService";
 import { getResidents } from "../residents/residentService";
@@ -39,6 +39,7 @@ function ObservationList() {
   const [filtroDesde, setFiltroDesde]         = useState(firstOfMonth());
   const [filtroHasta, setFiltroHasta]         = useState(today());
   const [soloSeguimiento, setSoloSeguimiento] = useState(false);
+  const [filtersOpen, setFiltersOpen]         = useState(!!preselectedId);
   const [loading, setLoading]                 = useState(true);
   const [error, setError]                     = useState(null);
 
@@ -87,6 +88,8 @@ function ObservationList() {
     }
   };
 
+  const hasActiveFilters = !!(filtroResidente || filtroTipo || soloSeguimiento);
+
   if (loading) return <Loading message="Cargando observaciones..." />;
 
   return (
@@ -115,94 +118,118 @@ function ObservationList() {
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4 flex justify-between items-center">
           <span>{error}</span>
-          <button type="button"
- onClick={fetchRecords} className="underline text-sm ml-2">Reintentar</button>
+          <button type="button" onClick={fetchRecords} className="underline text-sm ml-2">Reintentar</button>
         </div>
       )}
 
-      {/* Filters */}
-      <details className="group bg-white rounded-xl border border-slate-100 shadow-sm mb-5">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">Filtros</p>
+      {/* Filters — controlled open/close so re-renders don't collapse the panel */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm mb-5">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="w-full flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+          aria-expanded={filtersOpen}
+        >
+          <div className="text-left">
+            <p className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              Filtros
+              {hasActiveFilters && (
+                <span className="inline-flex h-2 w-2 rounded-full bg-teal-500" aria-label="Filtros activos" />
+              )}
+            </p>
             <p className="text-xs text-slate-500">
-              {filtroResidente || filtroTipo || soloSeguimiento
-                ? "Hay filtros activos"
-                : "Mes actual por defecto"}
+              {hasActiveFilters ? "Hay filtros activos" : "Mes actual por defecto"}
             </p>
           </div>
-          <span className="text-xs font-semibold text-teal-700 group-open:hidden">Ajustar</span>
-          <span className="hidden text-xs font-semibold text-slate-500 group-open:inline">Cerrar</span>
-        </summary>
-        <div className="border-t border-slate-100 p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Residente</label>
-              <select
-                value={filtroResidente}
-                onChange={(e) => setFiltroResidente(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="">Todos los residentes</option>
-                {residents.map((r) => (
-                  <option key={r.id} value={r.id}>{r.apellido}, {r.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Tipo</label>
-              <select
-                value={filtroTipo}
-                onChange={(e) => setFiltroTipo(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                {TIPOS.map(([val, lbl]) => (
-                  <option key={val} value={val}>{lbl}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Desde</label>
-              <input
-                type="date"
-                value={filtroDesde}
-                onChange={(e) => setFiltroDesde(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Hasta</label>
-              <input
-                type="date"
-                value={filtroHasta}
-                onChange={(e) => setFiltroHasta(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 px-3 py-2">
-              <input
-                type="checkbox"
-                checked={soloSeguimiento}
-                onChange={(e) => setSoloSeguimiento(e.target.checked)}
-                className="w-4 h-4 accent-teal-700"
-              />
-              <span className="text-sm text-slate-600 whitespace-nowrap">Solo seguimientos</span>
-            </label>
-          </div>
-          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <p className="text-xs text-slate-500">
-              Usa "Solo seguimientos" para preparar la entrega de turno.
-            </p>
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="self-start text-sm text-slate-500 hover:text-slate-700 underline"
+          <span className={`flex items-center gap-1 text-xs font-semibold transition-colors ${filtersOpen ? "text-slate-500" : "text-teal-700"}`}>
+            {filtersOpen ? "Cerrar" : "Ajustar"}
+            <svg
+              className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`}
+              fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
             >
-              Limpiar filtros
-            </button>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </span>
+        </button>
+
+        {filtersOpen && (
+          <div className="border-t border-slate-100 p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+              <div>
+                <label htmlFor="obs-residente" className="block text-xs text-slate-500 mb-1">Residente</label>
+                <select
+                  id="obs-residente"
+                  value={filtroResidente}
+                  onChange={(e) => setFiltroResidente(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="">Todos los residentes</option>
+                  {residents.map((r) => (
+                    <option key={r.id} value={r.id}>{r.apellido}, {r.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="obs-tipo" className="block text-xs text-slate-500 mb-1">Tipo</label>
+                <select
+                  id="obs-tipo"
+                  value={filtroTipo}
+                  onChange={(e) => setFiltroTipo(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  {TIPOS.map(([val, lbl]) => (
+                    <option key={val} value={val}>{lbl}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="obs-desde" className="block text-xs text-slate-500 mb-1">Desde</label>
+                <input
+                  id="obs-desde"
+                  type="date"
+                  value={filtroDesde}
+                  onChange={(e) => setFiltroDesde(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="obs-hasta" className="block text-xs text-slate-500 mb-1">Hasta</label>
+                <input
+                  id="obs-hasta"
+                  type="date"
+                  value={filtroHasta}
+                  onChange={(e) => setFiltroHasta(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <label htmlFor="obs-seguimiento" className="flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 px-3 py-2">
+                <input
+                  id="obs-seguimiento"
+                  type="checkbox"
+                  checked={soloSeguimiento}
+                  onChange={(e) => setSoloSeguimiento(e.target.checked)}
+                  className="w-4 h-4 accent-teal-700"
+                />
+                <span className="text-sm text-slate-600 whitespace-nowrap">Solo seguimientos</span>
+              </label>
+            </div>
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <p className="text-xs text-slate-500">
+                Usa "Solo seguimientos" para preparar la entrega de turno.
+              </p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="self-start text-sm text-slate-500 hover:text-slate-700 underline"
+                >
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </details>
+        )}
+      </div>
 
       {records.length === 0 ? (
         <div className="text-center py-16 text-slate-500 bg-white rounded-xl border border-slate-100">
@@ -210,6 +237,11 @@ function ObservationList() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
           </svg>
           <p>No hay observaciones para los filtros seleccionados.</p>
+          {hasActiveFilters && (
+            <button type="button" onClick={clearFilters} className="mt-2 text-sm text-teal-600 hover:underline">
+              Limpiar filtros
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4">

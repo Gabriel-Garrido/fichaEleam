@@ -31,6 +31,8 @@ function dateToISO(date) {
 
 function parseExcelSerialDate(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  // Excel serial dates range from 1 (1900-01-01) to ~55000 (2050); reject outliers
+  if (value < 1 || value > 55000) return null;
   const date = new Date(1899, 11, 30);
   date.setDate(date.getDate() + Math.floor(value));
   return dateToISO(date);
