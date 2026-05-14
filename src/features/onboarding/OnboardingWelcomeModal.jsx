@@ -78,19 +78,19 @@ export default function OnboardingWelcomeModal() {
         <div
           ref={dialogRef}
           tabIndex={-1}
-          className={`absolute bottom-0 left-0 right-0 outline-none bg-white rounded-t-3xl shadow-2xl overflow-hidden transition-transform duration-300 ${
+          className={`absolute bottom-0 left-0 right-0 outline-none bg-white rounded-t-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col transition-transform duration-300 ${
             visible ? 'translate-y-0' : 'translate-y-full'
           }`}
         >
           {/* Drag handle */}
-          <div className="flex justify-center pt-3 pb-1">
+          <div className="flex justify-center pt-3 pb-1 shrink-0">
             <div className="w-10 h-1 rounded-full bg-slate-300" aria-hidden="true" />
           </div>
 
           {/* Thin accent bar */}
-          <div className={`h-1 ${colors.pill}`} />
+          <div className={`h-1 shrink-0 ${colors.pill}`} />
 
-          <div className="px-5 pt-5 pb-6">
+          <div className="px-5 pt-5 pb-6 overflow-y-auto flex-1">
             {/* Hero row */}
             <div className="flex items-center gap-4 mb-4">
               <div

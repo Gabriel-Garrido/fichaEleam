@@ -75,7 +75,7 @@ export const ROLE_CONFIG = {
         description: 'Define qué puede ver y registrar cada funcionario.',
         icon: 'team',
         route: '/equipo',
-        matchRoutes: ['/equipo'],
+        matchRoutes: ['/equipo/permisos'],
         autoCompleteAfter: 6000,
         desktopTip:
           'Define permisos granulares por funcionario: qué módulos puede ver, qué puede registrar y qué puede eliminar. Usa las plantillas por cargo para agilizar la configuración.',
