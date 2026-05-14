@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
-import { authErrorMessage, login, loginWithGoogle } from "./authService";
+import { authErrorMessage, isPendingDemoError, login, loginWithGoogle } from "./authService";
 import { useAuth, useLoading } from "../../context/AuthContext";
 import { isSupabaseConfigured, supabaseConfigError } from "../../services/supabaseConfig";
 import Loading from "../../components/Loading";
@@ -23,6 +23,54 @@ function WrenchIcon() {
     <svg className="w-10 h-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
     </svg>
+  );
+}
+
+function DemoPendingNotice({ onHome }) {
+  return (
+    <div className="mb-5 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50 shadow-sm" role="status">
+      <div className="px-4 py-4">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-amber-700 shadow-sm ring-1 ring-amber-100">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-amber-950">Tu solicitud de demo está en revisión</p>
+            <p className="mt-1 text-sm leading-relaxed text-amber-900">
+              Ya recibimos este correo. El acceso con Google se habilita cuando el equipo aprueba la demo y deja listo tu entorno.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-xl bg-white/80 px-2 py-2 ring-1 ring-amber-100">
+            <div className="mx-auto mb-1 h-2 w-2 rounded-full bg-emerald-500" />
+            <p className="text-[11px] font-semibold text-slate-700">Solicitado</p>
+          </div>
+          <div className="rounded-xl bg-white/80 px-2 py-2 ring-1 ring-amber-100">
+            <div className="mx-auto mb-1 h-2 w-2 rounded-full bg-amber-500" />
+            <p className="text-[11px] font-semibold text-slate-700">En revisión</p>
+          </div>
+          <div className="rounded-xl bg-white/50 px-2 py-2 ring-1 ring-amber-100">
+            <div className="mx-auto mb-1 h-2 w-2 rounded-full bg-slate-300" />
+            <p className="text-[11px] font-semibold text-slate-500">Acceso listo</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-amber-200 bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-amber-900">No necesitas volver a registrarte. Revisa tu correo durante las próximas horas.</p>
+        <button
+          type="button"
+          onClick={onHome}
+          className="shrink-0 rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950"
+        >
+          Volver al inicio
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -60,6 +108,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPw,   setShowPw]   = useState(false);
   const [error,    setError]    = useState(null);
+  const [demoPending, setDemoPending] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   // Evitar flash del formulario durante el callback de Google OAuth.
   // Se detecta si hay token en el hash (callback de OAuth); se limpia
@@ -76,7 +125,12 @@ export default function Login() {
     const params = new URLSearchParams(hash);
     const oauthError = params.get("error_description") || params.get("error");
     if (oauthError) {
-      setError(authErrorMessage({ message: oauthError }, "No encontramos una cuenta habilitada para ese correo."));
+      if (isPendingDemoError({ message: oauthError })) {
+        setDemoPending(true);
+        setError(null);
+      } else {
+        setError(authErrorMessage({ message: oauthError }, "No encontramos una cuenta habilitada para ese correo."));
+      }
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       setOauthPending(false);
     }
@@ -96,6 +150,7 @@ export default function Login() {
       setError("Ingresa tu correo y contraseña para continuar.");
       return;
     }
+    setDemoPending(false);
     setError(null);
     setLoading(true);
     try {
@@ -110,12 +165,17 @@ export default function Login() {
 
   const handleGoogle = async () => {
     setError(null);
+    setDemoPending(false);
     setGoogleLoading(true);
     try {
       await loginWithGoogle();
     } catch (err) {
       console.warn("Error de Google OAuth:", err);
-      setError(authErrorMessage(err, "Google no respondió como esperábamos. Intenta otra vez en unos segundos."));
+      if (isPendingDemoError(err)) {
+        setDemoPending(true);
+      } else {
+        setError(authErrorMessage(err, "Google no respondió como esperábamos. Intenta otra vez en unos segundos."));
+      }
       setGoogleLoading(false);
     }
   };
@@ -141,6 +201,12 @@ export default function Login() {
           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {authNotice || "La conexión con Supabase está tardando más de lo habitual. Puedes intentar iniciar sesión nuevamente."}
           </div>
+        )}
+
+        {demoPending && (
+          <DemoPendingNotice
+            onHome={() => navigate("/")}
+          />
         )}
 
         {/* Google OAuth */}

@@ -4,9 +4,11 @@ import HelpTooltip from "../../components/HelpTooltip";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
 import {
+  CARE_ACTIVITY_PRESETS,
   CARE_CATEGORIES,
   CARE_CATEGORY_LABEL,
   CARE_TURNOS,
+  createCarePresetActivities,
   deactivateCareActivity,
   getResidentCarePlan,
   saveCareActivity,
@@ -74,6 +76,7 @@ export default function CarePlanTab({ resident }) {
   const [form, setForm] = useState(INITIAL_PLAN);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [presetSaving, setPresetSaving] = useState(false);
   const [activityModal, setActivityModal] = useState(null);
   const [showPaused, setShowPaused] = useState(false);
 
@@ -123,6 +126,21 @@ export default function CarePlanTab({ resident }) {
     () => (plan?.actividades ?? []).filter((item) => item.activo === false),
     [plan]
   );
+  const existingPresetIds = useMemo(() => {
+    const keys = new Set(activities.map((item) => `${item.categoria}:${item.titulo}`.toLowerCase()));
+    return new Set(
+      CARE_ACTIVITY_PRESETS
+        .filter((preset) => keys.has(`${preset.activity.categoria}:${preset.activity.titulo}`.toLowerCase()))
+        .map((preset) => preset.id)
+    );
+  }, [activities]);
+  const presetGroups = useMemo(() => {
+    return CARE_ACTIVITY_PRESETS.reduce((acc, preset) => {
+      if (!acc[preset.area]) acc[preset.area] = [];
+      acc[preset.area].push(preset);
+      return acc;
+    }, {});
+  }, []);
 
   const handleSavePlan = async (e) => {
     e.preventDefault();
@@ -165,6 +183,46 @@ export default function CarePlanTab({ resident }) {
       toast("No se pudo pausar la actividad.", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openPreset = (preset) => {
+    const existing = activities.find(
+      (item) => `${item.categoria}:${item.titulo}`.toLowerCase() === `${preset.activity.categoria}:${preset.activity.titulo}`.toLowerCase()
+    );
+    if (existing) {
+      if (!canEdit) return;
+      setActivityModal({
+        activity: existing,
+        schedule: (existing.horarios ?? [])[0] ?? { ...INITIAL_SCHEDULE, ...preset.schedule },
+      });
+      return;
+    }
+
+    setActivityModal({
+      activity: { ...INITIAL_ACTIVITY, ...preset.activity },
+      schedule: { ...INITIAL_SCHEDULE, ...preset.schedule },
+    });
+  };
+
+  const handleAddBaseRoutine = async () => {
+    if (!plan) return;
+    setPresetSaving(true);
+    try {
+      const result = await createCarePresetActivities({
+        plan,
+        presetIds: CARE_ACTIVITY_PRESETS.map((preset) => preset.id),
+        existingActivities: activities,
+      });
+      const createdText = `${result.created} actividad${result.created === 1 ? "" : "es"}`;
+      const skippedText = result.skipped ? `, ${result.skipped} ya existían` : "";
+      toast(`Rutina base agregada: ${createdText}${skippedText}.`, "success");
+      await load();
+    } catch (err) {
+      console.error(err);
+      toast("No se pudo agregar la rutina base.", "error");
+    } finally {
+      setPresetSaving(false);
     }
   };
 
@@ -238,6 +296,55 @@ export default function CarePlanTab({ resident }) {
           )}
         </div>
 
+        {plan && canCreate && (
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-950">Rutina sugerida ELEAM</h3>
+                <p className="text-sm text-slate-500">
+                  Alimentación, higiene, movilidad, prevención y bienestar con horarios editables.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddBaseRoutine}
+                disabled={presetSaving || saving}
+                className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60"
+              >
+                {presetSaving ? "Agregando..." : "Agregar rutina base"}
+              </button>
+            </div>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {Object.entries(presetGroups).map(([area, presets]) => (
+                <div key={area}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{area}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {presets.map((preset) => {
+                      const added = existingPresetIds.has(preset.id);
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => openPreset(preset)}
+                          disabled={saving || presetSaving || (added && !canEdit)}
+                          title={added ? "Editar actividad existente" : "Agregar o ajustar esta actividad"}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
+                            added
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800"
+                          }`}
+                        >
+                          {preset.activity.titulo}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!plan ? (
           <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
             Crea el plan base para agregar actividades.
@@ -272,7 +379,7 @@ export default function CarePlanTab({ resident }) {
                     <div className="mt-2 flex flex-wrap gap-2">
                       {(activity.horarios ?? []).filter((h) => h.activo !== false).map((h) => (
                         <span key={h.id} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-500">
-                          {h.turno} · {h.hora?.slice(0, 5)} · {h.frecuencia}
+                          {formatSchedule(h)}
                         </span>
                       ))}
                     </div>
@@ -339,6 +446,14 @@ export default function CarePlanTab({ resident }) {
       />
     </div>
   );
+}
+
+function formatSchedule(schedule) {
+  const base = `${schedule.turno} · ${schedule.hora?.slice(0, 5) ?? "--:--"}`;
+  if (schedule.frecuencia === "semanal") return `${base} · semanal`;
+  if (schedule.frecuencia === "mensual") return `${base} · día ${schedule.dias_mes?.[0] ?? 1}`;
+  if (schedule.frecuencia === "una_vez") return `${base} · ${schedule.fecha_unica ?? "fecha única"}`;
+  return `${base} · diaria`;
 }
 
 function Field({ label, value, onChange, disabled, type = "text", min, max, step }) {

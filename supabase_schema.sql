@@ -1593,6 +1593,20 @@ begin
 
         return new;
       end if;
+
+      if exists (
+        select 1
+        from public.demo_leads dl
+        where lower(dl.email) = v_email
+          and dl.demo_user_id is null
+          and dl.demo_token is null
+          and dl.estado in ('nuevo','contactado')
+        order by dl.creado_en desc
+        limit 1
+      ) then
+        raise exception 'DEMO_PENDING: Tu demo ya fue solicitado y esta pendiente de habilitacion. Te avisaremos cuando el acceso este listo.'
+          using errcode = '42501';
+      end if;
     end if;
 
     raise exception 'Cuenta no autorizada. Debe ser aprobada por superadmin o creada por un ELEAM activo.'
@@ -2536,6 +2550,34 @@ begin
 end;
 $$;
 
+create or replace function public.sync_stock_lote_controlado()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_indicacion record;
+begin
+  if new.indicacion_id is not null then
+    select es_controlado, tipo_controlado
+    into v_indicacion
+    from public.medicamentos_indicaciones
+    where id = new.indicacion_id;
+
+    if found and v_indicacion.es_controlado then
+      new.es_controlado := true;
+      new.tipo_controlado := coalesce(new.tipo_controlado, v_indicacion.tipo_controlado, 'psicotropico');
+    end if;
+  end if;
+
+  if new.es_controlado and new.tipo_controlado is null then
+    new.tipo_controlado := 'psicotropico';
+  end if;
+
+  return new;
+end;
+$$;
+
 -- Triggers
 drop trigger if exists trg_sync_pago_activo on public.eleams;
 create trigger trg_sync_pago_activo
@@ -2622,6 +2664,20 @@ drop trigger if exists trg_med_indicaciones_controlado on public.medicamentos_in
 create trigger trg_med_indicaciones_controlado
   before insert or update of es_controlado, requiere_doble_validacion on public.medicamentos_indicaciones
   for each row execute function public.sync_medicamento_controlado();
+
+drop trigger if exists trg_med_stock_lotes_controlado on public.medicamentos_stock_lotes;
+create trigger trg_med_stock_lotes_controlado
+  before insert or update of indicacion_id, es_controlado, tipo_controlado on public.medicamentos_stock_lotes
+  for each row execute function public.sync_stock_lote_controlado();
+
+update public.medicamentos_stock_lotes l
+set es_controlado = true,
+    tipo_controlado = coalesce(l.tipo_controlado, i.tipo_controlado, 'psicotropico'),
+    actualizado_en = now()
+from public.medicamentos_indicaciones i
+where l.indicacion_id = i.id
+  and i.es_controlado = true
+  and l.es_controlado = false;
 
 drop trigger if exists trg_med_indicaciones_updated_at on public.medicamentos_indicaciones;
 create trigger trg_med_indicaciones_updated_at

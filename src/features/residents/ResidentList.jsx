@@ -1,19 +1,22 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getResidents, deleteResident } from "./residentService";
+import { getResidents, deleteResident, createResidentsBatch } from "./residentService";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
 import { ESTADO_CONFIG, DEPENDENCIA_TONE, initials, calcAge } from "./residentUtils";
+import ExcelImportModal from "../import/ExcelImportModal";
+import { residentImportConfig, normalizeResidentRows } from "../import/bulkImportConfigs";
 
 export default function ResidentList() {
   const navigate = useNavigate();
   const toast    = useToast();
-  const { can } = useAuth();
+  const { can, isAdminEleam } = useAuth();
   const canDelete = can("eliminar_residentes");
   const canCreate = can("crear_residentes");
+  const canImport = canCreate && isAdminEleam;
 
   const [residents,    setResidents]    = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -21,6 +24,7 @@ export default function ResidentList() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [busqueda,     setBusqueda]     = useState("");
   const [view,         setView]         = useState("grid"); // grid | list
+  const [importModal,  setImportModal]  = useState(false);
 
   const fetchResidents = useCallback(async () => {
     setLoading(true);
@@ -45,6 +49,17 @@ export default function ResidentList() {
       toast(`${nombre} eliminado correctamente.`, "success");
     } catch {
       toast("No se pudo eliminar el residente.", "error");
+    }
+  };
+
+  const handleImportResidents = async (rows, onProgress) => createResidentsBatch(rows, onProgress);
+
+  const handleImportComplete = async (results) => {
+    const created = results.filter((r) => r.ok).length;
+    const failed = results.length - created;
+    if (created > 0) {
+      toast(`${created} residente${created !== 1 ? "s" : ""} creado${created !== 1 ? "s" : ""}${failed ? `; ${failed} fila${failed !== 1 ? "s" : ""} con error` : ""}.`, failed ? "warning" : "success");
+      await fetchResidents();
     }
   };
 
@@ -73,15 +88,34 @@ export default function ResidentList() {
       description={`${stats.total} residente${stats.total !== 1 ? "s" : ""} registrado${stats.total !== 1 ? "s" : ""}${filtroEstado ? ` · filtrando por ${ESTADO_CONFIG[filtroEstado]?.label.toLowerCase() ?? filtroEstado}` : ""}`}
       actions={
         canCreate ? (
-          <Button
-            onClick={() => navigate("/residents/new")}
-            className="w-full sm:w-auto bg-teal-700 text-white px-6 py-2.5 rounded-xl hover:bg-teal-800 transition-all font-medium shadow-sm"
-          >
-            + Agregar Residente
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {canImport && (
+              <Button
+                onClick={() => setImportModal(true)}
+                className="w-full sm:w-auto bg-white text-teal-700 border border-teal-200 px-5 py-2.5 rounded-xl hover:bg-teal-50 transition-all font-medium shadow-sm"
+              >
+                Cargar residentes desde Excel
+              </Button>
+            )}
+            <Button
+              onClick={() => navigate("/residents/new")}
+              className="w-full sm:w-auto bg-teal-700 text-white px-6 py-2.5 rounded-xl hover:bg-teal-800 transition-all font-medium shadow-sm"
+            >
+              + Agregar Residente
+            </Button>
+          </div>
         ) : null
       }
     >
+      <ExcelImportModal
+        isOpen={importModal}
+        onClose={() => setImportModal(false)}
+        config={residentImportConfig}
+        normalizeRows={normalizeResidentRows}
+        normalizeContext={{ existingResidents: residents }}
+        onImport={handleImportResidents}
+        onComplete={handleImportComplete}
+      />
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4 flex justify-between">

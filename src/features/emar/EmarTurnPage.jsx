@@ -107,7 +107,7 @@ export default function EmarTurnPage() {
       await load();
     } catch (err) {
       console.error(err);
-      toast("No se pudo guardar el registro eMAR.", "error");
+      toast(err.message || "No se pudo guardar el registro eMAR.", "error");
     } finally {
       setSaving(false);
     }
@@ -329,6 +329,7 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
     listAvailableLots({
       residenteId: modal.row.residente_id,
       indicacionId: modal.row.indicacion_id,
+      controlado: modal.row.indicacion?.es_controlado === true,
     })
       .then((rows) => {
         setLots(rows);
@@ -393,7 +394,9 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
         )}
         {needsLot && !loadingLots && lots.length === 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Sin stock disponible para este medicamento. Registra un lote con inventario desde la ficha del residente, pestaña eMAR.
+            {modal.row.indicacion?.es_controlado
+              ? "Sin lote controlado disponible para esta indicación. Registra o marca un lote controlado desde la ficha del residente, pestaña eMAR."
+              : "Sin stock disponible para este medicamento. Registra un lote con inventario desde la ficha del residente, pestaña eMAR."}
           </div>
         )}
 

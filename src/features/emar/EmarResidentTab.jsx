@@ -738,6 +738,7 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
   if (!modal) return null;
 
   const indication = indications.find((item) => item.id === indicationId) ?? modal.indication ?? null;
+  const effectiveControlled = indication?.es_controlado === true || lot.es_controlado === true;
 
   return (
     <Modal isOpen={!!modal} onClose={onClose} title={lot.id ? "Editar lote" : "Nuevo lote"}>
@@ -745,7 +746,15 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          onSubmit({ lot: { ...lot, indicacion_id: indicationId || null }, indication });
+          onSubmit({
+            lot: {
+              ...lot,
+              indicacion_id: indicationId || null,
+              es_controlado: effectiveControlled,
+              tipo_controlado: effectiveControlled ? lot.tipo_controlado || indication?.tipo_controlado || "psicotropico" : null,
+            },
+            indication,
+          });
         }}
       >
         <label className="block text-sm font-medium text-slate-700">
@@ -785,9 +794,14 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
           <Field label="Ubicación" value={lot.ubicacion ?? ""} onChange={(value) => setLot((p) => ({ ...p, ubicacion: value }))} disabled={saving} />
         </div>
         <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-          <input type="checkbox" checked={lot.es_controlado} disabled={saving || indication?.es_controlado} onChange={(e) => setLot((p) => ({ ...p, es_controlado: e.target.checked }))} className="h-4 w-4 accent-teal-700" />
+          <input type="checkbox" checked={effectiveControlled} disabled={saving || indication?.es_controlado} onChange={(e) => setLot((p) => ({ ...p, es_controlado: e.target.checked }))} className="h-4 w-4 accent-teal-700" />
           Lote controlado
         </label>
+        {indication?.es_controlado && (
+          <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-xs text-teal-900">
+            Esta indicación es controlada; el lote se registrará como controlado y requerirá validación secundaria al administrar.
+          </div>
+        )}
         {lot.id && (
           <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
             La cantidad actual no se edita aquí. Usa Ingreso, Ajuste o Conciliar para conservar auditoría.

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 
-function Modal({ isOpen, onClose, title, children }) {
+function Modal({ isOpen, onClose, title, children, panelClassName = "" }) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -9,6 +9,8 @@ function Modal({ isOpen, onClose, title, children }) {
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const panelClasses = panelClassName || "max-w-lg p-4 sm:p-6";
 
   return (
     <div
@@ -19,7 +21,7 @@ function Modal({ isOpen, onClose, title, children }) {
         role="dialog"
         aria-modal="true"
         aria-label={title ?? "Diálogo"}
-        className="relative bg-white rounded-t-2xl sm:rounded-xl shadow-xl max-w-lg w-full max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6"
+        className={`relative bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto ${panelClasses}`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

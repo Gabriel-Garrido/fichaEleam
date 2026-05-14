@@ -226,6 +226,7 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 - Administra residentes, signos vitales, observaciones, acreditación y equipo.
 - Paga la suscripción del ELEAM.
 - Crea funcionarios/familiares desde `/equipo`.
+- Puede cargar residentes y funcionarios desde planillas Excel `.xlsx`; la importación está restringida a `admin_eleam`.
 - Ajusta features visibles para funcionarios y familiares solo dentro de lo habilitado por superadmin.
 - Usa un `AppShell` operacional: sidebar desktop abierto por defecto, colapsable a icon rail con preview por hover/focus en 0,3 segundos, y bottom nav en mobile.
 - Las pantallas admin deben usar `PageLayout`/`PageHeader`, una acción primaria visible, filtros compactos y detalles secundarios en `details`, drawers o secciones avanzadas.
@@ -258,12 +259,12 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 | `/demo/:token` | Demo guiado por token. |
 | `/pago`, `/pago/return` | Suscripción MercadoPago. |
 | `/dashboard` | Panel operativo staff. |
-| `/turnos*` | Entrega de turno. |
-| `/residents*` | Residentes. |
+| `/turnos*` | Entrega de turno, tareas diarias de cuidado y eMAR por turno. |
+| `/residents*` | Residentes, incluida carga masiva desde Excel para admin ELEAM. |
 | `/vital-signs*` | Signos vitales. |
 | `/observations*` | Observaciones diarias. |
 | `/accreditation*` | Carpeta SEREMI. |
-| `/equipo` | Gestión de funcionarios/familiares. |
+| `/equipo` | Gestión de funcionarios/familiares, incluida carga masiva de funcionarios desde Excel. |
 | `/familiar*` | Portal familiar. |
 | `/superadmin` | Resumen ejecutivo plataforma. |
 | `/superadmin/clientes` | Cartera ELEAM y salud comercial. |
@@ -284,6 +285,14 @@ El registro legacy por invitación (`/register?invite=TOKEN`) valida primero la 
 - `MobileBottomNav` mantiene los accesos frecuentes y el menú "Más" agrupa módulos secundarios, cuenta y cierre de sesión.
 - Las vistas admin ELEAM priorizan foco operacional: siguiente acción, alertas, métricas mínimas y filtros compactos. La información secundaria debe quedar plegada o en secciones de apoyo para evitar sobrecarga.
 - `/pago` se renderiza como página pública cuando no hay sesión y como pantalla interna cuando el usuario está dentro del shell.
+
+### Importación desde Excel
+
+- Residentes: en `/residents`, solo `admin_eleam` ve `Cargar residentes desde Excel`. La planilla oficial incluye columnas claras como `Nombres *`, `Apellidos *`, `RUT`, `Fecha ingreso *`, estado clínico, dependencia, contacto y alergias.
+- Funcionarios: en `/equipo`, solo `admin_eleam` puede usar `Cargar funcionarios desde Excel`. La planilla exige `Nombre completo *`, `Correo electrónico *` y `Cargo / plantilla de permisos *`.
+- El modal descarga una plantilla `.xlsx` generada en el navegador con validaciones nativas de Excel para listas, fechas, rangos numéricos, email y campos obligatorios; al subirla igualmente normaliza fechas/RUT/enums y bloquea la importación si hay filas con errores.
+- Residentes se crean fila a fila para reportar errores específicos sin perder los registros válidos ya creados. Funcionarios se crean mediante `create-staff-user`, por lo que se mantienen límites de plan, creación Auth, flujo Gmail/Google y correos de bienvenida.
+- `read-excel-file` y `write-excel-file` se cargan dinámicamente solo al descargar o leer planillas; no forman parte del bundle inicial.
 
 ---
 

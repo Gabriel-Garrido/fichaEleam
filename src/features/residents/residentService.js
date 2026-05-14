@@ -7,11 +7,11 @@ async function getMyEleamId() {
   if (!user) throw new Error("No autenticado.");
   const { data, error } = await supabase
     .from("profiles")
-    .select("eleam_id")
+    .select("eleam_id, rol")
     .eq("id", user.id)
     .single();
   if (error || !data?.eleam_id) throw new Error("ELEAM no encontrado para este usuario.");
-  return { userId: user.id, eleamId: data.eleam_id };
+  return { userId: user.id, eleamId: data.eleam_id, rol: data.rol };
 }
 
 export const getResidents = async (estado = null) => {
@@ -49,6 +49,38 @@ export const createResident = async (residentData) => {
     .single();
   if (error) throw error;
   return data;
+};
+
+export const createResidentsBatch = async (rows, onProgress = null) => {
+  const { userId, eleamId, rol } = await getMyEleamId();
+  if (rol !== "admin_eleam") {
+    throw new Error("Solo el administrador del ELEAM puede cargar residentes desde Excel.");
+  }
+  const results = [];
+  let done = 0;
+
+  for (const row of rows) {
+    try {
+      const { data, error } = await supabase
+        .from("residentes")
+        .insert({ ...row.payload, creado_por: userId, eleam_id: eleamId })
+        .select()
+        .single();
+      if (error) throw error;
+      results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data });
+    } catch (error) {
+      const message =
+        error?.code === "23505"
+          ? "Ya existe un residente con ese RUT en este establecimiento."
+          : error?.message || "No se pudo crear el residente.";
+      results.push({ ok: false, rowNumber: row.rowNumber, label: row.label, error: message });
+    } finally {
+      done += 1;
+      onProgress?.(done, rows.length);
+    }
+  }
+
+  return results;
 };
 
 export const updateResident = async (id, residentData) => {

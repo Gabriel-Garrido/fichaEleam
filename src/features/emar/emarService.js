@@ -203,12 +203,6 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
       .single();
     if (error) throw error;
     saved = data;
-
-    const { error: deleteError } = await supabase
-      .from("medicamentos_horarios")
-      .delete()
-      .eq("indicacion_id", saved.id);
-    if (deleteError) throw deleteError;
   } else {
     const { data, error } = await supabase
       .from("medicamentos_indicaciones")
@@ -220,14 +214,29 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
   }
 
   const horario = normalizeSchedule(schedule);
-  const { error: scheduleError } = await supabase
-    .from("medicamentos_horarios")
-    .insert({
-      ...horario,
-      eleam_id: eleamId,
-      residente_id: residenteId,
-      indicacion_id: saved.id,
-    });
+  let scheduleError;
+  if (schedule?.id) {
+    const result = await supabase
+      .from("medicamentos_horarios")
+      .update({
+        ...horario,
+        eleam_id: eleamId,
+        residente_id: residenteId,
+        indicacion_id: saved.id,
+      })
+      .eq("id", schedule.id);
+    scheduleError = result.error;
+  } else {
+    const result = await supabase
+      .from("medicamentos_horarios")
+      .insert({
+        ...horario,
+        eleam_id: eleamId,
+        residente_id: residenteId,
+        indicacion_id: saved.id,
+      });
+    scheduleError = result.error;
+  }
   if (scheduleError) throw scheduleError;
 
   return saved;
@@ -235,6 +244,7 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
 
 export async function saveStockLot({ residenteId, indication = null, lot }) {
   const { userId, eleamId } = await getSessionProfile();
+  const isControlled = indication?.es_controlado === true || lot.es_controlado === true;
   const payload = {
     eleam_id: eleamId,
     residente_id: residenteId,
@@ -245,8 +255,8 @@ export async function saveStockLot({ residenteId, indication = null, lot }) {
     cantidad_actual: Number(lot.cantidad_actual ?? 0),
     unidad: lot.unidad?.trim() || indication?.unidad_dosis || "unidad",
     ubicacion: lot.ubicacion?.trim() || null,
-    es_controlado: lot.es_controlado ?? indication?.es_controlado ?? false,
-    tipo_controlado: (lot.es_controlado ?? indication?.es_controlado) ? lot.tipo_controlado || indication?.tipo_controlado || "psicotropico" : null,
+    es_controlado: isControlled,
+    tipo_controlado: isControlled ? lot.tipo_controlado || indication?.tipo_controlado || "psicotropico" : null,
     estado: lot.estado || "activo",
     actualizado_por: userId,
   };
@@ -288,7 +298,7 @@ export async function saveStockLot({ residenteId, indication = null, lot }) {
   return data;
 }
 
-export async function listAvailableLots({ residenteId, indicacionId = null } = {}) {
+export async function listAvailableLots({ residenteId, indicacionId = null, controlado = null } = {}) {
   let query = supabase
     .from("medicamentos_stock_lotes")
     .select("*")
@@ -298,6 +308,8 @@ export async function listAvailableLots({ residenteId, indicacionId = null } = {
 
   if (residenteId) query = query.eq("residente_id", residenteId);
   if (indicacionId) query = query.or(`indicacion_id.eq.${indicacionId},indicacion_id.is.null`);
+  if (controlado === true) query = query.eq("es_controlado", true);
+  if (controlado === false) query = query.eq("es_controlado", false);
 
   const { data, error } = await query;
   if (error) throw error;

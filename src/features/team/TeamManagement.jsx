@@ -11,6 +11,8 @@ import PageLayout from "../../layout/PageLayout";
 import FeaturePermissionMatrix from "../permissions/FeaturePermissionMatrix";
 import { featureDefaultMap } from "../permissions/featureCatalog";
 import { formatDate } from "../../utils/dateUtils";
+import ExcelImportModal from "../import/ExcelImportModal";
+import { staffImportConfig, normalizeStaffRows } from "../import/bulkImportConfigs";
 import {
   getEleamFeaturePermissions,
   getProfileFeaturePermissions,
@@ -88,6 +90,7 @@ export default function TeamManagement() {
   const [createModal,    setCreateModal]    = useState(false);
   const [permModal,      setPermModal]      = useState(null);   // profileId
   const [deleteConfirm,  setDeleteConfirm]  = useState(null);   // { id, nombre }
+  const [importModal,    setImportModal]    = useState(false);
 
   // Formulario creación
   const [createForm, setCreateForm] = useState({ nombre: "", email: "", rol: "funcionario", residenteId: "" });
@@ -302,6 +305,118 @@ export default function TeamManagement() {
     }
   };
 
+  const handleImportFuncionarios = async (rows, onProgress) => {
+    const results = [];
+    let done = 0;
+
+    for (const row of rows) {
+      try {
+        const result = await createStaffUser({
+          nombre: row.payload.nombre,
+          email: row.payload.email,
+          rol: "funcionario",
+        });
+
+        const warnings = [];
+        if (result.profile_id) {
+          try {
+            await updateFuncionarioPermisos(result.profile_id, row.payload.permisos);
+          } catch {
+            warnings.push("No se pudieron aplicar los permisos por cargo.");
+          }
+          try {
+            await saveProfileFeaturePermissions(
+              result.profile_id,
+              "funcionario",
+              featureDefaultMap("funcionario", roleFeatureLimits.funcionario),
+            );
+          } catch {
+            warnings.push("No se pudieron aplicar los permisos de módulos visibles.");
+          }
+        } else if (result.google_only) {
+          warnings.push("El usuario entrará con Google. Ajusta permisos avanzados después de su primer ingreso si el cargo requiere cambios.");
+        }
+
+        results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data: result, warnings });
+      } catch (error) {
+        results.push({
+          ok: false,
+          rowNumber: row.rowNumber,
+          label: row.label,
+          error: friendlyError(error, "No se pudo crear este funcionario."),
+        });
+      } finally {
+        done += 1;
+        onProgress?.(done, rows.length);
+      }
+    }
+
+    return results;
+  };
+
+  const handleImportFuncionariosComplete = async (results) => {
+    const created = results.filter((r) => r.ok).length;
+    const failed = results.length - created;
+    if (created > 0) {
+      toast(`${created} funcionario${created !== 1 ? "s" : ""} creado${created !== 1 ? "s" : ""}${failed ? `; ${failed} fila${failed !== 1 ? "s" : ""} con error` : ""}.`, failed ? "warning" : "success");
+      await refresh();
+    }
+  };
+
+  const renderStaffImportDetail = (successRows) => {
+    const credentialRows = successRows.filter((row) => row.data?.temp_password);
+    const googleRows = successRows.filter((row) => row.data?.google_only);
+    const warnings = successRows.flatMap((row) => (row.warnings ?? []).map((warning) => ({ warning, label: row.label })));
+    const credentialText = credentialRows
+      .map((row) => `${row.data.email}: ${row.data.temp_password}`)
+      .join("\n");
+
+    return (
+      <div className="mt-4 space-y-3">
+        {credentialRows.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-white p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-bold text-amber-900">
+                Contraseñas temporales generadas. Se muestran una sola vez.
+              </p>
+              <button
+                type="button"
+                onClick={() => copyText(credentialText)}
+                className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950"
+              >
+                Copiar credenciales
+              </button>
+            </div>
+            <div className="mt-3 max-h-40 overflow-auto rounded-lg bg-amber-50 p-2">
+              {credentialRows.map((row) => (
+                <p key={row.rowNumber} className="font-mono text-xs text-amber-950">
+                  {row.data.email}: {row.data.temp_password}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {googleRows.length > 0 && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
+            {googleRows.length} funcionario{googleRows.length !== 1 ? "s" : ""} con correo Gmail quedaron habilitados para ingresar con Google.
+          </div>
+        )}
+
+        {warnings.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs font-bold text-amber-900">Advertencias de permisos</p>
+            <ul className="mt-2 space-y-1 text-xs text-amber-800">
+              {warnings.map((item, index) => (
+                <li key={`${item.label}-${index}`}>{item.label}: {item.warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (loading) return <Loading message="Cargando equipo..." />;
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -313,15 +428,39 @@ export default function TeamManagement() {
       description="Crea usuarios, vincula familiares y define qué módulos verá cada persona."
       size="lg"
       actions={
-        <div className="text-sm text-slate-600 bg-white border rounded-xl px-4 py-2 shrink-0">
-          Funcionarios: <span className="font-bold">{funcionarios.length}</span>
-          {maxFunc !== null && <span className="text-slate-400"> / {maxFunc}</span>}
-          {" · "}
-          Familiares: <span className="font-bold">{familiares.length}</span>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Button
+            disabled={limiteAlcanzado}
+            onClick={() => setImportModal(true)}
+            className="w-full sm:w-auto bg-white text-teal-700 border border-teal-200 px-4 py-2 rounded-xl hover:bg-teal-50 disabled:opacity-50"
+          >
+            Cargar funcionarios desde Excel
+          </Button>
+          <div className="text-sm text-slate-600 bg-white border rounded-xl px-4 py-2 shrink-0">
+            Funcionarios: <span className="font-bold">{funcionarios.length}</span>
+            {maxFunc !== null && <span className="text-slate-400"> / {maxFunc}</span>}
+            {" · "}
+            Familiares: <span className="font-bold">{familiares.length}</span>
+          </div>
         </div>
       }
       className="space-y-6"
     >
+      <ExcelImportModal
+        isOpen={importModal}
+        onClose={() => setImportModal(false)}
+        config={staffImportConfig}
+        normalizeRows={normalizeStaffRows}
+        normalizeContext={{
+          existingMembers: members,
+          pendingInvites: invites,
+          maxFuncionarios: maxFunc,
+          currentFuncionarios: funcionarios.length + invitesFunc.length,
+        }}
+        onImport={handleImportFuncionarios}
+        onComplete={handleImportFuncionariosComplete}
+        renderResultDetail={renderStaffImportDetail}
+      />
 
       <TeamFlowHint
         residentesActivos={residentesActivos}

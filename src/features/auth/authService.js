@@ -11,6 +11,9 @@ export function authErrorMessage(error, fallback = "No pudimos completar la oper
   const raw = String(error?.message || error?.error_description || error || "");
   const msg = raw.toLowerCase();
 
+  if (isPendingDemoError(error)) {
+    return "Tu demo ya fue solicitado y está en revisión. Te avisaremos cuando el acceso esté habilitado.";
+  }
   if (msg.includes("invalid login credentials")) {
     return "Correo o contraseña incorrectos. Verifica los datos o recupera tu contraseña.";
   }
@@ -34,6 +37,17 @@ export function authErrorMessage(error, fallback = "No pudimos completar la oper
   }
 
   return fallback;
+}
+
+export function isPendingDemoError(error) {
+  const msg = String(error?.message || error?.error_description || error || "").toLowerCase();
+  return (
+    msg.includes("demo_pending") ||
+    msg.includes("demo ya fue solicitado") ||
+    msg.includes("demo ya se solicito") ||
+    msg.includes("demo ya se solicitó") ||
+    (msg.includes("solicitud de demo") && msg.includes("pendiente"))
+  );
 }
 
 export const login = async ({ email, password }) => {

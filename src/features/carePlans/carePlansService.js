@@ -19,6 +19,165 @@ export const CARE_CATEGORIES = [
 
 export const CARE_CATEGORY_LABEL = Object.fromEntries(CARE_CATEGORIES);
 
+export const CARE_ACTIVITY_PRESETS = [
+  {
+    id: "desayuno-asistido",
+    area: "Nutrición",
+    activity: {
+      categoria: "alimentacion",
+      titulo: "Desayuno asistido",
+      descripcion: "Apoyo y registro de tolerancia durante el desayuno.",
+      instrucciones: "Respetar pauta alimentaria, textura indicada y alertas de deglución.",
+      prioridad: "alta",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "08:30", turno: "mañana", tolerancia_min: 45 },
+  },
+  {
+    id: "almuerzo-asistido",
+    area: "Nutrición",
+    activity: {
+      categoria: "alimentacion",
+      titulo: "Almuerzo asistido",
+      descripcion: "Apoyo en alimentación y supervisión de ingesta.",
+      instrucciones: "Registrar rechazo, baja ingesta o signos de disfagia.",
+      prioridad: "alta",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "12:30", turno: "tarde", tolerancia_min: 60 },
+  },
+  {
+    id: "once-cena-asistida",
+    area: "Nutrición",
+    activity: {
+      categoria: "alimentacion",
+      titulo: "Once / cena asistida",
+      descripcion: "Apoyo en alimentación de tarde-noche.",
+      instrucciones: "Verificar dieta indicada y tolerancia antes del descanso.",
+      prioridad: "media",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "18:30", turno: "tarde", tolerancia_min: 60 },
+  },
+  {
+    id: "hidratacion-manana",
+    area: "Nutrición",
+    activity: {
+      categoria: "hidratacion",
+      titulo: "Hidratación supervisada",
+      descripcion: "Oferta y supervisión de líquidos según pauta.",
+      instrucciones: "Considerar restricción hídrica, espesantes o indicación clínica.",
+      prioridad: "media",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "10:30", turno: "mañana", tolerancia_min: 45 },
+  },
+  {
+    id: "bano-higiene",
+    area: "Higiene",
+    activity: {
+      categoria: "bano",
+      titulo: "Baño y aseo personal",
+      descripcion: "Asistencia en baño, muda o aseo en cama según dependencia.",
+      instrucciones: "Resguardar privacidad, seguridad térmica y condición de piel.",
+      prioridad: "alta",
+      requiere_observacion: true,
+    },
+    schedule: { frecuencia: "diaria", hora: "09:30", turno: "mañana", tolerancia_min: 90 },
+  },
+  {
+    id: "higiene-oral",
+    area: "Higiene",
+    activity: {
+      categoria: "higiene",
+      titulo: "Higiene oral y prótesis",
+      descripcion: "Aseo oral, cuidado de prótesis y confort bucal.",
+      instrucciones: "Avisar lesiones, dolor, sangrado o rechazo persistente.",
+      prioridad: "media",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "20:30", turno: "noche", tolerancia_min: 45 },
+  },
+  {
+    id: "vestuario-ropa-cama",
+    area: "Higiene",
+    activity: {
+      categoria: "higiene",
+      titulo: "Vestuario y ropa de cama",
+      descripcion: "Cambio de ropa, revisión de pertenencias y cama limpia/seca.",
+      instrucciones: "Priorizar residentes con incontinencia, sudoración o lesiones cutáneas.",
+      prioridad: "media",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "10:00", turno: "mañana", tolerancia_min: 90 },
+  },
+  {
+    id: "eliminacion-muda",
+    area: "Continencia",
+    activity: {
+      categoria: "eliminacion",
+      titulo: "Eliminación y muda",
+      descripcion: "Apoyo en baño, cambio de absorbente y cuidado de piel.",
+      instrucciones: "Registrar diarrea, constipación, diuresis alterada o lesiones.",
+      prioridad: "alta",
+      requiere_observacion: true,
+    },
+    schedule: { frecuencia: "diaria", hora: "14:30", turno: "tarde", tolerancia_min: 60 },
+  },
+  {
+    id: "movilizacion-transferencias",
+    area: "Movilidad",
+    activity: {
+      categoria: "movilidad",
+      titulo: "Movilización y transferencias",
+      descripcion: "Levantada, marcha asistida o traslado seguro según capacidad.",
+      instrucciones: "Usar ayudas técnicas y registrar dolor, mareo o rechazo.",
+      prioridad: "alta",
+      requiere_observacion: true,
+    },
+    schedule: { frecuencia: "diaria", hora: "11:00", turno: "mañana", tolerancia_min: 60 },
+  },
+  {
+    id: "cambios-posicion",
+    area: "Prevención",
+    activity: {
+      categoria: "cambios_posicion",
+      titulo: "Cambios de posición",
+      descripcion: "Reposicionamiento para prevención de úlceras por presión.",
+      instrucciones: "Revisar prominencias óseas y dejar alineación cómoda.",
+      prioridad: "alta",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "02:00", turno: "noche", tolerancia_min: 45 },
+  },
+  {
+    id: "prevencion-caidas",
+    area: "Prevención",
+    activity: {
+      categoria: "prevencion_caidas",
+      titulo: "Chequeo de prevención de caídas",
+      descripcion: "Revisión de entorno, calzado, timbre, barandas y ayudas técnicas.",
+      instrucciones: "Corregir riesgos antes de cambios de turno o deambulación.",
+      prioridad: "alta",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "07:30", turno: "mañana", tolerancia_min: 45 },
+  },
+  {
+    id: "actividad-estimulacion",
+    area: "Bienestar",
+    activity: {
+      categoria: "actividad",
+      titulo: "Actividad y estimulación",
+      descripcion: "Actividad recreativa, cognitiva o acompañamiento significativo.",
+      instrucciones: "Adaptar a preferencia, ánimo y nivel funcional del residente.",
+      prioridad: "media",
+      requiere_observacion: false,
+    },
+    schedule: { frecuencia: "diaria", hora: "16:30", turno: "tarde", tolerancia_min: 90 },
+  },
+];
+
 export const CARE_STATUS_LABEL = {
   pendiente: "Pendiente",
   cumplida: "Cumplida",
@@ -36,7 +195,11 @@ export const OMISSION_REASONS = [
 ];
 
 export function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function currentTurno(date = new Date()) {
@@ -75,14 +238,21 @@ export async function getSessionProfile() {
 
 export function normalizeSchedule(schedule = {}) {
   const frecuencia = schedule.frecuencia || "diaria";
+  const diasSemana = Array.isArray(schedule.dias_semana)
+    ? [...new Set(schedule.dias_semana.map(Number).filter((day) => day >= 1 && day <= 7))].sort((a, b) => a - b)
+    : [];
+  const diasMes = Array.isArray(schedule.dias_mes)
+    ? [...new Set(schedule.dias_mes.map(Number).filter((day) => day >= 1 && day <= 31))].sort((a, b) => a - b)
+    : [];
+  const tolerancia = Number(schedule.tolerancia_min ?? 60);
   return {
     frecuencia,
-    dias_semana: frecuencia === "semanal" ? schedule.dias_semana ?? [] : null,
-    dias_mes: frecuencia === "mensual" ? schedule.dias_mes ?? [] : null,
+    dias_semana: frecuencia === "semanal" ? (diasSemana.length ? diasSemana : [1, 2, 3, 4, 5, 6, 7]) : null,
+    dias_mes: frecuencia === "mensual" ? (diasMes.length ? diasMes : [1]) : null,
     fecha_unica: frecuencia === "una_vez" ? schedule.fecha_unica || todayIso() : null,
     hora: schedule.hora || "09:00",
     turno: schedule.turno || currentTurno(),
-    tolerancia_min: Number(schedule.tolerancia_min ?? 60),
+    tolerancia_min: Number.isFinite(tolerancia) ? Math.max(0, Math.min(720, tolerancia)) : 60,
     activo: schedule.activo !== false,
   };
 }
@@ -171,11 +341,6 @@ export async function saveCareActivity({ plan, activity, schedule }) {
     if (error) throw error;
     saved = data;
 
-    const { error: deleteError } = await supabase
-      .from("plan_cuidado_horarios")
-      .delete()
-      .eq("actividad_id", saved.id);
-    if (deleteError) throw deleteError;
   } else {
     const { data, error } = await supabase
       .from("plan_cuidado_actividades")
@@ -187,17 +352,89 @@ export async function saveCareActivity({ plan, activity, schedule }) {
   }
 
   const horario = normalizeSchedule(schedule);
-  const { error: scheduleError } = await supabase
-    .from("plan_cuidado_horarios")
-    .insert({
-      ...horario,
-      eleam_id: plan.eleam_id,
-      residente_id: plan.residente_id,
-      actividad_id: saved.id,
-    });
+  let scheduleError;
+  if (schedule?.id) {
+    const result = await supabase
+      .from("plan_cuidado_horarios")
+      .update({
+        ...horario,
+        eleam_id: plan.eleam_id,
+        residente_id: plan.residente_id,
+        actividad_id: saved.id,
+      })
+      .eq("id", schedule.id);
+    scheduleError = result.error;
+  } else {
+    const result = await supabase
+      .from("plan_cuidado_horarios")
+      .insert({
+        ...horario,
+        eleam_id: plan.eleam_id,
+        residente_id: plan.residente_id,
+        actividad_id: saved.id,
+      });
+    scheduleError = result.error;
+  }
   if (scheduleError) throw scheduleError;
 
   return saved;
+}
+
+export async function createCarePresetActivities({ plan, presetIds = [], existingActivities = [] }) {
+  const { userId } = await getSessionProfile();
+  const selectedIds = new Set(presetIds);
+  const selected = CARE_ACTIVITY_PRESETS.filter((preset) => selectedIds.has(preset.id));
+  const existingKeys = new Set(
+    existingActivities
+      .filter((item) => item.activo !== false)
+      .map((item) => `${item.categoria}:${item.titulo}`.toLowerCase())
+  );
+  let created = 0;
+  let skipped = 0;
+
+  for (const preset of selected) {
+    const activity = preset.activity;
+    const key = `${activity.categoria}:${activity.titulo}`.toLowerCase();
+    if (existingKeys.has(key)) {
+      skipped += 1;
+      continue;
+    }
+
+    const { data: saved, error } = await supabase
+      .from("plan_cuidado_actividades")
+      .insert({
+        eleam_id: plan.eleam_id,
+        residente_id: plan.residente_id,
+        plan_id: plan.id,
+        categoria: activity.categoria,
+        titulo: activity.titulo,
+        descripcion: activity.descripcion || null,
+        instrucciones: activity.instrucciones || null,
+        prioridad: activity.prioridad || "media",
+        requiere_observacion: activity.requiere_observacion === true,
+        activo: true,
+        creado_por: userId,
+        actualizado_por: userId,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+
+    const { error: scheduleError } = await supabase
+      .from("plan_cuidado_horarios")
+      .insert({
+        ...normalizeSchedule(preset.schedule),
+        eleam_id: plan.eleam_id,
+        residente_id: plan.residente_id,
+        actividad_id: saved.id,
+      });
+    if (scheduleError) throw scheduleError;
+
+    existingKeys.add(key);
+    created += 1;
+  }
+
+  return { created, skipped };
 }
 
 export async function deactivateCareActivity(activityId) {

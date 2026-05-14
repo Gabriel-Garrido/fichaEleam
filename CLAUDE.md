@@ -50,7 +50,7 @@ src/
 │   ├── vitalSigns/             # Formulario + lista + rangos clínicos
 │   ├── observations/           # 12 tipos de observaciones diarias
 │   ├── accreditation/          # Modelo v9: ámbitos, requisitos, evidencias, observaciones, auditoría
-│   ├── carePlans/              # Plan de cuidado: CarePlanTab (gestión de actividades + horarios), CareTasksPage (ejecución diaria por turno), carePlansService
+│   ├── carePlans/              # Plan de cuidado: CarePlanTab (actividades + horarios), CareTasksPage (bandeja diaria cuidado + eMAR), carePlansService
 │   │   └── carePlansService.js # Funciones compartidas: getSessionProfile(), todayIso(), currentTurno(), normalizeSchedule(), previousTurnos()
 │   ├── emar/                   # Kardex electrónico: EmarTurnPage (administración por turno), EmarResidentTab (historial por residente), emarService
 │   ├── turnos/                 # Entrega de turno: TurnoEntregaPage, TurnoHistoryPage, turnosService; integra datos de eMAR + plan de cuidado + signos + acreditación
@@ -180,7 +180,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | `/familiar/visitas` | FamiliarVisitas | `allowedRoles=[familiar]` + ELEAM vigente | Historial + registro de visitas |
 | `/turnos` | TurnoEntregaPage | STAFF | Entrega de turno: resumen clínico + cuidado + eMAR |
 | `/turnos/nueva` | TurnoEntregaPage | STAFF | Nueva entrega de turno |
-| `/turnos/tareas` | CareTasksPage | STAFF | Tareas diarias del plan de cuidado por turno |
+| `/turnos/tareas` | CareTasksPage | STAFF | Bandeja diaria de tareas del plan de cuidado y administraciones eMAR por turno |
 | `/turnos/emar` | EmarTurnPage | STAFF | Kardex electrónico: administración de medicamentos por turno |
 | `/turnos/:id` | TurnoHistoryPage | STAFF | Detalle histórico de una entrega de turno |
 | `/permisos` | FeaturePermissionsPage | `allowedRoles=[admin_eleam]` | Activar/desactivar features del ELEAM |
@@ -349,6 +349,7 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/equipo` + `/accreditation`.
 5. **Crear funcionarios**: Email + nombre + permisos → Edge Function `create-staff-user` crea o repara cuenta con contraseña temporal + envía email de bienvenida con credenciales.
 6. **Crear familiares**: Selecciona residente activo + email → mismo flujo; `familiar_residentes` vincula al residente asignado. También puede hacerlo un funcionario desde flujos operativos autorizados.
+7. **Carga masiva Excel**: Desde `/residents` puede importar residentes con plantilla `.xlsx`; desde `/equipo` puede importar funcionarios con plantilla `.xlsx`. Las plantillas incluyen validadores nativos de Excel para listas, fechas, rangos y campos obligatorios. Ambos flujos usan `ExcelImportModal`, validan antes de importar y están ocultos para funcionarios.
 
 ### funcionario (Personal clínico)
 
@@ -547,6 +548,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Superadmin**: Función `is_superadmin()` en todas las RLS; bypass seguro.
 - **Storage path scoped**: `acreditacion/{eleamId}/...`; RLS filtra por `split_part(name, '/', 2)`.
 - **Permisos granulares**: `funcionario_permisos` con checks en UI + RLS.
+- **Importación Excel restringida**: los botones de carga masiva solo aparecen para `admin_eleam`. Residentes usa RLS/`crear_residentes` y servicio fila a fila; funcionarios siempre pasa por Edge Function `create-staff-user` para respetar límites de plan y creación segura en Auth.
 - **Defense-in-depth en accreditationService**: `setRequisitoEstado`, `archiveDocumento` y el reemplazo de documentos incluyen `.eq("eleam_id", eleamId)` además de la protección RLS.
 
 ### Headers
@@ -581,6 +583,8 @@ Tabla `funcionario_permisos` con columnas bool por acción. Verificación en UI 
 `can()` en AuthContext: fail-closed para permisos marcados **false** — cuando no hay row en `funcionario_permisos`, esos permisos se deniegan explícitamente (set `FAIL_CLOSED_PERMS` en AuthContext.jsx). El schema crea filas para funcionarios nuevos y existentes.
 
 `teamConstants.js` exporta `PERM_GROUPS` (agrupa permisos por sección para la UI), `DEFAULT_PERMS` (valores para nuevos funcionarios) y `PLANTILLAS_CARGO` (presets por rol: Enfermero/a, Kinesiólogo/a, Médico/a, Auxiliar ATD, Administrativo/a).
+
+La importación de funcionarios desde Excel reutiliza `PLANTILLAS_CARGO` para derivar permisos iniciales. Si una cuenta Gmail aún no existe en Auth, `create-staff-user` deja invitación Google pendiente y los permisos avanzados se ajustan cuando exista el perfil.
 
 ---
 
