@@ -7,12 +7,35 @@ import { supabase } from "../../services/supabaseConfig";
 export async function getPublishedPosts({ limit = 50, destacadosFirst = true } = {}) {
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, titulo, resumen, cover_url, cover_alt, autor_nombre, tiempo_lectura_min, publicado_en, keywords, destacado")
+    .select("id, slug, titulo, resumen, cover_url, cover_alt, autor_nombre, tiempo_lectura_min, publicado_en, actualizado_en, keywords, destacado")
     .eq("estado", "publicado")
     .order("destacado", destacadosFirst ? { ascending: false } : { ascending: true })
     .order("publicado_en", { ascending: false })
     .limit(limit);
   if (error) throw error;
+  return data ?? [];
+}
+
+export async function getRelatedPosts(currentSlug, keywords = [], limit = 3) {
+  if (keywords.length > 0) {
+    const { data } = await supabase
+      .from("blog_posts")
+      .select("id, slug, titulo, resumen, cover_url, autor_nombre, tiempo_lectura_min, publicado_en, keywords")
+      .eq("estado", "publicado")
+      .neq("slug", currentSlug)
+      .overlaps("keywords", keywords)
+      .order("publicado_en", { ascending: false })
+      .limit(limit);
+    if (data?.length) return data;
+  }
+  // Fallback: artículos más recientes
+  const { data } = await supabase
+    .from("blog_posts")
+    .select("id, slug, titulo, resumen, cover_url, autor_nombre, tiempo_lectura_min, publicado_en, keywords")
+    .eq("estado", "publicado")
+    .neq("slug", currentSlug)
+    .order("publicado_en", { ascending: false })
+    .limit(limit);
   return data ?? [];
 }
 

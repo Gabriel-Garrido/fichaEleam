@@ -3,6 +3,7 @@ import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
+import { formatDateOnly } from "../../utils/dateUtils";
 import {
   EMAR_TURNOS,
   MED_ROUTES,
@@ -76,17 +77,12 @@ const STOCK_TONE = {
   inactivo: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
-function formatDate(date) {
-  if (!date) return "Sin fecha";
-  return new Date(`${date}T12:00:00`).toLocaleDateString("es-CL");
-}
-
 function formatSchedule(schedule) {
   if (!schedule) return "Sin horario";
   const base = `${schedule.turno} · ${schedule.hora?.slice(0, 5) ?? "--:--"}`;
   if (schedule.frecuencia === "semanal") return `${base} · semanal`;
   if (schedule.frecuencia === "mensual") return `${base} · dia ${schedule.dias_mes?.[0] ?? 1}`;
-  if (schedule.frecuencia === "una_vez") return `${base} · ${formatDate(schedule.fecha_unica)}`;
+  if (schedule.frecuencia === "una_vez") return `${base} · ${formatDateOnly(schedule.fecha_unica)}`;
   return `${base} · diaria`;
 }
 
@@ -348,7 +344,7 @@ export default function EmarResidentTab({ resident }) {
                       </span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      {formatDate(row.fecha)} · {row.hora?.slice(0, 5)} · {row.turno}
+                      {formatDateOnly(row.fecha)} · {row.hora?.slice(0, 5)} · {row.turno}
                     </div>
                   </div>
                 ))}
@@ -404,7 +400,7 @@ function IndicationRow({ item, canEdit, canAdjustStock, onEdit, onNewLot }) {
             )}
             {item.fecha_fin && (
               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                Hasta {formatDate(item.fecha_fin)}
+                Hasta {formatDateOnly(item.fecha_fin)}
               </span>
             )}
           </div>
@@ -461,7 +457,7 @@ function StockLotRow({ lot, canAdjustStock, onEdit, onMove, onReconcile }) {
             Stock {lot.cantidad_actual} {lot.unidad} · lote {lot.lote || "s/l"}
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Vence {formatDate(lot.fecha_vencimiento)}{lot.ubicacion ? ` · ${lot.ubicacion}` : ""}
+            Vence {formatDateOnly(lot.fecha_vencimiento)}{lot.ubicacion ? ` · ${lot.ubicacion}` : ""}
           </p>
         </div>
         {canAdjustStock && (

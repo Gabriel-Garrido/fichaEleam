@@ -103,7 +103,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 Te enviamos tu enlace personalizado en menos de 24 horas.
               </p>
             </div>
-            <button
+            <button type="button"
               onClick={onClose}
               className="text-teal-200 hover:text-white ml-4 mt-1"
               aria-label="Cerrar"
@@ -122,11 +122,11 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">¡Solicitud recibida!</h3>
-            <p className="text-gray-600 text-sm leading-relaxed">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">¡Solicitud recibida!</h3>
+            <p className="text-slate-600 text-sm leading-relaxed">
               En menos de 24 horas te enviaremos el enlace para acceder a tu demo personalizado de FichaEleam.
             </p>
-            <button
+            <button type="button"
               onClick={onClose}
               className="mt-6 bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700"
             >
@@ -137,7 +137,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
           <form onSubmit={handleSubmit} noValidate className="p-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
                   Nombre completo *
                 </label>
                 <input
@@ -147,19 +147,19 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                   onChange={set("nombre")}
                   placeholder="María González"
                   className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${
-                    errors.nombre ? "border-red-400" : "border-gray-300"
+                    errors.nombre ? "border-red-400" : "border-slate-300"
                   }`}
                 />
                 {errors.nombre && <p className="text-red-500 text-xs mt-1">{errors.nombre}</p>}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Cargo *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Cargo *</label>
                 <select
                   value={form.cargo}
                   onChange={set("cargo")}
                   className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white ${
-                    errors.cargo ? "border-red-400" : "border-gray-300"
+                    errors.cargo ? "border-red-400" : "border-slate-300"
                   }`}
                 >
                   <option value="">Selecciona...</option>
@@ -170,7 +170,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
                 Nombre del ELEAM / Residencia *
               </label>
               <input
@@ -179,7 +179,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 onChange={set("eleam_nombre")}
                 placeholder="Residencia Los Arrayanes"
                 className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${
-                  errors.eleam_nombre ? "border-red-400" : "border-gray-300"
+                  errors.eleam_nombre ? "border-red-400" : "border-slate-300"
                 }`}
               />
               {errors.eleam_nombre && <p className="text-red-500 text-xs mt-1">{errors.eleam_nombre}</p>}
@@ -187,21 +187,21 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Email *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Email *</label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={set("email")}
                   placeholder="tu@residencia.cl"
                   className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${
-                    errors.email ? "border-red-400" : "border-gray-300"
+                    errors.email ? "border-red-400" : "border-slate-300"
                   }`}
                 />
                 {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
                   Teléfono *
                 </label>
                 <input
@@ -210,7 +210,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                   onChange={set("telefono")}
                   placeholder="+56 9 XXXX XXXX"
                   className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 ${
-                    errors.telefono ? "border-red-400" : "border-gray-300"
+                    errors.telefono ? "border-red-400" : "border-slate-300"
                   }`}
                 />
                 {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
@@ -218,13 +218,13 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
                 N° de residentes (opcional)
               </label>
               <select
                 value={form.num_residentes}
                 onChange={set("num_residentes")}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
               >
                 <option value="">Selecciona...</option>
                 {RESIDENTES_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -243,7 +243,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
               {status === "submitting" ? "Enviando..." : "Solicitar Demo Gratuito"}
             </button>
 
-            <p className="text-center text-xs text-gray-400">
+            <p className="text-center text-xs text-slate-400">
               Sin compromiso · Respuesta en menos de 24 horas
             </p>
           </form>

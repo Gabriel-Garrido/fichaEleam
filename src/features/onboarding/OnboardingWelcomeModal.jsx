@@ -135,6 +135,7 @@ export default function OnboardingWelcomeModal() {
 
           {/* Primary CTA */}
           <button
+            type="button"
             onClick={handleStart}
             className={`w-full py-3.5 px-6 rounded-2xl text-white font-bold text-base ${colors.btn} focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all shadow-lg active:scale-[0.98]`}
           >
@@ -144,6 +145,7 @@ export default function OnboardingWelcomeModal() {
 
           {/* Secondary: skip */}
           <button
+            type="button"
             onClick={handleSkip}
             className="w-full mt-3 py-2 text-sm text-slate-400 hover:text-slate-600 transition-colors rounded-xl"
           >

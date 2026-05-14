@@ -29,7 +29,7 @@ function renderInline(text) {
     let m = rest.match(/!\[([^\]]*)\]\(([^)]+)\)/);
     if (m && m.index !== undefined) {
       if (m.index > 0) tokens.push(rest.slice(0, m.index));
-      tokens.push(<img key={KEY()} src={m[2]} alt={m[1]} loading="lazy" className="my-4 rounded-xl border border-gray-100" />);
+      tokens.push(<img key={KEY()} src={m[2]} alt={m[1]} loading="lazy" className="my-4 rounded-xl border border-slate-100" />);
       rest = rest.slice(m.index + m[0].length);
       continue;
     }
@@ -43,7 +43,7 @@ function renderInline(text) {
           key={KEY()}
           href={m[2]}
           {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-          className="text-[var(--color-primary)] underline hover:no-underline font-medium"
+          className="text-teal-700 underline hover:no-underline font-medium"
         >
           {m[1]}
         </a>,
@@ -100,7 +100,7 @@ export function renderMarkdown(md) {
   const flushPara = (buf) => {
     if (!buf.length) return;
     const text = buf.join(" ").trim();
-    if (text) out.push(<p key={KEY()} className="text-gray-700 leading-relaxed my-3">{renderInline(text)}</p>);
+    if (text) out.push(<p key={KEY()} className="text-slate-700 leading-relaxed my-3">{renderInline(text)}</p>);
   };
 
   while (i < lines.length) {
@@ -129,12 +129,12 @@ export function renderMarkdown(md) {
       const text  = h[2];
       const id    = slugifyHeading(text);
       const cls = level === 1
-        ? "text-3xl font-black text-gray-900 mt-8 mb-4"
+        ? "text-3xl font-black text-slate-900 mt-8 mb-4"
         : level === 2
-        ? "text-2xl font-bold text-gray-900 mt-8 mb-3 border-b border-gray-100 pb-2"
+        ? "text-2xl font-bold text-slate-900 mt-8 mb-3 border-b border-slate-100 pb-2"
         : level === 3
-        ? "text-xl font-bold text-gray-900 mt-6 mb-2"
-        : "text-lg font-semibold text-gray-800 mt-4 mb-2";
+        ? "text-xl font-bold text-slate-900 mt-6 mb-2"
+        : "text-lg font-semibold text-slate-800 mt-4 mb-2";
       const Tag = `h${Math.min(level + 1, 6)}`; // bump 1 nivel para que h2 sea el principal
       out.push(<Tag key={KEY()} id={id} className={cls}>{renderInline(text)}</Tag>);
       i++;
@@ -143,7 +143,7 @@ export function renderMarkdown(md) {
 
     // hr
     if (/^---+\s*$/.test(line)) {
-      out.push(<hr key={KEY()} className="my-8 border-gray-200" />);
+      out.push(<hr key={KEY()} className="my-8 border-slate-200" />);
       i++;
       continue;
     }
@@ -155,7 +155,7 @@ export function renderMarkdown(md) {
         block.push(lines[i].replace(/^>\s?/, "")); i++;
       }
       out.push(
-        <blockquote key={KEY()} className="border-l-4 border-teal-300 bg-teal-50/50 pl-4 py-2 italic text-gray-700 my-4">
+        <blockquote key={KEY()} className="border-l-4 border-teal-300 bg-teal-50/50 pl-4 py-2 italic text-slate-700 my-4">
           {block.map((l, idx) => (
             <p key={idx} className="my-1">{renderInline(l)}</p>
           ))}
@@ -172,7 +172,7 @@ export function renderMarkdown(md) {
         i++;
       }
       out.push(
-        <ul key={KEY()} className="list-disc list-outside pl-5 my-3 space-y-1 text-gray-700">
+        <ul key={KEY()} className="list-disc list-outside pl-5 my-3 space-y-1 text-slate-700">
           {items.map((it, idx) => <li key={idx}>{renderInline(it)}</li>)}
         </ul>,
       );
@@ -187,7 +187,7 @@ export function renderMarkdown(md) {
         i++;
       }
       out.push(
-        <ol key={KEY()} className="list-decimal list-outside pl-5 my-3 space-y-1 text-gray-700">
+        <ol key={KEY()} className="list-decimal list-outside pl-5 my-3 space-y-1 text-slate-700">
           {items.map((it, idx) => <li key={idx}>{renderInline(it)}</li>)}
         </ol>,
       );
@@ -205,14 +205,14 @@ export function renderMarkdown(md) {
       }
       out.push(
         <div key={KEY()} className="overflow-x-auto my-4">
-          <table className="min-w-full text-sm border border-gray-200 rounded-lg">
+          <table className="min-w-full text-sm border border-slate-200 rounded-lg">
             <thead className="bg-slate-50 text-slate-700">
-              <tr>{headers.map((h, idx) => <th key={idx} className="px-3 py-2 text-left font-semibold border-b border-gray-200">{renderInline(h)}</th>)}</tr>
+              <tr>{headers.map((h, idx) => <th key={idx} className="px-3 py-2 text-left font-semibold border-b border-slate-200">{renderInline(h)}</th>)}</tr>
             </thead>
             <tbody>
               {rows.map((r, ri) => (
-                <tr key={ri} className="border-b border-gray-100 last:border-0">
-                  {r.map((c, ci) => <td key={ci} className="px-3 py-2 text-gray-700">{renderInline(c)}</td>)}
+                <tr key={ri} className="border-b border-slate-100 last:border-0">
+                  {r.map((c, ci) => <td key={ci} className="px-3 py-2 text-slate-700">{renderInline(c)}</td>)}
                 </tr>
               ))}
             </tbody>

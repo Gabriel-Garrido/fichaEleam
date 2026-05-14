@@ -6,6 +6,7 @@ import {
 } from "../accreditation/accreditationService";
 import { currentTurno, getCareTaskSummary, todayIso } from "../carePlans/carePlansService";
 import { getEmarSummary } from "../emar/emarService";
+import { calcAge } from "../residents/residentUtils";
 
 // Resumen para el dashboard del ELEAM: porcentaje global, por ámbito,
 // totales clave y un puñado de alertas.
@@ -80,17 +81,6 @@ async function getResidentStats() {
     dependencia,
     sexos,
   };
-}
-
-function calcAge(fechaNacimiento) {
-  if (!fechaNacimiento) return null;
-  const fn = new Date(fechaNacimiento);
-  if (isNaN(fn)) return null;
-  const today = new Date();
-  let age = today.getFullYear() - fn.getFullYear();
-  const m = today.getMonth() - fn.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < fn.getDate())) age--;
-  return age;
 }
 
 async function getTodayVitalSignsCount() {

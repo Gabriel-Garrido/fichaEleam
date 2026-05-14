@@ -20,7 +20,7 @@ const COL_TIPS = {
   salud:
     "Indicador calculado en el cliente combinando:\n• eleams.pago_activo y subscription_status\n• Días hasta eleams.fecha_vencimiento_suscripcion (≤14d = alerta)\n• Días desde eleams.ultimo_contacto (>60d sin contacto = alerta)\n• eleams.riesgo_churn\n• Tareas CRM vencidas (crm_tasks con fecha_vencimiento pasada)\nPasa el cursor sobre el badge para ver los motivos detallados.",
   vencimiento:
-    "eleams.fecha_vencimiento_suscripcion — Fecha límite del acceso.\n🟢 Verde: vigente · 🟡 Ámbar: vence en ≤14 días · 🔴 Rojo: ya venció.",
+    "eleams.fecha_vencimiento_suscripcion — Fecha límite del acceso.\nVerde: vigente · Ámbar: vence en ≤14 días · Rojo: ya venció.",
   ultimoContacto:
     "eleams.ultimo_contacto — Se actualiza automáticamente al crear una interacción CRM. Sin contacto en más de 60 días hace que 'Salud' baje a 'Atención'. 'Sin contacto' en rojo = nunca hubo interacción registrada.",
   proxAccion:
@@ -38,20 +38,24 @@ function ThTip({ children, tip, center, className = "" }) {
   );
 }
 
-function VencimientoCell({ fecha, pagoActivo }) {
+function VencimientoCell({ fecha, pagoActivo, isDemo }) {
   const d = daysUntil(fecha);
   if (!fecha) return <span className="text-xs text-slate-400">—</span>;
-  let cls = "bg-emerald-50 text-emerald-700";
+  let cls = isDemo ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-emerald-50 text-emerald-700";
   if (d != null && d < 0)        cls = "bg-rose-100 text-rose-700";
+  else if (d != null && d <= 7)  cls = "bg-rose-100 text-rose-700";
   else if (d != null && d <= 14) cls = "bg-amber-100 text-amber-800";
-  if (!pagoActivo)               cls = "bg-slate-100 text-slate-500";
+  if (!pagoActivo && !isDemo)    cls = "bg-slate-100 text-slate-500";
   const title = d == null ? "" : d < 0
-    ? `Venció hace ${Math.abs(d)} días`
-    : d === 0 ? "Vence hoy"
-    : `Vence en ${d} días`;
+    ? `${isDemo ? "Demo venció" : "Venció"} hace ${Math.abs(d)} días`
+    : d === 0 ? `${isDemo ? "Demo vence" : "Vence"} hoy`
+    : `${isDemo ? "Demo vence" : "Vence"} en ${d} días`;
   return (
     <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${cls}`} title={title}>
       {formatDate(fecha)}
+      {isDemo && d != null && d >= 0 && (
+        <span className="ml-1 opacity-70">({d}d)</span>
+      )}
     </span>
   );
 }
@@ -87,15 +91,22 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
               const crm    = CRM_STATE_MAP[e.crm_estado] ?? CRM_STATE_MAP.lead;
               const riesgo = RIESGO_MAP[e.riesgo_churn] ?? RIESGO_MAP.desconocido;
               const overdue = taskCountByEleam[e.id] ?? 0;
+              const isDemo = e.plan === "demo";
               return (
-                <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={e.id} className={`transition-colors ${isDemo ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-slate-50"}`}>
                   <td className="px-3 py-2.5 font-semibold text-slate-800 w-40">
                     <button
+                      type="button"
                       onClick={() => onOpen(e)}
                       className="hover:underline text-left hover:text-teal-700 transition-colors leading-tight"
                     >
                       {e.nombre}
                     </button>
+                    {isDemo && (
+                      <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold border border-amber-200">
+                        Demo
+                      </span>
+                    )}
                     {overdue > 0 && (
                       <span
                         className="ml-1.5 text-[10px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded-full font-bold"
@@ -121,9 +132,13 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                   </td>
                   <td className="px-3 py-2.5 text-center">
                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                      e.pago_activo ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"
+                      e.pago_activo
+                        ? "bg-emerald-100 text-emerald-700"
+                        : isDemo
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-rose-100 text-rose-600"
                     }`}>
-                      {e.pago_activo ? "Activo" : "Inactivo"}
+                      {e.pago_activo ? "Activo" : isDemo ? "Demo" : "Inactivo"}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-center">
@@ -135,7 +150,7 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                     <CustomerHealthBadge eleam={e} tasksOverdue={overdue} />
                   </td>
                   <td className="px-3 py-2.5 text-center">
-                    <VencimientoCell fecha={e.fecha_vencimiento_suscripcion} pagoActivo={e.pago_activo} />
+                    <VencimientoCell fecha={e.fecha_vencimiento_suscripcion} pagoActivo={e.pago_activo} isDemo={isDemo} />
                   </td>
                   <td className="px-3 py-2.5 text-center text-xs whitespace-nowrap">
                     {e.ultimo_contacto
@@ -147,12 +162,14 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                   </td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     <button
+                      type="button"
                       onClick={() => onOpen(e)}
                       className="text-teal-700 hover:underline text-xs mr-3 font-medium"
                     >
                       Ficha
                     </button>
                     <button
+                      type="button"
                       onClick={() => onEdit(e)}
                       className="text-slate-500 hover:underline text-xs"
                     >

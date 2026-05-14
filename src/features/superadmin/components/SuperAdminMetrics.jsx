@@ -24,7 +24,7 @@ function MetricCard({
   const toneClass = toneClasses[tone] ?? toneClasses.slate;
 
   return (
-    <article className={`rounded-lg border bg-white p-4 shadow-sm ${toneClass}`}>
+    <article className={`rounded-xl border bg-white p-4 shadow-sm ${toneClass}`}>
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           {label}
@@ -52,7 +52,7 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
   const activeRatio = metrics.totalEleams
     ? Math.round((metrics.activeSubscriptions / metrics.totalEleams) * 100)
     : 0;
-  const withoutPaymentRatio = metrics.totalEleams
+  const demoRatio = metrics.totalEleams
     ? Math.round((metrics.demoEleams / metrics.totalEleams) * 100)
     : 0;
 
@@ -114,14 +114,14 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
           },
         },
         {
-          label: "Sin pago activo",
+          label: "En demo",
           value: metrics.demoEleams,
-          sub: `${withoutPaymentRatio}% de la cartera`,
-          tone: "violet",
+          sub: `${demoRatio}% de la cartera`,
+          tone: "amber",
           help: {
-            description: "Cuentas que no tienen pago activo. Puede incluir demos, pruebas y clientes vencidos.",
-            source: "public.eleams.pago_activo = false.",
-            action: "Sirve para separar oportunidades comerciales de clientes activos.",
+            description: "ELEAMs con plan demo activo. Son clientes en período de prueba que aún no tienen suscripción paga.",
+            source: "public.eleams.plan = 'demo'.",
+            action: "Priorizar seguimiento comercial para convertir demos en suscripciones pagadas.",
           },
         },
         {

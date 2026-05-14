@@ -1,4 +1,4 @@
-// Formatters compartidos para el panel superadmin.
+export { formatDate, formatDateTime } from "../../../utils/dateUtils";
 
 export function formatCLP(n) {
   if (n == null || Number.isNaN(Number(n))) return "$0";
@@ -11,25 +11,6 @@ export function formatCLP(n) {
   } catch {
     return `$${Number(n).toLocaleString("es-CL")}`;
   }
-}
-
-export function formatDate(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
-  } catch { return "—"; }
-}
-
-export function formatDateTime(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return "—"; }
 }
 
 export function daysUntil(iso) {
@@ -51,7 +32,7 @@ export const CRM_STATES = [
   { key: "pendiente_pago",  label: "Pago pendiente",  color: "bg-orange-100 text-orange-700", dot: "bg-orange-500" },
   { key: "cliente_activo",  label: "Cliente activo",  color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
   { key: "cliente_riesgo",  label: "Cliente en riesgo", color: "bg-rose-100 text-rose-700",   dot: "bg-rose-500" },
-  { key: "perdido",         label: "Perdido",         color: "bg-gray-200 text-gray-600",     dot: "bg-gray-500" },
+  { key: "perdido",         label: "Perdido",         color: "bg-slate-200 text-slate-600",     dot: "bg-slate-500" },
 ];
 
 export const CRM_STATE_MAP = Object.fromEntries(CRM_STATES.map((s) => [s.key, s]));
@@ -67,8 +48,8 @@ export const RIESGO_MAP = Object.fromEntries(RIESGO_CHURN.map((r) => [r.key, r])
 
 export const PLAN_LABEL = { demo: "Demo", mensual: "Mensual", anual: "Anual", inactivo: "Inactivo" };
 export const PLAN_BADGE = {
-  demo:     "bg-gray-100 text-gray-600",
+  demo:     "bg-amber-100 text-amber-800 border border-amber-200",
   mensual:  "bg-blue-100 text-blue-700",
   anual:    "bg-purple-100 text-purple-700",
-  inactivo: "bg-red-100 text-red-600",
+  inactivo: "bg-rose-100 text-rose-600",
 };

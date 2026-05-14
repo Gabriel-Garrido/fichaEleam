@@ -7,9 +7,9 @@ import {
   getAmbitoByCodigo,
   getRequisitosEleam,
   estadoMeta,
-  formatDate,
   diasHasta,
 } from "./accreditationService";
+import { formatDate } from "../../utils/dateUtils";
 
 const FILTROS = [
   { key: "all",       label: "Todos" },
@@ -37,8 +37,9 @@ function RequisitoRow({ re, onClick }) {
   const hasEvidence = (re.documentos ?? []).some((d) => d.vigente);
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="w-full text-left bg-white border border-gray-100 rounded-xl shadow-sm p-4 hover:shadow-md transition-all"
+      className="w-full text-left bg-white border border-slate-100 rounded-xl shadow-sm p-4 hover:shadow-md transition-all"
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0 flex-1">
@@ -57,21 +58,21 @@ function RequisitoRow({ re, onClick }) {
               </span>
             )}
           </div>
-          <h3 className="font-semibold text-gray-800 leading-tight">{r.nombre}</h3>
+          <h3 className="font-semibold text-slate-800 leading-tight">{r.nombre}</h3>
           {r.descripcion && (
-            <p className="text-sm text-gray-500 mt-1 line-clamp-2">{r.descripcion}</p>
+            <p className="text-sm text-slate-500 mt-1 line-clamp-2">{r.descripcion}</p>
           )}
         </div>
-        <svg className="shrink-0 w-5 h-5 text-gray-400 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="shrink-0 w-5 h-5 text-slate-400 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       </div>
-      <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap mt-2">
+      <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap mt-2">
         {r.medio_verificador && (
-          <span className="bg-gray-50 px-2 py-0.5 rounded">📎 {r.medio_verificador}</span>
+          <span className="bg-slate-50 px-2 py-0.5 rounded">{r.medio_verificador}</span>
         )}
         {re.responsable?.nombre && (
-          <span>Responsable: <span className="font-medium text-gray-700">{re.responsable.nombre}</span></span>
+          <span>Responsable: <span className="font-medium text-slate-700">{re.responsable.nombre}</span></span>
         )}
         {re.no_aplica_motivo && (
           <span className="italic">No aplica: {re.no_aplica_motivo}</span>
@@ -112,7 +113,7 @@ function FocusRequirement({ requisito, onOpen }) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide text-teal-700 font-semibold">Siguiente requisito recomendado</p>
-          <h2 className="text-base font-bold text-gray-900 mt-1 truncate">
+          <h2 className="text-base font-bold text-slate-900 mt-1 truncate">
             {r.codigo} · {r.nombre}
           </h2>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -131,7 +132,7 @@ function FocusRequirement({ requisito, onOpen }) {
         <button
           type="button"
           onClick={onOpen}
-          className="w-full sm:w-auto rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-button-hover)]"
+          className="w-full sm:w-auto rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
         >
           Abrir requisito
         </button>
@@ -193,8 +194,9 @@ export default function AccreditationAmbito() {
       <div className="max-w-3xl mx-auto px-4 py-12 text-center">
         <h1 className="text-xl font-bold mb-2">Ámbito no encontrado</h1>
         <button
+          type="button"
           onClick={() => navigate("/accreditation")}
-          className="text-sm text-[var(--color-primary)] hover:underline"
+          className="text-sm text-teal-700 hover:underline"
         >
           Volver a la Carpeta SEREMI
         </button>
@@ -205,22 +207,22 @@ export default function AccreditationAmbito() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
       <button
+        type="button"
         onClick={() => navigate("/accreditation")}
-        className="text-sm text-gray-500 hover:text-gray-800"
+        className="text-sm text-slate-500 hover:text-slate-800"
       >
         ← Volver a la Carpeta SEREMI
       </button>
 
-      <header className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <header className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <div className="flex items-center gap-4 flex-wrap">
-          <div className="text-4xl">{ambito.icono ?? "📁"}</div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-mono text-teal-700 bg-teal-50 inline-block px-2 py-0.5 rounded mb-1">
               {ambito.codigo}
             </p>
-            <h1 className="text-2xl font-black text-gray-800">{ambito.nombre}</h1>
+            <h1 className="text-2xl font-black text-slate-800">{ambito.nombre}</h1>
             {ambito.descripcion && (
-              <p className="text-sm text-gray-500 mt-1">{ambito.descripcion}</p>
+              <p className="text-sm text-slate-500 mt-1">{ambito.descripcion}</p>
             )}
           </div>
         </div>
@@ -235,17 +237,18 @@ export default function AccreditationAmbito() {
       <div className="flex gap-2 overflow-x-auto pb-1">
         {FILTROS.map((f) => (
           <button
+            type="button"
             key={f.key}
             onClick={() => setFiltro(f.key)}
             className={`shrink-0 px-3 py-1.5 text-sm rounded-full border whitespace-nowrap transition-colors ${
               filtro === f.key
-                ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                ? "bg-teal-700 text-white border-teal-700"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
             }`}
           >
             {f.label}
             {counts[f.key] != null && (
-              <span className={`ml-1.5 text-xs ${filtro === f.key ? "text-teal-100" : "text-gray-400"}`}>
+              <span className={`ml-1.5 text-xs ${filtro === f.key ? "text-teal-100" : "text-slate-400"}`}>
                 {counts[f.key]}
               </span>
             )}
@@ -255,7 +258,7 @@ export default function AccreditationAmbito() {
 
       {/* Lista */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center text-gray-500">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-500">
           No hay requisitos en este filtro.
         </div>
       ) : (

@@ -31,10 +31,10 @@ export const STATUS = {
   },
   unknown: {
     label: "Sin dato",
-    badge: "bg-gray-50 text-gray-500 border-gray-200",
-    text: "text-gray-400",
-    dot: "bg-gray-300",
-    ring: "ring-gray-200",
+    badge: "bg-slate-50 text-slate-500 border-slate-200",
+    text: "text-slate-400",
+    dot: "bg-slate-300",
+    ring: "ring-slate-200",
   },
 };
 

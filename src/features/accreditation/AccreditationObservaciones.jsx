@@ -10,8 +10,8 @@ import {
   getObservaciones,
   crearObservacion,
   cerrarObservacion,
-  formatDate,
 } from "./accreditationService";
+import { formatDate } from "../../utils/dateUtils";
 
 const FILTROS_ESTADO = [
   { key: "abiertas",  label: "Abiertas" },
@@ -57,7 +57,7 @@ function NuevaForm({ onCreated, onCancel, isAdmin }) {
     <form onSubmit={submit} className="bg-orange-50 border border-orange-200 rounded-2xl p-5 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-bold text-orange-900">Nueva observación general</h2>
-        <button type="button" onClick={onCancel} className="text-sm text-gray-500 hover:underline">
+        <button type="button" onClick={onCancel} className="text-sm text-slate-500 hover:underline">
           Cerrar
         </button>
       </div>
@@ -71,7 +71,7 @@ function NuevaForm({ onCreated, onCancel, isAdmin }) {
           <select
             value={origen}
             onChange={(e) => setOrigen(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
           >
             <option value="interna">Interna</option>
             <option value="fiscalizacion">Fiscalización</option>
@@ -86,7 +86,7 @@ function NuevaForm({ onCreated, onCancel, isAdmin }) {
           required
           value={descripcion}
           onChange={(e) => setDescripcion(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
         />
       </div>
 
@@ -96,7 +96,7 @@ function NuevaForm({ onCreated, onCancel, isAdmin }) {
           rows={2}
           value={acciones}
           onChange={(e) => setAcciones(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
         />
       </div>
 
@@ -109,14 +109,14 @@ function NuevaForm({ onCreated, onCancel, isAdmin }) {
         <Button
           type="button"
           onClick={onCancel}
-          className="border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 text-sm"
+          className="border border-slate-200 text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 text-sm"
         >
           Cancelar
         </Button>
         <Button
           type="submit"
           disabled={busy || !descripcion.trim()}
-          className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 text-sm disabled:opacity-50"
+          className="bg-orange-600 text-white px-4 py-2 rounded-xl hover:bg-orange-700 text-sm disabled:opacity-50"
         >
           {busy ? "Guardando..." : "Registrar"}
         </Button>
@@ -145,7 +145,7 @@ function ObsRow({ obs, onCerrar, onIr, isAdmin }) {
       obs.origen === "fiscalizacion" ? "border-rose-200 bg-rose-50" : "border-orange-200 bg-orange-50"
     }`}>
       <div className="flex items-center gap-2 flex-wrap mb-1">
-        <span className="text-[10px] uppercase font-bold text-gray-700">
+        <span className="text-[10px] uppercase font-bold text-slate-700">
           {obs.origen === "fiscalizacion" ? "Fiscalización" : "Interna"}
         </span>
         <span className={`text-[10px] uppercase font-bold rounded-full px-2 py-0.5 ${
@@ -153,24 +153,25 @@ function ObsRow({ obs, onCerrar, onIr, isAdmin }) {
           obs.estado === "en_proceso" ? "bg-amber-100 text-amber-700" :
           "bg-rose-100 text-rose-700"
         }`}>{obs.estado}</span>
-        <span className="text-xs text-gray-500">{formatDate(obs.fecha)}</span>
+        <span className="text-xs text-slate-500">{formatDate(obs.fecha)}</span>
         {r && (
           <button
+            type="button"
             onClick={() => onIr(obs.requisito_eleam_id)}
-            className="text-xs text-[var(--color-primary)] hover:underline"
+            className="text-xs text-teal-700 hover:underline"
           >
             {r.codigo} · {r.nombre}
           </button>
         )}
       </div>
-      <p className="text-sm text-gray-800">{obs.descripcion}</p>
+      <p className="text-sm text-slate-800">{obs.descripcion}</p>
       {obs.acciones_subsanacion && (
-        <p className="text-xs text-gray-600 mt-1">
+        <p className="text-xs text-slate-600 mt-1">
           <strong>Subsanación:</strong> {obs.acciones_subsanacion}
         </p>
       )}
       {obs.fecha_compromiso && (
-        <p className="text-xs text-gray-600">
+        <p className="text-xs text-slate-600">
           <strong>Compromiso:</strong> {formatDate(obs.fecha_compromiso)}
         </p>
       )}
@@ -182,7 +183,8 @@ function ObsRow({ obs, onCerrar, onIr, isAdmin }) {
         </p>
       )}
       {isAbierta && isAdmin && (!open ? (
-        <button onClick={() => setOpen(true)} className="text-xs text-[var(--color-primary)] hover:underline mt-2 font-semibold">
+        <button type="button"
+ onClick={() => setOpen(true)} className="text-xs text-teal-700 hover:underline mt-2 font-semibold">
           Cerrar observación
         </button>
       ) : (
@@ -192,14 +194,15 @@ function ObsRow({ obs, onCerrar, onIr, isAdmin }) {
             placeholder="Nota de cierre"
             value={nota}
             onChange={(e) => setNota(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
           />
           <div className="flex gap-2 justify-end">
-            <button onClick={() => setOpen(false)} className="text-xs text-gray-500 hover:underline">Cancelar</button>
+            <button type="button"
+ onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:underline">Cancelar</button>
             <Button
               onClick={submit}
               disabled={busy}
-              className="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-lg disabled:opacity-50"
+              className="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-xl disabled:opacity-50"
             >
               {busy ? "Cerrando..." : "Cerrar"}
             </Button>
@@ -257,23 +260,24 @@ export default function AccreditationObservaciones() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
       <button
+        type="button"
         onClick={() => navigate("/accreditation")}
-        className="text-sm text-gray-500 hover:text-gray-800"
+        className="text-sm text-slate-500 hover:text-slate-800"
       >
         ← Carpeta SEREMI
       </button>
 
       <header className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-black text-gray-800">Observaciones</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-black text-slate-800">Observaciones</h1>
+          <p className="text-sm text-slate-500">
             Registro de hallazgos internos y de fiscalizaciones, con sus acciones de subsanación.
           </p>
         </div>
         {isAdminEleam && !showNueva && (
           <Button
             onClick={() => setShowNueva(true)}
-            className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-[var(--color-button-hover)] text-sm"
+            className="bg-teal-700 text-white px-4 py-2 rounded-xl hover:bg-teal-800 text-sm"
           >
             + Nueva observación
           </Button>
@@ -292,12 +296,13 @@ export default function AccreditationObservaciones() {
         <div className="flex gap-1">
           {FILTROS_ESTADO.map((f) => (
             <button
+              type="button"
               key={f.key}
               onClick={() => setFiltroEstado(f.key)}
               className={`text-sm px-3 py-1.5 rounded-full border ${
                 filtroEstado === f.key
-                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  ? "bg-teal-700 text-white border-teal-700"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
               }`}
             >
               {f.label}
@@ -307,12 +312,13 @@ export default function AccreditationObservaciones() {
         <div className="flex gap-1">
           {FILTROS_ORIGEN.map((f) => (
             <button
+              type="button"
               key={f.key}
               onClick={() => setFiltroOrigen(f.key)}
               className={`text-sm px-3 py-1.5 rounded-full border ${
                 filtroOrigen === f.key
                   ? "bg-slate-700 text-white border-slate-700"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
               }`}
             >
               {f.label}
@@ -322,7 +328,7 @@ export default function AccreditationObservaciones() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center text-gray-500">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-500">
           No hay observaciones con estos filtros.
         </div>
       ) : (

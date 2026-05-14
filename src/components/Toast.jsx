@@ -10,8 +10,8 @@ const ICONS = {
 };
 
 const STYLES = {
-  success: "bg-green-600",
-  error: "bg-red-600",
+  success: "bg-emerald-600",
+  error: "bg-rose-600",
   warning: "bg-amber-500",
   info: "bg-blue-600",
 };
@@ -47,6 +47,7 @@ export function ToastProvider({ children }) {
             <span className="font-bold text-lg leading-none mt-0.5">{ICONS[t.type]}</span>
             <span className="flex-1 text-sm leading-snug">{t.message}</span>
             <button
+              type="button"
               onClick={() => dismiss(t.id)}
               className="text-white/70 hover:text-white text-lg leading-none ml-1"
               aria-label="Cerrar"

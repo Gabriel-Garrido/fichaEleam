@@ -10,6 +10,7 @@ import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
 import FeaturePermissionMatrix from "../permissions/FeaturePermissionMatrix";
 import { featureDefaultMap } from "../permissions/featureCatalog";
+import { formatDate } from "../../utils/dateUtils";
 import {
   getEleamFeaturePermissions,
   getProfileFeaturePermissions,
@@ -30,17 +31,8 @@ import { ROLE_LABEL, PERM_GROUPS, DEFAULT_PERMS, PLANTILLAS_CARGO } from "./team
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function formatDate(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
-  } catch { return "—"; }
-}
-
 function RoleBadge({ rol }) {
-  const r = ROLE_LABEL[rol] ?? { txt: rol, cls: "bg-gray-100 text-gray-700" };
+  const r = ROLE_LABEL[rol] ?? { txt: rol, cls: "bg-slate-100 text-slate-700" };
   return (
     <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${r.cls}`}>
       {r.txt}
@@ -54,9 +46,9 @@ function TeamFlowHint({ residentesActivos, limiteAlcanzado, maxFunc }) {
     : "Crea la cuenta, define permisos por cargo y entrega el primer acceso.";
 
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+    <section className="rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <p className="text-sm font-semibold text-gray-800">{main}</p>
+        <p className="text-sm font-semibold text-slate-800">{main}</p>
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
             Permisos por cargo
@@ -157,9 +149,9 @@ export default function TeamManagement() {
   if (!isAdminEleam) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 text-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">Acceso restringido</h1>
-        <p className="text-gray-500 mb-6">Solo el administrador del ELEAM puede gestionar el equipo.</p>
-        <Button className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-xl"
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Acceso restringido</h1>
+        <p className="text-slate-500 mb-6">Solo el administrador del ELEAM puede gestionar el equipo.</p>
+        <Button className="bg-teal-700 text-white px-6 py-2.5 rounded-xl"
           onClick={() => navigate("/dashboard")}>Volver al panel</Button>
       </div>
     );
@@ -168,9 +160,9 @@ export default function TeamManagement() {
   if (!pagoActivo) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 text-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">Activa tu suscripción</h1>
-        <p className="text-gray-500 mb-6">Para gestionar el equipo el ELEAM debe tener una suscripción activa.</p>
-        <Button className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-xl"
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Activa tu suscripción</h1>
+        <p className="text-slate-500 mb-6">Para gestionar el equipo el ELEAM debe tener una suscripción activa.</p>
+        <Button className="bg-teal-700 text-white px-6 py-2.5 rounded-xl"
           onClick={() => navigate("/pago")}>Activar suscripción</Button>
       </div>
     );
@@ -321,9 +313,9 @@ export default function TeamManagement() {
       description="Crea usuarios, vincula familiares y define qué módulos verá cada persona."
       size="lg"
       actions={
-        <div className="text-sm text-gray-600 bg-white border rounded-xl px-4 py-2 shrink-0">
+        <div className="text-sm text-slate-600 bg-white border rounded-xl px-4 py-2 shrink-0">
           Funcionarios: <span className="font-bold">{funcionarios.length}</span>
-          {maxFunc !== null && <span className="text-gray-400"> / {maxFunc}</span>}
+          {maxFunc !== null && <span className="text-slate-400"> / {maxFunc}</span>}
           {" · "}
           Familiares: <span className="font-bold">{familiares.length}</span>
         </div>
@@ -338,18 +330,19 @@ export default function TeamManagement() {
       />
 
       {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto border-b border-gray-200">
+      <div className="flex gap-2 overflow-x-auto border-b border-slate-200">
         {[
           { key: "funcionarios", label: `Funcionarios (${funcionarios.length})` },
           { key: "familiares",   label: `Familiares (${familiares.length})` },
         ].map((t) => (
           <button
+            type="button"
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
               tab === t.key
-                ? "border-[var(--color-primary)] text-[var(--color-primary)]"
-                : "border-transparent text-gray-500 hover:text-gray-800"
+                ? "border-teal-700 text-teal-700"
+                : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             {t.label}
@@ -361,9 +354,9 @@ export default function TeamManagement() {
       {tab === "funcionarios" && (
         <>
           {/* Lista de miembros */}
-          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h2 className="font-bold text-gray-800">Equipo del ELEAM</h2>
+              <h2 className="font-bold text-slate-800">Equipo del ELEAM</h2>
               <Button
                 disabled={limiteAlcanzado}
                 onClick={() => {
@@ -371,20 +364,20 @@ export default function TeamManagement() {
                   setCreateFeaturePerms(featureDefaultMap("funcionario", roleFeatureLimits.funcionario));
                   setCreateModal(true);
                 }}
-                className="w-full sm:w-auto bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+                className="w-full sm:w-auto bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-teal-800 disabled:opacity-50"
               >
                 + Nuevo funcionario
               </Button>
             </div>
 
             {limiteAlcanzado && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
                 Límite del plan alcanzado ({maxFunc} funcionarios). Actualiza el plan para agregar más.
               </p>
             )}
 
             {members.length === 0 ? (
-              <p className="text-sm text-gray-500">Sin miembros todavía.</p>
+              <p className="text-sm text-slate-500">Sin miembros todavía.</p>
             ) : (
               <ul className="divide-y">
                 {[...admins, ...funcionarios].map((m) => (
@@ -396,7 +389,7 @@ export default function TeamManagement() {
                     {/* Datos */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-gray-800 truncate">{m.nombre}</p>
+                        <p className="font-semibold text-slate-800 truncate">{m.nombre}</p>
                         <RoleBadge rol={m.rol} />
                         {m.must_reset_password && (
                           <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
@@ -404,19 +397,21 @@ export default function TeamManagement() {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-400 truncate">{m.email}</p>
-                      <p className="text-xs text-gray-400">Creado {formatDate(m.creado_en)}</p>
+                      <p className="text-sm text-slate-400 truncate">{m.email}</p>
+                      <p className="text-xs text-slate-400">Creado {formatDate(m.creado_en)}</p>
                     </div>
                     {/* Acciones solo para funcionarios */}
                     {m.rol === "funcionario" && (
                       <div className="flex gap-3 items-center shrink-0">
                         <button
+                          type="button"
                           onClick={() => openPermModal(m.id, "funcionario")}
-                          className="text-sm text-[var(--color-primary)] hover:underline font-medium"
+                          className="text-sm text-teal-700 hover:underline font-medium"
                         >
                           Permisos
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeleteConfirm({ id: m.id, nombre: m.nombre || m.email || "este usuario" })}
                           className="text-sm text-rose-600 hover:underline"
                         >
@@ -432,16 +427,17 @@ export default function TeamManagement() {
 
           {/* Invitaciones pendientes legacy */}
           {invitesFunc.length > 0 && (
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <h2 className="font-bold text-gray-800 mb-3">Invitaciones pendientes</h2>
+            <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+              <h2 className="font-bold text-slate-800 mb-3">Invitaciones pendientes</h2>
               <ul className="divide-y">
                 {invitesFunc.map((inv) => (
                   <li key={inv.id} className="py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-800 truncate">{inv.email}</p>
-                      <p className="text-xs text-gray-500">Expira {formatDate(inv.expira_en)}</p>
+                      <p className="font-semibold text-slate-800 truncate">{inv.email}</p>
+                      <p className="text-xs text-slate-500">Expira {formatDate(inv.expira_en)}</p>
                     </div>
-                    <button onClick={() => handleRevoke(inv.id)}
+                    <button type="button"
+ onClick={() => handleRevoke(inv.id)}
                       className="text-rose-600 text-sm hover:underline shrink-0">Cancelar</button>
                   </li>
                 ))}
@@ -454,9 +450,9 @@ export default function TeamManagement() {
       {/* ── Tab Familiares ───────────────────────────────────────────────── */}
       {tab === "familiares" && (
         <>
-          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h2 className="font-bold text-gray-800">Familiares vinculados</h2>
+              <h2 className="font-bold text-slate-800">Familiares vinculados</h2>
               <Button
                 disabled={residentesActivos === 0}
                 onClick={() => {
@@ -464,20 +460,20 @@ export default function TeamManagement() {
                   setCreateFeaturePerms(featureDefaultMap("familiar", roleFeatureLimits.familiar));
                   setCreateModal(true);
                 }}
-                className="w-full sm:w-auto bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+                className="w-full sm:w-auto bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-teal-800 disabled:opacity-50"
               >
                 + Nuevo familiar
               </Button>
             </div>
 
             {residentesActivos === 0 && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
                 Necesitas al menos un residente activo para agregar familiares.
               </p>
             )}
 
             {familiares.length === 0 ? (
-              <p className="text-sm text-gray-500">Aún no hay familiares vinculados.</p>
+              <p className="text-sm text-slate-500">Aún no hay familiares vinculados.</p>
             ) : (
               <ul className="divide-y">
                 {familiares.map((row) => (
@@ -488,7 +484,7 @@ export default function TeamManagement() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-gray-800 truncate">{row.profiles?.nombre ?? "—"}</p>
+                        <p className="font-semibold text-slate-800 truncate">{row.profiles?.nombre ?? "—"}</p>
                         <RoleBadge rol="familiar" />
                         {row.profiles?.must_reset_password && (
                           <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
@@ -496,20 +492,22 @@ export default function TeamManagement() {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-400 truncate">{row.profiles?.email ?? "—"}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-sm text-slate-400 truncate">{row.profiles?.email ?? "—"}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
                         Residente: {row.residentes?.apellido}, {row.residentes?.nombre}
                         {row.parentesco ? <> · {row.parentesco}</> : null}
                       </p>
                     </div>
                     <div className="flex gap-3 items-center shrink-0">
                       <button
+                        type="button"
                         onClick={() => openPermModal(row.profile_id, "familiar")}
-                        className="text-sm text-[var(--color-primary)] hover:underline font-medium"
+                        className="text-sm text-teal-700 hover:underline font-medium"
                       >
                         Permisos
                       </button>
                       <button
+                        type="button"
                         onClick={() => setDeleteConfirm({ id: row.profile_id, nombre: row.profiles?.nombre || row.profiles?.email || "este familiar" })}
                         className="text-rose-600 text-sm hover:underline"
                       >
@@ -524,21 +522,22 @@ export default function TeamManagement() {
 
           {/* Invitaciones familiares legacy */}
           {invitesFam.length > 0 && (
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <h2 className="font-bold text-gray-800 mb-3">Invitaciones pendientes</h2>
+            <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+              <h2 className="font-bold text-slate-800 mb-3">Invitaciones pendientes</h2>
               <ul className="divide-y">
                 {invitesFam.map((inv) => {
                   const res = residentes.find((r) => r.id === inv.residente_id);
                   return (
                     <li key={inv.id} className="py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-gray-800 truncate">{inv.email}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="font-semibold text-slate-800 truncate">{inv.email}</p>
+                        <p className="text-xs text-slate-500">
                           {res ? <>Residente: {res.apellido}, {res.nombre} · </> : ""}
                           Expira {formatDate(inv.expira_en)}
                         </p>
                       </div>
-                      <button onClick={() => handleRevoke(inv.id)}
+                      <button type="button"
+ onClick={() => handleRevoke(inv.id)}
                         className="text-rose-600 text-sm hover:underline shrink-0">Cancelar</button>
                     </li>
                   );
@@ -555,10 +554,10 @@ export default function TeamManagement() {
       <Modal isOpen={createModal} onClose={closeCreateModal}>
         <div className="space-y-5">
             <div>
-              <h2 className="text-xl font-bold text-gray-800">
+              <h2 className="text-xl font-bold text-slate-800">
                 {createForm.rol === "familiar" ? "Nuevo familiar" : "Nuevo funcionario"}
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-slate-500 mt-1">
                 {createForm.email.toLowerCase().endsWith("@gmail.com")
                   ? "Correo Gmail detectado: el usuario podrá iniciar sesión directamente con Google, sin necesidad de contraseña."
                   : "Se generará una contraseña temporal y se intentará enviarla por correo. El usuario la cambiará al iniciar sesión por primera vez."}
@@ -588,7 +587,7 @@ export default function TeamManagement() {
                         Se envió un correo de bienvenida con las instrucciones.
                       </p>
                     ) : (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mt-2">
                         No se pudo enviar el correo automáticamente. Informa al usuario que puede entrar en{" "}
                         <strong>fichaeleam.cl/login</strong> usando el botón de Google con su correo.
                       </p>
@@ -600,14 +599,14 @@ export default function TeamManagement() {
                     <p className="text-sm font-semibold text-amber-800 mb-2">
                       Guarda esta contraseña temporal — no se mostrará de nuevo
                     </p>
-                    <div className="flex gap-2 items-center bg-white border border-amber-200 rounded-lg p-2">
-                      <code className="flex-1 font-mono text-xl tracking-widest text-gray-800 select-all">
+                    <div className="flex gap-2 items-center bg-white border border-amber-200 rounded-xl p-2">
+                      <code className="flex-1 font-mono text-xl tracking-widest text-slate-800 select-all">
                         {createdUser.temp_password}
                       </code>
                       <button
                         type="button"
                         onClick={() => copyText(createdUser.temp_password)}
-                        className="text-[var(--color-primary)] font-semibold text-xs hover:underline shrink-0"
+                        className="text-teal-700 font-semibold text-xs hover:underline shrink-0"
                       >
                         Copiar
                       </button>
@@ -632,7 +631,7 @@ export default function TeamManagement() {
                 )}
                 <Button
                   onClick={closeCreateModal}
-                  className="w-full bg-[var(--color-primary)] text-white py-2.5 rounded-xl font-semibold"
+                  className="w-full bg-teal-700 text-white py-2.5 rounded-xl font-semibold"
                 >
                   Listo
                 </Button>
@@ -641,7 +640,7 @@ export default function TeamManagement() {
               <form onSubmit={handleCreate} className="space-y-4">
                 {/* Rol selector */}
                 <div>
-                  <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">Rol</label>
+                  <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">Rol</label>
                   <select
                     value={createForm.rol}
                     onChange={(e) => {
@@ -651,7 +650,7 @@ export default function TeamManagement() {
                       setCreateFeaturePerms(featureDefaultMap(e.target.value, roleFeatureLimits[e.target.value]));
                       setShowPermSection(false);
                     }}
-                    className="w-full rounded-lg border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
                     disabled={creating}
                   >
                     <option value="funcionario">Funcionario (personal clínico)</option>
@@ -661,7 +660,7 @@ export default function TeamManagement() {
 
                 {/* Nombre */}
                 <div>
-                  <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">Nombre completo</label>
+                  <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">Nombre completo</label>
                   <Input
                     required
                     placeholder="Juan Pérez"
@@ -673,7 +672,7 @@ export default function TeamManagement() {
 
                 {/* Email */}
                 <div>
-                  <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">Correo electrónico</label>
+                  <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">Correo electrónico</label>
                   <Input
                     type="email"
                     required
@@ -700,7 +699,7 @@ export default function TeamManagement() {
                 {createForm.rol === "funcionario" && (
                   <>
                     <div>
-                      <label className="text-xs uppercase font-semibold text-gray-500 mb-2 block">
+                      <label className="text-xs uppercase font-semibold text-slate-500 mb-2 block">
                         Cargo (define los permisos iniciales)
                       </label>
                       <div className="flex flex-wrap gap-2">
@@ -716,7 +715,7 @@ export default function TeamManagement() {
                             className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
                               selectedCargo === cargo
                                 ? "bg-teal-600 text-white border-teal-600"
-                                : "bg-white text-gray-600 border-gray-300 hover:border-teal-400 hover:text-teal-600"
+                                : "bg-white text-slate-600 border-slate-300 hover:border-teal-400 hover:text-teal-600"
                             }`}
                           >
                             {cargo}
@@ -730,17 +729,17 @@ export default function TeamManagement() {
                         type="button"
                         onClick={() => setShowPermSection((v) => !v)}
                         disabled={creating}
-                        className="text-xs text-[var(--color-primary)] hover:underline font-medium flex items-center gap-1"
+                        className="text-xs text-teal-700 hover:underline font-medium flex items-center gap-1"
                       >
                         <span>{showPermSection ? "▼" : "▶"}</span>
                         {showPermSection ? "Ocultar permisos detallados" : "Ver y ajustar permisos detallados"}
                       </button>
 
                       {showPermSection && (
-                        <div className="mt-3 border border-gray-100 rounded-xl p-4 bg-gray-50 space-y-3">
+                        <div className="mt-3 border border-slate-100 rounded-xl p-4 bg-slate-50 space-y-3">
                           {PERM_GROUPS.map((group) => (
                             <div key={group.label}>
-                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-2">{group.label}</p>
+                              <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">{group.label}</p>
                               <div className="space-y-1.5">
                                 {group.perms.map(({ key, label }) => (
                                   <label key={key} className="flex items-center gap-2 cursor-pointer">
@@ -751,9 +750,9 @@ export default function TeamManagement() {
                                         setCreatePerms((p) => ({ ...p, [key]: e.target.checked }))
                                       }
                                       disabled={creating}
-                                      className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-200"
+                                      className="w-3.5 h-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-200"
                                     />
-                                    <span className="text-xs text-gray-700">{label}</span>
+                                    <span className="text-xs text-slate-700">{label}</span>
                                     {(key.startsWith("eliminar_") || key === "archivar_acreditacion") && (
                                       <span className="text-[10px] text-rose-500 bg-rose-50 border border-rose-200 rounded px-1">
                                         destructivo
@@ -773,14 +772,14 @@ export default function TeamManagement() {
                 {/* Residente (solo familiar) */}
                 {createForm.rol === "familiar" && (
                   <div>
-                    <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">
+                    <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
                       Residente vinculado
                     </label>
                     <select
                       required
                       value={createForm.residenteId}
                       onChange={(e) => setCreateForm(f => ({ ...f, residenteId: e.target.value }))}
-                      className="w-full rounded-lg border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
+                      className="w-full rounded-xl border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
                       disabled={creating}
                     >
                       <option value="">Selecciona un residente...</option>
@@ -795,7 +794,7 @@ export default function TeamManagement() {
 
                 <div className="flex gap-3 justify-end pt-2">
                   <Button type="button" onClick={closeCreateModal}
-                    className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50">
+                    className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50">
                     Cancelar
                   </Button>
                   <Button
@@ -804,7 +803,7 @@ export default function TeamManagement() {
                       creating || !createForm.nombre || !createForm.email ||
                       (createForm.rol === "familiar" && !createForm.residenteId)
                     }
-                    className="bg-[var(--color-primary)] text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+                    className="bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"
                   >
                     {creating ? "Creando..." : "Crear usuario"}
                   </Button>
@@ -820,10 +819,10 @@ export default function TeamManagement() {
       <Modal isOpen={!!permModal} onClose={() => setPermModal(null)}>
         <div className="space-y-5">
             <div>
-              <h2 className="text-xl font-bold text-gray-800">
+              <h2 className="text-xl font-bold text-slate-800">
                 Permisos del {permRole === "familiar" ? "familiar" : "funcionario"}
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-slate-500 mt-1">
                 Define qué módulos verá en el sidebar. Los cambios se aplican en la próxima sesión del usuario.
               </p>
             </div>
@@ -842,14 +841,14 @@ export default function TeamManagement() {
                 />
 
                 {permRole === "funcionario" && (
-                  <details className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                    <summary className="cursor-pointer text-sm font-semibold text-gray-700">
+                  <details className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <summary className="cursor-pointer text-sm font-semibold text-slate-700">
                       Permisos avanzados de acciones
                     </summary>
                     <div className="mt-4 space-y-4">
                       {PERM_GROUPS.map((group) => (
                         <div key={group.label} className="bg-white rounded-xl p-4">
-                          <p className="text-xs uppercase font-bold text-gray-500 mb-3">{group.label}</p>
+                          <p className="text-xs uppercase font-bold text-slate-500 mb-3">{group.label}</p>
                           <div className="space-y-2">
                             {group.perms.map(({ key, label }) => (
                               <label key={key} className="flex items-center gap-3 cursor-pointer">
@@ -857,9 +856,9 @@ export default function TeamManagement() {
                                   type="checkbox"
                                   checked={editedPerms[key] ?? DEFAULT_PERMS[key]}
                                   onChange={(e) => setEditedPerms(p => ({ ...p, [key]: e.target.checked }))}
-                                  className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-200"
+                                  className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-200"
                                 />
-                                <span className="text-sm text-gray-700">{label}</span>
+                                <span className="text-sm text-slate-700">{label}</span>
                                 {(key.startsWith("eliminar_") || key === "archivar_acreditacion") && (
                                   <span className="text-xs text-rose-500 bg-rose-50 border border-rose-200 rounded px-1.5">
                                     acción destructiva
@@ -878,13 +877,13 @@ export default function TeamManagement() {
 
             <div className="flex gap-3 justify-end">
               <Button type="button" onClick={() => setPermModal(null)}
-                className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50">
+                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50">
                 Cancelar
               </Button>
               <Button
                 onClick={handleSavePerms}
                 disabled={savingPerms || loadingPerms}
-                className="bg-[var(--color-primary)] text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+                className="bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"
               >
                 {savingPerms ? "Guardando..." : "Guardar cambios"}
               </Button>
@@ -904,15 +903,15 @@ export default function TeamManagement() {
                   d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-gray-800">Eliminar usuario</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-xl font-bold text-slate-800">Eliminar usuario</h2>
+            <p className="text-sm text-slate-600">
               ¿Estás seguro que quieres eliminar a <strong>{deleteTargetName}</strong>?
               Esta acción no se puede deshacer. El usuario perderá el acceso de inmediato.
             </p>
             <div className="flex gap-3 justify-end pt-2">
               <Button type="button" disabled={deleting}
                 onClick={() => setDeleteConfirm(null)}
-                className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                 Cancelar
               </Button>
               <Button

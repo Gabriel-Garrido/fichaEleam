@@ -41,12 +41,13 @@ export default function RecuperarAcceso() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
       <div className="mb-6 text-center">
-        <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
+        <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
           FichaEleam
         </button>
-        <p className="text-sm text-gray-500 mt-1">Plataforma para ELEAM</p>
+        <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
       </div>
 
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
@@ -57,14 +58,15 @@ export default function RecuperarAcceso() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-gray-800">Revisa tu correo</h1>
-            <p className="text-sm text-gray-500">
-              Si <span className="font-medium text-gray-700">{email.trim()}</span> tiene una cuenta, recibirás un link de recuperación en los próximos minutos.
+            <h1 className="text-xl font-bold text-slate-800">Revisa tu correo</h1>
+            <p className="text-sm text-slate-500">
+              Si <span className="font-medium text-slate-700">{email.trim()}</span> tiene una cuenta, recibirás un link de recuperación en los próximos minutos.
             </p>
-            <p className="text-xs text-gray-400">El link expira en 1 hora. Revisa también tu carpeta de spam.</p>
+            <p className="text-xs text-slate-400">El link expira en 1 hora. Revisa también tu carpeta de spam.</p>
             <button
+              type="button"
               onClick={() => navigate("/login")}
-              className="mt-4 text-sm text-[var(--color-primary)] hover:underline font-medium"
+              className="mt-4 text-sm text-teal-700 hover:underline font-medium"
             >
               ← Volver al inicio de sesión
             </button>
@@ -77,15 +79,15 @@ export default function RecuperarAcceso() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-gray-800">Recuperar contraseña</h1>
-              <p className="text-sm text-gray-500 mt-1">
+              <h1 className="text-2xl font-bold text-slate-800">Recuperar contraseña</h1>
+              <p className="text-sm text-slate-500 mt-1">
                 Ingresa tu correo y te enviaremos un link para restablecerla.
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Correo electrónico</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Correo electrónico</label>
                 <Input
                   type="email"
                   placeholder="tu@email.cl"
@@ -93,12 +95,12 @@ export default function RecuperarAcceso() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
               {error && (
-                <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2" role="alert">
+                <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert">
                   {error}
                 </p>
               )}
@@ -106,14 +108,15 @@ export default function RecuperarAcceso() {
               <Button
                 type="submit"
                 disabled={loading || !email.trim()}
-                className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] disabled:opacity-50 transition-colors"
+                className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 disabled:opacity-50 transition-colors"
               >
                 {loading ? "Enviando..." : "Enviar link de recuperación"}
               </Button>
             </form>
 
-            <p className="text-sm text-center text-gray-400 mt-6">
-              <button onClick={() => navigate("/login")} className="text-[var(--color-primary)] hover:underline">
+            <p className="text-sm text-center text-slate-400 mt-6">
+              <button type="button"
+ onClick={() => navigate("/login")} className="text-teal-700 hover:underline">
                 ← Volver al inicio de sesión
               </button>
             </p>

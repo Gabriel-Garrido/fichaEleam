@@ -12,60 +12,27 @@ import {
   logVisit,
 } from "./familiarService";
 import { VITAL_DEFS, recordOverallStatus, STATUS } from "../vitalSigns/vitalRanges";
-
-const TIPO_LABEL = {
-  observacion_general: "Observación general",
-  caida: "Caída",
-  incidente: "Incidente",
-  curacion: "Curación",
-  visita_medica: "Visita médica",
-  administracion_medicamento: "Medicamento",
-  cambio_posicion: "Cambio de posición",
-  higiene: "Higiene",
-  alimentacion: "Alimentación",
-  eliminacion: "Eliminación",
-  actividad: "Actividad",
-  otro: "Otro",
-};
-
-function formatDateTime(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return "—"; }
-}
-
-function calcAge(fecha) {
-  if (!fecha) return null;
-  const d = new Date(fecha);
-  const today = new Date();
-  let age = today.getFullYear() - d.getFullYear();
-  const m = today.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-  return age;
-}
+import { TIPO_LABEL, calcAge } from "../residents/residentUtils";
+import { formatDateTime } from "../../utils/dateUtils";
 
 function ResidentBadgeRow({ res }) {
   const age = calcAge(res.fecha_nacimiento);
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+    <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
       <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center font-black text-lg">
+        <div className="w-14 h-14 rounded-full bg-teal-700 text-white flex items-center justify-center font-black text-lg">
           {(res.nombre?.[0] ?? "") + (res.apellido?.[0] ?? "")}
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="font-black text-gray-800 text-xl truncate">
+          <h2 className="font-black text-slate-800 text-xl truncate">
             {res.nombre} {res.apellido}
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500">
             {age != null && <>{age} años · </>}
             {res.parentesco ? <>Tu vínculo: <span className="font-semibold">{res.parentesco}</span></> : "Familiar autorizado"}
           </p>
           {(res.habitacion || res.cama) && (
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               Habitación {res.habitacion ?? "—"} · Cama {res.cama ?? "—"}
             </p>
           )}
@@ -84,7 +51,7 @@ function ResidentBadgeRow({ res }) {
 
 function VitalsBlock({ vitals }) {
   if (!vitals?.length) {
-    return <p className="text-sm text-gray-500">Sin registros de signos vitales aún.</p>;
+    return <p className="text-sm text-slate-500">Sin registros de signos vitales aún.</p>;
   }
   const latest = vitals[0];
   const overall = recordOverallStatus(latest);
@@ -93,7 +60,7 @@ function VitalsBlock({ vitals }) {
   return (
     <>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           Último registro · {formatDateTime(latest.fecha_hora)}
         </p>
         <span className={`text-xs font-semibold rounded-full px-3 py-1 border ${overallStyle.badge}`}>
@@ -118,11 +85,11 @@ function VitalsBlock({ vitals }) {
               );
           return (
             <div key={key} className={`rounded-xl border p-3 bg-white ${s.ring} ring-1`}>
-              <p className="text-[10px] uppercase font-semibold text-gray-400 tracking-wide truncate">
+              <p className="text-[10px] uppercase font-semibold text-slate-400 tracking-wide truncate">
                 {def.icon} {def.label}
               </p>
               <p className={`text-lg font-black truncate ${s.text}`}>
-                {value} <span className="text-xs font-semibold text-gray-400">{def.unit}</span>
+                {value} <span className="text-xs font-semibold text-slate-400">{def.unit}</span>
               </p>
             </div>
           );
@@ -134,7 +101,7 @@ function VitalsBlock({ vitals }) {
 
 function ObservationsBlock({ obs }) {
   if (!obs?.length) {
-    return <p className="text-sm text-gray-500">Sin observaciones recientes.</p>;
+    return <p className="text-sm text-slate-500">Sin observaciones recientes.</p>;
   }
   return (
     <ul className="divide-y">
@@ -142,20 +109,20 @@ function ObservationsBlock({ obs }) {
         <li key={o.id} className="py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-gray-700 line-clamp-3">
+              <p className="text-sm text-slate-700 line-clamp-3">
                 {o.descripcion}
               </p>
               {o.acciones_tomadas && (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   Acciones: {o.acciones_tomadas}
                 </p>
               )}
             </div>
             <div className="text-right shrink-0">
-              <span className="text-[10px] uppercase font-semibold text-gray-400 tracking-wide">
+              <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wide">
                 {TIPO_LABEL[o.tipo] ?? o.tipo}
               </span>
-              <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(o.fecha_hora)}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{formatDateTime(o.fecha_hora)}</p>
               {o.requiere_seguimiento && (
                 <span className="inline-block mt-1 text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
                   Seguimiento
@@ -243,8 +210,8 @@ export default function FamiliarPortal() {
   if (residentes.length === 0) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">Sin residentes asignados</h1>
-        <p className="text-gray-500 mb-4">
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Sin residentes asignados</h1>
+        <p className="text-slate-500 mb-4">
           Aún no estás vinculado a un residente. Pide al administrador del ELEAM
           que cree el vínculo o vuelva a generar la invitación.
         </p>
@@ -257,10 +224,10 @@ export default function FamiliarPortal() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
       <header>
-        <h1 className="text-2xl font-black text-gray-800">
+        <h1 className="text-2xl font-black text-slate-800">
           Hola{profile?.nombre ? `, ${profile.nombre.split(" ")[0]}` : ""} 👋
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           Aquí puedes ver el estado y los últimos registros de tu familiar
           {eleam?.nombre ? <> en <span className="font-semibold">{eleam.nombre}</span></> : null}.
         </p>
@@ -271,12 +238,13 @@ export default function FamiliarPortal() {
         <div className="flex flex-wrap gap-2">
           {residentes.map((r) => (
             <button
+              type="button"
               key={r.id}
               onClick={() => { setActiveId(r.id); fetchAll(r.id); }}
-              className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${
+              className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${
                 r.id === activeId
-                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  ? "bg-teal-700 text-white border-teal-700"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
               }`}
             >
               {r.nombre} {r.apellido}
@@ -288,48 +256,50 @@ export default function FamiliarPortal() {
       <ResidentBadgeRow res={activeRes} />
 
       {/* Signos vitales */}
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-gray-800">Signos vitales</h2>
+          <h2 className="font-bold text-slate-800">Signos vitales</h2>
         </div>
         <VitalsBlock vitals={vitals} />
       </section>
 
       {/* Observaciones */}
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-bold text-gray-800 mb-3">Últimas observaciones</h2>
+      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <h2 className="font-bold text-slate-800 mb-3">Últimas observaciones</h2>
         <ObservationsBlock obs={obs} />
       </section>
 
       {/* Visitas */}
-      <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h2 className="font-bold text-gray-800">Mis visitas recientes</h2>
+          <h2 className="font-bold text-slate-800">Mis visitas recientes</h2>
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => navigate("/familiar/visitas")}
-              className="text-sm text-[var(--color-primary)] hover:underline"
+              className="text-sm text-teal-700 hover:underline"
             >
               Ver todas
             </button>
             <button
+              type="button"
               onClick={handleLogVisit}
               disabled={logging}
-              className="bg-[var(--color-primary)] text-white text-sm font-semibold px-4 py-1.5 rounded-lg hover:bg-[var(--color-button-hover)] disabled:opacity-50"
+              className="bg-teal-700 text-white text-sm font-semibold px-4 py-1.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"
             >
               {logging ? "Guardando..." : "Registrar visita ahora"}
             </button>
           </div>
         </div>
         {visitas.length === 0 ? (
-          <p className="text-sm text-gray-500">Aún no tienes visitas registradas.</p>
+          <p className="text-sm text-slate-500">Aún no tienes visitas registradas.</p>
         ) : (
           <ul className="divide-y">
             {visitas.slice(0, 5).map((v) => (
               <li key={v.id} className="py-2 text-sm">
-                <span className="font-semibold text-gray-700">{formatDateTime(v.fecha_hora)}</span>
-                {v.duracion_min ? <span className="text-gray-500"> · {v.duracion_min} min</span> : null}
-                {v.notas ? <p className="text-gray-500 text-xs mt-0.5">{v.notas}</p> : null}
+                <span className="font-semibold text-slate-700">{formatDateTime(v.fecha_hora)}</span>
+                {v.duracion_min ? <span className="text-slate-500"> · {v.duracion_min} min</span> : null}
+                {v.notas ? <p className="text-slate-500 text-xs mt-0.5">{v.notas}</p> : null}
               </li>
             ))}
           </ul>

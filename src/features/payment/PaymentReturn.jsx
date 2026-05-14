@@ -32,27 +32,32 @@ export default function PaymentReturn() {
   const isPending = ["pendiente"].includes(subscriptionStatus);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
       <div className="bg-white max-w-lg w-full rounded-2xl shadow-md p-10 text-center">
         {profileLoading || (isPending && polled < 12) ? (
           <>
             <Loading message="Confirmando tu pago con MercadoPago..." />
-            <p className="text-xs text-gray-400 mt-4">
+            <p className="text-xs text-slate-400 mt-4">
               Esto puede tomar unos segundos. No cierres esta página.
             </p>
           </>
         ) : isActive ? (
           <>
-            <div className="text-emerald-500 text-5xl mb-3">✓</div>
-            <h1 className="text-2xl font-black text-gray-800 mb-2">
+            <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-emerald-500">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-black text-slate-800 mb-2">
               ¡Tu suscripción quedó activa!
             </h1>
-            <p className="text-gray-500 mb-6">
+            <p className="text-slate-500 mb-6">
               {eleam?.nombre} ya puede acceder al panel completo de FichaEleam.
             </p>
             <button
+              type="button"
               onClick={() => navigate("/dashboard")}
-              className="bg-[var(--color-primary)] text-white font-semibold px-6 py-3 rounded-xl hover:bg-[var(--color-button-hover)]"
+              className="bg-teal-700 text-white font-semibold px-6 py-3 rounded-xl hover:bg-teal-800"
             >
               Ir al panel
             </button>
@@ -60,10 +65,10 @@ export default function PaymentReturn() {
         ) : (
           <>
             <div className="text-amber-500 text-5xl mb-3">!</div>
-            <h1 className="text-2xl font-black text-gray-800 mb-2">
+            <h1 className="text-2xl font-black text-slate-800 mb-2">
               Tu pago aún no se ha confirmado
             </h1>
-            <p className="text-gray-500 mb-6 text-sm">
+            <p className="text-slate-500 mb-6 text-sm">
               {mpStatus
                 ? `Estado reportado por MercadoPago: ${mpStatus}.`
                 : "MercadoPago todavía no envió la confirmación."}
@@ -72,14 +77,16 @@ export default function PaymentReturn() {
             </p>
             <div className="flex justify-center gap-3">
               <button
+                type="button"
                 onClick={() => navigate("/pago")}
-                className="bg-[var(--color-primary)] text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-[var(--color-button-hover)]"
+                className="bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-800"
               >
                 Volver a pago
               </button>
               <button
+                type="button"
                 onClick={() => refetchProfile?.()}
-                className="border border-gray-300 text-gray-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-gray-50"
+                className="border border-slate-300 text-slate-700 font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-50"
               >
                 Reintentar
               </button>

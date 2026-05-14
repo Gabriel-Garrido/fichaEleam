@@ -126,7 +126,7 @@ function CheckIcon({ done }) {
     );
   }
   return (
-    <div className="w-6 h-6 rounded-full border-2 border-gray-300 shrink-0" />
+    <div className="w-6 h-6 rounded-full border-2 border-slate-300 shrink-0" />
   );
 }
 
@@ -143,20 +143,21 @@ export default function OnboardingGuide({
   const currentIndex = steps.findIndex((s) => s.panel === activePanel);
 
   return (
-    <aside className="w-72 shrink-0 bg-white border-r border-gray-100 flex flex-col h-full overflow-y-auto">
+    <aside className="w-72 shrink-0 bg-white border-r border-slate-100 flex flex-col h-full overflow-y-auto">
       {/* Header */}
-      <div className="p-4 border-b border-gray-100">
+      <div className="p-4 border-b border-slate-100">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Guía del demo</span>
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Guía del demo</span>
           <button
+            type="button"
             onClick={onDismiss}
-            className="text-xs text-gray-400 hover:text-gray-600 underline"
+            className="text-xs text-slate-400 hover:text-slate-600 underline"
           >
             Explorar libre
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex-1 bg-gray-100 rounded-full h-2">
+          <div className="flex-1 bg-slate-100 rounded-full h-2">
             <div
               className="bg-teal-500 h-2 rounded-full transition-all"
               style={{ width: `${totalProgress}%` }}
@@ -164,7 +165,7 @@ export default function OnboardingGuide({
           </div>
           <span className="text-xs font-semibold text-teal-600 shrink-0">{totalProgress}%</span>
         </div>
-        <p className="text-xs text-gray-400 mt-1">Progreso total (todos los roles)</p>
+        <p className="text-xs text-slate-400 mt-1">Progreso total (todos los roles)</p>
       </div>
 
       {/* Steps list */}
@@ -174,20 +175,21 @@ export default function OnboardingGuide({
           const active  = step.panel === activePanel;
           return (
             <button
+              type="button"
               key={step.id}
               onClick={() => onGoToStep(step.panel)}
               className={`w-full text-left rounded-xl p-3 transition-all flex items-start gap-3 ${
                 active
                   ? "bg-teal-50 border border-teal-200"
                   : done
-                  ? "hover:bg-gray-50"
-                  : "hover:bg-gray-50"
+                  ? "hover:bg-slate-50"
+                  : "hover:bg-slate-50"
               }`}
             >
               <CheckIcon done={done} />
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-xs font-bold ${active ? "text-teal-700" : done ? "text-gray-500" : "text-gray-700"}`}>
+                  <span className={`text-xs font-bold ${active ? "text-teal-700" : done ? "text-slate-500" : "text-slate-700"}`}>
                     {i + 1}. {step.titulo}
                   </span>
                   {!done && !active && (
@@ -195,10 +197,10 @@ export default function OnboardingGuide({
                   )}
                 </div>
                 {active && (
-                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{step.descripcion}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{step.descripcion}</p>
                 )}
                 {active && step.callout && (
-                  <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2">
                     <p className="text-[11px] text-amber-800 leading-snug">{step.callout}</p>
                   </div>
                 )}
@@ -209,9 +211,10 @@ export default function OnboardingGuide({
       </div>
 
       {/* Next button */}
-      <div className="p-4 border-t border-gray-100">
+      <div className="p-4 border-t border-slate-100">
         {currentIndex < steps.length - 1 ? (
           <button
+            type="button"
             onClick={onNext}
             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
           >
@@ -223,7 +226,7 @@ export default function OnboardingGuide({
         ) : (
           <div className="text-center">
             <p className="text-xs text-teal-600 font-semibold mb-2">¡Completaste esta vista!</p>
-            <p className="text-xs text-gray-500">Prueba las otras vistas (Funcionario, Familiar) para ver el 100%.</p>
+            <p className="text-xs text-slate-500">Prueba las otras vistas (Funcionario, Familiar) para ver el 100%.</p>
           </div>
         )}
       </div>

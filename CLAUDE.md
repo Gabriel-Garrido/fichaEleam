@@ -43,15 +43,20 @@ src/
 │   └── AuthContext.jsx         # useAuth() + useLoading()
 ├── features/
 │   ├── auth/                   # Login, Register, RecuperarAcceso, ResetPassword, authService
-│   ├── landing/                # LandingPage (CTA demo, sin auto-registro público)
-│   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService
+│   ├── landing/                # LandingPage (calm-inspired, CTA demo, sin auto-registro público); DemoRequestModal, landingAnalytics
+│   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService (diseño consistente con landing: nav/footer dark slate-950)
 │   ├── dashboard/              # AdminDashboard (rol-aware: admin_eleam muestra gestión, funcionario muestra clínica)
-│   ├── residents/              # CRUD residentes + detalles
+│   ├── residents/              # CRUD residentes + detalles; residentUtils.js exporta ESTADO_CONFIG, ESTADO_BADGE, DEPENDENCIA_TONE, TIPO_LABEL, TIPO_BADGE, initials(), calcAge()
 │   ├── vitalSigns/             # Formulario + lista + rangos clínicos
 │   ├── observations/           # 12 tipos de observaciones diarias
 │   ├── accreditation/          # Modelo v9: ámbitos, requisitos, evidencias, observaciones, auditoría
+│   ├── carePlans/              # Plan de cuidado: CarePlanTab (gestión de actividades + horarios), CareTasksPage (ejecución diaria por turno), carePlansService
+│   │   └── carePlansService.js # Funciones compartidas: getSessionProfile(), todayIso(), currentTurno(), normalizeSchedule(), previousTurnos()
+│   ├── emar/                   # Kardex electrónico: EmarTurnPage (administración por turno), EmarResidentTab (historial por residente), emarService
+│   ├── turnos/                 # Entrega de turno: TurnoEntregaPage, TurnoHistoryPage, turnosService; integra datos de eMAR + plan de cuidado + signos + acreditación
+│   ├── permissions/            # Gestión de features por ELEAM: featureCatalog.js (12 features), FeaturePermissionsPage (admin)
 │   ├── payment/                # PaymentPage, PaymentReturn (MercadoPago)
-│   ├── team/                   # TeamManagement (crear funcionarios/familiares) + ChangePasswordPage
+│   ├── team/                   # TeamManagement (crear funcionarios/familiares), teamConstants.js (PERM_GROUPS, PLANTILLAS_CARGO, DEFAULT_PERMS) + ChangePasswordPage
 │   ├── familiar/               # Portal restringido + registro de visitas
 │   ├── demo/                   # Demo guiado por token, datos mock y guía interactiva
 │   ├── onboarding/             # Sistema de onboarding adaptativo por rol/permisos
@@ -64,13 +69,15 @@ src/
 │   ├── superadmin/             # Dashboard CRM + blog editor + gestión de pagos + LeadsPanel
 │   │   └── blog/               # BlogManagement, BlogEditor (solo para superadmin)
 │   └── utils/                  # Markdown renderer, customer health, etc.
+├── navigation/
+│   └── navigationConfig.js     # itemAllowed(): filtra nav por rol, featurePermissions y permisos granulares
 ├── routes/
 │   └── AppRouter.jsx           # Rutas con guards
 ├── services/
 │   └── supabaseConfig.js       # Cliente Supabase singleton
 └── utils/
-    ├── constants.js
-    ├── dateUtils.js
+    ├── dateUtils.js            # formatDate(iso), formatDateTime(iso), formatDateOnly(dateStr) — fuente canónica para toda la app
+    ├── passwordValidation.js   # validatePassword(password, confirm) — compartido por Register, ResetPassword, ChangePasswordPage
     ├── validators.js           # Email, UUID, RUT, phone
     └── seo.js                  # Hook useSEO + JSON-LD builders
 
@@ -80,7 +87,7 @@ supabase/functions/
 ├── create-demo-user/           # Crea usuario real cuando superadmin aprueba demo lead
 ├── create-staff-user/          # Crea funcionario/familiar con contraseña temporal
 ├── delete-staff-user/          # Elimina staff/familiar desde Auth + cascadas
-├── invite-funcionario/         # Flujo antiguo (invitación por email con token)
+├── invite-funcionario/         # Legacy: invitación por token. Edge Function activa para tokens existentes; teamService.js ya no lo llama (usa create-staff-user)
 ├── mp-create-subscription/
 ├── mp-webhook/
 └── mp-cancel-subscription/
@@ -168,8 +175,15 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | `/accreditation/observaciones` | AccreditationObservaciones | STAFF | Observaciones internas/fiscalización |
 | `/accreditation/carpeta` | AccreditationCarpeta | STAFF | Export imprimible (Ctrl+P) |
 | `/equipo` | TeamManagement | `allowedRoles=[admin_eleam]` | Crear funcionarios/familiares con contraseña temporal |
+| `/equipo/permisos/:profileId` | FuncionarioPermisosPage | `allowedRoles=[admin_eleam]` | Editar permisos granulares de un funcionario |
 | `/familiar` | FamiliarPortal | `allowedRoles=[familiar]` + ELEAM vigente | Residente asignado + últimos signos + observaciones |
 | `/familiar/visitas` | FamiliarVisitas | `allowedRoles=[familiar]` + ELEAM vigente | Historial + registro de visitas |
+| `/turnos` | TurnoEntregaPage | STAFF | Entrega de turno: resumen clínico + cuidado + eMAR |
+| `/turnos/nueva` | TurnoEntregaPage | STAFF | Nueva entrega de turno |
+| `/turnos/tareas` | CareTasksPage | STAFF | Tareas diarias del plan de cuidado por turno |
+| `/turnos/emar` | EmarTurnPage | STAFF | Kardex electrónico: administración de medicamentos por turno |
+| `/turnos/:id` | TurnoHistoryPage | STAFF | Detalle histórico de una entrega de turno |
+| `/permisos` | FeaturePermissionsPage | `allowedRoles=[admin_eleam]` | Activar/desactivar features del ELEAM |
 | `/superadmin` | SuperAdminDashboard | SuperAdminRoute | CRM: métricas, tabla ELEAMs, leads, edición, pagos |
 | `/superadmin/blog` | BlogManagement | SuperAdminRoute | Lista de posts |
 | `/superadmin/blog/new`, `/superadmin/blog/:id/edit` | BlogEditor | SuperAdminRoute | Editor de posts |
@@ -277,7 +291,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 **`familiar_residentes`** — PK (profile_id, residente_id): parentesco, creado_por, creado_en.
 
-**`funcionario_permisos`** — Permisos granulares por funcionario. Columnas: `crear_residentes`, `editar_residentes`, `eliminar_residentes`, `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales`, `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones`, `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion`, `registrar_visitas` (todas bool).
+**`funcionario_permisos`** — Permisos granulares por funcionario. 21 columnas bool: las 13 originales (`crear/editar/eliminar_residentes`, `crear/editar/eliminar_signos_vitales`, `crear/editar/eliminar_observaciones`, `subir/editar/archivar_acreditacion`, `registrar_visitas`) más 8 nuevas (`crear_indicaciones_medicamentos`, `editar_indicaciones_medicamentos`, `validar_medicamentos_controlados`, `ajustar_stock_medicamentos`, `completar_tareas_cuidado`, `editar_indicaciones_cuidado`, `ver_costos_medicamentos`, `exportar_reportes`). Ver sección "Permisos Granulares" para defaults.
 
 **`visitas_familiar`** — Registro de visitas: residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por.
 
@@ -468,6 +482,18 @@ Ruta pública: `/demo/:token`. Guarda progreso en `demo_leads.demo_progreso`, ac
 
 Los datos clínicos del demo viven en `src/features/demo/demoData.js`; no escriben tablas clínicas reales.
 
+### Detección de plan demo en el frontend
+
+**Patrón canónico**: `eleam.plan === "demo"` (NO `!pago_activo` — un demo puede tener `pago_activo=true` mientras no haya vencido).
+
+**Superadmin (EleamTable)**: Filas demo reciben fondo `bg-amber-50/40`, badge "Demo" junto al nombre, celda Pago muestra "Demo" en amber (no "Inactivo"), VencimientoCell muestra días restantes `({d}d)` y título contextual "Demo vence en X días".
+
+**Superadmin (EleamCustomerDrawer)**: Banner amber/rose encima de la sección de suscripción mostrando días restantes o estado vencido; sección de suscripción toma fondo amber; oculta fila "Próximo cobro MP" para demos.
+
+**Superadmin (SuperAdminMetrics)**: Métrica "En demo" cuenta `plan = 'demo'` (no `!pago_activo`). Tono amber, diferenciada de "Activos" (emerald) y "En riesgo" (rose).
+
+**PaymentPage (admin_eleam)**: Cuando `isAdminEleam && eleam.plan === "demo"`, muestra banner prominente con días restantes y fecha de vencimiento en lugar de la tarjeta de suscripción normal. Botón de plan dice "Activar plan" en lugar de "Suscribirme". Funcionarios y familiares **no ven** información de demo (solo el banner genérico de acceso limitado que ya existía).
+
 ---
 
 ## Blog Público
@@ -476,7 +502,7 @@ Los datos clínicos del demo viven en `src/features/demo/demoData.js`; no escrib
 
 **Editor superadmin**: `/superadmin/blog` (lista), `/superadmin/blog/new` (crear), `/superadmin/blog/:id/edit` (editar).
 
-**SEO**: Meta tags (description, OG, Twitter), JSON-LD (Article, Organization, SoftwareApplication, FAQ, Breadcrumb), `robots.txt` (GPTBot, ClaudeBot, PerplexityBot, etc.), `sitemap.xml`.
+**SEO / LLM**: Meta tags (description, OG, Twitter), JSON-LD (Article, Organization, SoftwareApplication, FAQPage, Breadcrumb, Blog schema con publisher), `robots.txt` (GPTBot, ClaudeBot, PerplexityBot, etc.), `sitemap.xml`. La landing incluye JSON-LD SoftwareApplication + Organization además de FAQPage para maximizar visibilidad en LLMs.
 
 **Hook**: `useSEO({title, description, path, image, type, keywords, jsonLd})` inyecta meta tags + JSON-LD sin librerías externas.
 
@@ -488,7 +514,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 
 ### Funcionalidades
 
-- **Métricas**: ELEAMs totales, activos, demos, nuevos este mes, residentes, MRR (CLP).
+- **Métricas**: ELEAMs totales, activos, demos (`plan='demo'`), nuevos este mes, residentes, MRR (CLP), leads últimos 7 días, sesiones demo activas.
 - **Tabla de ELEAMs**: Búsqueda, filtro por estado, plan, vencimiento. Edición inline: activar/desactivar, cambiar plan, max_residentes, fecha_vencimiento, notas.
 - **Registrar pago**: Monto, plan, método, fecha inicio/fin → RPC transaccional `registrar_pago_y_activar_eleam`.
 - **Historial de pagos**: Últimos 20 con ELEAM, monto, plan, estado.
@@ -509,7 +535,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Email**: Regex estricto en `validateEmail()`.
 - **UUID**: `isValidUUID()` antes de usarlo en queries; rechazo silencioso de inválidos.
 - **RUT**: `validateRut()` con módulo-11; campo opcional → true si vacío.
-- **Archivos**: MIME whitelist + tamaño ≤10 MB en `AccreditationUpload.jsx`.
+- **Archivos**: Extensión + MIME type whitelist + tamaño ≤10 MB en `accreditationService.js` (`validateFile()`). `ALLOWED_EXTENSIONS` y `ALLOWED_MIME` se validan juntos; extensión primero, luego `file.type` si está presente.
 - **Nombres de archivo**: `sanitizeFilename()` → elimina `..`, `/`, `\`, especiales; whitelist de extensiones.
 
 ### Validación servidor (RLS)
@@ -521,6 +547,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Superadmin**: Función `is_superadmin()` en todas las RLS; bypass seguro.
 - **Storage path scoped**: `acreditacion/{eleamId}/...`; RLS filtra por `split_part(name, '/', 2)`.
 - **Permisos granulares**: `funcionario_permisos` con checks en UI + RLS.
+- **Defense-in-depth en accreditationService**: `setRequisitoEstado`, `archiveDocumento` y el reemplazo de documentos incluyen `.eq("eleam_id", eleamId)` además de la protección RLS.
 
 ### Headers
 
@@ -536,15 +563,24 @@ Stack trace solo si `import.meta.env.DEV`; producción muestra mensaje genérico
 
 Tabla `funcionario_permisos` con columnas bool por acción. Verificación en UI + `can()` desde `useAuth()`.
 
-| Permiso | Nota |
-|---------|------|
-| `crear_residentes`, `editar_residentes`, `eliminar_residentes` | CRUD residentes |
-| `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales` | Signos vitales |
-| `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones` | Observaciones |
-| `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación |
-| `registrar_visitas` | Visitas familiares |
+| Permiso | Nota | Default |
+|---------|------|---------|
+| `crear_residentes`, `editar_residentes`, `eliminar_residentes` | CRUD residentes | true / true / **false** |
+| `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales` | Signos vitales | true / true / **false** |
+| `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones` | Observaciones | true / true / **false** |
+| `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación | true / true / **false** |
+| `registrar_visitas` | Visitas familiares | true |
+| `crear_indicaciones_medicamentos`, `editar_indicaciones_medicamentos` | Indicaciones eMAR | **false** / **false** |
+| `validar_medicamentos_controlados` | Validar controlados en eMAR | **false** |
+| `ajustar_stock_medicamentos` | Ajuste manual de stock | **false** |
+| `completar_tareas_cuidado` | Registrar cumplimiento de tareas del plan de cuidado | **false** |
+| `editar_indicaciones_cuidado` | Editar plan de cuidado del residente | **false** |
+| `ver_costos_medicamentos` | Ver costos en módulo eMAR | true |
+| `exportar_reportes` | Exportar reportes clínicos | true |
 
-Default backend: sin row en `funcionario_permisos`, `public.funcionario_can()` deniega. El schema crea filas para funcionarios nuevos y existentes.
+`can()` en AuthContext: fail-closed para permisos marcados **false** — cuando no hay row en `funcionario_permisos`, esos permisos se deniegan explícitamente (set `FAIL_CLOSED_PERMS` en AuthContext.jsx). El schema crea filas para funcionarios nuevos y existentes.
+
+`teamConstants.js` exporta `PERM_GROUPS` (agrupa permisos por sección para la UI), `DEFAULT_PERMS` (valores para nuevos funcionarios) y `PLANTILLAS_CARGO` (presets por rol: Enfermero/a, Kinesiólogo/a, Médico/a, Auxiliar ATD, Administrativo/a).
 
 ---
 
@@ -605,6 +641,66 @@ update public.profiles set rol = 'superadmin' where email = 'tu-email@gmail.com'
 
 ---
 
+## Sistema de Diseño (Design System)
+
+El proyecto usa **Tailwind CSS 4 puro** sin CSS variables de colores. No hay `var(--color-*)` en el código; todo usa clases Tailwind directas.
+
+### Paleta de colores
+
+| Propósito | Tailwind |
+|-----------|---------|
+| Primario (acciones, CTA) | `teal-700` / `hover:teal-800` |
+| Primario fondo suave | `teal-50`, `teal-100` |
+| Primario texto suave | `teal-600`, `teal-700` |
+| Superficies / texto neutro | `slate-*` (NO `gray-*`) |
+| Fondo página | `slate-50` o `white` |
+| Éxito | `emerald-*` |
+| Alerta | `amber-*` |
+| Error / urgente | `rose-*` |
+| Info | `sky-*` |
+
+### Bordes y formas
+
+- Cards: `rounded-2xl` con `border border-slate-100 shadow-sm`
+- Modales: `rounded-2xl` (mobile: `rounded-t-2xl`) — manejado por `Modal.jsx`
+- Botones: `rounded-xl`
+- Inputs/selects: `rounded-xl border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100`
+- Badges / pills: `rounded-full`
+- Badges internos pequeños: `rounded-xl`
+
+### Iconografía
+
+- **Heroicons outline** (SVG inline). NO emojis en UI de la aplicación (excepción: íconos médicos en `VITAL_DEFS.icon` con `aria-hidden`).
+- Patrón de icono en empty states: caja teal-50 + icono teal-600, 12×12px, `rounded-xl`.
+- Iconos de navegación: centralizados en `NavIcon.jsx`.
+
+### Accesibilidad
+
+- Todos los `<button>` con `onClick` tienen `type="button"` explícito (o `type="submit"` en formularios).
+- Elementos clickeables no-button (artículos, divs) tienen `role="button"`, `tabIndex={0}` y `onKeyDown` con Enter/Space.
+- Labels de formulario usan `htmlFor` + `id` para asociación semántica (screen readers).
+- Tooltips sobre texto truncado vía `title` attribute.
+
+### Componentes base
+
+| Componente | Notas |
+|-----------|-------|
+| `Button.jsx` | Acepta `className` para override de color. Base: `rounded-xl`. |
+| `Input.jsx` | Base: `rounded-xl border-slate-300 focus:border-teal-500`. |
+| `Modal.jsx` | Accesible: Escape, backdrop click, `role=dialog`. |
+| `Loading.jsx` | Spinner teal-700. |
+| `ErrorBoundary.jsx` | Clase. Stack trace solo en DEV. |
+| `SupabaseError.jsx` | Pantalla de error si Supabase no configurado. |
+| `Toast.jsx` | `useToast()` hook. 4s auto-dismiss. |
+| `HelpTooltip.jsx` | Botón `?` con tooltip de ayuda. |
+| `PageLayout.jsx` | Wrapper con `PageHeader` + slot `actions`. |
+
+### dashboardUtils.js — claves de tono
+
+`KPI_TONE`, `FILTER_TONE`, `CARD_TONE` usan claves: `primary`, `emerald`, `amber`, `rose`, `slate` (no `gray`).
+
+---
+
 ## Onboarding Adaptativo
 
 Sistema de guía de primeros pasos en `src/features/onboarding/`. Montado en `AppShell.jsx` via `<OnboardingProvider>`.
@@ -635,23 +731,27 @@ Persistido en localStorage con clave `fichaeleam_onboarding_v2_{userId}`. Campos
 
 ## Qué Hacer Ahora
 
-1. **Permisos granulares de funcionario**: Si necesitas más permisos o cambiar defaults, edita la lógica en `useAuth()` + `funcionario_permisos` tabla.
+1. **Permisos granulares de funcionario**: Si necesitas más permisos o cambiar defaults, edita `FAIL_CLOSED_PERMS` en `AuthContext.jsx`, `PERM_GROUPS`/`DEFAULT_PERMS` en `teamConstants.js` y el ALTER TABLE en `supabase_schema.sql`.
 2. **Onboarding**: Para agregar pasos, edita `ROLE_CONFIG` en `onboardingConfig.js` (sin cambiar los componentes). Las clases Tailwind del color deben ser estáticas en `COLOR_CLASSES`.
 3. **Acreditación**: Si el modelo v9 requiere cambios (ámbitos, requisitos, estados), edita `supabase_schema.sql` + servicios.
 4. **Blog/CRM**: Editable desde UI; no requiere cambios de código.
 5. **MercadoPago**: Secrets en Edge Functions; pruebas con TEST token.
 6. **SEO**: Valida sitemap + JSON-LD con Google Search Console.
 7. **Headers en producción**: Configurar los security headers en el servidor / CDN que sirve `/dist`. El archivo `public/_headers` cubre Netlify y Cloudflare Pages.
+8. **eMAR / Plan de cuidado**: Nuevos permisos (`completar_tareas_cuidado`, `editar_indicaciones_cuidado`, etc.) están en `FAIL_CLOSED_PERMS` — deniegan acceso hasta que admin los otorgue explícitamente.
 
 ---
 
 ## Archivos de Referencia
 
-- `supabase_schema.sql` — Schema completo (23 tablas, RLS, funciones, triggers).
+- `supabase_schema.sql` — Schema completo (tablas, RLS, funciones, triggers, ALTER TABLE permisos).
 - `src/routes/AppRouter.jsx` — Definición de todas las rutas.
-- `src/context/AuthContext.jsx` — useAuth(), helpers, derivados.
+- `src/context/AuthContext.jsx` — useAuth(), FAIL_CLOSED_PERMS, helpers, derivados.
 - `src/components/ProtectedRoute.jsx` — Guarding de sesión, pago, rol.
 - `src/features/vitalSigns/vitalRanges.js` — Rangos clínicos.
+- `src/features/carePlans/carePlansService.js` — Helpers compartidos: `getSessionProfile()`, `todayIso()`, `currentTurno()`, `normalizeSchedule()`, `previousTurnos()`.
+- `src/features/team/teamConstants.js` — `PERM_GROUPS`, `DEFAULT_PERMS`, `PLANTILLAS_CARGO`.
+- `src/features/permissions/featureCatalog.js` — Catálogo de 12 features con IDs, labels y defaults.
 - `src/features/onboarding/onboardingConfig.js` — Pasos y colores del onboarding por rol.
 - `src/features/onboarding/OnboardingContext.jsx` — Lógica de estado, permisos y auto-complete.
 - `public/_headers` — Security headers para Netlify / Cloudflare Pages.

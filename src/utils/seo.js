@@ -44,6 +44,19 @@ function setJsonLd(id, data) {
   el.textContent = JSON.stringify(data);
 }
 
+function cleanArticleMetas() {
+  [...document.head.querySelectorAll("meta[data-seo-article]")].forEach((el) => el.remove());
+}
+
+function setArticleMeta(prop, content) {
+  if (!content) return;
+  const el = document.createElement("meta");
+  el.setAttribute("property", prop);
+  el.setAttribute("data-seo-article", "");
+  el.setAttribute("content", content);
+  document.head.appendChild(el);
+}
+
 /**
  * useSEO — inyecta metadatos por ruta.
  *
@@ -56,6 +69,9 @@ function setJsonLd(id, data) {
  *     keywords: ["ELEAM", "SEREMI"],
  *     jsonLd: {...} | [{...}],
  *     noIndex: false,
+ *     publishedTime: "2025-01-01T00:00:00Z",  // solo para type="article"
+ *     modifiedTime:  "2025-06-01T00:00:00Z",  // solo para type="article"
+ *     author: "Equipo FichaEleam",             // solo para type="article"
  *   })
  */
 export function useSEO({
@@ -67,6 +83,9 @@ export function useSEO({
   keywords,
   jsonLd,
   noIndex = false,
+  publishedTime,
+  modifiedTime,
+  author,
 } = {}) {
   useEffect(() => {
     const fullTitle = title
@@ -84,22 +103,38 @@ export function useSEO({
     const canonical = path ? `${ORIGIN}${path}` : ORIGIN;
     setLinkRel("canonical", canonical);
 
-    setMeta("property", "og:title", fullTitle);
-    setMeta("property", "og:description", description ?? "");
+    // Open Graph — base
     setMeta("property", "og:type", type);
     setMeta("property", "og:url", canonical);
-    if (image) setMeta("property", "og:image", image.startsWith("http") ? image : `${ORIGIN}${image}`);
+    setMeta("property", "og:title", fullTitle);
+    setMeta("property", "og:description", description ?? "");
+    setMeta("property", "og:locale", "es_CL");
+    setMeta("property", "og:site_name", "FichaEleam");
+    const ogImage = image ? (image.startsWith("http") ? image : `${ORIGIN}${image}`) : null;
+    if (ogImage) setMeta("property", "og:image", ogImage);
 
+    // Open Graph — artículo (se limpian en cleanup para no contaminar otras rutas)
+    cleanArticleMetas();
+    if (type === "article") {
+      if (publishedTime) setArticleMeta("og:article:published_time", publishedTime);
+      if (modifiedTime || publishedTime) setArticleMeta("og:article:modified_time", modifiedTime ?? publishedTime);
+      if (author) setArticleMeta("og:article:author", author);
+      if (Array.isArray(keywords)) {
+        keywords.forEach((tag) => setArticleMeta("og:article:tag", tag));
+      }
+    }
+
+    // Twitter / X
+    setMeta("name", "twitter:card", ogImage ? "summary_large_image" : "summary");
     setMeta("name", "twitter:title", fullTitle);
     setMeta("name", "twitter:description", description ?? "");
-    if (image) setMeta("name", "twitter:image", image.startsWith("http") ? image : `${ORIGIN}${image}`);
+    if (ogImage) setMeta("name", "twitter:image", ogImage);
 
     // JSON-LD por ruta. id "page" se reemplaza al volver a llamar.
     if (jsonLd) {
       const arr = Array.isArray(jsonLd) ? jsonLd : [jsonLd];
       arr.forEach((d, i) => setJsonLd(`page-${i}`, d));
     } else {
-      // Limpia anteriores
       [...document.head.querySelectorAll('script[data-jsonld^="page-"]')]
         .forEach((el) => el.remove());
     }
@@ -107,22 +142,21 @@ export function useSEO({
     return () => {
       [...document.head.querySelectorAll('script[data-jsonld^="page-"]')]
         .forEach((el) => el.remove());
+      cleanArticleMetas();
     };
-    // El effect se reejecuta cuando cambian los serializados; eslint no
-    // puede inferir igualdad estructural de keywords/jsonLd y aceptamos
-    // la complejidad explícita en las deps porque el costo es despreciable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, description, path, image, type, JSON.stringify(keywords), JSON.stringify(jsonLd), noIndex]);
+  }, [title, description, path, image, type, JSON.stringify(keywords), JSON.stringify(jsonLd), noIndex, publishedTime, modifiedTime, author]);
 }
 
 // ─────────────────────────────────────────────────────────────
 // Helpers JSON-LD
 // ─────────────────────────────────────────────────────────────
 
-export function articleJsonLd({ titulo, resumen, slug, image, publicadoEn, actualizadoEn, autor, keywords }) {
-  return {
+export function articleJsonLd({ titulo, resumen, slug, image, publicadoEn, actualizadoEn, autor, keywords, wordCount }) {
+  const obj = {
     "@context": "https://schema.org",
-    "@type": "Article",
+    "@type": ["Article", "BlogPosting"],
+    "@id": `${ORIGIN}/blog/${slug}`,
     "headline": titulo,
     "description": resumen,
     "image": image ? (image.startsWith("http") ? image : `${ORIGIN}${image}`) : `${ORIGIN}/og-image.png`,
@@ -131,10 +165,13 @@ export function articleJsonLd({ titulo, resumen, slug, image, publicadoEn, actua
     "author": {
       "@type": "Person",
       "name": autor ?? "Equipo FichaEleam",
+      "url": `${ORIGIN}/blog`,
     },
     "publisher": {
       "@type": "Organization",
+      "@id": `${ORIGIN}/#organization`,
       "name": "FichaEleam",
+      "url": ORIGIN,
       "logo": {
         "@type": "ImageObject",
         "url": `${ORIGIN}/og-image.png`,
@@ -144,9 +181,21 @@ export function articleJsonLd({ titulo, resumen, slug, image, publicadoEn, actua
       "@type": "WebPage",
       "@id": `${ORIGIN}/blog/${slug}`,
     },
+    "isPartOf": {
+      "@type": "Blog",
+      "@id": `${ORIGIN}/blog`,
+      "name": "Blog FichaEleam",
+    },
     "keywords": keywords?.join(", "),
     "inLanguage": "es-CL",
+    // SpeakableSpecification indica a LLMs/voice qué extractos son más relevantes
+    "speakable": {
+      "@type": "SpeakableSpecification",
+      "cssSelector": ["h1", ".article-summary"],
+    },
   };
+  if (wordCount) obj.wordCount = wordCount;
+  return obj;
 }
 
 export function breadcrumbJsonLd(items) {
@@ -174,6 +223,42 @@ export function faqJsonLd(qa) {
       "acceptedAnswer": { "@type": "Answer", "text": a },
     })),
   };
+}
+
+// Blog schema para la página de listado, con blogPost items para motores y LLMs.
+export function blogListJsonLd(posts = []) {
+  const base = {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    "@id": `${ORIGIN}/blog`,
+    "name": "Blog FichaEleam",
+    "description": "Recursos para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile: gestión clínica, DS 14/2017, acreditación SEREMI y buenas prácticas.",
+    "url": `${ORIGIN}/blog`,
+    "inLanguage": "es-CL",
+    "publisher": {
+      "@type": "Organization",
+      "@id": `${ORIGIN}/#organization`,
+      "name": "FichaEleam",
+      "url": ORIGIN,
+    },
+  };
+  if (posts.length > 0) {
+    base.blogPost = posts.map((p) => ({
+      "@type": "BlogPosting",
+      "@id": `${ORIGIN}/blog/${p.slug}`,
+      "headline": p.titulo,
+      "description": p.resumen,
+      "datePublished": p.publicado_en,
+      ...(p.actualizado_en && { "dateModified": p.actualizado_en }),
+      "url": `${ORIGIN}/blog/${p.slug}`,
+      "author": {
+        "@type": "Person",
+        "name": p.autor_nombre ?? "Equipo FichaEleam",
+      },
+      ...(p.keywords?.length && { "keywords": p.keywords.join(", ") }),
+    }));
+  }
+  return base;
 }
 
 export const SITE_ORIGIN = ORIGIN;

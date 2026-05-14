@@ -26,12 +26,12 @@ function Modal({ isOpen, onClose, title, children }) {
           type="button"
           onClick={onClose}
           aria-label="Cerrar"
-          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+          className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors"
         >
           &times;
         </button>
         {title && (
-          <h2 className="text-lg font-semibold text-gray-800 mb-4 pr-8">{title}</h2>
+          <h2 className="text-lg font-semibold text-slate-900 mb-4 pr-8">{title}</h2>
         )}
         {children}
       </div>

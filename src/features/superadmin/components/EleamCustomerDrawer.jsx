@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import {
   CRM_STATE_MAP, RIESGO_MAP, PLAN_LABEL,
-  formatCLP, formatDate,
+  formatCLP, formatDate, daysUntil,
 } from "../utils/superadminFormatters";
 import CustomerHealthBadge from "./CustomerHealthBadge";
 import InteractionTimeline from "./InteractionTimeline";
@@ -107,12 +107,12 @@ export default function EleamCustomerDrawer({
     <>
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} aria-hidden />
       <aside
-        className="fixed right-0 top-0 h-full w-full sm:w-[660px] bg-gray-50 border-l border-gray-200 shadow-2xl z-50 overflow-y-auto"
+        className="fixed right-0 top-0 h-full w-full sm:w-[660px] bg-slate-50 border-l border-slate-200 shadow-2xl z-50 overflow-y-auto"
         role="dialog"
         aria-modal="true"
       >
         {/* Header */}
-        <header className="sticky top-0 bg-white border-b border-gray-100 p-4 flex items-start justify-between gap-3 z-10">
+        <header className="sticky top-0 bg-white border-b border-slate-100 p-4 flex items-start justify-between gap-3 z-10">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
               Ficha 360 · CRM
@@ -138,11 +138,14 @@ export default function EleamCustomerDrawer({
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 text-2xl leading-none mt-0.5"
-            aria-label="Cerrar"
+            className="shrink-0 rounded-xl p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Cerrar panel"
           >
-            ×
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </header>
 
@@ -152,17 +155,56 @@ export default function EleamCustomerDrawer({
           </div>
         ) : (
           <div className="p-4 space-y-4">
+            {/* Banner demo activo */}
+            {eleam.plan === "demo" && (() => {
+              const d = daysUntil(eleam.fecha_vencimiento_suscripcion);
+              const expired = d != null && d < 0;
+              const urgent  = !expired && d != null && d <= 7;
+              return (
+                <div className={`rounded-xl border p-4 ${expired ? "bg-rose-50 border-rose-200" : urgent ? "bg-amber-50 border-amber-200" : "bg-amber-50 border-amber-200"}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`shrink-0 mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center ${expired ? "bg-rose-100" : "bg-amber-100"}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-4 h-4 ${expired ? "text-rose-600" : "text-amber-700"}`}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-xs font-bold uppercase tracking-wide ${expired ? "text-rose-700" : "text-amber-800"}`}>
+                        {expired ? "Demo vencido" : "Acceso demo activo"}
+                      </p>
+                      <p className={`text-sm mt-0.5 ${expired ? "text-rose-700" : "text-amber-900"}`}>
+                        {d == null
+                          ? "Sin fecha de vencimiento configurada."
+                          : expired
+                            ? `El período demo venció hace ${Math.abs(d)} día${Math.abs(d) !== 1 ? "s" : ""}. El acceso ya no está activo.`
+                            : d === 0
+                              ? "El período demo vence hoy."
+                              : `Quedan ${d} día${d !== 1 ? "s" : ""} de demo (hasta ${formatDate(eleam.fecha_vencimiento_suscripcion)}).`}
+                      </p>
+                      {!expired && (
+                        <p className="text-xs text-amber-700 mt-1">
+                          Registra un pago manual o espera que el cliente se suscriba desde su panel.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Acciones rápidas */}
             <div className="flex gap-2 flex-wrap">
               <button
+                type="button"
                 onClick={() => onEdit(eleam)}
-                className="text-sm bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-sm bg-teal-700 text-white px-4 py-2 rounded-xl hover:bg-teal-800 transition-colors"
               >
                 Editar ELEAM
               </button>
               <button
+                type="button"
                 onClick={() => onRegisterPayment(eleam.id)}
-                className="text-sm bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+                className="text-sm bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 transition-colors"
               >
                 Registrar pago
               </button>
@@ -184,15 +226,15 @@ export default function EleamCustomerDrawer({
             </section>
 
             {/* Suscripción */}
-            <section className="bg-white border border-slate-100 rounded-xl p-4">
-              <SectionBlock title="Suscripción y acceso" cols={3}>
+            <section className={`border rounded-xl p-4 ${eleam.plan === "demo" ? "bg-amber-50/50 border-amber-100" : "bg-white border-slate-100"}`}>
+              <SectionBlock title={eleam.plan === "demo" ? "Demo y acceso" : "Suscripción y acceso"} cols={3}>
                 <Stat
                   label="Plan"
                   value={<span className="capitalize">{PLAN_LABEL[eleam.plan] ?? eleam.plan ?? "—"}</span>}
                   tip={TIPS.plan}
                 />
                 <Stat
-                  label="Estado suscripción"
+                  label="Estado"
                   value={<SubscriptionStatusPill status={eleam.subscription_status} />}
                   tip={TIPS.subscription_status}
                 />
@@ -202,15 +244,17 @@ export default function EleamCustomerDrawer({
                   tip={TIPS.pago}
                 />
                 <Stat
-                  label="Vence"
+                  label={eleam.plan === "demo" ? "Demo vence" : "Vence"}
                   value={formatDate(eleam.fecha_vencimiento_suscripcion)}
                   tip={TIPS.vence}
                 />
-                <Stat
-                  label="Próximo cobro MP"
-                  value={formatDate(eleam.proximo_cobro_en)}
-                  tip={TIPS.proximo_cobro}
-                />
+                {eleam.plan !== "demo" && (
+                  <Stat
+                    label="Próximo cobro MP"
+                    value={formatDate(eleam.proximo_cobro_en)}
+                    tip={TIPS.proximo_cobro}
+                  />
+                )}
                 <Stat
                   label="Registrado"
                   value={formatDate(eleam.creado_en)}
@@ -236,7 +280,7 @@ export default function EleamCustomerDrawer({
               </SectionBlock>
 
               {eleam.notas_admin && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-3">
                   <p className="text-[10px] uppercase font-bold text-amber-700 mb-1">Notas internas</p>
                   <p className="text-sm text-amber-900 leading-relaxed">{eleam.notas_admin}</p>
                 </div>
@@ -245,30 +289,38 @@ export default function EleamCustomerDrawer({
 
             {/* Historial de pagos */}
             <section className="bg-white border border-slate-100 rounded-xl p-4">
-              <h3 className="font-semibold text-slate-700 text-sm mb-2">
-                Historial de pagos
-                <span className="ml-2 text-[10px] text-slate-400 font-normal">tabla pagos — últimos 30</span>
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-slate-700 text-sm">Historial de pagos</h3>
+                {(slot.payments ?? []).length > 0 && (
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {slot.payments.length} registro{slot.payments.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
               {(slot.payments ?? []).length === 0 ? (
                 <p className="text-sm text-slate-400">Sin pagos registrados.</p>
               ) : (
-                <ul className="divide-y divide-slate-50">
+                <ul className="space-y-1.5">
                   {slot.payments.slice(0, 6).map((p) => (
-                    <li key={p.id} className="py-2.5 flex items-center justify-between text-sm gap-3">
+                    <li key={p.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5 gap-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-slate-800">
+                        <p className="text-sm font-semibold text-slate-800">
                           {formatCLP(p.monto)}
-                          <span className="text-slate-400 font-normal"> · {PLAN_LABEL[p.plan] ?? p.plan}</span>
+                          <span className="text-slate-400 font-normal text-xs"> · {PLAN_LABEL[p.plan] ?? p.plan}</span>
                         </p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-400 mt-0.5">
                           {formatDate(p.fecha_pago)}
                           {p.metodo_pago ? ` · ${p.metodo_pago}` : ""}
                         </p>
                       </div>
-                      <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                      <span className={`shrink-0 text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${
                         p.estado === "completado"
                           ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-500"
+                          : p.estado === "pendiente"
+                            ? "bg-amber-100 text-amber-700"
+                            : p.estado === "fallido"
+                              ? "bg-rose-100 text-rose-600"
+                              : "bg-slate-100 text-slate-500"
                       }`}>
                         {p.estado}
                       </span>

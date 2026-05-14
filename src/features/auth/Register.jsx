@@ -6,6 +6,7 @@ import { useLoading, useAuth } from "../../context/AuthContext";
 import Loading from "../../components/Loading";
 import { authErrorMessage, register, validateInvitationToken } from "./authService";
 import { validateEmail } from "../../utils/validators";
+import { validatePassword } from "../../utils/passwordValidation";
 
 // El registro está restringido a usuarios con invitación válida.
 // Los nuevos administradores ingresan a la plataforma solo a través del
@@ -72,12 +73,13 @@ function Register() {
   // (solo cuando auth terminó de cargar; durante authLoading el spinner de abajo lo maneja)
   if (!authLoading && !inviteToken) {
     return (
-      <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
         <div className="mb-6 text-center">
-          <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
+          <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
             FichaEleam
           </button>
-          <p className="text-sm text-gray-500 mt-1">Plataforma para ELEAM</p>
+          <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
         </div>
         <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
           <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
@@ -85,20 +87,22 @@ function Register() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800">Acceso por invitación</h2>
-          <p className="text-sm text-gray-500">
+          <h2 className="text-xl font-bold text-slate-800">Acceso por invitación</h2>
+          <p className="text-sm text-slate-500">
             El registro directo no está disponible. Si fuiste invitado por un ELEAM, usa el link que recibiste por correo.
           </p>
           <div className="space-y-3 pt-2">
             <button
+              type="button"
               onClick={() => navigate("/login")}
-              className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+              className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
             >
               Iniciar sesión
             </button>
             <button
+              type="button"
               onClick={() => navigate("/")}
-              className="w-full border border-gray-300 text-gray-600 py-3 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-colors"
+              className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl font-semibold text-sm hover:bg-slate-50 transition-colors"
             >
               Volver al inicio
             </button>
@@ -110,12 +114,13 @@ function Register() {
 
   if (!authLoading && inviteError) {
     return (
-      <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
         <div className="mb-6 text-center">
-          <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
+          <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
             FichaEleam
           </button>
-          <p className="text-sm text-gray-500 mt-1">Plataforma para ELEAM</p>
+          <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
         </div>
         <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
           <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto">
@@ -123,18 +128,20 @@ function Register() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800">Invitación no disponible</h2>
-          <p className="text-sm text-gray-500">{inviteError}</p>
+          <h2 className="text-xl font-bold text-slate-800">Invitación no disponible</h2>
+          <p className="text-sm text-slate-500">{inviteError}</p>
           <div className="space-y-3 pt-2">
             <button
+              type="button"
               onClick={() => navigate("/login")}
-              className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+              className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
             >
               Iniciar sesión
             </button>
             <button
+              type="button"
               onClick={() => navigate("/")}
-              className="w-full border border-gray-300 text-gray-600 py-3 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-colors"
+              className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl font-semibold text-sm hover:bg-slate-50 transition-colors"
             >
               Volver al inicio
             </button>
@@ -149,14 +156,6 @@ function Register() {
     setUserData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const validatePassword = () => {
-    const { password, confirmPassword } = userData;
-    if (password.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
-    if (!/[A-Z]/.test(password)) return "La contraseña debe incluir al menos una letra mayúscula.";
-    if (!/[0-9]/.test(password)) return "La contraseña debe incluir al menos un número.";
-    if (password !== confirmPassword) return "Las contraseñas no coinciden.";
-    return null;
-  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -169,7 +168,7 @@ function Register() {
       setError("El correo electrónico no es válido.");
       return;
     }
-    const passwordError = validatePassword();
+    const passwordError = validatePassword(userData.password, userData.confirmPassword);
     if (passwordError) { setError(passwordError); return; }
 
     setLoading(true);
@@ -195,12 +194,13 @@ function Register() {
 
   if (registered) {
     return (
-      <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
         <div className="mb-6 text-center">
-          <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
+          <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
             FichaEleam
           </button>
-          <p className="text-sm text-gray-500 mt-1">Plataforma para ELEAM</p>
+          <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
         </div>
         <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
           <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
@@ -208,13 +208,14 @@ function Register() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800">Cuenta activada</h2>
-          <p className="text-sm text-gray-500">
-            Ya puedes iniciar sesión con <span className="font-medium text-gray-700">{userData.email}</span>.
+          <h2 className="text-xl font-bold text-slate-800">Cuenta activada</h2>
+          <p className="text-sm text-slate-500">
+            Ya puedes iniciar sesión con <span className="font-medium text-slate-700">{userData.email}</span>.
           </p>
           <button
+            type="button"
             onClick={() => navigate("/login")}
-            className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+            className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
           >
             Ir al inicio de sesión
           </button>
@@ -224,12 +225,13 @@ function Register() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
       <div className="mb-6 text-center">
-        <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
+        <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
           FichaEleam
         </button>
-        <p className="text-sm text-gray-500 mt-1">Plataforma para ELEAM</p>
+        <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
       </div>
 
       <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8">
@@ -249,11 +251,11 @@ function Register() {
           )}
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-800 mb-5">Crea tu contraseña</h1>
+        <h1 className="text-2xl font-bold text-slate-800 mb-5">Crea tu contraseña</h1>
 
         <form className="space-y-4" onSubmit={handleRegister} noValidate>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Nombre completo</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Nombre completo</label>
             <Input
               type="text"
               name="nombre"
@@ -262,11 +264,11 @@ function Register() {
               onChange={handleChange}
               autoComplete="name"
               required
-              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Correo electrónico</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Correo electrónico</label>
             <Input
               type="email"
               name="email"
@@ -276,11 +278,11 @@ function Register() {
               readOnly={Boolean(inviteInfo?.email)}
               autoComplete="email"
               required
-              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] read-only:bg-gray-50"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 read-only:bg-slate-50"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Contraseña</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Contraseña</label>
             <div className="relative">
               <Input
                 type={showPw ? "text" : "password"}
@@ -290,12 +292,12 @@ function Register() {
                 onChange={handleChange}
                 autoComplete="new-password"
                 required
-                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] pr-10"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 tabIndex={-1}
               >
                 {showPw ? (
@@ -312,7 +314,7 @@ function Register() {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Confirmar contraseña</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Confirmar contraseña</label>
             <Input
               type={showPw ? "text" : "password"}
               name="confirmPassword"
@@ -321,27 +323,28 @@ function Register() {
               onChange={handleChange}
               autoComplete="new-password"
               required
-              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           {error && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2" role="alert">
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert">
               {error}
             </p>
           )}
 
           <Button
             type="submit"
-            className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+            className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
           >
             Activar mi cuenta
           </Button>
         </form>
 
-        <p className="text-sm text-center text-gray-400 mt-5">
+        <p className="text-sm text-center text-slate-400 mt-5">
           ¿Ya tienes cuenta?{" "}
-          <button onClick={() => navigate("/login")} className="text-[var(--color-primary)] hover:underline">
+          <button type="button"
+ onClick={() => navigate("/login")} className="text-teal-700 hover:underline">
             Inicia sesión
           </button>
         </p>

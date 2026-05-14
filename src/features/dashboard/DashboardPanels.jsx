@@ -33,7 +33,9 @@ export function CriticalAlerts({ latestVitals, followUps, expiring, operational,
   if (!totalAlertas) {
     return (
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-3">
-        <span className="text-emerald-600 text-lg">✓</span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5 text-emerald-600 shrink-0">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
         <div>
           <p className="text-sm font-semibold text-emerald-800">Sin alertas críticas</p>
           <p className="text-xs text-emerald-700/80">
@@ -47,7 +49,9 @@ export function CriticalAlerts({ latestVitals, followUps, expiring, operational,
   return (
     <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-rose-600 text-lg">🚨</span>
+        <svg className="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
         <h2 className="font-semibold text-rose-800">
           Atención inmediata · {totalAlertas} alerta{totalAlertas === 1 ? "" : "s"}
         </h2>
@@ -100,9 +104,9 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
     return (
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-            <div className="h-3 w-24 bg-gray-100 rounded mb-3" />
-            <div className="h-8 w-16 bg-gray-100 rounded" />
+          <div key={i} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+            <div className="h-3 w-24 bg-slate-100 rounded mb-3" />
+            <div className="h-8 w-16 bg-slate-100 rounded" />
           </div>
         ))}
       </section>
@@ -140,15 +144,15 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-      <div className="lg:col-span-2 bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+      <div className="lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-1.5">
-              <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Siguiente acción</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Siguiente acción</p>
               <HelpTooltip label="Ayuda: siguiente acción">{nextActionHelp}</HelpTooltip>
             </div>
-            <h2 className="text-lg font-bold text-gray-900 mt-1">{nextAction.label}</h2>
-            <p className="text-sm text-gray-500 mt-1">{nextAction.hint}</p>
+            <h2 className="text-lg font-bold text-slate-900 mt-1">{nextAction.label}</h2>
+            <p className="text-sm text-slate-500 mt-1">{nextAction.hint}</p>
           </div>
           <button
             type="button"
@@ -161,15 +165,15 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
         {stale.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {stale.slice(0, 4).map((r) => (
-              <span key={r.id} className="inline-flex items-center gap-2 rounded-full bg-gray-50 border border-gray-100 px-2.5 py-1 text-xs text-gray-600">
-                <span className="h-5 w-5 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[10px] font-bold">
+              <span key={r.id} className="inline-flex items-center gap-2 rounded-full bg-slate-50 border border-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                <span className="h-5 w-5 rounded-full bg-teal-700 text-white flex items-center justify-center text-[10px] font-bold">
                   {initials(r.nombre, r.apellido)}
                 </span>
                 {r.apellido}
               </span>
             ))}
             {stale.length > 4 && (
-              <span className="inline-flex items-center rounded-full bg-gray-50 border border-gray-100 px-2.5 py-1 text-xs text-gray-500">
+              <span className="inline-flex items-center rounded-full bg-slate-50 border border-slate-100 px-2.5 py-1 text-xs text-slate-500">
                 +{stale.length - 4} más
               </span>
             )}
@@ -188,7 +192,7 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
         label="Registros del turno"
         value={currentActivity.signos + currentActivity.observaciones}
         sub={`${currentActivity.signos} signos · ${currentActivity.observaciones} observaciones`}
-        tone={(currentActivity.signos + currentActivity.observaciones) > 0 ? "primary" : "gray"}
+        tone={(currentActivity.signos + currentActivity.observaciones) > 0 ? "primary" : "slate"}
         help={activityHelp}
       />
     </section>
@@ -200,7 +204,7 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
 export function RiskMatrix({ clinicalSummary, highDependency, staleCount, followUpCount }) {
   const items = [
     { label: "Críticos",        value: clinicalSummary.critical, tone: clinicalSummary.critical ? "rose"    : "emerald" },
-    { label: "Alta dependencia",value: highDependency,           tone: highDependency            ? "amber"   : "gray"    },
+    { label: "Alta dependencia",value: highDependency,           tone: highDependency            ? "amber"   : "slate"   },
     { label: "Sin control hoy", value: staleCount,               tone: staleCount                ? "rose"    : "emerald" },
     { label: "Seguimientos",    value: followUpCount,            tone: followUpCount             ? "amber"   : "emerald" },
   ];
@@ -225,9 +229,9 @@ export function FirstRunPanel({ navigate }) {
     <section className="bg-white border border-teal-100 rounded-2xl shadow-sm p-5">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         <div>
-          <p className="text-xs uppercase tracking-wide text-[var(--color-primary)] font-semibold">Primeros pasos</p>
-          <h2 className="text-xl font-bold text-gray-900 mt-1">Configura tu ELEAM para empezar a gestionar el turno</h2>
-          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+          <p className="text-xs uppercase tracking-wide text-teal-700 font-semibold">Primeros pasos</p>
+          <h2 className="text-xl font-bold text-slate-900 mt-1">Configura tu ELEAM para empezar a gestionar el turno</h2>
+          <p className="text-sm text-slate-500 mt-1 max-w-2xl">
             Agrega residentes activos, registra el primer control y sube documentos base para que el dashboard entregue indicadores útiles.
           </p>
         </div>
@@ -276,26 +280,27 @@ export function ClinicalBoard({ list, loading, error, navigate }) {
       title="Estado clínico actual"
       subtitle="Último signo vital de cada residente activo"
       action={
-        <button onClick={() => navigate("/vital-signs/new")} className="text-xs text-[var(--color-primary)] hover:underline">
+        <button type="button"
+ onClick={() => navigate("/vital-signs/new")} className="text-xs text-teal-700 hover:underline">
           + Registrar →
         </button>
       }
     >
       <div className="flex flex-wrap gap-2 mb-4">
-        <FilterPill active={filter === "all"}      onClick={() => setFilter("all")}                                label={`Todos · ${list.length}`}        tone="gray"    />
+        <FilterPill active={filter === "all"}      onClick={() => setFilter("all")}                                label={`Todos · ${list.length}`}        tone="slate"   />
         <FilterPill active={filter === "critical"} onClick={() => setFilter(filter === "critical" ? "all" : "critical")} label={`Crítico · ${counts.critical}`}  tone="rose"    />
         <FilterPill active={filter === "warning"}  onClick={() => setFilter(filter === "warning"  ? "all" : "warning")}  label={`Atención · ${counts.warning}`}  tone="amber"   />
         <FilterPill active={filter === "normal"}   onClick={() => setFilter(filter === "normal"   ? "all" : "normal")}   label={`Normal · ${counts.normal}`}     tone="emerald" />
-        <FilterPill active={filter === "sin"}      onClick={() => setFilter(filter === "sin"      ? "all" : "sin")}      label={`Sin datos · ${counts.sin}`}     tone="gray"    />
+        <FilterPill active={filter === "sin"}      onClick={() => setFilter(filter === "sin"      ? "all" : "sin")}      label={`Sin datos · ${counts.sin}`}     tone="slate"   />
       </div>
       {loading ? (
-        <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
+        <div className="text-sm text-slate-400 py-6 text-center">Cargando…</div>
       ) : filtered.length === 0 ? (
-        <div className="text-sm text-gray-500 py-6 text-center">
+        <div className="text-sm text-slate-500 py-6 text-center">
           {list.length === 0 ? "No hay residentes activos." : "No hay residentes en esta categoría."}
         </div>
       ) : (
-        <ul className="divide-y divide-gray-100 -mx-2">
+        <ul className="divide-y divide-slate-100 -mx-2">
           {filtered.map((r) => <ClinicalRow key={r.id} r={r} navigate={navigate} />)}
         </ul>
       )}
@@ -310,28 +315,28 @@ function ClinicalRow({ r, navigate }) {
   return (
     <li
       onClick={() => navigate(`/residents/${r.id}`)}
-      className="flex items-center gap-3 px-2 py-3 hover:bg-gray-50 rounded-lg cursor-pointer"
+      className="flex items-center gap-3 px-2 py-3 hover:bg-slate-50 rounded-xl cursor-pointer"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--color-secondary)] to-[var(--color-primary)] text-white text-sm font-bold">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 text-white text-sm font-bold">
         {initials(r.nombre, r.apellido)}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-gray-800 truncate text-sm">{r.apellido}, {r.nombre}</span>
+          <span className="font-medium text-slate-800 truncate text-sm">{r.apellido}, {r.nombre}</span>
           <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.badge}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
             {overall.label}
           </span>
         </div>
-        <div className="text-[11px] text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+        <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
           {r.habitacion && <span>Hab. {r.habitacion}{r.cama ? ` · Cama ${r.cama}` : ""}</span>}
           {r.ultimoSigno ? (
             <span>
               Último: {timeAgo(r.ultimoSigno.fecha_hora)}
-              {r.ultimoSigno.turno && <span className="ml-1 capitalize text-gray-400">· {r.ultimoSigno.turno}</span>}
+              {r.ultimoSigno.turno && <span className="ml-1 capitalize text-slate-400">· {r.ultimoSigno.turno}</span>}
             </span>
           ) : (
-            <span className="text-gray-400">Sin signos vitales registrados</span>
+            <span className="text-slate-400">Sin signos vitales registrados</span>
           )}
         </div>
       </div>
@@ -339,8 +344,9 @@ function ClinicalRow({ r, navigate }) {
         <MiniVitals s={r.ultimoSigno} status={status} />
       ) : (
         <button
+          type="button"
           onClick={(e) => { e.stopPropagation(); navigate(`/vital-signs/new?residenteId=${r.id}`); }}
-          className="text-xs text-[var(--color-primary)] hover:underline shrink-0"
+          className="text-xs text-teal-700 hover:underline shrink-0"
         >
           Registrar →
         </button>
@@ -355,7 +361,7 @@ export function DependencyChart({ dist, total }) {
   if (!dist || total === 0) {
     return (
       <Card title="Dependencia" subtitle="Distribución de residentes activos">
-        <p className="text-sm text-gray-400">Sin residentes activos.</p>
+        <p className="text-sm text-slate-400">Sin residentes activos.</p>
       </Card>
     );
   }
@@ -372,9 +378,9 @@ export function DependencyChart({ dist, total }) {
             <div key={k}>
               <div className="flex justify-between text-xs mb-0.5">
                 <span className={`${t.text} font-medium`}>{t.label}</span>
-                <span className="text-gray-500 tabular-nums">{v} <span className="text-gray-400">· {pct}%</span></span>
+                <span className="text-slate-500 tabular-nums">{v} <span className="text-slate-400">· {pct}%</span></span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                 <div className={`h-2 rounded-full ${t.bg} transition-all duration-700`} style={{ width: `${pct}%` }} />
               </div>
             </div>
@@ -391,7 +397,7 @@ export function ShiftActivity({ activity, turno }) {
   if (!activity) {
     return (
       <Card title="Actividad por turno" subtitle="Registros del día">
-        <p className="text-sm text-gray-400">Sin datos.</p>
+        <p className="text-sm text-slate-400">Sin datos.</p>
       </Card>
     );
   }
@@ -407,22 +413,22 @@ export function ShiftActivity({ activity, turno }) {
           return (
             <div key={t}>
               <div className="flex justify-between text-xs mb-1">
-                <span className={`capitalize ${isCurrent ? "font-semibold text-[var(--color-primary)]" : "text-gray-600"}`}>
+                <span className={`capitalize ${isCurrent ? "font-semibold text-teal-700" : "text-slate-600"}`}>
                   {t} {isCurrent && <span className="text-[10px] uppercase tracking-wider">· actual</span>}
                 </span>
-                <span className="text-gray-500 tabular-nums">{a.signos} sv · {a.observaciones} obs</span>
+                <span className="text-slate-500 tabular-nums">{a.signos} sv · {a.observaciones} obs</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden flex">
-                <div className="h-2 bg-[var(--color-primary)]"    style={{ width: `${(a.signos / max) * 100}%` }} />
-                <div className="h-2 bg-[var(--color-secondary)]"  style={{ width: `${(a.observaciones / max) * 100}%` }} />
-                <div className="h-2"                               style={{ width: `${100 - pct}%` }} />
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
+                <div className="h-2 bg-teal-700"    style={{ width: `${(a.signos / max) * 100}%` }} />
+                <div className="h-2 bg-teal-400"    style={{ width: `${(a.observaciones / max) * 100}%` }} />
+                <div className="h-2"                style={{ width: `${100 - pct}%` }} />
               </div>
             </div>
           );
         })}
-        <div className="flex gap-3 text-[11px] text-gray-400 pt-1">
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[var(--color-primary)]" /> Signos vitales</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[var(--color-secondary)]" /> Observaciones</span>
+        <div className="flex gap-3 text-[11px] text-slate-400 pt-1">
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-teal-700" /> Signos vitales</span>
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-teal-400" /> Observaciones</span>
         </div>
       </div>
     </Card>
@@ -435,7 +441,7 @@ export function Demographics({ stats }) {
   if (!stats) {
     return (
       <Card title="Demografía">
-        <p className="text-sm text-gray-400">Sin datos.</p>
+        <p className="text-sm text-slate-400">Sin datos.</p>
       </Card>
     );
   }
@@ -453,7 +459,7 @@ export function Demographics({ stats }) {
       <div className="space-y-2">
         <SexoRow label="Femenino" value={fem}  pct={pct(fem)}  color="bg-pink-400" />
         <SexoRow label="Masculino" value={mas} pct={pct(mas)}  color="bg-sky-400"  />
-        {otro > 0 && <SexoRow label="Otro" value={otro} pct={pct(otro)} color="bg-gray-400" />}
+        {otro > 0 && <SexoRow label="Otro" value={otro} pct={pct(otro)} color="bg-slate-400" />}
       </div>
     </Card>
   );
@@ -466,27 +472,28 @@ export function FollowUpsCard({ items, navigate }) {
     <Card
       title="Seguimientos pendientes"
       subtitle={`${items.length} observaci${items.length === 1 ? "ón" : "ones"} con seguimiento`}
-      icon="⚠️" tone="amber"
+      tone="amber"
       action={items.length > 0 && (
-        <button onClick={() => navigate("/observations")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
+        <button type="button"
+ onClick={() => navigate("/observations")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
       )}
     >
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400 py-2">Sin seguimientos pendientes.</p>
+        <p className="text-sm text-slate-400 py-2">Sin seguimientos pendientes.</p>
       ) : (
         <ul className="space-y-2">
           {items.slice(0, 4).map((obs) => (
             <li key={obs.id} onClick={() => navigate(`/residents/${obs.residente_id}`)}
-              className="bg-white rounded-lg border border-gray-100 px-3 py-2 cursor-pointer hover:bg-amber-50/50 transition-colors"
+              className="bg-white rounded-xl border border-slate-100 px-3 py-2 cursor-pointer hover:bg-amber-50/50 transition-colors"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="font-medium text-gray-800 text-sm truncate">
+                <span className="font-medium text-slate-800 text-sm truncate">
                   {obs.residentes ? `${obs.residentes.apellido}, ${obs.residentes.nombre}` : "—"}
                 </span>
-                <span className="text-[10px] text-gray-400 shrink-0">{timeAgo(obs.fecha_hora)}</span>
+                <span className="text-[10px] text-slate-400 shrink-0">{timeAgo(obs.fecha_hora)}</span>
               </div>
               <div className="text-[11px] text-amber-700 font-medium">{TIPO_LABEL[obs.tipo] ?? obs.tipo}</div>
-              <p className="text-xs text-gray-500 line-clamp-2">{obs.descripcion}</p>
+              <p className="text-xs text-slate-500 line-clamp-2">{obs.descripcion}</p>
             </li>
           ))}
         </ul>
@@ -500,27 +507,28 @@ export function IncidentsCard({ items, navigate }) {
     <Card
       title="Incidentes y caídas"
       subtitle="Últimos 7 días"
-      icon="🚨" tone="rose"
+      tone="rose"
       action={items.length > 0 && (
-        <button onClick={() => navigate("/observations")} className="text-xs text-rose-700 hover:underline">Ver todos →</button>
+        <button type="button"
+ onClick={() => navigate("/observations")} className="text-xs text-rose-700 hover:underline">Ver todos →</button>
       )}
     >
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400 py-2">Sin incidentes registrados esta semana.</p>
+        <p className="text-sm text-slate-400 py-2">Sin incidentes registrados esta semana.</p>
       ) : (
         <ul className="space-y-2">
           {items.slice(0, 4).map((obs) => (
             <li key={obs.id} onClick={() => navigate(`/residents/${obs.residente_id}`)}
-              className="bg-white rounded-lg border border-gray-100 px-3 py-2 cursor-pointer hover:bg-rose-50/50 transition-colors"
+              className="bg-white rounded-xl border border-slate-100 px-3 py-2 cursor-pointer hover:bg-rose-50/50 transition-colors"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="font-medium text-gray-800 text-sm truncate">
+                <span className="font-medium text-slate-800 text-sm truncate">
                   {obs.residentes ? `${obs.residentes.apellido}, ${obs.residentes.nombre}` : "—"}
                 </span>
-                <span className="text-[10px] text-gray-400 shrink-0">{timeAgo(obs.fecha_hora)}</span>
+                <span className="text-[10px] text-slate-400 shrink-0">{timeAgo(obs.fecha_hora)}</span>
               </div>
               <div className="text-[11px] text-rose-700 font-medium">{TIPO_LABEL[obs.tipo] ?? obs.tipo}</div>
-              <p className="text-xs text-gray-500 line-clamp-2">{obs.descripcion}</p>
+              <p className="text-xs text-slate-500 line-clamp-2">{obs.descripcion}</p>
             </li>
           ))}
         </ul>
@@ -534,13 +542,14 @@ export function ExpiringDocsCard({ items, navigate }) {
     <Card
       title="Documentos por vencer"
       subtitle="Próximos 30 días"
-      icon="📅" tone="amber"
+      tone="amber"
       action={items.length > 0 && (
-        <button onClick={() => navigate("/accreditation")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
+        <button type="button"
+ onClick={() => navigate("/accreditation")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
       )}
     >
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400 py-2">Sin vencimientos próximos.</p>
+        <p className="text-sm text-slate-400 py-2">Sin vencimientos próximos.</p>
       ) : (
         <ul className="space-y-2">
           {items.slice(0, 4).map((re) => {
@@ -549,11 +558,11 @@ export function ExpiringDocsCard({ items, navigate }) {
             const r = re.requisito;
             return (
               <li key={re.id} onClick={() => navigate(`/accreditation/requisito/${re.id}`)}
-                className="bg-white rounded-lg border border-gray-100 px-3 py-2 cursor-pointer hover:bg-amber-50/50 transition-colors flex justify-between items-center gap-3"
+                className="bg-white rounded-xl border border-slate-100 px-3 py-2 cursor-pointer hover:bg-amber-50/50 transition-colors flex justify-between items-center gap-3"
               >
                 <div className="flex-1 min-w-0">
-                  <span className="font-medium text-gray-800 text-sm truncate block">{r?.nombre ?? "—"}</span>
-                  <span className="text-[11px] text-gray-400 truncate block">{r?.codigo} · {r?.ambito?.nombre ?? "—"}</span>
+                  <span className="font-medium text-slate-800 text-sm truncate block">{r?.nombre ?? "—"}</span>
+                  <span className="text-[11px] text-slate-400 truncate block">{r?.codigo} · {r?.ambito?.nombre ?? "—"}</span>
                 </div>
                 <span className={`text-xs font-bold tabular-nums shrink-0 px-2 py-0.5 rounded-full ${urgent ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
                   {daysLeft <= 0 ? "Hoy" : `${daysLeft}d`}
@@ -570,22 +579,22 @@ export function ExpiringDocsCard({ items, navigate }) {
 export function AccreditationCard({ acreditacion, navigate, loading }) {
   const ambitos = (acreditacion.ambitos ?? []).slice(0, 6);
   return (
-    <div className="lg:col-span-2 bg-gradient-to-br from-white to-teal-50/40 rounded-2xl shadow-sm border border-gray-100 p-5">
+    <div className="lg:col-span-2 bg-gradient-to-br from-white to-teal-50/40 rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-start justify-between mb-2">
         <div>
-          <p className="text-xs uppercase tracking-wide text-gray-400 font-medium">Carpeta SEREMI</p>
-          <p className="text-sm text-gray-600">
+          <p className="text-xs uppercase tracking-wide text-slate-400 font-medium">Carpeta SEREMI</p>
+          <p className="text-sm text-slate-600">
             {acreditacion.cumple} de {acreditacion.total} requisitos al día
             {acreditacion.observacionesAbiertas ? ` · ${acreditacion.observacionesAbiertas} observación${acreditacion.observacionesAbiertas === 1 ? "" : "es"} abierta${acreditacion.observacionesAbiertas === 1 ? "" : "s"}` : ""}
           </p>
         </div>
-        <span className="text-3xl font-bold text-[var(--color-primary)] tabular-nums">
+        <span className="text-3xl font-bold text-teal-700 tabular-nums">
           {loading ? "…" : `${acreditacion.porcentaje}%`}
         </span>
       </div>
-      <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+      <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
         <div
-          className="h-3 bg-gradient-to-r from-[var(--color-secondary)] to-[var(--color-primary)] rounded-full transition-all duration-700"
+          className="h-3 bg-gradient-to-r from-teal-500 to-teal-700 rounded-full transition-all duration-700"
           style={{ width: `${acreditacion.porcentaje}%` }}
         />
       </div>
@@ -596,11 +605,12 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
                          a.porcentaje >= 50 ? "border-amber-200 bg-amber-50" :
                                               "border-rose-200 bg-rose-50";
             return (
-              <button key={a.codigo} onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
-                className={`text-left rounded-lg border p-2 hover:shadow-sm transition-all ${tone}`}
+              <button type="button"
+ key={a.codigo} onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
+                className={`text-left rounded-xl border p-2 hover:shadow-sm transition-all ${tone}`}
               >
-                <p className="text-[10px] font-mono text-gray-500">{a.codigo}</p>
-                <p className="text-xs font-semibold text-gray-800 leading-tight line-clamp-1">{a.nombre}</p>
+                <p className="text-[10px] font-mono text-slate-500">{a.codigo}</p>
+                <p className="text-xs font-semibold text-slate-800 leading-tight line-clamp-1">{a.nombre}</p>
                 <p className="text-xs font-bold tabular-nums mt-0.5">{a.porcentaje}%</p>
               </button>
             );
@@ -608,10 +618,12 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
         </div>
       )}
       <div className="flex items-center justify-between mt-4">
-        <button onClick={() => navigate("/accreditation")} className="text-xs font-semibold text-[var(--color-primary)] hover:underline">
+        <button type="button"
+ onClick={() => navigate("/accreditation")} className="text-xs font-semibold text-teal-700 hover:underline">
           Abrir Carpeta SEREMI →
         </button>
-        <button onClick={() => navigate("/accreditation/observaciones")} className="text-xs text-gray-500 hover:underline">
+        <button type="button"
+ onClick={() => navigate("/accreditation/observaciones")} className="text-xs text-slate-500 hover:underline">
           Observaciones
         </button>
       </div>

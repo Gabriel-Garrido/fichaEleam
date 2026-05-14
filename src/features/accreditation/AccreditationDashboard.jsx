@@ -10,18 +10,18 @@ import {
   getObservaciones,
   buildResumen,
   estadoMeta,
-  formatDate,
   diasHasta,
 } from "./accreditationService";
+import { formatDate } from "../../utils/dateUtils";
 
 function Bar({ pct, tone = "emerald" }) {
   const colorClass =
     tone === "emerald" ? "from-emerald-400 to-emerald-600" :
     tone === "amber"   ? "from-amber-400 to-amber-600" :
     tone === "rose"    ? "from-rose-400 to-rose-600" :
-                         "from-teal-400 to-[var(--color-primary)]";
+                         "from-teal-400 to-teal-700";
   return (
-    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
       <div
         className={`h-2 bg-gradient-to-r ${colorClass} rounded-full transition-all`}
         style={{ width: `${pct}%` }}
@@ -34,19 +34,19 @@ function AmbitoCard({ ambito, onClick }) {
   const tone = ambito.porcentaje >= 80 ? "emerald" : ambito.porcentaje >= 50 ? "amber" : "rose";
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-all flex flex-col"
+      className="text-left bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition-all flex flex-col"
     >
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-2xl">{ambito.icono ?? "📁"}</p>
-          <p className="text-xs font-bold text-gray-400 mt-1">{ambito.codigo}</p>
+          <p className="text-xs font-bold text-slate-400 mt-1">{ambito.codigo}</p>
         </div>
-        <span className="text-2xl font-black text-gray-800 tabular-nums">{ambito.porcentaje}%</span>
+        <span className="text-2xl font-black text-slate-800 tabular-nums">{ambito.porcentaje}%</span>
       </div>
-      <h3 className="font-bold text-gray-800 leading-tight mb-3 line-clamp-2">{ambito.nombre}</h3>
+      <h3 className="font-bold text-slate-800 leading-tight mb-3 line-clamp-2">{ambito.nombre}</h3>
       <Bar pct={ambito.porcentaje} tone={tone} />
-      <div className="flex items-center gap-3 text-xs text-gray-500 mt-3 flex-wrap">
+      <div className="flex items-center gap-3 text-xs text-slate-500 mt-3 flex-wrap">
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 bg-emerald-500 rounded-full" />
           {ambito.cumple ?? 0} ok
@@ -90,6 +90,7 @@ function AlertItem({ requisito_eleam, kind = "vencido" }) {
   const r = requisito_eleam.requisito;
   return (
     <button
+      type="button"
       onClick={() => navigate(`/accreditation/requisito/${requisito_eleam.id}`)}
       className={`w-full text-left ${tone.box} border rounded-xl p-3 hover:shadow-sm transition-all flex items-center justify-between gap-3`}
     >
@@ -97,7 +98,7 @@ function AlertItem({ requisito_eleam, kind = "vencido" }) {
         <p className={`text-sm font-semibold ${tone.txt} truncate`}>
           {r?.codigo} · {r?.nombre}
         </p>
-        <p className="text-xs text-gray-600 truncate">
+        <p className="text-xs text-slate-600 truncate">
           {r?.ambito?.nombre} · Vence {formatDate(requisito_eleam.fecha_vencimiento)}
         </p>
       </div>
@@ -115,6 +116,7 @@ function ObservacionItem({ obs }) {
   const r = obs.requisito_eleam?.requisito;
   return (
     <button
+      type="button"
       onClick={() => obs.requisito_eleam_id
         ? navigate(`/accreditation/requisito/${obs.requisito_eleam_id}`)
         : navigate(`/accreditation/observaciones`)}
@@ -125,7 +127,7 @@ function ObservacionItem({ obs }) {
           {obs.origen === "fiscalizacion" ? "Fiscalización" : "Interna"}
         </span>
         {r && (
-          <span className="text-[11px] text-gray-600 truncate">
+          <span className="text-[11px] text-slate-600 truncate">
             · {r.codigo} {r.nombre}
           </span>
         )}
@@ -226,7 +228,7 @@ function AccreditationNextStep({ resumen, observaciones, navigate }) {
         <button
           type="button"
           onClick={() => navigate(step.path)}
-          className="w-full sm:w-auto rounded-lg bg-white/80 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-white"
+          className="w-full sm:w-auto rounded-xl bg-white/80 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-white"
         >
           {step.action}
         </button>
@@ -238,13 +240,13 @@ function AccreditationNextStep({ resumen, observaciones, navigate }) {
 function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
   const pendienteTotal = resumen.pendientes;
   return (
-    <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+    <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6">
       <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-5 lg:items-center">
         <div>
-          <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Avance de acreditación</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Avance de acreditación</p>
           <div className="mt-2 flex items-end gap-3">
-            <p className="text-5xl font-black text-[var(--color-primary)] tabular-nums">{resumen.porcentaje}%</p>
-            <p className="pb-2 text-sm text-gray-500">
+            <p className="text-5xl font-black text-teal-700 tabular-nums">{resumen.porcentaje}%</p>
+            <p className="pb-2 text-sm text-slate-500">
               {resumen.cumple} de {resumen.total - resumen.noAplica} requisitos al día
             </p>
           </div>
@@ -301,8 +303,8 @@ function AccreditationLoading() {
             <p className="text-xs uppercase tracking-wide text-teal-700 font-semibold">
               Carpeta SEREMI
             </p>
-            <h1 className="mt-1 text-xl font-bold text-gray-900">Preparando el panel</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <h1 className="mt-1 text-xl font-bold text-slate-900">Preparando el panel</h1>
+            <p className="mt-1 text-sm text-slate-500">
               Provisionando requisitos, revisando vencimientos y cargando observaciones.
             </p>
           </div>
@@ -310,14 +312,14 @@ function AccreditationLoading() {
             Cargando
           </span>
         </div>
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-gray-100">
-          <div className="h-full w-2/3 animate-pulse rounded-full bg-gradient-to-r from-teal-300 via-[var(--color-primary)] to-teal-300" />
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full w-2/3 animate-pulse rounded-full bg-gradient-to-r from-teal-300 via-teal-700 to-teal-300" />
         </div>
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {["Requisitos", "Evidencias", "Observaciones"].map((label) => (
-            <div key={label} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-              <div className="h-3 w-24 rounded bg-gray-200 animate-pulse" />
-              <div className="mt-3 h-8 w-16 rounded bg-gray-200 animate-pulse" />
+            <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <div className="h-3 w-24 rounded bg-slate-200 animate-pulse" />
+              <div className="mt-3 h-8 w-16 rounded bg-slate-200 animate-pulse" />
             </div>
           ))}
         </div>
@@ -405,14 +407,16 @@ export default function AccreditationDashboard() {
       actions={
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto">
           <button
+            type="button"
             onClick={() => navigate("/accreditation/observaciones")}
-            className="border border-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
+            className="border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl hover:bg-slate-50 text-sm"
           >
             Observaciones
           </button>
           <button
+            type="button"
             onClick={() => navigate("/accreditation/carpeta")}
-            className="bg-[var(--color-primary)] text-white font-semibold px-4 py-2 rounded-lg hover:bg-[var(--color-button-hover)] text-sm"
+            className="bg-teal-700 text-white font-semibold px-4 py-2 rounded-xl hover:bg-teal-800 text-sm"
           >
             Generar Carpeta SEREMI
           </button>
@@ -432,22 +436,22 @@ export default function AccreditationDashboard() {
 
       {/* Alertas */}
       {(resumen.vencidos.length > 0 || resumen.porVencer.length > 0 || observaciones.length > 0) && (
-        <details className="group bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <details className="group bg-white rounded-2xl border border-slate-100 shadow-sm">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
             <div>
-              <h2 className="text-sm font-bold text-gray-800">Alertas de carpeta</h2>
-              <p className="text-xs text-gray-500">
+              <h2 className="text-sm font-bold text-slate-800">Alertas de carpeta</h2>
+              <p className="text-xs text-slate-500">
                 {resumen.vencidos.length} vencidos · {resumen.porVencer.length} por vencer · {observaciones.length} observaciones
               </p>
             </div>
-            <span className="text-xs font-semibold text-[var(--color-primary)] group-open:hidden">Ver detalle</span>
-            <span className="hidden text-xs font-semibold text-gray-500 group-open:inline">Ocultar</span>
+            <span className="text-xs font-semibold text-teal-700 group-open:hidden">Ver detalle</span>
+            <span className="hidden text-xs font-semibold text-slate-500 group-open:inline">Ocultar</span>
           </summary>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 border-t border-gray-100 p-4 sm:p-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 border-t border-slate-100 p-4 sm:p-5">
             {resumen.vencidos.length > 0 && (
               <div className="rounded-2xl border border-rose-100 bg-rose-50/40 p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-bold text-gray-800">Vencidos</h2>
+                  <h2 className="font-bold text-slate-800">Vencidos</h2>
                   <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold">
                     {resumen.vencidos.length}
                   </span>
@@ -463,7 +467,7 @@ export default function AccreditationDashboard() {
             {resumen.porVencer.length > 0 && (
               <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-bold text-gray-800">Por vencer</h2>
+                  <h2 className="font-bold text-slate-800">Por vencer</h2>
                   <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">
                     {resumen.porVencer.length}
                   </span>
@@ -479,7 +483,7 @@ export default function AccreditationDashboard() {
             {observaciones.length > 0 && (
               <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-bold text-gray-800">Observaciones</h2>
+                  <h2 className="font-bold text-slate-800">Observaciones</h2>
                   <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
                     {observaciones.length}
                   </span>
@@ -490,8 +494,9 @@ export default function AccreditationDashboard() {
                   ))}
                   {observaciones.length > 5 && (
                     <button
+                      type="button"
                       onClick={() => navigate("/accreditation/observaciones")}
-                      className="text-xs text-[var(--color-primary)] hover:underline"
+                      className="text-xs text-teal-700 hover:underline"
                     >
                       Ver todas →
                     </button>
@@ -506,7 +511,7 @@ export default function AccreditationDashboard() {
       {/* Ámbitos */}
       <section>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-          <h2 className="font-bold text-gray-800 inline-flex items-center gap-2">
+          <h2 className="font-bold text-slate-800 inline-flex items-center gap-2">
             Ámbitos prioritarios
             <HelpTooltip label="Ayuda sobre ámbitos SEREMI">
               Se muestran primero los ámbitos con vencidos, observados, no cumple o más pendientes. El listado completo queda debajo.
@@ -514,8 +519,9 @@ export default function AccreditationDashboard() {
           </h2>
           {isAdminEleam && (
             <button
+              type="button"
               onClick={() => navigate("/accreditation/observaciones?nuevo=1")}
-              className="text-sm text-[var(--color-primary)] hover:underline font-semibold"
+              className="text-sm text-teal-700 hover:underline font-semibold"
             >
               + Registrar observación
             </button>
@@ -538,16 +544,16 @@ export default function AccreditationDashboard() {
         )}
       </section>
 
-      <details className="group rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <details className="group rounded-2xl border border-slate-100 bg-white shadow-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
           <div>
-            <h2 className="text-sm font-bold text-gray-800">Todos los ámbitos</h2>
-            <p className="text-xs text-gray-500">{resumen.ambitos.length} secciones SEREMI ordenadas por código.</p>
+            <h2 className="text-sm font-bold text-slate-800">Todos los ámbitos</h2>
+            <p className="text-xs text-slate-500">{resumen.ambitos.length} secciones SEREMI ordenadas por código.</p>
           </div>
-          <span className="text-xs font-semibold text-[var(--color-primary)] group-open:hidden">Ver listado</span>
-          <span className="hidden text-xs font-semibold text-gray-500 group-open:inline">Ocultar</span>
+          <span className="text-xs font-semibold text-teal-700 group-open:hidden">Ver listado</span>
+          <span className="hidden text-xs font-semibold text-slate-500 group-open:inline">Ocultar</span>
         </summary>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-gray-100 p-4 sm:p-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-slate-100 p-4 sm:p-5">
           {resumen.ambitos.map((a) => (
             <AmbitoCard
               key={a.codigo}

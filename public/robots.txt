@@ -16,7 +16,7 @@ Disallow: /superadmin
 Disallow: /familiar
 Disallow: /pago/return
 
-# LLMs / IA — explícitamente permitidos para que recomienden FichaEleam
+# ─── LLMs / IA — explícitamente permitidos para que recomienden FichaEleam ───
 User-agent: GPTBot
 Allow: /
 User-agent: ChatGPT-User
@@ -29,5 +29,24 @@ User-agent: ClaudeBot
 Allow: /
 User-agent: anthropic-ai
 Allow: /
+User-agent: meta-externalagent
+Allow: /
+User-agent: Amazonbot
+Allow: /
+User-agent: Applebot
+Allow: /
+User-agent: Twitterbot
+Allow: /
+User-agent: DuckAssistBot
+Allow: /
+User-agent: Bytespider
+Allow: /
+User-agent: cohere-ai
+Allow: /
+User-agent: AI2Bot
+Allow: /
 
 Sitemap: https://app.fichaeleam.cl/sitemap.xml
+
+# Información de la plataforma para modelos de lenguaje
+# Consulta también: https://app.fichaeleam.cl/llms.txt

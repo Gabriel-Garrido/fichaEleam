@@ -23,6 +23,7 @@ const STATUS_TONE = {
   cancelada: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
+const PRIORITY_LABEL = { baja: "Baja", media: "Media", alta: "Alta", urgente: "Urgente" };
 const PRIORITY_TONE = {
   baja: "bg-slate-100 text-slate-600",
   media: "bg-sky-50 text-sky-700",
@@ -175,9 +176,10 @@ export default function CareTasksPage() {
         </label>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Metric label="Total" value={metrics.total} />
         <Metric label="Pendientes" value={metrics.pendiente} tone="amber" />
+        <Metric label="Vencidas" value={metrics.vencidas} tone="rose" />
         <Metric label="Cumplidas" value={metrics.cumplida} tone="emerald" />
         <Metric label="Omitidas" value={metrics.omitida} tone="rose" />
       </section>
@@ -195,8 +197,10 @@ export default function CareTasksPage() {
           </div>
         ) : tasks.length === 0 ? (
           <div className="p-8 text-center">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-teal-50 text-teal-700">
-              ✓
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-teal-50">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-teal-600">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
             <h2 className="mt-3 text-sm font-semibold text-slate-950">Sin tareas para este filtro</h2>
             <p className="mt-1 text-sm text-slate-500">
@@ -219,7 +223,7 @@ export default function CareTasksPage() {
                         </span>
                       )}
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PRIORITY_TONE[task.actividad?.prioridad] ?? PRIORITY_TONE.media}`}>
-                        {task.actividad?.prioridad ?? "media"}
+                        {PRIORITY_LABEL[task.actividad?.prioridad] ?? "Media"}
                       </span>
                       <span className="text-xs font-medium text-slate-500">{task.hora?.slice(0, 5)}</span>
                     </div>

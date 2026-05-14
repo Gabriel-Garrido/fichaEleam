@@ -18,20 +18,31 @@ function GoogleIcon() {
   );
 }
 
+function WrenchIcon() {
+  return (
+    <svg className="w-10 h-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
+    </svg>
+  );
+}
+
 function SinSupabase() {
   const navigate = useNavigate();
   const message = supabaseConfigError === "invalid-url"
     ? "La URL de Supabase no tiene un formato válido. Revisa VITE_SUPABASE_URL en tu archivo .env."
     : "El inicio de sesión requiere conexión a la base de datos. Configura las variables de entorno para activar esta función.";
   return (
-    <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center">
-        <div className="text-4xl mb-4">🔧</div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">Supabase no configurado</h2>
-        <p className="text-gray-500 text-sm mb-6">{message}</p>
+        <div className="flex justify-center mb-4">
+          <WrenchIcon />
+        </div>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">Supabase no configurado</h2>
+        <p className="text-slate-500 text-sm mb-6">{message}</p>
         <button
+          type="button"
           onClick={() => navigate("/")}
-          className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+          className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
         >
           Volver al inicio
         </button>
@@ -110,18 +121,19 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
       {/* Logo */}
       <div className="mb-6 text-center">
-        <button onClick={() => navigate("/")} className="text-2xl font-black text-[var(--color-primary)] tracking-tight">
+        <button type="button"
+ onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
           FichaEleam
         </button>
-        <p className="text-sm text-gray-500 mt-1">Plataforma para ELEAM</p>
+        <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
       </div>
 
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-gray-800 mb-1">Bienvenido de vuelta</h1>
-        <p className="text-sm text-gray-500 mb-6">
+        <h1 className="text-2xl font-bold text-slate-800 mb-1">Bienvenido de vuelta</h1>
+        <p className="text-sm text-slate-500 mb-6">
           Ingresa solo si tu cuenta ya fue habilitada por FichaEleam o por tu ELEAM.
         </p>
 
@@ -133,12 +145,13 @@ export default function Login() {
 
         {/* Google OAuth */}
         <button
+          type="button"
           onClick={handleGoogle}
           disabled={googleLoading}
-          className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-xl py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors mb-5 disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-xl py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors mb-5 disabled:opacity-50"
         >
           {googleLoading ? (
-            <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
             </svg>
@@ -147,20 +160,20 @@ export default function Login() {
           )}
           {googleLoading ? "Redirigiendo..." : "Continuar con Google"}
         </button>
-        <p className="text-xs text-gray-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-5">
+        <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-5">
           Google no crea cuentas nuevas. Solo funciona si ese correo ya fue aprobado para demo,
           tiene un ELEAM vigente o fue creado como funcionario/familiar.
         </p>
 
         <div className="flex items-center gap-3 mb-5">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-xs text-gray-400">o con correo</span>
-          <div className="flex-1 h-px bg-gray-200" />
+          <div className="flex-1 h-px bg-slate-200" />
+          <span className="text-xs text-slate-400">o con correo</span>
+          <div className="flex-1 h-px bg-slate-200" />
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4" noValidate>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Correo electrónico</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Correo electrónico</label>
             <Input
               type="email"
               name="email"
@@ -169,16 +182,16 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-medium text-gray-600">Contraseña</label>
+              <label className="block text-xs font-medium text-slate-600">Contraseña</label>
               <Link
                 to="/recuperar-acceso"
-                className="text-xs text-[var(--color-primary)] hover:underline"
+                className="text-xs text-teal-700 hover:underline"
               >
                 ¿Olvidaste tu contraseña?
               </Link>
@@ -192,12 +205,12 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)] pr-10"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 tabIndex={-1}
               >
                 {showPw ? (
@@ -215,14 +228,14 @@ export default function Login() {
           </div>
 
           {error && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2" role="alert">
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert">
               {error}
             </p>
           )}
 
           <Button
             type="submit"
-            className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[var(--color-button-hover)] transition-colors"
+            className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 transition-colors"
           >
             Iniciar sesión
           </Button>
@@ -242,8 +255,9 @@ export default function Login() {
               <p className="text-sm text-slate-600">¿Quieres digitalizar tu ELEAM?</p>
             </div>
             <button
+              type="button"
               onClick={() => navigate("/")}
-              className="shrink-0 text-sm bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[var(--color-button-hover)] transition-colors"
+              className="shrink-0 text-sm bg-teal-700 text-white px-4 py-2 rounded-xl font-semibold hover:bg-teal-800 transition-colors"
             >
               Solicitar demo
             </button>

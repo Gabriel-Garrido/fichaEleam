@@ -146,7 +146,7 @@ export function OnboardingProvider({ children }) {
         completedAt: hasNewPending ? null : prev.completedAt,
       };
     });
-  }, [availableSteps, profileLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [availableSteps, profileLoading]);
 
   // ── 5. Auto-complete: mark a step done after the user lingers on its route ─
   useEffect(() => {

@@ -44,13 +44,28 @@ const INITIAL_SCHEDULE = {
 
 const WEEK_DAYS = [
   [1, "L"],
-  [2, "M"],
-  [3, "M"],
+  [2, "Ma"],
+  [3, "Mi"],
   [4, "J"],
   [5, "V"],
   [6, "S"],
   [7, "D"],
 ];
+
+const PRIORITY_LABEL = { baja: "Baja", media: "Media", alta: "Alta", urgente: "Urgente" };
+const PRIORITY_TONE = {
+  baja: "bg-slate-100 text-slate-600",
+  media: "bg-sky-50 text-sky-700",
+  alta: "bg-amber-50 text-amber-800",
+  urgente: "bg-rose-50 text-rose-700",
+};
+const PRIORITY_BORDER = {
+  baja: "border-l-slate-300",
+  media: "border-l-sky-300",
+  alta: "border-l-amber-400",
+  urgente: "border-l-rose-500",
+};
+const PRIORITY_ORDER = { urgente: 0, alta: 1, media: 2, baja: 3 };
 
 export default function CarePlanTab({ resident }) {
   const toast = useToast();
@@ -60,6 +75,7 @@ export default function CarePlanTab({ resident }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activityModal, setActivityModal] = useState(null);
+  const [showPaused, setShowPaused] = useState(false);
 
   const canEdit = can("editar_planes_cuidado");
   const canCreate = can("crear_planes_cuidado");
@@ -95,8 +111,18 @@ export default function CarePlanTab({ resident }) {
   const activities = useMemo(() => {
     return (plan?.actividades ?? [])
       .filter((item) => item.activo !== false)
-      .sort((a, b) => (a.categoria || "").localeCompare(b.categoria || ""));
+      .sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.prioridad] ?? 2;
+        const pb = PRIORITY_ORDER[b.prioridad] ?? 2;
+        if (pa !== pb) return pa - pb;
+        return (a.titulo || "").localeCompare(b.titulo || "");
+      });
   }, [plan]);
+
+  const pausedActivities = useMemo(
+    () => (plan?.actividades ?? []).filter((item) => item.activo === false),
+    [plan]
+  );
 
   const handleSavePlan = async (e) => {
     e.preventDefault();
@@ -216,25 +242,32 @@ export default function CarePlanTab({ resident }) {
           <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
             Crea el plan base para agregar actividades.
           </p>
-        ) : activities.length === 0 ? (
-          <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-            Aún no hay actividades. Agrega alimentación, baño, movilidad u otros cuidados recurrentes.
-          </p>
+        ) : activities.length === 0 && pausedActivities.length === 0 ? (
+          <div className="mt-6 p-4 text-center">
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-teal-50">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-teal-600">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-slate-950">Sin actividades aún</p>
+            <p className="mt-1 text-sm text-slate-500">Agrega alimentación, baño, movilidad u otros cuidados recurrentes.</p>
+          </div>
         ) : (
           <div className="mt-4 divide-y divide-slate-100">
             {activities.map((activity) => (
-              <div key={activity.id} className="py-4">
+              <div key={activity.id} className={`border-l-4 py-4 pl-4 ${PRIORITY_BORDER[activity.prioridad] ?? PRIORITY_BORDER.media}`}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700">
                         {CARE_CATEGORY_LABEL[activity.categoria] ?? activity.categoria}
                       </span>
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                        {activity.prioridad}
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PRIORITY_TONE[activity.prioridad] ?? PRIORITY_TONE.media}`}>
+                        {PRIORITY_LABEL[activity.prioridad] ?? activity.prioridad}
                       </span>
                     </div>
                     <h3 className="mt-2 text-sm font-semibold text-slate-950">{activity.titulo}</h3>
+                    {activity.descripcion && <p className="mt-1 text-sm text-slate-600">{activity.descripcion}</p>}
                     {activity.instrucciones && <p className="mt-1 text-sm text-slate-500">{activity.instrucciones}</p>}
                     <div className="mt-2 flex flex-wrap gap-2">
                       {(activity.horarios ?? []).filter((h) => h.activo !== false).map((h) => (
@@ -271,6 +304,31 @@ export default function CarePlanTab({ resident }) {
             ))}
           </div>
         )}
+
+        {pausedActivities.length > 0 && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowPaused((prev) => !prev)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`h-4 w-4 transition-transform ${showPaused ? "rotate-90" : ""}`}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+              {pausedActivities.length} actividad{pausedActivities.length === 1 ? "" : "es"} pausada{pausedActivities.length === 1 ? "" : "s"}
+            </button>
+            {showPaused && (
+              <div className="mt-3 space-y-2">
+                {pausedActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <span className="text-sm text-slate-500">{activity.titulo}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-400">Pausada</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <ActivityModal
@@ -283,14 +341,18 @@ export default function CarePlanTab({ resident }) {
   );
 }
 
-function Field({ label, value, onChange, disabled }) {
+function Field({ label, value, onChange, disabled, type = "text", min, max, step }) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
       <input
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
+        min={min}
+        max={max}
+        step={step}
         className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50"
       />
     </label>
@@ -377,6 +439,7 @@ function ActivityModal({ modal, saving, onClose, onSubmit }) {
           </select>
         </label>
         <Field label="Título" value={activity.titulo} onChange={(value) => setActivity((p) => ({ ...p, titulo: value }))} disabled={saving} />
+        <TextArea label="Descripción" value={activity.descripcion ?? ""} onChange={(value) => setActivity((p) => ({ ...p, descripcion: value }))} disabled={saving} />
         <TextArea label="Instrucciones" value={activity.instrucciones ?? ""} onChange={(value) => setActivity((p) => ({ ...p, instrucciones: value }))} disabled={saving} />
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm font-medium text-slate-700">
@@ -427,17 +490,26 @@ function ActivityModal({ modal, saving, onClose, onSubmit }) {
             />
           </label>
         </div>
+        <Field
+          label="Tolerancia (min)"
+          type="number"
+          min="0"
+          step="5"
+          value={schedule.tolerancia_min}
+          onChange={(value) => setSchedule((p) => ({ ...p, tolerancia_min: Number(value) }))}
+          disabled={saving}
+        />
 
         {schedule.frecuencia === "semanal" && (
           <div>
             <div className="mb-2 text-sm font-medium text-slate-700">Días</div>
             <div className="flex flex-wrap gap-2">
-              {WEEK_DAYS.map(([day, label], index) => (
+              {WEEK_DAYS.map(([day, label]) => (
                 <button
-                  key={`${day}-${index}`}
+                  key={day}
                   type="button"
                   onClick={() => toggleDay(day)}
-                  className={`grid h-9 w-9 place-items-center rounded-full border text-xs font-semibold ${
+                  className={`grid h-9 min-w-[2.25rem] place-items-center rounded-full border px-2 text-xs font-semibold ${
                     schedule.dias_semana?.includes(day)
                       ? "border-teal-600 bg-teal-50 text-teal-700"
                       : "border-slate-200 text-slate-500"
@@ -453,6 +525,9 @@ function ActivityModal({ modal, saving, onClose, onSubmit }) {
         {schedule.frecuencia === "mensual" && (
           <Field
             label="Día del mes"
+            type="number"
+            min="1"
+            max="31"
             value={(schedule.dias_mes?.[0] ?? 1).toString()}
             onChange={(value) => setSchedule((p) => ({ ...p, dias_mes: [Math.max(1, Math.min(31, Number(value) || 1))] }))}
             disabled={saving}
