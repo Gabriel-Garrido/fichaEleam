@@ -2926,7 +2926,6 @@ create policy "sv_select" on public.signos_vitales
     or (
       public.my_rol() = 'familiar'
       and residente_id in (select public.my_familiar_residente_ids())
-      and visible_familiar = true
     )
   );
 
