@@ -88,30 +88,40 @@ async function loadVitals(fecha) {
   return data ?? [];
 }
 
-async function loadObservations(fecha) {
+async function loadObservations(fecha, turno) {
   const { start, end } = dayBounds(fecha);
   const recent = recentBounds(fecha, 3);
-  const [today, incidents] = await Promise.all([
+  const [today, incidents, followups] = await Promise.all([
     supabase
       .from("observaciones_diarias")
-      .select("id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas, requiere_seguimiento, residentes(id, nombre, apellido, habitacion, cama)")
+      .select("id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(id, nombre, apellido, habitacion, cama)")
       .gte("fecha_hora", start)
       .lt("fecha_hora", end)
       .order("fecha_hora", { ascending: false }),
     supabase
       .from("observaciones_diarias")
-      .select("id, residente_id, fecha_hora, turno, tipo, descripcion, requiere_seguimiento, residentes(id, nombre, apellido, habitacion, cama)")
+      .select("id, residente_id, fecha_hora, turno, tipo, descripcion, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(id, nombre, apellido, habitacion, cama)")
       .in("tipo", ["caida", "incidente"])
       .gte("fecha_hora", recent.start)
       .lte("fecha_hora", recent.end)
       .order("fecha_hora", { ascending: false })
       .limit(12),
+    supabase
+      .from("observaciones_diarias")
+      .select("id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(id, nombre, apellido, habitacion, cama)")
+      .eq("requiere_seguimiento", true)
+      .eq("seguimiento_fecha", fecha)
+      .eq("seguimiento_turno", turno)
+      .eq("seguimiento_estado", "pendiente")
+      .order("fecha_hora", { ascending: true }),
   ]);
   if (today.error) throw today.error;
   if (incidents.error) throw incidents.error;
+  if (followups.error) throw followups.error;
   return {
     today: today.data ?? [],
     incidents: incidents.data ?? [],
+    followups: followups.data ?? [],
   };
 }
 
@@ -249,7 +259,7 @@ export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTur
   const [residentes, signos, obs, seremi, careTurno, emarTurno] = await Promise.all([
     loadActiveResidents(),
     loadVitals(fecha),
-    loadObservations(fecha),
+    loadObservations(fecha, turno),
     loadSeremiAlerts(),
     loadCareTurno(fecha, turno),
     loadEmarTurno(fecha, turno),
@@ -282,8 +292,7 @@ export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTur
     .sort((a, b) => (a.status === b.status ? 0 : a.status === "critical" ? -1 : 1))
     .slice(0, 12);
 
-  const seguimiento = obs.today
-    .filter((item) => item.requiere_seguimiento)
+  const seguimiento = obs.followups
     .slice(0, 12)
     .map((item) => ({
       id: item.id,
@@ -291,6 +300,9 @@ export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTur
       descripcion: item.descripcion,
       acciones_tomadas: item.acciones_tomadas,
       fecha_hora: item.fecha_hora,
+      seguimiento_fecha: item.seguimiento_fecha,
+      seguimiento_turno: item.seguimiento_turno,
+      seguimiento_estado: item.seguimiento_estado,
       residente: residentMeta(item.residentes),
     }));
 

@@ -155,7 +155,7 @@ export default function TurnoBuilder() {
               ))}
             </SummarySection>
 
-            <SummarySection title="Seguimientos" empty="No hay observaciones con seguimiento de hoy.">
+            <SummarySection title="Seguimientos pendientes" empty="No hay seguimientos pendientes para este turno.">
               {summary.seguimientos?.map((item) => (
                 <TextRow key={item.id} item={item} />
               ))}
@@ -286,9 +286,19 @@ function ResidentRow({ residente }) {
 
 function TextRow({ item }) {
   return (
-    <div className="rounded-2xl border border-slate-200 p-3">
-      <div className="text-sm font-semibold text-slate-950">{item.residente?.nombre ?? "Residente"}</div>
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-950">{item.residente?.nombre ?? "Residente"}</div>
+        {item.seguimiento_turno && (
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold capitalize text-amber-800">
+            Pendiente · {item.seguimiento_turno}
+          </span>
+        )}
+      </div>
       <p className="mt-1 text-sm leading-6 text-slate-600">{item.descripcion}</p>
+      {item.acciones_tomadas && (
+        <p className="mt-1 text-xs leading-5 text-slate-500">Acciones: {item.acciones_tomadas}</p>
+      )}
     </div>
   );
 }

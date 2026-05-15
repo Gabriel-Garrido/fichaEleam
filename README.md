@@ -124,6 +124,29 @@ Cuando cambie el flujo de autenticación, re-ejecuta el schema antes de desplega
 
 ---
 
+## Seed de Prueba
+
+`supabase_test_seed.sql` crea datos QA completos e idempotentes: usuarios Auth para todos los roles, ELEAM activo/demo/vencido, residentes, portal familiar, signos, observaciones, planes de cuidado, eMAR, stock, acreditación, pagos, CRM, blog, leads de demo y analytics.
+
+Ejecutar después de `supabase_schema.sql`:
+
+```bash
+# SQL Editor de Supabase o psql conectado al proyecto
+\i supabase_test_seed.sql
+```
+
+Credenciales incluidas:
+
+- `superadmin.qa@fichaeleam.test` / `FichaEleam123!`
+- `admin.qa@fichaeleam.test` / `FichaEleam123!`
+- `funcionario.qa@fichaeleam.test` / `FichaEleam123!`
+- `familiar.qa@fichaeleam.test` / `FichaEleam123!`
+- `demo.admin.qa@fichaeleam.test` / `FichaEleam123!`
+
+El seed usa UUIDs fijos y secciones por dominio para que sea simple actualizarlo cuando cambie el modelo. No borra datos existentes.
+
+---
+
 ## Edge Functions
 
 Funciones deployables en `supabase/functions/`:

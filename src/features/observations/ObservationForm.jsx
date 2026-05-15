@@ -22,6 +22,21 @@ const TIPOS = [
   ["otro", "Otro"],
 ];
 
+const TURNOS = ["mañana", "tarde", "noche"];
+
+function dateFromDateTime(value) {
+  return String(value || new Date().toISOString()).slice(0, 10);
+}
+
+function defaultFollowUp(fechaHora, turno) {
+  const baseDate = dateFromDateTime(fechaHora);
+  const base = new Date(`${baseDate}T12:00:00`);
+  if (turno === "mañana") return { fecha: baseDate, turno: "tarde" };
+  if (turno === "tarde") return { fecha: baseDate, turno: "noche" };
+  base.setDate(base.getDate() + 1);
+  return { fecha: base.toISOString().slice(0, 10), turno: "mañana" };
+}
+
 function ObservationForm() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -37,6 +52,8 @@ function ObservationForm() {
     descripcion: "",
     acciones_tomadas: "",
     requiere_seguimiento: false,
+    seguimiento_fecha: "",
+    seguimiento_turno: "",
     visible_familiar: false,
     resumen_familiar: "",
   });
@@ -51,7 +68,37 @@ function ObservationForm() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+    setForm((prev) => {
+      if (name === "requiere_seguimiento") {
+        if (!checked) {
+          return {
+            ...prev,
+            requiere_seguimiento: false,
+            seguimiento_fecha: "",
+            seguimiento_turno: "",
+          };
+        }
+        const next = defaultFollowUp(prev.fecha_hora, prev.turno);
+        return {
+          ...prev,
+          requiere_seguimiento: true,
+          seguimiento_fecha: prev.seguimiento_fecha || next.fecha,
+          seguimiento_turno: prev.seguimiento_turno || next.turno,
+        };
+      }
+
+      const nextValue = type === "checkbox" ? checked : value;
+      const nextForm = { ...prev, [name]: nextValue };
+      if ((name === "fecha_hora" || name === "turno") && prev.requiere_seguimiento) {
+        const next = defaultFollowUp(
+          name === "fecha_hora" ? value : prev.fecha_hora,
+          name === "turno" ? value : prev.turno
+        );
+        nextForm.seguimiento_fecha = next.fecha;
+        nextForm.seguimiento_turno = next.turno;
+      }
+      return nextForm;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -59,9 +106,18 @@ function ObservationForm() {
     setError(null);
     if (!form.residente_id) { setError("Debe seleccionar un residente."); return; }
     if (!form.descripcion.trim()) { setError("La descripción es obligatoria."); return; }
+    if (form.requiere_seguimiento && (!form.seguimiento_fecha || !form.seguimiento_turno)) {
+      setError("Indica fecha y turno para dejar el seguimiento como tarea pendiente.");
+      return;
+    }
     setSaving(true);
     try {
-      await createObservation(form);
+      await createObservation({
+        ...form,
+        seguimiento_fecha: form.requiere_seguimiento ? form.seguimiento_fecha : null,
+        seguimiento_turno: form.requiere_seguimiento ? form.seguimiento_turno : null,
+        seguimiento_estado: "pendiente",
+      });
       toast("Observación guardada correctamente.", "success");
       if (preselectedId) navigate(`/residents/${preselectedId}`);
       else navigate("/observations");
@@ -164,6 +220,41 @@ function ObservationForm() {
                 className="w-4 h-4 accent-teal-700" />
               <span className="text-sm text-slate-700">Requiere seguimiento</span>
             </label>
+            {form.requiere_seguimiento && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-amber-900 mb-1">Fecha del seguimiento *</label>
+                    <input
+                      type="date"
+                      name="seguimiento_fecha"
+                      value={form.seguimiento_fecha}
+                      onChange={handleChange}
+                      required={form.requiere_seguimiento}
+                      className="w-full border border-amber-200 bg-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-amber-900 mb-1">Turno del seguimiento *</label>
+                    <select
+                      name="seguimiento_turno"
+                      value={form.seguimiento_turno}
+                      onChange={handleChange}
+                      required={form.requiere_seguimiento}
+                      className="w-full border border-amber-200 bg-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                    >
+                      <option value="">Seleccionar turno...</option>
+                      {TURNOS.map((turno) => (
+                        <option key={turno} value={turno}>{turno.charAt(0).toUpperCase() + turno.slice(1)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-amber-800">
+                  Esta observación aparecerá como pendiente en la entrega del turno seleccionado hasta que sea resuelta o cancelada.
+                </p>
+              </div>
+            )}
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" name="visible_familiar" checked={form.visible_familiar} onChange={handleChange}
                 className="w-4 h-4 accent-teal-700" />

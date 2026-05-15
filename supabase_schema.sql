@@ -165,6 +165,10 @@ create table if not exists public.observaciones_diarias (
   descripcion           text not null,
   acciones_tomadas      text,
   requiere_seguimiento  boolean not null default false,
+  seguimiento_fecha     date,
+  seguimiento_turno     text check (seguimiento_turno in ('mañana','tarde','noche') or seguimiento_turno is null),
+  seguimiento_estado    text not null default 'pendiente'
+                         check (seguimiento_estado in ('pendiente','resuelto','cancelado')),
   visible_familiar      boolean not null default false,
   resumen_familiar      text,
   registrado_por        uuid references auth.users(id) on delete set null,
@@ -174,12 +178,19 @@ create table if not exists public.observaciones_diarias (
 
 alter table public.observaciones_diarias
   add column if not exists visible_familiar boolean not null default false,
-  add column if not exists resumen_familiar text;
+  add column if not exists resumen_familiar text,
+  add column if not exists seguimiento_fecha date,
+  add column if not exists seguimiento_turno text check (seguimiento_turno in ('mañana','tarde','noche') or seguimiento_turno is null),
+  add column if not exists seguimiento_estado text not null default 'pendiente'
+    check (seguimiento_estado in ('pendiente','resuelto','cancelado'));
 
 create index if not exists idx_observaciones_residente_fecha on public.observaciones_diarias(residente_id, fecha_hora desc);
 create index if not exists idx_observaciones_tipo on public.observaciones_diarias(tipo);
 create index if not exists idx_observaciones_seguimiento
   on public.observaciones_diarias(residente_id, fecha_hora desc)
+  where requiere_seguimiento = true;
+create index if not exists idx_observaciones_seguimiento_turno
+  on public.observaciones_diarias(seguimiento_fecha, seguimiento_turno, seguimiento_estado)
   where requiere_seguimiento = true;
 create index if not exists idx_observaciones_familiar
   on public.observaciones_diarias(residente_id, fecha_hora desc)
@@ -639,10 +650,21 @@ create table if not exists public.visitas_familiar (
   duracion_min    integer check (duracion_min is null or duracion_min between 1 and 1440),
   notas           text,
   registrado_por  uuid references auth.users(id) on delete set null,
+  estado          text not null default 'completada' check (estado in ('pendiente','activa','completada','cancelada')),
+  validado_por    uuid references public.profiles(id) on delete set null,
+  validado_en     timestamptz,
+  salida_hora     timestamptz,
   creado_en       timestamptz not null default now()
 );
 
 create index if not exists idx_visitas_residente_fecha on public.visitas_familiar(residente_id, fecha_hora desc);
+create index if not exists idx_visitas_estado on public.visitas_familiar(residente_id, estado) where estado in ('pendiente','activa');
+
+-- visitas_familiar: workflow columns (idempotent for existing DBs)
+alter table public.visitas_familiar add column if not exists estado text not null default 'completada' check (estado in ('pendiente','activa','completada','cancelada'));
+alter table public.visitas_familiar add column if not exists validado_por uuid references public.profiles(id) on delete set null;
+alter table public.visitas_familiar add column if not exists validado_en timestamptz;
+alter table public.visitas_familiar add column if not exists salida_hora timestamptz;
 
 -- ============================================================
 -- 4. Pagos, MercadoPago y webhooks
@@ -1095,7 +1117,6 @@ begin
       requiere_seguimiento
     from public.observaciones_diarias
     where residente_id = p_residente_id
-      and visible_familiar = true
     order by fecha_hora desc
     limit 8
   ) o;
@@ -1116,7 +1137,6 @@ begin
     join public.plan_cuidado_actividades a on a.id = t.actividad_id
     where t.residente_id = p_residente_id
       and t.fecha = current_date
-      and a.visible_familiar = true
     order by t.hora asc
     limit 12
   ) c;
@@ -1136,7 +1156,6 @@ begin
     join public.medicamentos_indicaciones i on i.id = ma.indicacion_id
     where ma.residente_id = p_residente_id
       and ma.fecha = current_date
-      and i.visible_familiar = true
     order by ma.hora asc
     limit 12
   ) m;
@@ -1144,7 +1163,7 @@ begin
   select coalesce(jsonb_agg(to_jsonb(vis) order by vis.fecha_hora desc), '[]'::jsonb)
   into v_visitas
   from (
-    select id, fecha_hora, duracion_min, notas
+    select id, fecha_hora, duracion_min, notas, estado, validado_en, salida_hora
     from public.visitas_familiar
     where residente_id = p_residente_id
       and profile_id = (select auth.uid())
@@ -1428,6 +1447,8 @@ declare
   v_residente_id uuid := null;
   v_invitado_por uuid := null;
   v_account_source text := coalesce(new.raw_app_meta_data->>'fichaeleam_account_source', '');
+  v_is_qa_seed boolean := current_setting('app.allow_qa_seed_users', true) = 'on'
+                          and v_account_source = 'qa_seed';
 begin
   v_nombre := coalesce(
     new.raw_user_meta_data->>'nombre',
@@ -1461,6 +1482,66 @@ begin
       email = excluded.email,
       rol = 'superadmin',
       eleam_id = excluded.eleam_id;
+    return new;
+  end if;
+
+  -- Modo exclusivo para supabase_test_seed.sql. No desactiva triggers ni
+  -- requiere ser owner de auth.users. Solo se habilita dentro de la
+  -- transaccion del seed mediante set_config('app.allow_qa_seed_users','on', true).
+  if v_is_qa_seed then
+    v_eleam_id := case
+      when new.raw_app_meta_data->>'eleam_id_direct' is not null
+      then (new.raw_app_meta_data->>'eleam_id_direct')::uuid
+      else null
+    end;
+    v_rol := coalesce(nullif(trim(new.raw_app_meta_data->>'rol_direct'), ''), 'funcionario');
+    v_residente_id := case
+      when new.raw_app_meta_data->>'residente_id_direct' is not null
+      then (new.raw_app_meta_data->>'residente_id_direct')::uuid
+      else null
+    end;
+
+    if v_rol not in ('admin_eleam', 'funcionario', 'familiar', 'superadmin') then
+      raise exception 'rol_direct invalido para seed QA: %', coalesce(v_rol, 'null')
+        using errcode = '42501';
+    end if;
+
+    -- Si el seed crea primero auth.users y despues las entidades publicas,
+    -- no abortamos: el mismo seed hace upsert de profiles mas abajo.
+    if v_rol <> 'superadmin'
+       and (v_eleam_id is null or not exists (select 1 from public.eleams where id = v_eleam_id)) then
+      return new;
+    end if;
+
+    insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
+    values (
+      new.id,
+      v_nombre,
+      new.email,
+      v_rol,
+      case when v_rol = 'superadmin' then null else v_eleam_id end,
+      coalesce((new.raw_user_meta_data->>'must_reset_password')::boolean, false)
+    )
+    on conflict (id) do update set
+      nombre              = excluded.nombre,
+      email               = excluded.email,
+      rol                 = excluded.rol,
+      eleam_id            = excluded.eleam_id,
+      must_reset_password = excluded.must_reset_password;
+
+    if v_rol = 'familiar'
+       and v_residente_id is not null
+       and exists (
+         select 1 from public.residentes r
+         where r.id = v_residente_id
+           and r.eleam_id = v_eleam_id
+           and r.estado = 'activo'
+       ) then
+      insert into public.familiar_residentes (profile_id, residente_id, creado_por)
+      values (new.id, v_residente_id, null)
+      on conflict do nothing;
+    end if;
+
     return new;
   end if;
 
@@ -3728,6 +3809,7 @@ create policy "pfp_admin_all" on public.profile_feature_permissions
 
 drop policy if exists "vf_select" on public.visitas_familiar;
 drop policy if exists "vf_insert" on public.visitas_familiar;
+drop policy if exists "vf_update" on public.visitas_familiar;
 drop policy if exists "vf_delete" on public.visitas_familiar;
 
 create policy "vf_select" on public.visitas_familiar
@@ -3755,6 +3837,15 @@ create policy "vf_insert" on public.visitas_familiar
     )
     or (
       public.my_rol() in ('admin_eleam','funcionario')
+      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    )
+  );
+
+create policy "vf_update" on public.visitas_familiar
+  for update using (
+    public.is_superadmin()
+    or (
+      (public.my_rol() = 'admin_eleam' or public.funcionario_can('registrar_visitas'))
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
   );

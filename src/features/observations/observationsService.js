@@ -2,7 +2,8 @@ import { supabase } from "../../services/supabaseConfig";
 
 const OBSERVATION_SELECT = `
   id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas,
-  requiere_seguimiento, visible_familiar, resumen_familiar, registrado_por,
+  requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado,
+  visible_familiar, resumen_familiar, registrado_por,
   creado_en, actualizado_en
 `;
 
@@ -31,9 +32,16 @@ export const getObservations = async (
 
 export const createObservation = async (payload) => {
   const { data: { user } } = await supabase.auth.getUser();
+  const requiereSeguimiento = payload.requiere_seguimiento === true;
+  const cleanPayload = {
+    ...payload,
+    seguimiento_fecha: requiereSeguimiento ? payload.seguimiento_fecha || null : null,
+    seguimiento_turno: requiereSeguimiento ? payload.seguimiento_turno || null : null,
+    seguimiento_estado: requiereSeguimiento ? payload.seguimiento_estado || "pendiente" : "pendiente",
+  };
   const { data, error } = await supabase
     .from("observaciones_diarias")
-    .insert({ ...payload, registrado_por: user?.id })
+    .insert({ ...cleanPayload, registrado_por: user?.id })
     .select(OBSERVATION_SELECT)
     .single();
   if (error) throw error;

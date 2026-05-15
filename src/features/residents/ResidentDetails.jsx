@@ -1,21 +1,47 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getResidentById } from "./residentService";
 import { getVitalSigns } from "../vitalSigns/vitalSignsService";
 import { getObservations } from "../observations/observationsService";
 import { useAuth } from "../../context/AuthContext";
 import { isValidUUID } from "../../utils/validators";
+import { formatDateTime } from "../../utils/dateUtils";
 import Loading from "../../components/Loading";
+import { useToast } from "../../components/Toast";
 import VitalCard from "../vitalSigns/VitalCard";
 import CarePlanTab from "../carePlans/CarePlanTab";
 import EmarResidentTab from "../emar/EmarResidentTab";
+import {
+  listCareTasks,
+  completeCareTask,
+  todayIso,
+  currentTurno,
+  CARE_CATEGORY_LABEL,
+  OMISSION_REASONS,
+} from "../carePlans/carePlansService";
+import {
+  getVisits,
+  getPendingVisits,
+  validateVisitEntry,
+  registerVisitExit,
+  cancelVisit,
+  logVisit,
+} from "../familiar/familiarService";
 import {
   VITAL_DEFS,
   STATUS,
   recordOverallLabel,
 } from "../vitalSigns/vitalRanges";
 
-import { ESTADO_BADGE, DEPENDENCIA_TONE, TIPO_LABEL, TIPO_BADGE, initials, calcAge } from "./residentUtils";
+import {
+  ESTADO_BADGE,
+  DEPENDENCIA_TONE,
+  TIPO_LABEL,
+  TIPO_BADGE,
+  initials,
+  calcAge,
+  getAllergySummary,
+} from "./residentUtils";
 
 function daysSince(date) {
   if (!date) return null;
@@ -27,10 +53,27 @@ function daysSince(date) {
   return Math.floor((Date.now() - local.getTime()) / 86400000);
 }
 
+function formatFollowUpLabel(record) {
+  const parts = [];
+
+  if (record.seguimiento_fecha) {
+    parts.push(
+      new Date(`${record.seguimiento_fecha}T12:00:00`).toLocaleDateString("es-CL", {
+        day: "2-digit",
+        month: "2-digit",
+      })
+    );
+  }
+
+  if (record.seguimiento_turno) parts.push(record.seguimiento_turno);
+
+  return parts.length ? `Seguimiento · ${parts.join(" · ")}` : "Seguimiento pendiente";
+}
+
 function ResidentDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { canFeature } = useAuth();
+  const { canFeature, can } = useAuth();
   const [resident, setResident] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -54,13 +97,16 @@ function ResidentDetails() {
 
   const age = calcAge(resident.fecha_nacimiento);
   const stayDays = daysSince(resident.fecha_ingreso);
+  const allergies = getAllergySummary(resident.alergias);
 
   const tabs = [
     { id: "info",          label: "Información" },
     { id: "signos",        label: "Signos Vitales" },
     { id: "observaciones", label: "Observaciones" },
-    canFeature("care-plans") && { id: "care", label: "Plan de cuidado" },
-    canFeature("emar") && { id: "emar", label: "eMAR" },
+    canFeature("care-plans") && { id: "tareas",  label: "Tareas hoy" },
+    canFeature("care-plans") && { id: "care",    label: "Plan de cuidado" },
+    canFeature("emar")       && { id: "emar",    label: "eMAR" },
+    can("registrar_visitas") && { id: "visitas", label: "Visitas" },
   ].filter(Boolean);
 
   return (
@@ -159,43 +205,58 @@ function ResidentDetails() {
             />
           </div>
 
-          {resident.alergias?.length > 0 && (
+          {allergies.hasRealAllergies && (
             <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4 shrink-0 text-rose-500 mt-0.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
               </svg>
               <div className="text-sm text-rose-700">
                 <span className="font-semibold">Alergias:</span>{" "}
-                {resident.alergias.join(", ")}
+                {allergies.label}
+              </div>
+            </div>
+          )}
+
+          {allergies.hasExplicitNoKnownAllergies && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+              <div className="text-sm font-medium text-emerald-700">
+                {allergies.label}
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 mb-6">
-        {tabs.map((t) => (
-          <button
-            type="button"
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === t.id
-                ? "border-teal-600 text-teal-700"
-                : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Tabs — overflow-x-auto prevents cut-off on mobile */}
+      <div className="mb-6 -mx-1 overflow-x-auto">
+        <div className="flex min-w-max border-b border-slate-200 px-1">
+          {tabs.map((t) => (
+            <button
+              type="button"
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                tab === t.id
+                  ? "border-teal-600 text-teal-700"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "info"          && <InfoTab resident={resident} />}
       {tab === "signos"        && <SignosTab residenteId={id} navigate={navigate} />}
       {tab === "observaciones" && <ObservacionesTab residenteId={id} navigate={navigate} />}
+      {tab === "tareas"        && <TareasTab residenteId={id} />}
       {tab === "care"          && <CarePlanTab resident={resident} />}
       {tab === "emar"          && <EmarResidentTab resident={resident} />}
+      {tab === "visitas"       && <VisitasTab residenteId={id} />}
     </div>
   );
 }
@@ -222,6 +283,7 @@ function QuickStat({ label, value, sub, tone, capitalize, truncate }) {
 /* ─── Info Tab ──────────────────────────────────────────────── */
 
 function InfoTab({ resident }) {
+  const allergies = getAllergySummary(resident.alergias);
   const InfoRow = ({ label, value }) =>
     value ? (
       <div>
@@ -261,15 +323,19 @@ function InfoTab({ resident }) {
             value={resident.indice_barthel != null ? `${resident.indice_barthel}/100` : null}
           />
           <InfoRow label="Escala Katz" value={resident.escala_katz} />
-          {resident.alergias?.length > 0 && (
+          {(allergies.hasRealAllergies || allergies.hasExplicitNoKnownAllergies) && (
             <div>
               <dt className="text-xs text-slate-400 uppercase tracking-wide">Alergias</dt>
               <dd className="flex flex-wrap gap-1 mt-1">
-                {resident.alergias.map((a) => (
+                {allergies.hasRealAllergies ? allergies.items.map((a) => (
                   <span key={a} className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full">
                     {a}
                   </span>
-                ))}
+                )) : (
+                  <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full">
+                    {allergies.label}
+                  </span>
+                )}
               </dd>
             </div>
           )}
@@ -607,8 +673,8 @@ function ObservacionesTab({ residenteId, navigate }) {
                   {TIPO_LABEL[r.tipo] ?? r.tipo}
                 </span>
                 {r.requiere_seguimiento && (
-                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-                    Seguimiento
+                  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+                    {formatFollowUpLabel(r)}
                   </span>
                 )}
                 <span className="text-xs text-slate-400 capitalize">{r.turno}</span>
@@ -629,6 +695,692 @@ function ObservacionesTab({ residenteId, navigate }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Visitas Tab (staff: validate entry & exit) ────────────── */
+
+const VF_STATUS = {
+  pendiente:  { label: "Esperando validación", pill: "bg-amber-100 text-amber-800",    dot: "bg-amber-400 animate-pulse" },
+  activa:     { label: "En visita",            pill: "bg-teal-100 text-teal-800",      dot: "bg-teal-500 animate-pulse" },
+  completada: { label: "Completada",           pill: "bg-emerald-100 text-emerald-700",dot: "bg-emerald-500" },
+  cancelada:  { label: "Cancelada",            pill: "bg-slate-100 text-slate-500",    dot: "bg-slate-300" },
+};
+
+function VisitasTab({ residenteId }) {
+  const toast = useToast();
+  const [visitas, setVisitas]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [busyId, setBusyId]         = useState(null);
+  const [exitModal, setExitModal]   = useState(null);
+  const [exitNotes, setExitNotes]   = useState("");
+  const [logModal, setLogModal]     = useState(false);
+  const [logForm, setLogForm]       = useState({ notas: "" });
+  const loaded                      = useRef(false);
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const data = await getVisits(residenteId, 50);
+      setVisitas(data);
+      loaded.current = true;
+    } catch {
+      /* silent */
+    } finally {
+      setLoading(false);
+    }
+  }, [residenteId]);
+
+  useEffect(() => {
+    if (loaded.current) return;
+    load();
+  }, [load]);
+
+  const doValidateEntry = async (visitId) => {
+    setBusyId(visitId);
+    try {
+      const updated = await validateVisitEntry(visitId);
+      setVisitas((prev) => prev.map((v) => v.id === visitId ? { ...v, ...updated } : v));
+      toast("Ingreso validado correctamente.", "success");
+    } catch {
+      toast("No se pudo validar el ingreso.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const doRegisterExit = async () => {
+    if (!exitModal) return;
+    setBusyId(exitModal.id);
+    try {
+      const updated = await registerVisitExit({ visitId: exitModal.id, notas: exitNotes });
+      setVisitas((prev) => prev.map((v) => v.id === exitModal.id ? { ...v, ...updated } : v));
+      toast("Salida registrada.", "success");
+      setExitModal(null);
+      setExitNotes("");
+    } catch {
+      toast("No se pudo registrar la salida.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const doLogVisit = async () => {
+    setBusyId("log");
+    try {
+      const created = await logVisit({ residenteId, notas: logForm.notas });
+      setVisitas((prev) => [created, ...prev]);
+      toast("Visita registrada.", "success");
+      setLogModal(false);
+      setLogForm({ notas: "" });
+    } catch {
+      toast("No se pudo registrar la visita.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const doCancel = async (visitId) => {
+    setBusyId(visitId);
+    try {
+      const updated = await cancelVisit(visitId);
+      setVisitas((prev) => prev.map((v) => v.id === visitId ? { ...v, ...updated } : v));
+      toast("Visita cancelada.", "success");
+    } catch {
+      toast("No se pudo cancelar.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (loading) return <Loading message="Cargando visitas..." />;
+
+  const pending  = visitas.filter((v) => v.estado === "pendiente");
+  const active   = visitas.filter((v) => v.estado === "activa");
+  const history  = visitas.filter((v) => !["pendiente", "activa"].includes(v.estado));
+
+  return (
+    <div className="space-y-5">
+      {/* Header with manual log button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold text-slate-800">Registro de visitas</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {pending.length > 0 && `${pending.length} esperando validación · `}
+            {active.length > 0 && `${active.length} en curso · `}
+            {visitas.length} total
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => load(true)} className="text-xs text-slate-400 hover:text-slate-600 underline">
+            Actualizar
+          </button>
+          <button
+            type="button"
+            onClick={() => setLogModal(true)}
+            className="rounded-xl bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800"
+          >
+            + Registrar visita
+          </button>
+        </div>
+      </div>
+
+      {/* Pending visits — need entry validation */}
+      {pending.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-200 px-2.5 py-1 text-xs font-semibold text-amber-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              Esperando validación de ingreso
+            </span>
+          </div>
+          <div className="space-y-2">
+            {pending.map((v) => (
+              <div key={v.id} className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {v.profiles?.nombre ?? "Familiar"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Anunció llegada: {formatDateTime(v.fecha_hora)}
+                  </p>
+                  {v.notas && <p className="text-xs text-slate-500 italic mt-0.5">{v.notas}</p>}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => doValidateEntry(v.id)}
+                    disabled={busyId === v.id}
+                    className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                  >
+                    {busyId === v.id ? "..." : "Validar ingreso"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => doCancel(v.id)}
+                    disabled={busyId === v.id}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Active visits — need exit registration */}
+      {active.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-100 border border-teal-200 px-2.5 py-1 text-xs font-semibold text-teal-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
+              En visita ahora
+            </span>
+          </div>
+          <div className="space-y-2">
+            {active.map((v) => (
+              <div key={v.id} className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {v.profiles?.nombre ?? "Familiar"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Ingresó: {formatDateTime(v.fecha_hora)}
+                    {v.validado_en && ` · Validado: ${formatDateTime(v.validado_en)}`}
+                  </p>
+                  {v.notas && <p className="text-xs text-slate-500 italic mt-0.5">{v.notas}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExitModal(v)}
+                  disabled={!!busyId}
+                  className="shrink-0 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
+                >
+                  Registrar salida
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Visit history */}
+      {history.length > 0 && (
+        <section className="bg-white border border-slate-100 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Historial
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {history.map((v) => {
+              const st = VF_STATUS[v.estado] ?? VF_STATUS.completada;
+              return (
+                <li key={v.id} className="px-4 py-3 flex items-start gap-3">
+                  <div className="pt-1.5 shrink-0">
+                    <span className={`block h-2.5 w-2.5 rounded-full ${st.dot}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-slate-800">
+                        {v.profiles?.nombre ?? "Familiar"}
+                      </p>
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.pill}`}>
+                        {st.label}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 mt-0.5 text-xs text-slate-400">
+                      <span>{formatDateTime(v.fecha_hora)}</span>
+                      {v.duracion_min && <span>{v.duracion_min} min</span>}
+                      {v.salida_hora && <span>Salida: {formatDateTime(v.salida_hora)}</span>}
+                    </div>
+                    {v.notas && <p className="text-xs text-slate-400 italic mt-0.5">{v.notas}</p>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {visitas.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-100">
+          <p className="text-sm text-slate-500">Sin visitas registradas para este residente.</p>
+        </div>
+      )}
+
+      {/* Exit registration modal */}
+      {exitModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+            <h3 className="font-semibold text-slate-800">Registrar salida</h3>
+            <p className="text-sm text-slate-600">
+              <span className="font-medium">{exitModal.profiles?.nombre ?? "Familiar"}</span>
+              <span className="text-slate-400"> · ingresó {formatDateTime(exitModal.fecha_hora)}</span>
+            </p>
+            <div>
+              <label htmlFor="exit-notes" className="text-xs font-semibold uppercase tracking-wide text-slate-500 block mb-1">
+                Notas (opcional)
+              </label>
+              <textarea
+                id="exit-notes"
+                rows={2}
+                value={exitNotes}
+                onChange={(e) => setExitNotes(e.target.value)}
+                placeholder="Observaciones sobre la visita..."
+                className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setExitModal(null); setExitNotes(""); }}
+                className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={doRegisterExit}
+                disabled={!!busyId}
+                className="flex-1 rounded-xl bg-slate-800 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
+              >
+                {busyId ? "Guardando..." : "Confirmar salida"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual log modal */}
+      {logModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+            <h3 className="font-semibold text-slate-800">Registrar visita completada</h3>
+            <p className="text-sm text-slate-500">
+              Registra una visita que ya ocurrió. La hora de entrada y salida se guardan como ahora.
+            </p>
+            <div>
+              <label htmlFor="log-notes" className="text-xs font-semibold uppercase tracking-wide text-slate-500 block mb-1">
+                Notas (opcional)
+              </label>
+              <textarea
+                id="log-notes"
+                rows={2}
+                value={logForm.notas}
+                onChange={(e) => setLogForm((f) => ({ ...f, notas: e.target.value }))}
+                placeholder="Familiar visitó al residente..."
+                className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setLogModal(false); setLogForm({ notas: "" }); }}
+                className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={doLogVisit}
+                disabled={busyId === "log"}
+                className="flex-1 rounded-xl bg-teal-700 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+              >
+                {busyId === "log" ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Tareas de hoy Tab (lazy-loaded) ───────────────────────── */
+
+const PRIORITY_DOT = {
+  alta:  "bg-rose-500",
+  media: "bg-amber-400",
+  baja:  "bg-slate-300",
+};
+
+const TASK_STATUS_STYLE = {
+  pendiente:    { pill: "bg-amber-100 text-amber-800",    label: "Pendiente" },
+  cumplida:     { pill: "bg-emerald-100 text-emerald-800", label: "Cumplida" },
+  omitida:      { pill: "bg-rose-100 text-rose-700",      label: "Omitida" },
+  reprogramada: { pill: "bg-sky-100 text-sky-700",        label: "Reprogramada" },
+  cancelada:    { pill: "bg-slate-100 text-slate-500",    label: "Cancelada" },
+};
+
+const TURNO_LABEL = { mañana: "Mañana", tarde: "Tarde", noche: "Noche" };
+const TURNO_COLOR = {
+  mañana: "bg-amber-50 border-amber-200 text-amber-800",
+  tarde:  "bg-sky-50 border-sky-200 text-sky-800",
+  noche:  "bg-violet-50 border-violet-200 text-violet-800",
+};
+
+function TareasTab({ residenteId }) {
+  const { can } = useAuth();
+  const canComplete = can("completar_tareas_cuidado");
+
+  const [tasks, setTasks]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
+  const [busyId, setBusyId]         = useState(null);
+  const [omitTask, setOmitTask]     = useState(null);
+  const [omitReason, setOmitReason] = useState("rechazo");
+  const [omitNotes, setOmitNotes]   = useState("");
+  const loaded = useRef(false);
+
+  const today = todayIso();
+  const turno = currentTurno();
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError(null);
+    try {
+      const data = await listCareTasks({ residenteId, fecha: today, generate: true });
+      setTasks(data);
+      loaded.current = true;
+    } catch {
+      setError("No se pudieron cargar las tareas del día.");
+    } finally {
+      setLoading(false);
+    }
+  }, [residenteId, today]);
+
+  useEffect(() => {
+    if (loaded.current) return;
+    load();
+  }, [load]);
+
+  const doComplete = async (taskId) => {
+    setBusyId(taskId);
+    try {
+      await completeCareTask({ id: taskId, estado: "cumplida" });
+      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, estado: "cumplida" } : t));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const doOmit = async () => {
+    if (!omitTask) return;
+    setBusyId(omitTask.id);
+    try {
+      await completeCareTask({
+        id: omitTask.id,
+        estado: "omitida",
+        motivoOmision: omitReason,
+        notas: omitNotes.trim() || null,
+      });
+      setTasks((prev) => prev.map((t) => t.id === omitTask.id ? { ...t, estado: "omitida" } : t));
+      setOmitTask(null);
+      setOmitNotes("");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (loading) return <Loading message="Cargando tareas del día..." />;
+
+  if (error) return (
+    <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+      <span>{error}</span>
+      <button type="button" onClick={() => load()} className="underline text-xs ml-auto">Reintentar</button>
+    </div>
+  );
+
+  const carryOver  = tasks.filter((t) => t._arrastre);
+  const todayTasks = tasks.filter((t) => !t._arrastre);
+  const byTurno    = { mañana: [], tarde: [], noche: [] };
+  for (const t of todayTasks) {
+    if (byTurno[t.turno]) byTurno[t.turno].push(t);
+  }
+
+  const total   = tasks.length;
+  const done    = tasks.filter((t) => t.estado === "cumplida").length;
+  const omitted = tasks.filter((t) => t.estado === "omitida").length;
+  const pending = tasks.filter((t) => t.estado === "pendiente").length;
+
+  if (total === 0) return (
+    <div className="text-center py-12 bg-white rounded-2xl border border-slate-100">
+      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-teal-50">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-teal-600">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+        </svg>
+      </div>
+      <p className="text-sm font-medium text-slate-600">Sin tareas programadas para hoy</p>
+      <p className="text-xs text-slate-400 mt-1">Configura el plan de cuidado en la pestaña "Plan de cuidado"</p>
+    </div>
+  );
+
+  const progress = Math.round(((done + omitted) / total) * 100);
+
+  return (
+    <div className="space-y-5">
+      {/* Summary strip */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400 font-medium">Progreso del día</p>
+            <p className="text-sm font-semibold text-slate-700 capitalize">
+              Turno actual: {TURNO_LABEL[turno]}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-teal-700">{progress}%</p>
+            <p className="text-xs text-slate-400">{done + omitted} de {total} completadas</p>
+          </div>
+        </div>
+        <div className="w-full bg-slate-100 rounded-full h-1.5 mb-3">
+          <div
+            className="bg-teal-500 h-1.5 rounded-full transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <div className="flex gap-4 text-xs flex-wrap">
+          <span className="flex items-center gap-1 text-amber-700">
+            <span className="w-2 h-2 rounded-full bg-amber-400" />
+            {pending} pendiente{pending !== 1 ? "s" : ""}
+          </span>
+          <span className="flex items-center gap-1 text-emerald-700">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            {done} cumplida{done !== 1 ? "s" : ""}
+          </span>
+          <span className="flex items-center gap-1 text-rose-600">
+            <span className="w-2 h-2 rounded-full bg-rose-400" />
+            {omitted} omitida{omitted !== 1 ? "s" : ""}
+          </span>
+          <button type="button" onClick={() => load(true)} className="ml-auto text-slate-400 hover:text-slate-600 underline">
+            Actualizar
+          </button>
+        </div>
+      </div>
+
+      {/* Carry-over tasks */}
+      {carryOver.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 border border-rose-200 px-2.5 py-1 text-xs font-semibold text-rose-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              Arrastre de turnos anteriores
+            </span>
+          </div>
+          <div className="space-y-2">
+            {carryOver.map((task) => (
+              <TareaCard
+                key={task.id}
+                task={task}
+                canComplete={canComplete}
+                busyId={busyId}
+                onComplete={doComplete}
+                onOmit={setOmitTask}
+                isCarryOver
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Tasks grouped by turno */}
+      {["mañana", "tarde", "noche"].map((t) => {
+        const list = byTurno[t];
+        if (list.length === 0) return null;
+        const isCurrent = t === turno;
+        return (
+          <section key={t}>
+            <div className={`inline-flex items-center gap-2 mb-2 px-3 py-1.5 rounded-xl border text-xs font-semibold ${TURNO_COLOR[t]} ${isCurrent ? "ring-2 ring-offset-1 ring-teal-400" : ""}`}>
+              {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />}
+              {TURNO_LABEL[t]}
+              {isCurrent && <span className="font-normal opacity-75">(turno actual)</span>}
+            </div>
+            <div className="space-y-2">
+              {list.map((task) => (
+                <TareaCard
+                  key={task.id}
+                  task={task}
+                  canComplete={canComplete}
+                  busyId={busyId}
+                  onComplete={doComplete}
+                  onOmit={setOmitTask}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      {/* Omit confirmation sheet */}
+      {omitTask && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+            <h3 className="font-semibold text-slate-800">Omitir tarea</h3>
+            <p className="text-sm text-slate-600 font-medium">{omitTask.actividad?.titulo}</p>
+            <div>
+              <label htmlFor="omit-reason" className="text-xs text-slate-500 uppercase tracking-wide block mb-1">
+                Motivo de omisión
+              </label>
+              <select
+                id="omit-reason"
+                value={omitReason}
+                onChange={(e) => setOmitReason(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              >
+                {OMISSION_REASONS.map(([v, label]) => (
+                  <option key={v} value={v}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="omit-notes" className="text-xs text-slate-500 uppercase tracking-wide block mb-1">
+                Notas adicionales (opcional)
+              </label>
+              <textarea
+                id="omit-notes"
+                rows={2}
+                value={omitNotes}
+                onChange={(e) => setOmitNotes(e.target.value)}
+                placeholder="Detalles relevantes..."
+                className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 resize-none"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => { setOmitTask(null); setOmitNotes(""); }}
+                className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={doOmit}
+                disabled={!!busyId}
+                className="flex-1 rounded-xl bg-rose-600 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {busyId ? "Guardando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TareaCard({ task, canComplete, busyId, onComplete, onOmit, isCarryOver }) {
+  const status   = TASK_STATUS_STYLE[task.estado] ?? { pill: "bg-slate-100 text-slate-500", label: task.estado };
+  const priority = task.actividad?.prioridad;
+  const isBusy   = busyId === task.id;
+  const isPending = task.estado === "pendiente";
+
+  return (
+    <div className={`bg-white rounded-xl border px-4 py-3 flex gap-3 ${isCarryOver ? "border-rose-200 bg-rose-50/30" : "border-slate-100"}`}>
+      <div className="pt-1.5 shrink-0">
+        <span
+          className={`block w-2.5 h-2.5 rounded-full ${PRIORITY_DOT[priority] ?? "bg-slate-200"}`}
+          title={priority ? `Prioridad ${priority}` : ""}
+        />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start gap-2 flex-wrap">
+          <span className="text-sm font-medium text-slate-800 leading-snug flex-1">
+            {task.actividad?.titulo ?? "Tarea"}
+          </span>
+          <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${status.pill}`}>
+            {status.label}
+          </span>
+        </div>
+
+        {task.actividad?.instrucciones && (
+          <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{task.actividad.instrucciones}</p>
+        )}
+
+        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+          {task.hora && (
+            <span className="text-xs text-slate-400">{task.hora.slice(0, 5)}</span>
+          )}
+          {CARE_CATEGORY_LABEL[task.actividad?.categoria] && (
+            <span className="text-xs text-slate-400">{CARE_CATEGORY_LABEL[task.actividad.categoria]}</span>
+          )}
+          {task.motivo_omision && (
+            <span className="text-xs text-rose-500 italic">
+              {OMISSION_REASONS.find(([v]) => v === task.motivo_omision)?.[1] ?? task.motivo_omision}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {canComplete && isPending ? (
+        <div className="shrink-0 flex flex-col gap-1.5 ml-1">
+          <button
+            type="button"
+            onClick={() => onComplete(task.id)}
+            disabled={isBusy}
+            className="rounded-lg bg-teal-700 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50 transition-colors"
+          >
+            {isBusy ? "..." : "Cumplir"}
+          </button>
+          <button
+            type="button"
+            onClick={() => onOmit(task)}
+            disabled={isBusy}
+            className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+          >
+            Omitir
+          </button>
+        </div>
+      ) : task.estado === "cumplida" ? (
+        <div className="shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 ml-1">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4 text-emerald-600">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+        </div>
+      ) : null}
     </div>
   );
 }

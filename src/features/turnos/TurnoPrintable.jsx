@@ -110,8 +110,18 @@ export default function TurnoPrintable() {
             <div><strong>{row.nombre}</strong></div>
           )} />
 
-          <PrintableList title="Seguimientos" items={item.resumen_json?.seguimientos} render={(row) => (
-            <div><strong>{row.residente?.nombre}</strong> · {row.descripcion}</div>
+          <PrintableList title="Seguimientos pendientes" items={item.resumen_json?.seguimientos} render={(row) => (
+            <div>
+              <strong>{row.residente?.nombre}</strong> · {row.descripcion}
+              <div className="mt-1 text-xs text-slate-500">
+                Pendiente para turno {row.seguimiento_turno ?? "sin turno"}
+              </div>
+              {row.acciones_tomadas && (
+                <div className="mt-1 text-xs text-slate-500">
+                  Acciones: {row.acciones_tomadas}
+                </div>
+              )}
+            </div>
           )} />
 
           <PrintableList title="Incidentes recientes" items={item.resumen_json?.incidentes_recientes} render={(row) => (

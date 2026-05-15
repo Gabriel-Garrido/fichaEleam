@@ -251,31 +251,67 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
     saved = data;
   }
 
-  const horario = normalizeSchedule(schedule);
-  let scheduleError;
-  if (schedule?.id) {
-    const result = await supabase
+  const sourceSchedules = Array.isArray(indication.schedules) && indication.schedules.length
+    ? indication.schedules
+    : Array.isArray(schedule)
+      ? schedule
+      : [schedule];
+  const horarios = sourceSchedules
+    .filter(Boolean)
+    .map((item) => ({ ...normalizeSchedule(item), id: item.id || null }));
+
+  if (horarios.length === 0) {
+    throw new Error("Debe registrar al menos un horario.");
+  }
+
+  if (indication.id) {
+    const activeIds = horarios.map((item) => item.id).filter(Boolean);
+    let deactivate = supabase
+      .from("medicamentos_horarios")
+      .update({ activo: false })
+      .eq("indicacion_id", saved.id);
+
+    if (activeIds.length > 0) {
+      deactivate = deactivate.not("id", "in", `(${activeIds.join(",")})`);
+    }
+
+    const { error: deactivateError } = await deactivate;
+    if (deactivateError) throw deactivateError;
+  }
+
+  const existing = horarios.filter((item) => item.id);
+  const created = horarios.filter((item) => !item.id);
+
+  for (const item of existing) {
+    const { id, ...horario } = item;
+    const { error } = await supabase
       .from("medicamentos_horarios")
       .update({
         ...horario,
         eleam_id: eleamId,
         residente_id: residenteId,
         indicacion_id: saved.id,
+        activo: horario.activo !== false,
       })
-      .eq("id", schedule.id);
-    scheduleError = result.error;
-  } else {
-    const result = await supabase
-      .from("medicamentos_horarios")
-      .insert({
-        ...horario,
-        eleam_id: eleamId,
-        residente_id: residenteId,
-        indicacion_id: saved.id,
-      });
-    scheduleError = result.error;
+      .eq("id", id);
+    if (error) throw error;
   }
-  if (scheduleError) throw scheduleError;
+
+  if (created.length > 0) {
+    const { error } = await supabase
+      .from("medicamentos_horarios")
+      .insert(created.map((item) => {
+        const horario = { ...item };
+        delete horario.id;
+        return {
+          ...horario,
+          eleam_id: eleamId,
+          residente_id: residenteId,
+          indicacion_id: saved.id,
+        };
+      }));
+    if (error) throw error;
+  }
 
   return saved;
 }

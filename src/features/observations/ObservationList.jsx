@@ -23,6 +23,23 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatFollowUpLabel(record) {
+  const parts = [];
+
+  if (record.seguimiento_fecha) {
+    parts.push(
+      new Date(`${record.seguimiento_fecha}T12:00:00`).toLocaleDateString("es-CL", {
+        day: "2-digit",
+        month: "2-digit",
+      })
+    );
+  }
+
+  if (record.seguimiento_turno) parts.push(record.seguimiento_turno);
+
+  return parts.length ? `Seguimiento · ${parts.join(" · ")}` : "Seguimiento pendiente";
+}
+
 function ObservationList() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -263,8 +280,8 @@ function ObservationList() {
                       {TIPO_LABEL[r.tipo] ?? r.tipo}
                     </span>
                     {r.requiere_seguimiento && (
-                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
-                        Seguimiento
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+                        {formatFollowUpLabel(r)}
                       </span>
                     )}
                     <span className="text-xs text-slate-400 capitalize">{r.turno}</span>

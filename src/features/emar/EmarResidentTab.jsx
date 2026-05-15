@@ -79,6 +79,16 @@ const STOCK_TONE = {
   inactivo: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
+function cloneSchedule(schedule = INITIAL_SCHEDULE) {
+  return {
+    ...INITIAL_SCHEDULE,
+    ...schedule,
+    hora: schedule.hora?.slice(0, 5) ?? INITIAL_SCHEDULE.hora,
+    dias_semana: schedule.dias_semana ?? INITIAL_SCHEDULE.dias_semana,
+    dias_mes: schedule.dias_mes ?? INITIAL_SCHEDULE.dias_mes,
+  };
+}
+
 function formatSchedule(schedule) {
   if (!schedule) return "Sin horario";
   const base = `${schedule.turno} · ${schedule.hora?.slice(0, 5) ?? "--:--"}`;
@@ -130,22 +140,60 @@ export default function EmarResidentTab({ resident }) {
   }, [resident.id]);
 
   const activeIndications = useMemo(
-    () => data.indicaciones.filter((item) => item.estado !== "suspendido"),
+    () => data.indicaciones.filter((item) => !["suspendida", "suspendido", "finalizada"].includes(item.estado)),
     [data.indicaciones]
   );
+
+  const stockByIndication = useMemo(() => {
+    const totals = {};
+    for (const lot of data.lotes) {
+      if (!lot.indicacion_id || lot.estado !== "activo") continue;
+      const qty = Number(lot.cantidad_actual ?? 0);
+      if (qty <= 0) continue;
+      if (!totals[lot.indicacion_id]) totals[lot.indicacion_id] = { cantidad: 0, unidad: lot.unidad || "unidad" };
+      totals[lot.indicacion_id].cantidad += qty;
+    }
+    return totals;
+  }, [data.lotes]);
 
   const controlledLots = useMemo(
     () => data.lotes.filter((lot) => lot.es_controlado),
     [data.lotes]
   );
 
+  const stockAlerts = useMemo(() => {
+    const today = new Date(`${todayIso()}T12:00:00`);
+    return data.lotes.filter((lot) => {
+      const qty = Number(lot.cantidad_actual ?? 0);
+      const expired = lot.fecha_vencimiento && new Date(`${lot.fecha_vencimiento}T12:00:00`) < today;
+      return lot.estado !== "retirado" && (qty <= 0 || expired);
+    });
+  }, [data.lotes]);
+
+  const recentPending = useMemo(
+    () => data.administraciones.filter((row) => ["pendiente", "pendiente_validacion"].includes(row.estado)).length,
+    [data.administraciones]
+  );
+
   const handleSaveIndication = async ({ indication, schedule }) => {
     setSaving(true);
     try {
-      await saveMedicationIndication({ residenteId: resident.id, indication, schedule });
+      const saved = await saveMedicationIndication({ residenteId: resident.id, indication, schedule });
       toast("Indicación guardada.", "success");
       setIndicationModal(null);
       await load();
+      if (!indication.id && saved?.requiere_stock && canAdjustStock) {
+        setLotModal({
+          indication: saved,
+          lot: {
+            ...INITIAL_LOT,
+            medicamento_nombre: saved.medicamento_nombre,
+            unidad: saved.unidad_dosis || "unidad",
+            es_controlado: saved.es_controlado,
+            tipo_controlado: saved.tipo_controlado || "psicotropico",
+          },
+        });
+      }
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo guardar la indicación.", "error");
@@ -240,10 +288,37 @@ export default function EmarResidentTab({ resident }) {
           </div>
         </div>
 
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MiniMetric label="Indicaciones activas" value={activeIndications.length} />
+          <MiniMetric label="Lotes con stock" value={data.lotes.filter((lot) => Number(lot.cantidad_actual ?? 0) > 0).length} tone="emerald" />
+          <MiniMetric label="Alertas de stock" value={stockAlerts.length} tone={stockAlerts.length ? "amber" : "emerald"} />
+          <MiniMetric label="Pendiente eMAR" value={recentPending} tone={recentPending ? "amber" : "emerald"} />
+        </div>
+
+        {(!canCreateIndication || !canAdjustStock) && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            Tu perfil puede consultar eMAR
+            {!canCreateIndication ? ", pero no crear indicaciones" : ""}
+            {!canAdjustStock ? ", ni registrar stock" : ""}. Un administrador puede habilitar esos permisos en Gestión de equipo.
+          </div>
+        )}
+
         {activeIndications.length === 0 ? (
-          <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-            No hay indicaciones activas. Agrega medicamentos habituales, SOS o tratamientos temporales con su horario.
-          </p>
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+            <h3 className="text-sm font-semibold text-slate-950">Configura la primera indicación</h3>
+            <p className="mx-auto mt-1 max-w-xl text-sm text-slate-500">
+              Registra medicamento, dosis y uno o más horarios. Desde ahí eMAR generará las administraciones por turno.
+            </p>
+            {canCreateIndication && (
+              <button
+                type="button"
+                onClick={() => setIndicationModal({ indication: INITIAL_INDICATION, schedule: { ...INITIAL_SCHEDULE, turno: currentTurno() } })}
+                className="mt-4 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+              >
+                Crear indicación
+              </button>
+            )}
+          </div>
         ) : (
           <div className="mt-4 divide-y divide-slate-100">
             {activeIndications.map((item) => (
@@ -252,7 +327,13 @@ export default function EmarResidentTab({ resident }) {
                 item={item}
                 canEdit={canEditIndication}
                 canAdjustStock={canAdjustStock}
-                onEdit={() => setIndicationModal({ indication: item, schedule: item.horarios?.[0] ?? INITIAL_SCHEDULE })}
+                stock={stockByIndication[item.id]}
+                onEdit={() => setIndicationModal({
+                  indication: item,
+                  schedules: item.horarios?.filter((h) => h.activo !== false).length
+                    ? item.horarios.filter((h) => h.activo !== false)
+                    : [INITIAL_SCHEDULE],
+                })}
                 onNewLot={() => setLotModal({
                   indication: item,
                   lot: {
@@ -386,7 +467,9 @@ export default function EmarResidentTab({ resident }) {
   );
 }
 
-function IndicationRow({ item, canEdit, canAdjustStock, onEdit, onNewLot }) {
+function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot }) {
+  const needsStock = item.requiere_stock || item.es_controlado;
+  const hasStock = Number(stock?.cantidad ?? 0) > 0;
   return (
     <div className="py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -410,6 +493,13 @@ function IndicationRow({ item, canEdit, canAdjustStock, onEdit, onNewLot }) {
           <p className="mt-1 text-sm text-slate-600">
             {item.dosis} {item.unidad_dosis || ""}{item.concentracion ? ` · ${item.concentracion}` : ""}
           </p>
+          {needsStock && (
+            <p className={`mt-1 text-sm font-medium ${hasStock ? "text-emerald-700" : "text-amber-800"}`}>
+              {hasStock
+                ? `Stock disponible: ${stock.cantidad} ${stock.unidad}`
+                : "Sin stock disponible para esta indicación"}
+            </p>
+          )}
           {item.instrucciones && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.instrucciones}</p>}
           <div className="mt-2 flex flex-wrap gap-2">
             {(item.horarios ?? []).filter((h) => h.activo !== false).map((h) => (
@@ -536,7 +626,7 @@ function TextArea({ label, value, onChange, disabled, required = false }) {
   );
 }
 
-function ScheduleFields({ schedule, setSchedule, saving }) {
+function ScheduleFields({ schedule, setSchedule, saving, title = "Horario", onRemove = null }) {
   const toggleDay = (day) => {
     setSchedule((prev) => {
       const set = new Set(prev.dias_semana ?? []);
@@ -547,7 +637,19 @@ function ScheduleFields({ schedule, setSchedule, saving }) {
 
   return (
     <div className="rounded-2xl border border-slate-200 p-4">
-      <div className="mb-3 text-sm font-semibold text-slate-950">Horario</div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-slate-950">{title}</div>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={saving}
+            className="text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-60"
+          >
+            Quitar
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-sm font-medium text-slate-700">
           Frecuencia
@@ -625,18 +727,13 @@ function ScheduleFields({ schedule, setSchedule, saving }) {
 
 function IndicationModal({ modal, saving, onClose, onSubmit }) {
   const [indication, setIndication] = useState(INITIAL_INDICATION);
-  const [schedule, setSchedule] = useState(INITIAL_SCHEDULE);
+  const [schedules, setSchedules] = useState([INITIAL_SCHEDULE]);
 
   useEffect(() => {
     if (!modal) return;
     setIndication({ ...INITIAL_INDICATION, ...modal.indication });
-    setSchedule({
-      ...INITIAL_SCHEDULE,
-      ...modal.schedule,
-      hora: modal.schedule?.hora?.slice(0, 5) ?? INITIAL_SCHEDULE.hora,
-      dias_semana: modal.schedule?.dias_semana ?? INITIAL_SCHEDULE.dias_semana,
-      dias_mes: modal.schedule?.dias_mes ?? INITIAL_SCHEDULE.dias_mes,
-    });
+    const incoming = modal.schedules?.length ? modal.schedules : [modal.schedule ?? INITIAL_SCHEDULE];
+    setSchedules(incoming.map(cloneSchedule));
   }, [modal]);
 
   if (!modal) return null;
@@ -656,7 +753,7 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          onSubmit({ indication, schedule });
+          onSubmit({ indication: { ...indication, schedules }, schedule: schedules });
         }}
       >
         <div className="grid grid-cols-2 gap-3">
@@ -734,13 +831,43 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
           </label>
         )}
 
-        <ScheduleFields schedule={schedule} setSchedule={setSchedule} saving={saving} />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-950">Horarios de administración</h3>
+              <p className="text-xs text-slate-500">Puedes agregar más de una toma diaria o programaciones específicas.</p>
+            </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => setSchedules((prev) => [...prev, cloneSchedule({ turno: currentTurno() })])}
+              className="rounded-xl border border-teal-200 px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 disabled:opacity-60"
+            >
+              Agregar horario
+            </button>
+          </div>
+          {schedules.map((item, index) => (
+            <ScheduleFields
+              key={item.id ?? index}
+              title={`Horario ${index + 1}`}
+              schedule={item}
+              setSchedule={(updater) => {
+                setSchedules((prev) => prev.map((current, currentIndex) => {
+                  if (currentIndex !== index) return current;
+                  return typeof updater === "function" ? updater(current) : updater;
+                }));
+              }}
+              saving={saving}
+              onRemove={schedules.length > 1 ? () => setSchedules((prev) => prev.filter((_, currentIndex) => currentIndex !== index)) : null}
+            />
+          ))}
+        </div>
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
             Cancelar
           </button>
-          <button type="submit" disabled={saving || !indication.medicamento_nombre?.trim() || !indication.dosis?.trim()} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving || !indication.medicamento_nombre?.trim() || !indication.dosis?.trim() || schedules.length === 0} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
             {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>

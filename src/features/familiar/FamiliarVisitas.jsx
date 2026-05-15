@@ -2,26 +2,30 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../components/Toast";
 import { friendlyError } from "../../utils/errorMessages";
-import Button from "../../components/Button";
-import Input from "../../components/Input";
 import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
-import { getVisits, logVisit } from "./familiarService";
+import Button from "../../components/Button";
+import { getVisits, requestVisit, cancelVisit } from "./familiarService";
 import { useFamiliarResidentData } from "./useFamiliarResidentData";
 import { formatDateTime } from "../../utils/dateUtils";
 
-function localNowForInput() {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
+const VISIT_STATUS = {
+  pendiente:  { label: "Esperando validación", pill: "bg-amber-100 text-amber-800",    dot: "bg-amber-400 animate-pulse" },
+  activa:     { label: "En visita",            pill: "bg-teal-100 text-teal-800",      dot: "bg-teal-500 animate-pulse" },
+  completada: { label: "Completada",           pill: "bg-emerald-100 text-emerald-700",dot: "bg-emerald-500" },
+  cancelada:  { label: "Cancelada",            pill: "bg-slate-100 text-slate-500",    dot: "bg-slate-300" },
+};
 
 export default function FamiliarVisitas() {
-  const navigate = useNavigate();
-  const toast = useToast();
+  const navigate   = useNavigate();
+  const toast      = useToast();
   const [visitas, setVisitas]       = useState([]);
   const [loadingVisits, setLoadingVisits] = useState(false);
-  const [saving, setSaving]         = useState(false);
+  const [announcing, setAnnouncing] = useState(false);
+  const [showAnnounce, setShowAnnounce] = useState(false);
+  const [announceNotes, setAnnounceNotes] = useState("");
+  const [cancelling, setCancelling] = useState(null);
+
   const {
     residentes,
     activeId,
@@ -30,12 +34,6 @@ export default function FamiliarVisitas() {
     selectResident,
   } = useFamiliarResidentData({ toast });
 
-  const [form, setForm] = useState({
-    fecha_hora: localNowForInput(),
-    duracion_min: "",
-    notas: "",
-  });
-
   const loadVisits = useCallback(async (id) => {
     if (!id) return;
     setLoadingVisits(true);
@@ -43,7 +41,7 @@ export default function FamiliarVisitas() {
       const v = await getVisits(id, 100);
       setVisitas(v);
     } catch (e) {
-      toast(friendlyError(e, "No se pudieron cargar las visitas. Intenta de nuevo."), "error");
+      toast(friendlyError(e, "No se pudieron cargar las visitas."), "error");
     } finally {
       setLoadingVisits(false);
     }
@@ -53,54 +51,64 @@ export default function FamiliarVisitas() {
     if (activeId) loadVisits(activeId);
   }, [activeId, loadVisits]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleAnnounce = async () => {
     if (!activeId) return;
-    setSaving(true);
+    setAnnouncing(true);
     try {
-      await logVisit({
-        residenteId: activeId,
-        fechaHora: form.fecha_hora ? new Date(form.fecha_hora).toISOString() : undefined,
-        duracionMin: form.duracion_min ? Number(form.duracion_min) : null,
-        notas: form.notas,
-      });
-      toast("Visita registrada", "success");
-      setForm({ fecha_hora: localNowForInput(), duracion_min: "", notas: "" });
+      await requestVisit({ residenteId: activeId, notas: announceNotes });
+      toast("Llegada anunciada. Un funcionario validará tu ingreso.", "success");
+      setShowAnnounce(false);
+      setAnnounceNotes("");
       await loadVisits(activeId);
     } catch (err) {
-      toast(friendlyError(err, "No se pudo guardar la visita. Intenta de nuevo."), "error");
+      toast(friendlyError(err, "No se pudo registrar la solicitud."), "error");
     } finally {
-      setSaving(false);
+      setAnnouncing(false);
+    }
+  };
+
+  const handleCancel = async (visitId) => {
+    setCancelling(visitId);
+    try {
+      await cancelVisit(visitId);
+      toast("Visita cancelada.", "success");
+      setVisitas((prev) => prev.map((v) => v.id === visitId ? { ...v, estado: "cancelada" } : v));
+    } catch (err) {
+      toast(friendlyError(err, "No se pudo cancelar."), "error");
+    } finally {
+      setCancelling(null);
     }
   };
 
   if (loading) return <Loading message="Cargando visitas..." />;
+
   if (residentes.length === 0) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12 text-center">
         <h1 className="text-2xl font-bold text-slate-800 mb-2">Sin residentes asignados</h1>
-        <p className="text-slate-500">Pide al administrador del ELEAM que cree el vínculo.</p>
+        <p className="text-slate-500 text-sm">Pide al administrador del ELEAM que cree el vínculo.</p>
       </div>
     );
   }
+
+  const hasPendingOrActive = visitas.some((v) => ["pendiente", "activa"].includes(v.estado));
 
   return (
     <PageLayout
       title="Mis visitas"
       eyebrow="Portal familiar"
-      description={`Registro de tus visitas a ${activeResident?.nombre ?? "tu familiar"} ${activeResident?.apellido ?? ""}`}
+      description={`Historial de visitas a ${activeResident?.nombre ?? "tu familiar"} ${activeResident?.apellido ?? ""}.`}
       size="lg"
       actions={
         <Button
           onClick={() => navigate("/familiar")}
           className="bg-white text-teal-700 border border-teal-200 hover:bg-teal-50"
         >
-          Volver al portal
+          ← Volver al portal
         </Button>
       }
       className="space-y-5"
     >
-
       {residentes.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {residentes.map((r) => (
@@ -108,7 +116,7 @@ export default function FamiliarVisitas() {
               type="button"
               key={r.id}
               onClick={() => selectResident(r.id)}
-              className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${
+              className={`px-3 py-1.5 rounded-xl border text-sm font-medium transition-colors ${
                 r.id === activeId
                   ? "bg-teal-700 text-white border-teal-700"
                   : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
@@ -120,86 +128,160 @@ export default function FamiliarVisitas() {
         </div>
       )}
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3"
-      >
-        <h2 className="font-bold text-slate-800 mb-1">Registrar nueva visita</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
-              Fecha y hora
-            </label>
-            <Input
-              type="datetime-local"
-              value={form.fecha_hora}
-              onChange={(e) => setForm((f) => ({ ...f, fecha_hora: e.target.value }))}
-              required
-            />
-          </div>
-          <div>
-            <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
-              Duración (minutos)
-            </label>
-            <Input
-              type="number"
-              min="1" max="1440"
-              placeholder="Ej. 45"
-              value={form.duracion_min}
-              onChange={(e) => setForm((f) => ({ ...f, duracion_min: e.target.value }))}
-            />
-          </div>
-        </div>
-        <div>
-          <label htmlFor="visita-notas" className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
-            Notas (opcional)
-          </label>
-          <textarea
-            id="visita-notas"
-            className="w-full rounded-xl border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
-            rows={3}
-            placeholder="¿Cómo encontraste a tu familiar? ¿Algo que el equipo deba saber?"
-            value={form.notas}
-            onChange={(e) => setForm((f) => ({ ...f, notas: e.target.value }))}
-          />
-        </div>
-        <div className="text-right">
-          <Button
-            type="submit"
-            disabled={saving}
-            className="bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"
-          >
-            {saving ? "Guardando..." : "Guardar visita"}
-          </Button>
-        </div>
-      </form>
+      {/* How it works */}
+      <div className="bg-teal-50 border border-teal-100 rounded-2xl px-5 py-4">
+        <p className="text-sm font-semibold text-teal-800 mb-2">¿Cómo funciona el registro de visitas?</p>
+        <ol className="text-sm text-teal-700 space-y-1 list-none">
+          <li className="flex items-start gap-2">
+            <span className="shrink-0 grid h-5 w-5 place-items-center rounded-full bg-teal-700 text-white text-[10px] font-bold mt-0.5">1</span>
+            Anuncia tu llegada con el botón de abajo.
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="shrink-0 grid h-5 w-5 place-items-center rounded-full bg-teal-700 text-white text-[10px] font-bold mt-0.5">2</span>
+            Un funcionario del ELEAM valida tu ingreso.
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="shrink-0 grid h-5 w-5 place-items-center rounded-full bg-teal-700 text-white text-[10px] font-bold mt-0.5">3</span>
+            Al terminar tu visita, el funcionario registra la salida.
+          </li>
+        </ol>
+      </div>
 
-      <section className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-        <h2 className="font-bold text-slate-800 mb-3">Historial</h2>
-        {loadingVisits ? (
-          <p className="text-sm text-slate-500">Cargando historial...</p>
-        ) : visitas.length === 0 ? (
-          <p className="text-sm text-slate-500">Aún no tienes visitas registradas.</p>
-        ) : (
-          <ul className="divide-y">
-            {visitas.map((v) => (
-              <li key={v.id} className="py-3 flex items-start justify-between gap-3">
+      {/* Announce panel */}
+      {!hasPendingOrActive && (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h2 className="font-bold text-slate-800">Anunciar mi llegada</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Notifica al equipo que estás en camino o ya llegaste.
+            </p>
+          </div>
+          <div className="p-5">
+            {showAnnounce ? (
+              <div className="space-y-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-700">
-                    {formatDateTime(v.fecha_hora)}
-                    {v.duracion_min ? <span className="text-slate-500 font-normal"> · {v.duracion_min} min</span> : null}
-                  </p>
-                  {v.notas && <p className="text-sm text-slate-500 mt-0.5">{v.notas}</p>}
+                  <label htmlFor="announce-notes" className="text-xs font-semibold uppercase tracking-wide text-slate-500 block mb-1">
+                    Notas para el equipo (opcional)
+                  </label>
+                  <textarea
+                    id="announce-notes"
+                    rows={2}
+                    value={announceNotes}
+                    onChange={(e) => setAnnounceNotes(e.target.value)}
+                    placeholder="Ej: Llegué al portón principal. Traje ropa para el fin de semana."
+                    className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 resize-none"
+                  />
                 </div>
-                {v.profiles?.nombre && (
-                  <span className="text-[11px] text-slate-400 shrink-0">
-                    {v.profiles.nombre}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowAnnounce(false); setAnnounceNotes(""); }}
+                    className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAnnounce}
+                    disabled={announcing}
+                    className="flex-1 rounded-xl bg-teal-700 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                  >
+                    {announcing ? "Enviando…" : "Confirmar llegada"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAnnounce(true)}
+                className="w-full rounded-xl bg-teal-700 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 transition-colors"
+              >
+                Anunciar mi llegada
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Active/pending notice */}
+      {hasPendingOrActive && (
+        <div className="bg-teal-50 border border-teal-200 rounded-2xl px-5 py-4 flex items-center gap-3">
+          <span className="h-3 w-3 rounded-full bg-teal-500 animate-pulse shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-teal-800">
+              {visitas.find((v) => v.estado === "activa") ? "Visita en curso" : "Solicitud pendiente de validación"}
+            </p>
+            <p className="text-xs text-teal-700 mt-0.5">
+              {visitas.find((v) => v.estado === "activa")
+                ? "El equipo registrará tu salida al finalizar la visita."
+                : "Un funcionario del ELEAM validará tu ingreso en breve."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Visit history */}
+      <section className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="font-bold text-slate-800">Historial de visitas</h2>
+          <button
+            type="button"
+            onClick={() => loadVisits(activeId)}
+            disabled={loadingVisits}
+            className="text-xs text-slate-400 hover:text-slate-600 underline disabled:opacity-50"
+          >
+            Actualizar
+          </button>
+        </div>
+        <div className="p-5">
+          {loadingVisits ? (
+            <p className="text-sm text-slate-400 text-center py-4">Cargando historial...</p>
+          ) : visitas.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">Aún no tienes visitas registradas.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100 -mx-1 px-1">
+              {visitas.map((v) => {
+                const st = VISIT_STATUS[v.estado] ?? VISIT_STATUS.completada;
+                const canCancel = v.estado === "pendiente";
+                return (
+                  <li key={v.id} className="py-3 flex items-start gap-3">
+                    <div className="pt-1 shrink-0">
+                      <span className={`block h-2.5 w-2.5 rounded-full ${st.dot}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-slate-800">
+                          {formatDateTime(v.fecha_hora)}
+                        </p>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.pill}`}>
+                          {st.label}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-400">
+                        {v.duracion_min && <span>{v.duracion_min} min</span>}
+                        {v.salida_hora && <span>Salida: {formatDateTime(v.salida_hora)}</span>}
+                        {v.validado_en && <span>Ingreso validado {formatDateTime(v.validado_en)}</span>}
+                      </div>
+                      {v.notas && (
+                        <p className="text-xs text-slate-500 mt-1 italic">{v.notas}</p>
+                      )}
+                    </div>
+                    {canCancel && (
+                      <button
+                        type="button"
+                        onClick={() => handleCancel(v.id)}
+                        disabled={cancelling === v.id}
+                        className="shrink-0 text-xs text-rose-500 hover:text-rose-700 underline disabled:opacity-50"
+                      >
+                        {cancelling === v.id ? "..." : "Cancelar"}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </section>
     </PageLayout>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
@@ -37,134 +37,319 @@ function StatePill({ estado }) {
   );
 }
 
-function StateActions({ re, onChange, isAdmin }) {
-  const [showNA, setShowNA] = useState(false);
-  const [naMotivo, setNaMotivo] = useState("");
-  const [showCumple, setShowCumple] = useState(false);
-  const [fechaVenc, setFechaVenc] = useState(re.fecha_vencimiento ?? "");
-  const [busy, setBusy] = useState(false);
+const STATUS_OPTIONS = [
+  {
+    value: "cumple",
+    label: "Cumple",
+    description: "La evidencia vigente está cargada y el requisito queda al día.",
+  },
+  {
+    value: "pendiente",
+    label: "Pendiente",
+    description: "Aún falta cargar evidencia, revisarla o completar información.",
+  },
+  {
+    value: "observado",
+    label: "Observado",
+    description: "Hay una observación abierta que debe subsanarse antes de cumplir.",
+  },
+  {
+    value: "no_cumple",
+    label: "No cumple",
+    description: "El requisito fue revisado y no satisface lo solicitado.",
+  },
+  {
+    value: "vencido",
+    label: "Vencido",
+    description: "La evidencia perdió vigencia y debe renovarse.",
+  },
+  {
+    value: "no_aplica",
+    label: "No aplica",
+    description: "El requisito no corresponde a este ELEAM. Requiere motivo.",
+  },
+];
 
-  const change = async (estado, extra = {}) => {
-    setBusy(true);
-    try { await onChange({ estado, ...extra }); }
-    finally { setBusy(false); }
-  };
+const STATUS_DESCRIPTIONS = STATUS_OPTIONS.reduce((acc, option) => {
+  acc[option.value] = option.description;
+  return acc;
+}, {});
 
-  const submitNoAplica = async () => {
-    if (!naMotivo.trim()) return;
-    setBusy(true);
-    try { await onChange({ noAplica: naMotivo.trim() }); setShowNA(false); setNaMotivo(""); }
-    finally { setBusy(false); }
-  };
+function getDueBadge(fechaVencimiento) {
+  const dias = diasHasta(fechaVencimiento);
+  if (dias == null) return null;
+  if (dias < 0) {
+    return {
+      label: `Venció hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? "" : "s"}`,
+      cls: "bg-rose-50 text-rose-700 border-rose-200",
+    };
+  }
+  if (dias === 0) {
+    return { label: "Vence hoy", cls: "bg-amber-50 text-amber-800 border-amber-200" };
+  }
+  if (dias <= 30) {
+    return { label: `Vence en ${dias} días`, cls: "bg-amber-50 text-amber-800 border-amber-200" };
+  }
+  return { label: `Vence en ${dias} días`, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+}
 
-  const submitCumple = async () => {
-    setBusy(true);
-    try { await onChange({ cumple: fechaVenc || null }); setShowCumple(false); }
-    finally { setBusy(false); }
-  };
-
+function DetailTile({ label, children, action }) {
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        <Button
-          onClick={() => setShowCumple((s) => !s)}
-          disabled={busy}
-          className="bg-emerald-600 text-white text-sm px-3 py-1.5 rounded-xl hover:bg-emerald-700"
-        >
-          Marcar cumple
-        </Button>
-        <Button
-          onClick={() => change("pendiente", { fecha_vencimiento: null })}
-          disabled={busy}
-          className="bg-amber-500 text-white text-sm px-3 py-1.5 rounded-xl hover:bg-amber-600"
-        >
-          Marcar pendiente
-        </Button>
-        <Button
-          onClick={() => change("no_cumple")}
-          disabled={busy}
-          className="bg-rose-600 text-white text-sm px-3 py-1.5 rounded-xl hover:bg-rose-700"
-        >
-          No cumple
-        </Button>
-        {isAdmin && re.requisito?.permite_no_aplica && (
-          <Button
-            onClick={() => setShowNA((s) => !s)}
-            disabled={busy}
-            className="bg-slate-500 text-white text-sm px-3 py-1.5 rounded-xl hover:bg-slate-600"
-          >
-            Marcar no aplica
-          </Button>
-        )}
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+        {action}
       </div>
-
-      {showCumple && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
-          <p className="text-sm text-emerald-800">
-            {re.requisito?.requiere_vencimiento
-              ? "Indica la fecha de vencimiento (este documento se renueva)."
-              : "Si tiene fecha de vigencia, agrégala aquí. Si no, deja vacío."}
-          </p>
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className="text-xs uppercase font-semibold text-emerald-700 mb-1 block">
-                Fecha de vencimiento (opcional)
-              </label>
-              <Input type="date" value={fechaVenc} onChange={(e) => setFechaVenc(e.target.value)} />
-            </div>
-            <Button
-              onClick={submitCumple}
-              disabled={busy}
-              className="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700"
-            >
-              Confirmar
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {showNA && (
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
-          <p className="text-sm text-slate-700">
-            "No aplica" se usa cuando este requisito no corresponde a tu ELEAM
-            (ej. ascensor en establecimiento sin ascensor). Indica el motivo:
-          </p>
-          <textarea
-            rows={2}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-            placeholder="Motivo (ej. el ELEAM no cuenta con caldera)"
-            value={naMotivo}
-            onChange={(e) => setNaMotivo(e.target.value)}
-          />
-          <div className="flex gap-2 justify-end">
-            <Button
-              onClick={() => { setShowNA(false); setNaMotivo(""); }}
-              className="border border-slate-200 text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 text-sm"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={submitNoAplica}
-              disabled={busy || !naMotivo.trim()}
-              className="bg-slate-700 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800 text-sm disabled:opacity-50"
-            >
-              Confirmar
-            </Button>
-          </div>
-        </div>
-      )}
+      <div className="text-sm text-slate-800">{children}</div>
     </div>
   );
 }
 
+function StateActions({ re, onChange, canEdit }) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState("");
+  const [naMotivo, setNaMotivo] = useState("");
+  const [fechaVenc, setFechaVenc] = useState(re.fecha_vencimiento ?? "");
+  const [busy, setBusy] = useState(false);
+  const currentMeta = estadoMeta(re.estado);
+  const dueBadge = getDueBadge(re.fecha_vencimiento);
+  const canUseNoAplica = Boolean(re.requisito?.permite_no_aplica);
+  const availableStates = STATUS_OPTIONS.filter((option) => (
+    option.value !== re.estado && (option.value !== "no_aplica" || canUseNoAplica)
+  ));
+  const selectedOption = STATUS_OPTIONS.find((option) => option.value === selected);
+  const needsFechaVencimiento = selected === "cumple" && re.requisito?.requiere_vencimiento;
+  const submitDisabled =
+    busy ||
+    !selected ||
+    (selected === "no_aplica" && !naMotivo.trim()) ||
+    (needsFechaVencimiento && !fechaVenc);
+
+  const submitChange = async () => {
+    if (submitDisabled) return;
+    setBusy(true);
+    try {
+      if (selected === "no_aplica") {
+        await onChange({ noAplica: naMotivo.trim() });
+        setNaMotivo("");
+      } else if (selected === "cumple") {
+        await onChange({ cumple: fechaVenc || null });
+      } else if (selected === "pendiente") {
+        await onChange({ estado: selected, fecha_vencimiento: null, no_aplica_motivo: null });
+      } else {
+        await onChange({ estado: selected, no_aplica_motivo: null });
+      }
+      setOpen(false);
+      setSelected("");
+    }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <section className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Estado actual</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <StatePill estado={re.estado} />
+            {dueBadge && (
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${dueBadge.cls}`}>
+                {dueBadge.label}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-sm text-slate-600">
+            {STATUS_DESCRIPTIONS[re.estado] ?? currentMeta.label}
+          </p>
+          {re.fecha_vencimiento && (
+            <p className="mt-1 text-xs text-slate-500">
+              Fecha de vencimiento: {formatDate(re.fecha_vencimiento)}
+            </p>
+          )}
+        </div>
+        {canEdit && (
+          <Button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            disabled={busy}
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50"
+          >
+            {open ? "Cerrar cambio" : "Cambiar estado"}
+          </Button>
+        )}
+      </div>
+
+      {re.no_aplica_motivo && (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Motivo no aplica</p>
+          <p className="text-sm text-slate-700">{re.no_aplica_motivo}</p>
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-4 border-t border-slate-200 pt-4">
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-bold text-slate-800">Selecciona el nuevo estado</p>
+              <p className="text-xs text-slate-500">El cambio quedará registrado como última revisión del requisito.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {availableStates.map((option) => {
+              const meta = estadoMeta(option.value);
+              const active = selected === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSelected(option.value)}
+                  className={[
+                    "rounded-xl border bg-white p-3 text-left transition-colors",
+                    active ? "border-teal-500 ring-2 ring-teal-100" : "border-slate-200 hover:border-teal-300",
+                  ].join(" ")}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+                    <span className="text-sm font-bold text-slate-800">{option.label}</span>
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">{option.description}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selected === "cumple" && (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-emerald-700">
+                Fecha de vencimiento {needsFechaVencimiento ? "*" : "(opcional)"}
+              </label>
+              <Input type="date" value={fechaVenc} onChange={(e) => setFechaVenc(e.target.value)} required={needsFechaVencimiento} />
+              <p className="mt-2 text-xs text-emerald-800">
+                {needsFechaVencimiento
+                  ? "Este requisito se renueva periódicamente; registra la fecha para alertar a tiempo."
+                  : "Úsala solo si la evidencia tiene vigencia definida."}
+              </p>
+            </div>
+          )}
+
+          {selected === "no_aplica" && (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                Motivo *
+              </label>
+              <textarea
+                rows={3}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                placeholder="Ej. el ELEAM no cuenta con ascensor, por lo que este certificado no corresponde."
+                value={naMotivo}
+                onChange={(e) => setNaMotivo(e.target.value)}
+              />
+            </div>
+          )}
+
+          {selectedOption && selected !== "cumple" && selected !== "no_aplica" && (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+              {selectedOption.description}
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setSelected("");
+                setNaMotivo("");
+                setFechaVenc(re.fecha_vencimiento ?? "");
+              }}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={submitChange}
+              disabled={submitDisabled}
+              className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+            >
+              {busy ? "Actualizando..." : "Aplicar cambio"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 16V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M20 16.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.5" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes)) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb >= 10 ? 0 : 1)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+}
+
 function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
   const toast = useToast();
+  const inputRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState(null);
+  const [dragging, setDragging] = useState(false);
   const [fechaEmision, setFechaEmision] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [notas, setNotas] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const resetForm = () => {
+    setFile(null);
+    setFechaEmision("");
+    setFechaVencimiento("");
+    setNotas("");
+    setDragging(false);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const selectFile = (nextFile) => {
+    if (!nextFile) {
+      setFile(null);
+      return;
+    }
+    const err = validateFile(nextFile);
+    if (err) {
+      toast(err, "error");
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+    setFile(nextFile);
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    setDragging(false);
+    selectFile(event.dataTransfer.files?.[0] ?? null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -181,7 +366,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
         reemplazo: hasVigente,
       });
       toast(hasVigente ? "Documento reemplazado" : "Documento subido", "success");
-      setFile(null); setFechaEmision(""); setFechaVencimiento(""); setNotas("");
+      resetForm();
       setOpen(false);
       onUploaded?.();
     } catch (err2) {
@@ -212,13 +397,68 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
 
       <div>
         <label className="text-xs uppercase font-semibold text-teal-700 mb-1 block">Archivo (máx 10MB)</label>
-        <input
-          type="file"
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="block w-full text-sm"
-          required
-        />
+        <div
+          onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
+          onDrop={handleDrop}
+          className={[
+            "rounded-xl border border-dashed bg-white p-3 transition-colors",
+            dragging ? "border-teal-500 bg-teal-50" : "border-teal-200 hover:border-teal-400",
+          ].join(" ")}
+        >
+          <input
+            ref={inputRef}
+            id={`evidencia-file-${reId}`}
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
+            onChange={(e) => selectFile(e.target.files?.[0] ?? null)}
+            className="peer sr-only"
+          />
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800">
+                {file ? "Archivo listo para subir" : "Arrastra el archivo o selecciónalo desde tu equipo"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                PDF, Word, Excel o imagen hasta 10 MB. Cada carga queda versionada en el historial.
+              </p>
+            </div>
+
+            <label
+              htmlFor={`evidencia-file-${reId}`}
+              className="inline-flex min-h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-800 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-teal-500 peer-focus-visible:ring-offset-2"
+            >
+              <UploadIcon />
+              {file ? "Cambiar archivo" : "Seleccionar archivo"}
+            </label>
+          </div>
+
+          {file && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-teal-100 bg-teal-50 px-3 py-2">
+              <div className="flex min-w-0 items-center gap-2 text-teal-900">
+                <span className="shrink-0 rounded-md bg-white p-1 text-teal-700">
+                  <FileIcon />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold" title={file.name}>{file.name}</p>
+                  <p className="text-xs text-teal-700">{formatFileSize(file.size)}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setFile(null);
+                  if (inputRef.current) inputRef.current.value = "";
+                }}
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-teal-800 hover:bg-white"
+              >
+                Quitar
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -252,7 +492,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
       <div className="flex gap-2 justify-end">
         <Button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={() => { resetForm(); setOpen(false); }}
           className="border border-slate-200 text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 text-sm"
         >
           Cancelar
@@ -589,14 +829,14 @@ export default function AccreditationRequisito() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const handleStateChange = async ({ estado, noAplica, cumple, fecha_vencimiento }) => {
+  const handleStateChange = async ({ estado, noAplica, cumple, ...payload }) => {
     try {
       if (noAplica !== undefined) {
         await marcarNoAplica(id, noAplica);
       } else if (cumple !== undefined) {
         await marcarCumple(id, cumple);
       } else {
-        await setRequisitoEstado(id, { estado, ...(fecha_vencimiento !== undefined ? { fecha_vencimiento } : {}) });
+        await setRequisitoEstado(id, { estado, ...payload });
       }
       toast("Estado actualizado", "success");
       await loadAll();
@@ -666,7 +906,7 @@ export default function AccreditationRequisito() {
   const r = re.requisito;
   const a = r.ambito;
   const vigente = docs[0] ?? null;
-  const dias = diasHasta(re.fecha_vencimiento);
+  const canEditStatus = isAdminEleam || can("editar_acreditacion");
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
@@ -680,63 +920,71 @@ export default function AccreditationRequisito() {
 
       {/* Header */}
       <header className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <div className="flex items-center gap-2 flex-wrap mb-2">
+        <div className="flex items-center gap-2 flex-wrap mb-3">
           <span className="text-[10px] font-mono bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded">
             {r.codigo}
           </span>
-          <StatePill estado={re.estado} />
-          {re.fecha_vencimiento && dias != null && (
-            <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
-              dias < 0 ? "bg-rose-100 text-rose-700" :
-              dias <= 30 ? "bg-amber-100 text-amber-800" :
-              "bg-emerald-100 text-emerald-700"
-            }`}>
-              {dias < 0 ? `Venció hace ${Math.abs(dias)}d` :
-               dias === 0 ? "Vence hoy" :
-               `Vence en ${dias}d`}
-            </span>
-          )}
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            {a.nombre}
+          </span>
         </div>
         <h1 className="text-2xl font-black text-slate-800 mb-2">{r.nombre}</h1>
         {r.descripcion && (
           <p className="text-sm text-slate-600 mb-2">{r.descripcion}</p>
         )}
-        {r.medio_verificador && (
-          <p className="text-sm text-slate-500">
-            <strong className="text-slate-700">Medio verificador:</strong> {r.medio_verificador}
-          </p>
-        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-xs">
-          <div>
-            <p className="uppercase font-semibold text-slate-400 mb-1">Responsable</p>
+        <div className="mt-5">
+          <StateActions re={re} onChange={handleStateChange} canEdit={canEditStatus} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <DetailTile
+            label="Evidencia vigente"
+            action={vigente && (
+              <button
+                type="button"
+                onClick={() => handleViewDoc(vigente)}
+                className="text-xs font-semibold text-teal-700 hover:underline"
+              >
+                Ver
+              </button>
+            )}
+          >
+            {vigente ? (
+              <div className="min-w-0">
+                <p className="truncate font-semibold" title={vigente.archivo_nombre}>{vigente.archivo_nombre}</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  v{vigente.version}{vigente.fecha_vencimiento ? ` · vence ${formatDate(vigente.fecha_vencimiento)}` : ""}
+                </p>
+              </div>
+            ) : (
+              <p className="text-slate-500">Sin evidencia vigente.</p>
+            )}
+          </DetailTile>
+
+          <DetailTile label="Responsable">
             {re.responsable?.nombre ? (
-              <p>{re.responsable.nombre}{" "}
+              <p className="font-semibold">{re.responsable.nombre}{" "}
                 <span className="text-slate-500">({re.responsable.rol})</span>
               </p>
             ) : (
-              <button type="button"
- onClick={handleAssignSelf} className="text-teal-700 hover:underline">
+              <button type="button" onClick={handleAssignSelf} className="font-semibold text-teal-700 hover:underline">
                 + Asignarme
               </button>
             )}
-          </div>
-          <div>
-            <p className="uppercase font-semibold text-slate-400 mb-1">Última revisión</p>
-            <p>{re.ultima_revision_en ? formatDate(re.ultima_revision_en) : "—"}</p>
-          </div>
+          </DetailTile>
+
+          <DetailTile label="Última revisión">
+            <p>{re.ultima_revision_en ? formatDate(re.ultima_revision_en) : "Sin revisión registrada."}</p>
+          </DetailTile>
         </div>
 
-        {re.no_aplica_motivo && (
-          <div className="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <p className="text-xs uppercase font-semibold text-slate-500 mb-1">Motivo "no aplica"</p>
-            <p className="text-sm text-slate-700">{re.no_aplica_motivo}</p>
+        {r.medio_verificador && (
+          <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50 p-4">
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-teal-700">Medio verificador esperado</p>
+            <p className="text-sm text-teal-900">{r.medio_verificador}</p>
           </div>
         )}
-
-        <div className="mt-5">
-          <StateActions re={re} onChange={handleStateChange} isAdmin={isAdminEleam} />
-        </div>
       </header>
 
       {/* Tabs */}

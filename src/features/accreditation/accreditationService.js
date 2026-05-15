@@ -257,6 +257,7 @@ export async function marcarCumple(reId, fechaVencimiento) {
   return setRequisitoEstado(reId, {
     estado: "cumple",
     fecha_vencimiento: fechaVencimiento || null,
+    no_aplica_motivo: null,
   });
 }
 

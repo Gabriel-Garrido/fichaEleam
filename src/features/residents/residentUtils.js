@@ -57,3 +57,37 @@ export function calcAge(fechaNacimiento) {
   if (m < 0 || (m === 0 && today.getDate() < fn.getDate())) age--;
   return age;
 }
+
+function normalizeAllergyValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+const NO_KNOWN_ALLERGY_VALUES = new Set([
+  "sin alergia",
+  "sin alergias",
+  "sin alergias conocidas",
+  "no alergia",
+  "no alergias",
+  "no refiere alergias",
+  "ninguna",
+  "ninguno",
+]);
+
+export function getAllergySummary(alergias) {
+  const items = Array.isArray(alergias)
+    ? alergias.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const realAllergies = items.filter((item) => !NO_KNOWN_ALLERGY_VALUES.has(normalizeAllergyValue(item)));
+
+  return {
+    items: realAllergies,
+    hasRealAllergies: realAllergies.length > 0,
+    hasExplicitNoKnownAllergies: items.length > 0 && realAllergies.length === 0,
+    label: realAllergies.length > 0 ? realAllergies.join(", ") : "Sin alergias registradas",
+  };
+}
