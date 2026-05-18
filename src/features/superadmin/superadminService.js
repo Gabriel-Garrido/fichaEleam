@@ -339,7 +339,6 @@ export async function grantDemoAccess(leadId) {
     ...lead,
     _code: data.code || null,
     _message: data.message || null,
-    _temp_password: data.temp_password,
     _email_sent: data.email_sent === true,
     _email_error: data.email_error || null,
     _email_skipped: data.email_skipped === true,

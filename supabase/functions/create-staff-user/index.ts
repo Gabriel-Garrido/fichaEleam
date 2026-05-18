@@ -5,21 +5,22 @@
 // Para correos Gmail (@gmail.com): crea una invitación en funcionario_invitaciones
 // y el usuario puede ingresar directamente con Google OAuth. No necesita contraseña.
 //
-// Para otros correos: crea el usuario con contraseña temporal generada aquí.
-// El trigger handle_new_user crea el profile automáticamente usando app_metadata
-// firmado por Admin API. Nunca confiar en user_metadata para eleam_id/rol.
+// Para otros correos: crea el usuario con una contraseña aleatoria interna y le
+// envía por correo un enlace para definir su propia contraseña. La contraseña
+// interna nunca se devuelve. El trigger handle_new_user crea el profile usando
+// app_metadata firmado por Admin API. Nunca confiar en user_metadata para eleam_id/rol.
 //
 // Reglas:
 //   • Admin ELEAM con suscripción activa/en_gracia puede crear funcionarios y familiares.
 //   • Funcionario del ELEAM puede crear familiares vinculados a residentes activos.
 //   • Si rol='familiar' → residente_id obligatorio y debe pertenecer al ELEAM.
 //   • Si rol='funcionario' → respeta max_funcionarios del plan.
-//   • La contraseña temporal (solo correos no-Gmail) se devuelve una sola vez en la respuesta.
+//   • La contraseña nunca se devuelve; el acceso se entrega por enlace al correo.
 //   • Si Resend no está configurado o falla, retorna email_sent=false y email_error.
 
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
-import { sendEmail, staffWelcomeEmail, gmailStaffWelcomeEmail } from "../_shared/email.ts";
+import { sendEmail, staffWelcomeEmail, gmailStaffWelcomeEmail, type EmailResult } from "../_shared/email.ts";
 import {
   findAuthUserByEmail,
   isDuplicateAuthUserError,
@@ -59,30 +60,40 @@ function getAppUrl(): string {
   return rawAppUrl.replace(/\/+$/, "");
 }
 
-async function sendStaffCredentials({
+// Genera un enlace de recuperación (un solo uso) para que el usuario defina
+// su contraseña. El enlace nunca se devuelve al cliente, solo se envía al correo.
+async function generateAccessLink(
+  sb: ReturnType<typeof adminClient>,
+  email: string,
+): Promise<{ link: string | null; error: string | null }> {
+  const { data, error } = await sb.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${getAppUrl()}/reset-password` },
+  });
+  if (error) return { link: null, error: String(error.message ?? error) };
+  const link = data?.properties?.action_link ?? null;
+  if (!link) return { link: null, error: "No se pudo generar el enlace de acceso" };
+  return { link, error: null };
+}
+
+async function sendStaffAccessLink({
   email,
   nombre,
-  tempPassword,
+  setupUrl,
   eleamNombre,
   rol,
 }: {
   email: string;
   nombre: string;
-  tempPassword: string;
+  setupUrl: string;
   eleamNombre: string;
   rol: string;
 }) {
   return await sendEmail({
     to: email,
     subject: `Tu acceso a FichaEleam — ${eleamNombre}`,
-    html: staffWelcomeEmail({
-      nombre,
-      email,
-      tempPassword,
-      eleamNombre,
-      rol,
-      loginUrl: `${getAppUrl()}/login`,
-    }),
+    html: staffWelcomeEmail({ nombre, email, eleamNombre, rol, setupUrl }),
   });
 }
 
@@ -413,6 +424,8 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "No se pudo validar si el correo ya existe en Auth." }, 500);
     }
 
+    // Contraseña aleatoria interna: el usuario nunca la ve ni la recibe.
+    // Define la suya con el enlace de recuperación que se envía por correo.
     const tempPassword = generatePassword();
 
     if (existingAuthUser) {
@@ -482,18 +495,20 @@ Deno.serve(async (req) => {
         }, 500);
       }
 
-      const emailResult = await sendStaffCredentials({
-        email: cleanEmail,
-        nombre,
-        tempPassword,
-        eleamNombre: eleam.nombre,
-        rol,
-      });
+      const linkResult = await generateAccessLink(sb, cleanEmail);
+      const emailResult: EmailResult = linkResult.link
+        ? await sendStaffAccessLink({
+            email: cleanEmail,
+            nombre,
+            setupUrl: linkResult.link,
+            eleamNombre: eleam.nombre,
+            rol,
+          })
+        : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
 
       return jsonResponse(req, {
         ok: true,
         repaired_existing_auth_user: true,
-        temp_password: tempPassword,
         profile_id: existingAuthUser.id,
         email: cleanEmail,
         rol,
@@ -530,17 +545,19 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "No se pudo crear el usuario." }, 500);
     }
 
-    const emailResult = await sendStaffCredentials({
-      email: cleanEmail,
-      nombre,
-      tempPassword,
-      eleamNombre: eleam.nombre,
-      rol,
-    });
+    const linkResult = await generateAccessLink(sb, cleanEmail);
+    const emailResult: EmailResult = linkResult.link
+      ? await sendStaffAccessLink({
+          email: cleanEmail,
+          nombre,
+          setupUrl: linkResult.link,
+          eleamNombre: eleam.nombre,
+          rol,
+        })
+      : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
 
     return jsonResponse(req, {
       ok: true,
-      temp_password: tempPassword,
       profile_id: created.user.id,
       email: cleanEmail,
       rol,

@@ -92,28 +92,22 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
 export function staffWelcomeEmail({
   nombre,
   email,
-  tempPassword,
   eleamNombre,
   rol,
-  loginUrl,
+  setupUrl,
 }: {
   nombre: string;
   email: string;
-  tempPassword: string;
   eleamNombre: string;
   rol: string;
-  loginUrl: string;
+  setupUrl: string;
 }): string {
   const safeNombre = escapeHtml(nombre);
   const safeEmail = escapeHtml(email);
-  const safeTempPassword = escapeHtml(tempPassword);
   const safeEleamNombre = escapeHtml(eleamNombre);
-  const safeLoginUrl = escapeHtml(loginUrl);
+  const safeSetupUrl = escapeHtml(setupUrl);
   const rolLabel = rol === "familiar" ? "Familiar" : "Funcionario";
   const safeRolLabel = escapeHtml(rolLabel);
-  const googleHint = email.toLowerCase().endsWith("@gmail.com")
-    ? " Si tu correo es Gmail, después de entrar con esta contraseña temporal podrás vincular Google como método de acceso."
-    : "";
   return `
 <!DOCTYPE html>
 <html lang="es">
@@ -128,25 +122,19 @@ export function staffWelcomeEmail({
       <p style="color:#1e293b;font-size:16px;margin:0 0 8px">Hola, <strong>${safeNombre}</strong></p>
       <p style="color:#475569;font-size:14px;margin:0 0 24px">
         El administrador de <strong>${safeEleamNombre}</strong> te ha creado una cuenta como <strong>${safeRolLabel}</strong>.
+        Para activarla, define tu contraseña con el botón de abajo.
       </p>
 
-      <div style="background:#f1f5f9;border-radius:12px;padding:20px 24px;margin-bottom:24px">
-        <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Tus credenciales de acceso</p>
-        <p style="margin:0 0 8px;font-size:14px;color:#1e293b"><strong>Correo:</strong> ${safeEmail}</p>
-        <p style="margin:0;font-size:14px;color:#1e293b"><strong>Contraseña temporal:</strong>
-          <span style="font-family:monospace;background:#e2e8f0;padding:2px 8px;border-radius:4px;font-size:15px">${safeTempPassword}</span>
-        </p>
-      </div>
-
-      <p style="color:#64748b;font-size:13px;margin:0 0 24px">
-        Al ingresar por primera vez deberás establecer una contraseña personal.${googleHint}
-      </p>
-
-      <a href="${safeLoginUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px">
-        Ingresar a FichaEleam
+      <a href="${safeSetupUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px">
+        Activar mi cuenta
       </a>
 
-      <p style="color:#94a3b8;font-size:12px;margin:32px 0 0">
+      <p style="color:#64748b;font-size:13px;margin:24px 0 0">
+        Correo de tu cuenta: <strong>${safeEmail}</strong>
+      </p>
+      <p style="color:#94a3b8;font-size:12px;margin:16px 0 0">
+        El enlace es personal y caduca por seguridad. Si expira, solicita uno nuevo desde
+        "¿Olvidaste tu contraseña?" en la página de inicio de sesión.
         Si no esperabas este correo, ignóralo. Para soporte: soporte@fichaeleam.cl
       </p>
     </div>
@@ -215,24 +203,18 @@ export function gmailStaffWelcomeEmail({
 export function demoWelcomeEmail({
   nombre,
   email,
-  tempPassword,
   eleamNombre,
-  loginUrl,
+  setupUrl,
 }: {
   nombre: string;
   email: string;
-  tempPassword: string;
   eleamNombre: string;
-  loginUrl: string;
+  setupUrl: string;
 }): string {
   const safeNombre = escapeHtml(nombre);
   const safeEmail = escapeHtml(email);
-  const safeTempPassword = escapeHtml(tempPassword);
   const safeEleamNombre = escapeHtml(eleamNombre);
-  const safeLoginUrl = escapeHtml(loginUrl);
-  const googleHint = email.toLowerCase().endsWith("@gmail.com")
-    ? " Si tu correo es Gmail, después de entrar con esta contraseña temporal podrás vincular Google como método de acceso."
-    : "";
+  const safeSetupUrl = escapeHtml(setupUrl);
   return `
 <!DOCTYPE html>
 <html lang="es">
@@ -247,26 +229,19 @@ export function demoWelcomeEmail({
       <p style="color:#1e293b;font-size:16px;margin:0 0 8px">Hola, <strong>${safeNombre}</strong></p>
       <p style="color:#475569;font-size:14px;margin:0 0 24px">
         Tu acceso a la demo de FichaEleam para <strong>${safeEleamNombre}</strong> ha sido activado.
-        Explora tu entorno de prueba durante el período demo; podrás cargar residentes, equipo y documentos cuando lo necesites.
+        Define tu contraseña con el botón de abajo para entrar y explorar tu entorno de prueba.
       </p>
 
-      <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:20px 24px;margin-bottom:24px">
-        <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#0f766e;text-transform:uppercase;letter-spacing:.05em">Acceso a tu demo</p>
-        <p style="margin:0 0 8px;font-size:14px;color:#1e293b"><strong>Correo:</strong> ${safeEmail}</p>
-        <p style="margin:0;font-size:14px;color:#1e293b"><strong>Contraseña temporal:</strong>
-          <span style="font-family:monospace;background:#ccfbf1;padding:2px 8px;border-radius:4px;font-size:15px">${safeTempPassword}</span>
-        </p>
-      </div>
-
-      <p style="color:#64748b;font-size:13px;margin:0 0 24px">
-        Al ingresar por primera vez deberás elegir una contraseña personal.${googleHint}
-      </p>
-
-      <a href="${safeLoginUrl}" style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px">
-        Ingresar a mi demo
+      <a href="${safeSetupUrl}" style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px">
+        Activar mi demo
       </a>
 
-      <p style="color:#94a3b8;font-size:12px;margin:32px 0 0">
+      <p style="color:#64748b;font-size:13px;margin:24px 0 0">
+        Correo de tu cuenta: <strong>${safeEmail}</strong>
+      </p>
+      <p style="color:#94a3b8;font-size:12px;margin:16px 0 0">
+        El enlace es personal y caduca por seguridad. Si expira, solicita uno nuevo desde
+        "¿Olvidaste tu contraseña?" en la página de inicio de sesión.
         ¿Tienes preguntas? Escríbenos a soporte@fichaeleam.cl
       </p>
     </div>

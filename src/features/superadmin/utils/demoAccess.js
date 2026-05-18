@@ -34,7 +34,7 @@ export function getDemoLeadAccessState(lead = {}) {
 }
 
 export function demoGrantResultMessage(result = {}) {
-  const emailFailed = result.email_error || (result.temp_password && result.email_sent === false);
+  const emailFailed = result.email_error || result.email_sent === false;
 
   if (result.code === "already_active" || result.already_active) {
     return {
@@ -56,9 +56,11 @@ export function demoGrantResultMessage(result = {}) {
     return {
       title: "Cuenta reparada",
       toast: emailFailed
-        ? "Cuenta demo reparada; comparte las credenciales manualmente"
+        ? "Cuenta demo reparada; el correo de acceso no se pudo enviar"
         : "Cuenta demo reparada correctamente",
-      body: "Existia un usuario Auth sin perfil operativo. Se reparo y se genero una contrasena temporal.",
+      body: emailFailed
+        ? "Se reparo el usuario Auth, pero no se pudo enviar el enlace de acceso. El usuario puede pedir uno nuevo desde recuperar acceso."
+        : "Se reparo el usuario Auth y se le envio por correo un enlace para definir su contrasena.",
     };
   }
 
@@ -121,19 +123,17 @@ export function demoGrantResultMessage(result = {}) {
   if (emailFailed) {
     return {
       title: "Usuario demo creado",
-      toast: "Cuenta demo creada; comparte las credenciales manualmente",
+      toast: "Cuenta demo creada; el correo de acceso no se pudo enviar",
       body: result.email_error
-        ? `No se pudo enviar el correo automatico: ${result.email_error}`
-        : "No se envio correo automatico. Copia las credenciales y compartelas por un canal seguro.",
+        ? `No se pudo enviar el enlace de acceso: ${result.email_error}. El usuario puede pedir uno nuevo desde recuperar acceso.`
+        : "No se envio el enlace de acceso. El usuario puede pedir uno nuevo desde recuperar acceso en el inicio de sesion.",
     };
   }
 
   return {
     title: "Usuario demo creado",
     toast: "Usuario demo creado correctamente",
-    body: result.email_sent
-      ? "El usuario recibira las credenciales por correo."
-      : "Se genero una cuenta demo. Comparte las credenciales si el correo automatico no fue enviado.",
+    body: "El usuario recibira por correo un enlace para definir su contrasena e ingresar.",
   };
 }
 

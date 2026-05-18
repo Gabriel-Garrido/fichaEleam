@@ -19,10 +19,6 @@ const ESTADO_LABELS = {
 
 const ESTADOS = Object.keys(ESTADO_LABELS);
 
-function copyToClipboard(text) {
-  navigator.clipboard?.writeText(text).catch(() => {});
-}
-
 function SearchIcon() {
   return (
     <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -78,10 +74,8 @@ export default function LeadsPanel({
       });
       setCredenciales({
         email:                      updated.email ?? lead.email,
-        temp_password:              updated._temp_password,
         email_sent:                 updated._email_sent,
         email_error:                updated._email_error,
-        email_skipped:              updated._email_skipped,
         reused_existing_user:       updated._reused_existing_user,
         already_active:             updated._already_active,
         repaired_existing_auth_user:updated._repaired_existing_auth_user,
@@ -123,68 +117,34 @@ export default function LeadsPanel({
         <Modal
           isOpen={true}
           onClose={() => setCredenciales(null)}
-          title={credenciales.result_message?.title ?? (credenciales.temp_password ? "Usuario demo creado" : "Demo activado")}
+          title={credenciales.result_message?.title ?? "Demo aprobado"}
         >
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              <strong>{credenciales.nombre}</strong>: {credenciales.result_message?.body ?? (
-                credenciales.temp_password
-                  ? "Cuenta demo habilitada. Comparte las credenciales si el correo no fue enviado."
-                  : "Cuenta existente habilitada para demo. No se genero contrasena nueva."
-              )}
+              <strong>{credenciales.nombre}</strong>: {credenciales.result_message?.body ??
+                "Cuenta demo habilitada."}
             </p>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
               <p className="text-sm text-slate-700"><strong>Correo:</strong> {credenciales.email}</p>
-              {credenciales.temp_password && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm text-slate-700">
-                    <strong>Contraseña temporal:</strong>{" "}
-                    <span className="font-mono bg-white border border-slate-200 rounded px-2 py-0.5 text-base select-all">
-                      {credenciales.temp_password}
-                    </span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => { copyToClipboard(credenciales.temp_password); toast("Copiada", "success"); }}
-                    className="text-xs text-teal-700 border border-teal-200 bg-teal-50 rounded-xl px-2.5 py-1 hover:bg-teal-100 font-medium"
-                  >
-                    Copiar
-                  </button>
-                </div>
+              {credenciales.email_sent && (
+                <p className="mt-1 text-sm text-emerald-700">
+                  Se envió a este correo un enlace para definir la contraseña e ingresar.
+                </p>
               )}
             </div>
 
-            {credenciales.temp_password && !credenciales.email_sent && (
+            {credenciales.email_sent === false && credenciales.email_error && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-xs font-semibold text-amber-800">Correo no enviado automáticamente</p>
+                <p className="text-xs font-semibold text-amber-800">Correo de acceso no enviado</p>
                 <p className="mt-1 text-xs text-amber-700">
-                  {credenciales.email_error
-                    ? `Motivo: ${credenciales.email_error}`
-                    : "Comparte las credenciales manualmente y revisa la configuración de Resend."}
+                  Motivo: {credenciales.email_error}. El usuario puede pedir el enlace desde
+                  "¿Olvidaste tu contraseña?" en el inicio de sesión.
                 </p>
               </div>
             )}
 
-            <p className="text-xs text-slate-400">
-              {credenciales.temp_password
-                ? "El usuario deberá cambiar esta contraseña en su primer acceso. Si tiene Gmail, puede vincular Google desde /cambiar-clave."
-                : "El usuario accede con su contraseña actual, Google si ya estaba configurado, o puede usar recuperar acceso."}
-            </p>
-
-            <div className="flex justify-end gap-2">
-              {credenciales.temp_password && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    copyToClipboard(`Correo: ${credenciales.email}\nContraseña temporal: ${credenciales.temp_password}`);
-                    toast("Credenciales copiadas", "success");
-                  }}
-                  className="border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm hover:bg-slate-50"
-                >
-                  Copiar todo
-                </button>
-              )}
+            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => setCredenciales(null)}

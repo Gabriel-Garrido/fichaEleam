@@ -52,9 +52,8 @@ describe("demoGrantResultMessage", () => {
   it("describes email delivery failures", () => {
     expect(demoGrantResultMessage({
       code: "created",
-      temp_password: "secret",
       email_sent: false,
       email_error: "RESEND_API_KEY missing",
-    }).toast).toContain("comparte las credenciales");
+    }).toast).toContain("no se pudo enviar");
   });
 });

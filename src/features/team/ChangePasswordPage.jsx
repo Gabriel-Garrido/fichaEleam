@@ -162,7 +162,6 @@ export default function ChangePasswordPage() {
           <h1 className="text-2xl font-bold text-slate-800">Elige tu contraseña</h1>
           <p className="text-sm text-slate-500 mt-1">
             Por seguridad, debes establecer una contraseña personal antes de continuar.
-            La contraseña temporal que recibiste quedará sin efecto.
           </p>
         </div>
 

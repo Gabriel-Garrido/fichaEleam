@@ -207,8 +207,8 @@ export default function ResidentForm() {
           setFamiliarCreado({
             nombre:        familiarForm.nombre.trim(),
             email:         result.email ?? familiarForm.email.trim().toLowerCase(),
-            temp_password: result.temp_password,
             is_gmail:      !!(result.is_gmail || result.google_only),
+            email_sent:    result.email_sent === true,
           });
           // La pantalla de contraseña se muestra antes de navegar
           return;
@@ -274,9 +274,11 @@ export default function ResidentForm() {
         residenteId: id,
       });
       toast(
-        result.temp_password
-          ? `Familiar creado. Contraseña temporal: ${result.temp_password}`
-          : "Familiar creado. El familiar accederá con su cuenta de Google.",
+        result.is_gmail || result.google_only
+          ? "Familiar creado. Accederá con su cuenta de Google."
+          : result.email_sent === true
+            ? "Familiar creado. Se envió un enlace de acceso a su correo."
+            : "Familiar creado, pero no se pudo enviar el correo de acceso.",
         "success"
       );
       setShowFamiliarEdit(false);
@@ -325,30 +327,7 @@ export default function ResidentForm() {
             }
           </p>
 
-          {familiarCreado.temp_password ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mb-6">
-              <p className="text-xs text-amber-700 font-semibold mb-3">
-                Guarda esta contraseña — no se mostrará de nuevo
-              </p>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 w-20 shrink-0">Correo:</span>
-                  <code className="font-mono text-slate-800 bg-white border border-amber-200 rounded px-2 py-0.5 flex-1">
-                    {familiarCreado.email}
-                  </code>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 w-20 shrink-0">Contraseña:</span>
-                  <code className="font-mono text-xl tracking-widest text-slate-800 bg-white border border-amber-200 rounded px-2 py-0.5 flex-1 select-all">
-                    {familiarCreado.temp_password}
-                  </code>
-                </div>
-              </div>
-              <p className="text-xs text-amber-600 mt-3">
-                El familiar deberá cambiarla en su primer acceso.
-              </p>
-            </div>
-          ) : (
+          {familiarCreado.is_gmail ? (
             <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 text-left mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <svg className="w-4 h-4 text-sky-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -364,6 +343,20 @@ export default function ResidentForm() {
               </div>
               <p className="text-xs text-sky-600 mt-3">
                 El familiar iniciará sesión con el botón "Continuar con Google" usando esta dirección.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left mb-6">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-slate-500 w-20 shrink-0">Correo:</span>
+                <code className="font-mono text-slate-800 bg-white border border-slate-200 rounded px-2 py-0.5 flex-1">
+                  {familiarCreado.email}
+                </code>
+              </div>
+              <p className={`text-xs mt-3 ${familiarCreado.email_sent ? "text-emerald-600" : "text-amber-600"}`}>
+                {familiarCreado.email_sent
+                  ? "Le enviamos un enlace para definir su contraseña y entrar."
+                  : 'No se pudo enviar el correo. El familiar puede pedir el enlace desde "¿Olvidaste tu contraseña?" en el inicio de sesión.'}
               </p>
             </div>
           )}

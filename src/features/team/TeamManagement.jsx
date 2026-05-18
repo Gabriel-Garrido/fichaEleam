@@ -199,12 +199,6 @@ export default function TeamManagement() {
     setShowPermSection(false);
   };
 
-  const copyText = (text) => {
-    navigator.clipboard?.writeText(text)
-      .then(() => toast("Copiado al portapapeles", "success"))
-      .catch(() => toast("No se pudo copiar", "error"));
-  };
-
   // ─── Handlers: permisos ──────────────────────────────────────────────────
 
   const openPermModal = async (profileId, role = "funcionario") => {
@@ -335,36 +329,34 @@ export default function TeamManagement() {
   };
 
   const renderStaffImportDetail = (successRows) => {
-    const credentialRows = successRows.filter((row) => row.data?.temp_password);
     const googleRows = successRows.filter((row) => row.data?.google_only);
+    const linkRows = successRows.filter((row) => !row.data?.google_only);
+    const emailFailedRows = linkRows.filter((row) => row.data?.email_sent === false);
     const warnings = successRows.flatMap((row) => (row.warnings ?? []).map((warning) => ({ warning, label: row.label })));
-    const credentialText = credentialRows
-      .map((row) => `${row.data.email}: ${row.data.temp_password}`)
-      .join("\n");
 
     return (
       <div className="mt-4 space-y-3">
-        {credentialRows.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-white p-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs font-bold text-amber-900">
-                Contraseñas temporales generadas. Se muestran una sola vez.
-              </p>
-              <button
-                type="button"
-                onClick={() => copyText(credentialText)}
-                className="rounded-xl bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950"
-              >
-                Copiar credenciales
-              </button>
-            </div>
-            <div className="mt-3 max-h-40 overflow-auto rounded-xl bg-amber-50 p-2">
-              {credentialRows.map((row) => (
+        {linkRows.length > 0 && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+            {linkRows.length} funcionario{linkRows.length !== 1 ? "s" : ""} recibirá{linkRows.length !== 1 ? "n" : ""} por correo un enlace para activar su cuenta.
+          </div>
+        )}
+
+        {emailFailedRows.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs font-bold text-amber-900">
+              {emailFailedRows.length} correo{emailFailedRows.length !== 1 ? "s" : ""} no se pudo enviar
+            </p>
+            <div className="mt-2 max-h-40 overflow-auto rounded-xl bg-white p-2">
+              {emailFailedRows.map((row) => (
                 <p key={row.rowNumber} className="font-mono text-xs text-amber-950">
-                  {row.data.email}: {row.data.temp_password}
+                  {row.data.email}
                 </p>
               ))}
             </div>
+            <p className="mt-2 text-xs text-amber-800">
+              Pídeles que activen su cuenta desde "¿Olvidaste tu contraseña?" en el inicio de sesión.
+            </p>
           </div>
         )}
 
@@ -674,7 +666,7 @@ export default function TeamManagement() {
               <p className="text-sm text-slate-500 mt-1">
                 {createForm.email.toLowerCase().endsWith("@gmail.com")
                   ? "Correo Gmail detectado: el usuario podrá iniciar sesión directamente con Google, sin necesidad de contraseña."
-                  : "Se generará una contraseña temporal y se intentará enviarla por correo. El usuario la cambiará al iniciar sesión por primera vez."}
+                  : "Se enviará al correo un enlace para que el usuario defina su contraseña y active su cuenta."}
               </p>
             </div>
 
@@ -707,40 +699,30 @@ export default function TeamManagement() {
                       </p>
                     )}
                   </div>
-                ) : (
-                  /* ── Correo estándar: contraseña temporal ── */
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <p className="text-sm font-semibold text-amber-800 mb-2">
-                      Guarda esta contraseña temporal — no se mostrará de nuevo
-                    </p>
-                    <div className="flex gap-2 items-center bg-white border border-amber-200 rounded-xl p-2">
-                      <code className="flex-1 font-mono text-xl tracking-widest text-slate-800 select-all">
-                        {createdUser.temp_password}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => copyText(createdUser.temp_password)}
-                        className="text-teal-700 font-semibold text-xs hover:underline shrink-0"
-                      >
-                        Copiar
-                      </button>
+                ) : createdUser.email_sent ? (
+                  /* ── Correo estándar: enlace de acceso enviado ── */
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <p className="text-sm font-semibold text-emerald-800">Enlace de acceso enviado</p>
                     </div>
-                    <p className="text-xs text-amber-700 mt-2">
-                      {createdUser.email_sent
-                        ? `También enviamos estas credenciales a ${createdUser.email}.`
-                        : `Comparte esta contraseña con ${createdUser.email}.`}
-                      Al iniciar sesión deberá establecer una nueva.
+                    <p className="text-xs text-emerald-700">
+                      Enviamos a <strong>{createdUser.email}</strong> un enlace para que defina su contraseña y active la cuenta.
                     </p>
-                    {!createdUser.email_sent && (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mt-2">
-                        <p className="text-xs font-semibold text-amber-800">Correo no enviado automáticamente</p>
-                        <p className="mt-1 text-xs text-amber-700">
-                          {createdUser.email_error
-                            ? `Motivo: ${createdUser.email_error}`
-                            : "Comparte las credenciales manualmente y revisa la configuración de Resend."}
-                        </p>
-                      </div>
-                    )}
+                  </div>
+                ) : (
+                  /* ── Correo estándar: el enlace no se pudo enviar ── */
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+                    <p className="text-sm font-semibold text-amber-800">
+                      No se pudo enviar el correo de acceso
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      La cuenta de <strong>{createdUser.email}</strong> quedó creada.
+                      {createdUser.email_error ? ` Motivo: ${createdUser.email_error}.` : ""} Pídele que la
+                      active desde "¿Olvidaste tu contraseña?" en el inicio de sesión.
+                    </p>
                   </div>
                 )}
                 <Button

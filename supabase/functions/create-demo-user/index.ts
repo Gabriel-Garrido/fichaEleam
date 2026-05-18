@@ -15,7 +15,7 @@
 
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
-import { sendEmail, demoWelcomeEmail } from "../_shared/email.ts";
+import { sendEmail, demoWelcomeEmail, type EmailResult } from "../_shared/email.ts";
 import {
   findAuthUserByEmail,
   isDuplicateAuthUserError,
@@ -61,29 +61,43 @@ function generatePassword(): string {
     .join("");
 }
 
-async function sendDemoCredentials({
+function getAppUrl(): string {
+  const rawAppUrl = Deno.env.get("PUBLIC_APP_URL")?.trim() || "https://fichaeleam.cl";
+  return rawAppUrl.replace(/\/+$/, "");
+}
+
+// Genera un enlace de recuperación (un solo uso) para que el usuario defina
+// su contraseña. El enlace nunca se devuelve al cliente, solo se envía al correo.
+async function generateAccessLink(
+  sb: ReturnType<typeof adminClient>,
+  email: string,
+): Promise<{ link: string | null; error: string | null }> {
+  const { data, error } = await sb.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${getAppUrl()}/reset-password` },
+  });
+  if (error) return { link: null, error: String(error.message ?? error) };
+  const link = data?.properties?.action_link ?? null;
+  if (!link) return { link: null, error: "No se pudo generar el enlace de acceso" };
+  return { link, error: null };
+}
+
+async function sendDemoAccessLink({
   email,
   nombre,
-  tempPassword,
+  setupUrl,
   eleamNombre,
 }: {
   email: string;
   nombre: string;
-  tempPassword: string;
+  setupUrl: string;
   eleamNombre: string;
 }) {
-  const rawAppUrl = Deno.env.get("PUBLIC_APP_URL")?.trim() || "https://fichaeleam.cl";
-  const appUrl = rawAppUrl.replace(/\/+$/, "");
   return await sendEmail({
     to: email,
     subject: `Tu demo de FichaEleam está lista, ${nombre}`,
-    html: demoWelcomeEmail({
-      nombre,
-      email,
-      tempPassword,
-      eleamNombre,
-      loginUrl: `${appUrl}/login`,
-    }),
+    html: demoWelcomeEmail({ nombre, email, eleamNombre, setupUrl }),
   });
 }
 
@@ -247,6 +261,8 @@ Deno.serve(async (req) => {
       return fail(req, "internal_error", "No se pudo validar si el correo ya existe. Intenta nuevamente.", 500);
     }
 
+    // Contraseña aleatoria interna: el usuario nunca la ve ni la recibe.
+    // Define la suya con el enlace de recuperación que se envía por correo.
     const tempPassword = generatePassword();
 
     const { data: demoEleam, error: eleamCreateErr } = await sb
@@ -332,19 +348,21 @@ Deno.serve(async (req) => {
         return fail(req, "internal_error", "No se pudo actualizar el lead con la cuenta reparada.", 500);
       }
 
-      const emailResult = await sendDemoCredentials({
-        email: cleanEmail,
-        nombre: lead.nombre,
-        tempPassword,
-        eleamNombre,
-      });
+      const linkResult = await generateAccessLink(sb, cleanEmail);
+      const emailResult: EmailResult = linkResult.link
+        ? await sendDemoAccessLink({
+            email: cleanEmail,
+            nombre: lead.nombre,
+            setupUrl: linkResult.link,
+            eleamNombre,
+          })
+        : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
 
       return success(req, "repaired_auth", "Cuenta Auth reparada y demo aprobado.", {
         repaired_existing_auth_user: true,
         profile_id: existingAuthUser.id,
         eleam_id: demoEleam.id,
         email: cleanEmail,
-        temp_password: tempPassword,
         email_sent: emailResult.sent,
         email_skipped: emailResult.skipped === true,
         ...(emailResult.error ? { email_error: emailResult.error } : {}),
@@ -417,18 +435,20 @@ Deno.serve(async (req) => {
       return fail(req, "internal_error", "El usuario se creó, pero no se pudo actualizar el lead. Recarga y verifica.", 500);
     }
 
-    const emailResult = await sendDemoCredentials({
-      email: cleanEmail,
-      nombre: lead.nombre,
-      tempPassword,
-      eleamNombre,
-    });
+    const linkResult = await generateAccessLink(sb, cleanEmail);
+    const emailResult: EmailResult = linkResult.link
+      ? await sendDemoAccessLink({
+          email: cleanEmail,
+          nombre: lead.nombre,
+          setupUrl: linkResult.link,
+          eleamNombre,
+        })
+      : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
 
     return success(req, "created", "Usuario demo creado correctamente.", {
       profile_id: profileId,
       eleam_id: eleamId,
       email: cleanEmail,
-      temp_password: tempPassword,
       email_sent: emailResult.sent,
       email_skipped: emailResult.skipped === true,
       ...(emailResult.error ? { email_error: emailResult.error } : {}),

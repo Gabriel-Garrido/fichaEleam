@@ -172,7 +172,7 @@ export const staffImportConfig = {
   instructions: [
     "Completa una fila por funcionario. No incluyas administradores ni familiares en esta planilla.",
     "El cargo define los permisos iniciales. Después puedes ajustarlos desde Equipo y permisos.",
-    "Los correos Gmail se habilitan para entrar con Google. Otros correos reciben contraseña temporal.",
+    "Los correos Gmail se habilitan para entrar con Google. Otros correos reciben un enlace de acceso por correo.",
   ],
   columns: [
     { key: "nombre", header: "Nombre completo *", aliases: ["nombre", "nombres"], required: true, width: 28 },
