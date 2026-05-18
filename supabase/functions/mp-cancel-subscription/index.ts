@@ -6,7 +6,7 @@
 // El cambio definitivo de subscription_status llega vía webhook,
 // pero anticipamos el estado a 'cancelado' para que la UI lo refleje.
 
-import { preflight, jsonResponse } from "../_shared/cors.ts";
+import { preflight, jsonResponse, internalErrorResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
 import { updatePreapprovalStatus } from "../_shared/mercadopago.ts";
 
@@ -59,8 +59,6 @@ Deno.serve(async (req) => {
     return jsonResponse(req, { ok: true });
   } catch (e) {
     console.error("mp-cancel-subscription", e);
-    return jsonResponse(req, {
-      error: "Error interno", detail: String(e?.message ?? e),
-    }, 500);
+    return internalErrorResponse(req);
   }
 });

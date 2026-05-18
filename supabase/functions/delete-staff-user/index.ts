@@ -11,7 +11,7 @@
 //   • El target debe pertenecer al mismo ELEAM.
 //   • No se puede eliminar al propio admin_eleam.
 
-import { preflight, jsonResponse } from "../_shared/cors.ts";
+import { preflight, jsonResponse, internalErrorResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,6 +75,6 @@ Deno.serve(async (req) => {
     return jsonResponse(req, { ok: true });
   } catch (e) {
     console.error("delete-staff-user", e);
-    return jsonResponse(req, { error: "Error interno", detail: String(e?.message ?? e) }, 500);
+    return internalErrorResponse(req);
   }
 });

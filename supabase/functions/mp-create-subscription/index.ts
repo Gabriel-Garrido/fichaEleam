@@ -8,7 +8,7 @@
 // Solo el admin del ELEAM (rol = 'admin_eleam') puede activar la suscripción.
 // Un funcionario nunca paga — su acceso depende del estado del ELEAM.
 
-import { preflight, jsonResponse } from "../_shared/cors.ts";
+import { preflight, jsonResponse, internalErrorResponse } from "../_shared/cors.ts";
 import { getCallerProfile, adminClient } from "../_shared/supabase.ts";
 import {
   createPreapproval,
@@ -172,10 +172,6 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("mp-create-subscription error", e);
-    return jsonResponse(
-      req,
-      { error: "Error interno", detail: String(e?.message ?? e) },
-      500,
-    );
+    return internalErrorResponse(req);
   }
 });

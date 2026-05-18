@@ -18,7 +18,7 @@
 //   • La contraseña nunca se devuelve; el acceso se entrega por enlace al correo.
 //   • Si Resend no está configurado o falla, retorna email_sent=false y email_error.
 
-import { preflight, jsonResponse } from "../_shared/cors.ts";
+import { preflight, jsonResponse, internalErrorResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
 import { sendEmail, staffWelcomeEmail, gmailStaffWelcomeEmail, type EmailResult } from "../_shared/email.ts";
 import {
@@ -567,6 +567,6 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("create-staff-user", e);
-    return jsonResponse(req, { error: "Error interno", detail: String(e?.message ?? e) }, 500);
+    return internalErrorResponse(req);
   }
 });
