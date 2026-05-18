@@ -162,10 +162,9 @@ function ResidentDetails() {
                 {age != null && <span>{age} años</span>}
                 {resident.sexo && <span className="capitalize">{resident.sexo}</span>}
                 {resident.rut && <span>RUT: {resident.rut}</span>}
-                {resident.habitacion && (
+                {resident.ubicacion_label && (
                   <span>
-                    Hab. {resident.habitacion}
-                    {resident.cama ? ` · Cama ${resident.cama}` : ""}
+                    {resident.ubicacion_label}
                   </span>
                 )}
               </div>

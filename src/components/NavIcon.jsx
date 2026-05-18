@@ -8,6 +8,12 @@ const ICONS = {
   residents: (
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
   ),
+  beds: (
+    <>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75v10.5m0-6h16.5m0 0V8.625A2.625 2.625 0 0017.625 6h-3.75a2.625 2.625 0 00-2.625 2.625v2.625m9 0v6m-16.5 0h16.5m-16.5 0A1.875 1.875 0 015.625 19.125h12.75A1.875 1.875 0 0020.25 17.25" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 11.25V9.75A1.5 1.5 0 018.25 8.25h.75a1.5 1.5 0 011.5 1.5v1.5" />
+    </>
+  ),
   vitals: (
     <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
   ),

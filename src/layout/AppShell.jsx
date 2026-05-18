@@ -7,9 +7,9 @@ import { useNavigationItems } from "../navigation/useNavigationItems";
 import { logout } from "../features/auth/authService";
 import {
   OnboardingProvider,
-  OnboardingWelcomeModal,
-  OnboardingChecklist,
-  OnboardingBanner,
+  ActivationIntro,
+  ActivationPanel,
+  ActivationNudge,
 } from "../features/onboarding";
 
 export default function AppShell({ children }) {
@@ -40,7 +40,7 @@ export default function AppShell({ children }) {
           onLogout={handleLogout}
         />
         <div className={`${collapsed ? "lg:pl-20" : "lg:pl-72"} transition-[padding] duration-200`}>
-          <OnboardingBanner />
+          <ActivationNudge />
           <main className="min-h-screen pb-28 lg:pb-0">
             {children ?? <Outlet />}
           </main>
@@ -52,8 +52,8 @@ export default function AppShell({ children }) {
           auth={auth}
           onLogout={handleLogout}
         />
-        <OnboardingWelcomeModal />
-        <OnboardingChecklist />
+        <ActivationIntro />
+        <ActivationPanel />
       </div>
     </OnboardingProvider>
   );

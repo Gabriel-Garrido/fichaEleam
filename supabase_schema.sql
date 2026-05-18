@@ -113,8 +113,6 @@ create table if not exists public.residentes (
   fecha_ingreso            date not null default current_date,
   fecha_egreso             date,
   motivo_egreso            text,
-  habitacion               text,
-  cama                     text,
   estado                   text not null default 'activo'
                            check (estado in ('activo','hospitalizado','egresado','fallecido')),
   indice_barthel           integer check (indice_barthel between 0 and 100),
@@ -130,6 +128,105 @@ create unique index if not exists residentes_rut_eleam_unique
   where rut is not null;
 create index if not exists idx_residentes_eleam_estado on public.residentes(eleam_id, estado);
 create index if not exists idx_residentes_nombre on public.residentes(apellido, nombre);
+
+create table if not exists public.habitaciones (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  codigo          text not null,
+  nombre          text,
+  piso            text,
+  sector          text,
+  estado          text not null default 'operativa'
+                  check (estado in ('operativa','mantenimiento','inactiva')),
+  notas           text,
+  orden           integer not null default 0,
+  creado_por      uuid references auth.users(id) on delete set null,
+  actualizado_por uuid references auth.users(id) on delete set null,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now(),
+  unique (eleam_id, codigo)
+);
+
+create index if not exists idx_habitaciones_eleam_estado
+  on public.habitaciones(eleam_id, estado);
+create index if not exists idx_habitaciones_eleam_orden
+  on public.habitaciones(eleam_id, orden, codigo);
+
+create table if not exists public.camas (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  habitacion_id   uuid not null references public.habitaciones(id) on delete restrict,
+  codigo          text not null,
+  nombre          text,
+  tipo            text not null default 'estandar'
+                  check (tipo in ('estandar','clinica','bariatrica','otra')),
+  estado          text not null default 'operativa'
+                  check (estado in ('operativa','mantenimiento','inactiva')),
+  notas           text,
+  orden           integer not null default 0,
+  creado_por      uuid references auth.users(id) on delete set null,
+  actualizado_por uuid references auth.users(id) on delete set null,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now(),
+  unique (habitacion_id, codigo)
+);
+
+create index if not exists idx_camas_eleam_estado
+  on public.camas(eleam_id, estado);
+create index if not exists idx_camas_habitacion_orden
+  on public.camas(habitacion_id, orden, codigo);
+
+create table if not exists public.cama_asignaciones (
+  id             uuid primary key default gen_random_uuid(),
+  eleam_id       uuid not null references public.eleams(id) on delete cascade,
+  cama_id        uuid not null references public.camas(id) on delete restrict,
+  residente_id   uuid not null references public.residentes(id) on delete cascade,
+  estado         text not null default 'ocupada'
+                 check (estado in ('ocupada','reservada_hospitalizacion')),
+  fecha_inicio   timestamptz not null default now(),
+  fecha_fin      timestamptz,
+  motivo_fin     text,
+  notas          text,
+  creado_por     uuid references auth.users(id) on delete set null,
+  cerrado_por    uuid references auth.users(id) on delete set null,
+  creado_en      timestamptz not null default now(),
+  actualizado_en timestamptz not null default now(),
+  check (fecha_fin is null or fecha_fin >= fecha_inicio)
+);
+
+create unique index if not exists cama_asignaciones_cama_activa_unique
+  on public.cama_asignaciones(cama_id)
+  where fecha_fin is null;
+create unique index if not exists cama_asignaciones_residente_activa_unique
+  on public.cama_asignaciones(residente_id)
+  where fecha_fin is null;
+create index if not exists idx_cama_asignaciones_eleam_estado
+  on public.cama_asignaciones(eleam_id, estado, fecha_inicio desc);
+create index if not exists idx_cama_asignaciones_residente_hist
+  on public.cama_asignaciones(residente_id, fecha_inicio desc);
+
+create table if not exists public.camas_audit (
+  id             uuid primary key default gen_random_uuid(),
+  eleam_id       uuid references public.eleams(id) on delete cascade,
+  cama_id        uuid references public.camas(id) on delete set null,
+  residente_id   uuid references public.residentes(id) on delete set null,
+  accion         text not null,
+  detalle        jsonb,
+  realizado_por  uuid references public.profiles(id) on delete set null,
+  realizado_en   timestamptz not null default now()
+);
+
+create index if not exists idx_camas_audit_eleam
+  on public.camas_audit(eleam_id, realizado_en desc);
+
+alter table public.residentes
+  add column if not exists cama_actual_id uuid references public.camas(id) on delete set null;
+
+create unique index if not exists residentes_cama_actual_unique
+  on public.residentes(cama_actual_id)
+  where cama_actual_id is not null and estado in ('activo','hospitalizado');
+create index if not exists idx_residentes_cama_actual_id
+  on public.residentes(cama_actual_id);
 
 create table if not exists public.signos_vitales (
   id                       uuid primary key default gen_random_uuid(),
@@ -600,6 +697,7 @@ create table if not exists public.funcionario_permisos (
   administrar_medicamentos boolean not null default true,
   validar_medicamentos_controlados boolean not null default false,
   ajustar_stock_medicamentos boolean not null default false,
+  asignar_camas            boolean not null default true,
   subir_acreditacion      boolean not null default true,
   editar_acreditacion     boolean not null default true,
   archivar_acreditacion   boolean not null default false,
@@ -621,6 +719,7 @@ alter table public.funcionario_permisos
   add column if not exists administrar_medicamentos        boolean not null default true,
   add column if not exists validar_medicamentos_controlados boolean not null default false,
   add column if not exists ajustar_stock_medicamentos      boolean not null default false,
+  add column if not exists asignar_camas                   boolean not null default true,
   add column if not exists editar_indicaciones_cuidado     boolean not null default false;
 
 create table if not exists public.eleam_feature_permissions (
@@ -1304,8 +1403,29 @@ begin
     'apellido', r.apellido,
     'fecha_nacimiento', r.fecha_nacimiento,
     'estado', r.estado,
-    'habitacion', r.habitacion,
-    'cama', r.cama,
+    'habitacion', h.codigo,
+    'cama', c.codigo,
+    'ubicacion_label', case
+      when h.codigo is not null and c.codigo is not null then 'Hab. ' || h.codigo || ' · Cama ' || c.codigo
+      when h.codigo is not null then 'Hab. ' || h.codigo
+      when c.codigo is not null then 'Cama ' || c.codigo
+      else null
+    end,
+    'cama_actual_id', r.cama_actual_id,
+    'ubicacion', case
+      when c.id is null then null
+      else jsonb_build_object(
+        'cama_id', c.id,
+        'cama_codigo', c.codigo,
+        'cama_nombre', c.nombre,
+        'cama_estado', c.estado,
+        'habitacion_id', h.id,
+        'habitacion_codigo', h.codigo,
+        'habitacion_nombre', h.nombre,
+        'piso', h.piso,
+        'sector', h.sector
+      )
+    end,
     'nivel_dependencia', r.nivel_dependencia,
     'fecha_ingreso', r.fecha_ingreso,
     'prevision', r.prevision,
@@ -1322,6 +1442,8 @@ begin
   )
   into v_residente
   from public.residentes r
+  left join public.camas c on c.id = r.cama_actual_id
+  left join public.habitaciones h on h.id = c.habitacion_id
   left join public.familiar_residentes fr
     on fr.residente_id = r.id
    and fr.profile_id = (select auth.uid())
@@ -1486,6 +1608,7 @@ begin
     when 'administrar_medicamentos' then administrar_medicamentos
     when 'validar_medicamentos_controlados' then validar_medicamentos_controlados
     when 'ajustar_stock_medicamentos'    then ajustar_stock_medicamentos
+    when 'asignar_camas'                 then asignar_camas
     when 'editar_indicaciones_cuidado'  then editar_indicaciones_cuidado
     else false
   end
@@ -3318,6 +3441,496 @@ begin
 end;
 $$;
 
+create or replace function public.asignar_residente_a_cama(
+  p_residente_id uuid,
+  p_cama_id uuid,
+  p_notas text default null
+)
+returns public.cama_asignaciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_residente public.residentes;
+  v_cama record;
+  v_current_assignment public.cama_asignaciones;
+  v_bed_assignment public.cama_asignaciones;
+  v_assignment public.cama_asignaciones;
+  v_notas text := nullif(trim(coalesce(p_notas, '')), '');
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_residente_id is null or p_cama_id is null then
+    raise exception 'Residente y cama son obligatorios' using errcode = 'P0001';
+  end if;
+
+  select *
+  into v_residente
+  from public.residentes
+  where id = p_residente_id
+  for update;
+
+  if not found then
+    raise exception 'Residente no encontrado' using errcode = 'P0001';
+  end if;
+
+  if v_residente.estado <> 'activo' then
+    raise exception 'Solo se puede asignar cama a residentes activos' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_residente.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_residente.eleam_id)
+       or not public.funcionario_can('asignar_camas') then
+      raise exception 'No autorizado a asignar camas' using errcode = '42501';
+    end if;
+  end if;
+
+  select
+    c.*,
+    h.estado as habitacion_estado,
+    h.codigo as habitacion_codigo
+  into v_cama
+  from public.camas c
+  join public.habitaciones h on h.id = c.habitacion_id
+  where c.id = p_cama_id
+  for update of c, h;
+
+  if not found then
+    raise exception 'Cama no encontrada' using errcode = 'P0001';
+  end if;
+
+  if v_cama.eleam_id is distinct from v_residente.eleam_id then
+    raise exception 'La cama no pertenece al ELEAM del residente' using errcode = 'P0001';
+  end if;
+
+  if v_cama.habitacion_estado <> 'operativa' then
+    raise exception 'La habitacion % no esta operativa', v_cama.habitacion_codigo using errcode = 'P0001';
+  end if;
+
+  if v_cama.estado <> 'operativa' then
+    raise exception 'La cama no esta operativa' using errcode = 'P0001';
+  end if;
+
+  perform set_config('app.allow_bed_assignment_sync', 'on', true);
+
+  select *
+  into v_bed_assignment
+  from public.cama_asignaciones
+  where cama_id = p_cama_id
+    and fecha_fin is null
+  for update;
+
+  if found and v_bed_assignment.residente_id is distinct from p_residente_id then
+    if v_bed_assignment.estado = 'reservada_hospitalizacion' then
+      raise exception 'La cama esta reservada por hospitalizacion de otro residente' using errcode = 'P0001';
+    end if;
+
+    raise exception 'La cama ya esta ocupada por otro residente' using errcode = 'P0001';
+  end if;
+
+  select *
+  into v_current_assignment
+  from public.cama_asignaciones
+  where residente_id = p_residente_id
+    and fecha_fin is null
+  for update;
+
+  if found and v_current_assignment.cama_id = p_cama_id then
+    update public.cama_asignaciones
+    set estado = 'ocupada',
+        notas = coalesce(v_notas, notas),
+        actualizado_en = now()
+    where id = v_current_assignment.id
+    returning * into v_assignment;
+
+    update public.residentes
+    set cama_actual_id = p_cama_id
+    where id = p_residente_id;
+
+    insert into public.camas_audit (
+      eleam_id, cama_id, residente_id, accion, detalle, realizado_por
+    )
+    values (
+      v_residente.eleam_id, p_cama_id, p_residente_id, 'asignacion_confirmada',
+      jsonb_build_object('notas', v_notas),
+      v_user
+    );
+
+    return v_assignment;
+  elsif found then
+    update public.cama_asignaciones
+    set fecha_fin = now(),
+        motivo_fin = 'traslado',
+        notas = trim(both from concat_ws(E'\n', notas, v_notas)),
+        cerrado_por = v_user,
+        actualizado_en = now()
+    where id = v_current_assignment.id;
+  end if;
+
+  insert into public.cama_asignaciones (
+    eleam_id, cama_id, residente_id, estado, notas, creado_por
+  )
+  values (
+    v_residente.eleam_id, p_cama_id, p_residente_id, 'ocupada', v_notas, v_user
+  )
+  returning * into v_assignment;
+
+  update public.residentes
+  set cama_actual_id = p_cama_id
+  where id = p_residente_id;
+
+  insert into public.camas_audit (
+    eleam_id, cama_id, residente_id, accion, detalle, realizado_por
+  )
+  values (
+    v_residente.eleam_id, p_cama_id, p_residente_id,
+    case when v_current_assignment.id is null then 'asignacion' else 'traslado' end,
+    jsonb_build_object(
+      'cama_anterior_id', v_current_assignment.cama_id,
+      'cama_nueva_id', p_cama_id,
+      'notas', v_notas
+    ),
+    v_user
+  );
+
+  return v_assignment;
+end;
+$$;
+
+create or replace function public.liberar_cama_residente(
+  p_residente_id uuid,
+  p_motivo text default 'liberacion',
+  p_notas text default null
+)
+returns public.cama_asignaciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_residente public.residentes;
+  v_assignment public.cama_asignaciones;
+  v_updated public.cama_asignaciones;
+  v_motivo text := coalesce(nullif(trim(coalesce(p_motivo, '')), ''), 'liberacion');
+  v_notas text := nullif(trim(coalesce(p_notas, '')), '');
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_residente_id is null then
+    raise exception 'Residente obligatorio' using errcode = 'P0001';
+  end if;
+
+  select *
+  into v_residente
+  from public.residentes
+  where id = p_residente_id
+  for update;
+
+  if not found then
+    raise exception 'Residente no encontrado' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_residente.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_residente.eleam_id)
+       or not public.funcionario_can('asignar_camas') then
+      raise exception 'No autorizado a liberar camas' using errcode = '42501';
+    end if;
+  end if;
+
+  perform set_config('app.allow_bed_assignment_sync', 'on', true);
+
+  select *
+  into v_assignment
+  from public.cama_asignaciones
+  where residente_id = p_residente_id
+    and fecha_fin is null
+  for update;
+
+  if not found then
+    update public.residentes
+    set cama_actual_id = null
+    where id = p_residente_id
+      and cama_actual_id is not null;
+
+    return null;
+  end if;
+
+  perform set_config('app.allow_bed_assignment_sync', 'on', true);
+
+  update public.cama_asignaciones
+  set fecha_fin = now(),
+      motivo_fin = v_motivo,
+      notas = trim(both from concat_ws(E'\n', notas, v_notas)),
+      cerrado_por = v_user,
+      actualizado_en = now()
+  where id = v_assignment.id
+  returning * into v_updated;
+
+  update public.residentes
+  set cama_actual_id = null
+  where id = p_residente_id;
+
+  insert into public.camas_audit (
+    eleam_id, cama_id, residente_id, accion, detalle, realizado_por
+  )
+  values (
+    v_assignment.eleam_id, v_assignment.cama_id, p_residente_id, 'liberacion',
+    jsonb_build_object('motivo', v_motivo, 'notas', v_notas),
+    v_user
+  );
+
+  return v_updated;
+end;
+$$;
+
+create or replace function public.resolver_cama_hospitalizacion(
+  p_residente_id uuid,
+  p_accion text,
+  p_notas text default null
+)
+returns public.cama_asignaciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_residente public.residentes;
+  v_assignment public.cama_asignaciones;
+  v_updated public.cama_asignaciones;
+  v_accion text := lower(nullif(trim(coalesce(p_accion, '')), ''));
+  v_notas text := nullif(trim(coalesce(p_notas, '')), '');
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_residente_id is null or v_accion not in ('reservar','liberar') then
+    raise exception 'Accion de hospitalizacion invalida' using errcode = 'P0001';
+  end if;
+
+  select *
+  into v_residente
+  from public.residentes
+  where id = p_residente_id
+  for update;
+
+  if not found then
+    raise exception 'Residente no encontrado' using errcode = 'P0001';
+  end if;
+
+  if v_residente.estado <> 'hospitalizado' then
+    raise exception 'La decision de cama por hospitalizacion requiere estado hospitalizado' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_residente.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_residente.eleam_id)
+       or not public.funcionario_can('asignar_camas') then
+      raise exception 'No autorizado a resolver camas por hospitalizacion' using errcode = '42501';
+    end if;
+  end if;
+
+  perform set_config('app.allow_bed_assignment_sync', 'on', true);
+
+  select *
+  into v_assignment
+  from public.cama_asignaciones
+  where residente_id = p_residente_id
+    and fecha_fin is null
+  for update;
+
+  if v_accion = 'reservar' then
+    if not found then
+      raise exception 'El residente no tiene una cama activa para reservar' using errcode = 'P0001';
+    end if;
+
+    update public.cama_asignaciones
+    set estado = 'reservada_hospitalizacion',
+        notas = trim(both from concat_ws(E'\n', notas, v_notas)),
+        actualizado_en = now()
+    where id = v_assignment.id
+    returning * into v_updated;
+
+    update public.residentes
+    set cama_actual_id = v_assignment.cama_id
+    where id = p_residente_id;
+
+    insert into public.camas_audit (
+      eleam_id, cama_id, residente_id, accion, detalle, realizado_por
+    )
+    values (
+      v_assignment.eleam_id, v_assignment.cama_id, p_residente_id,
+      'reserva_hospitalizacion',
+      jsonb_build_object('notas', v_notas),
+      v_user
+    );
+
+    return v_updated;
+  end if;
+
+  if not found then
+    update public.residentes
+    set cama_actual_id = null
+    where id = p_residente_id
+      and cama_actual_id is not null;
+
+    return null;
+  end if;
+
+  update public.cama_asignaciones
+  set fecha_fin = now(),
+      motivo_fin = 'hospitalizacion_liberada',
+      notas = trim(both from concat_ws(E'\n', notas, v_notas)),
+      cerrado_por = v_user,
+      actualizado_en = now()
+  where id = v_assignment.id
+  returning * into v_updated;
+
+  update public.residentes
+  set cama_actual_id = null
+  where id = p_residente_id;
+
+  insert into public.camas_audit (
+    eleam_id, cama_id, residente_id, accion, detalle, realizado_por
+  )
+  values (
+    v_assignment.eleam_id, v_assignment.cama_id, p_residente_id,
+    'liberacion_hospitalizacion',
+    jsonb_build_object('notas', v_notas),
+    v_user
+  );
+
+  return v_updated;
+end;
+$$;
+
+create or replace function public.prevent_habitacion_estado_ocupada()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.estado is distinct from old.estado and new.estado <> 'operativa' then
+    if exists (
+      select 1
+      from public.camas c
+      join public.cama_asignaciones ca on ca.cama_id = c.id
+      where c.habitacion_id = new.id
+        and ca.fecha_fin is null
+    ) then
+      raise exception 'No se puede cambiar la habitacion a % porque tiene camas ocupadas o reservadas', new.estado
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.prevent_cama_estado_ocupada()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.estado is distinct from old.estado and new.estado <> 'operativa' then
+    if exists (
+      select 1
+      from public.cama_asignaciones ca
+      where ca.cama_id = new.id
+        and ca.fecha_fin is null
+    ) then
+      raise exception 'No se puede cambiar la cama a % porque esta ocupada o reservada', new.estado
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.prevent_residente_cama_direct_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.cama_actual_id is distinct from old.cama_actual_id
+     and current_setting('app.allow_bed_assignment_sync', true) is distinct from 'on' then
+    raise exception 'La cama del residente se gestiona desde el modulo Camas' using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.sync_residente_cama_por_estado()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_assignment public.cama_asignaciones;
+  v_user uuid := (select auth.uid());
+begin
+  if new.estado is not distinct from old.estado then
+    return new;
+  end if;
+
+  if new.estado in ('egresado','fallecido') and old.cama_actual_id is not null then
+    select *
+    into v_assignment
+    from public.cama_asignaciones
+    where residente_id = new.id
+      and fecha_fin is null
+    for update;
+
+    if found then
+      update public.cama_asignaciones
+      set fecha_fin = now(),
+          motivo_fin = case when new.estado = 'fallecido' then 'fallecimiento' else 'egreso' end,
+          cerrado_por = v_user,
+          actualizado_en = now()
+      where id = v_assignment.id;
+
+      insert into public.camas_audit (
+        eleam_id, cama_id, residente_id, accion, detalle, realizado_por
+      )
+      values (
+        v_assignment.eleam_id, v_assignment.cama_id, new.id, 'liberacion_automatica',
+        jsonb_build_object('estado_residente', new.estado),
+        v_user
+      );
+    end if;
+
+    new.cama_actual_id := null;
+  elsif new.estado = 'activo' and new.cama_actual_id is not null then
+    update public.cama_asignaciones
+    set estado = 'ocupada',
+        actualizado_en = now()
+    where residente_id = new.id
+      and fecha_fin is null
+      and estado = 'reservada_hospitalizacion';
+  end if;
+
+  return new;
+end;
+$$;
+
 create or replace function public.sync_medicamento_controlado()
 returns trigger
 language plpgsql
@@ -3370,6 +3983,26 @@ create trigger trg_residentes_limit
   before insert or update of estado, eleam_id on public.residentes
   for each row execute function public.check_residentes_limit();
 
+drop trigger if exists trg_residentes_cama_estado on public.residentes;
+create trigger trg_residentes_cama_estado
+  before update of estado on public.residentes
+  for each row execute function public.sync_residente_cama_por_estado();
+
+drop trigger if exists trg_prevent_residente_cama_direct_update on public.residentes;
+create trigger trg_prevent_residente_cama_direct_update
+  before update of cama_actual_id on public.residentes
+  for each row execute function public.prevent_residente_cama_direct_update();
+
+drop trigger if exists trg_prevent_habitacion_estado_ocupada on public.habitaciones;
+create trigger trg_prevent_habitacion_estado_ocupada
+  before update of estado on public.habitaciones
+  for each row execute function public.prevent_habitacion_estado_ocupada();
+
+drop trigger if exists trg_prevent_cama_estado_ocupada on public.camas;
+create trigger trg_prevent_cama_estado_ocupada
+  before update of estado on public.camas
+  for each row execute function public.prevent_cama_estado_ocupada();
+
 drop trigger if exists trg_funcionarios_limit on public.profiles;
 create trigger trg_funcionarios_limit
   before insert or update of eleam_id, rol on public.profiles
@@ -3409,6 +4042,21 @@ create trigger trg_profile_feature_permissions_updated_at
 drop trigger if exists trg_residentes_updated_at on public.residentes;
 create trigger trg_residentes_updated_at
   before update on public.residentes
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_habitaciones_updated_at on public.habitaciones;
+create trigger trg_habitaciones_updated_at
+  before update on public.habitaciones
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_camas_updated_at on public.camas;
+create trigger trg_camas_updated_at
+  before update on public.camas
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_cama_asignaciones_updated_at on public.cama_asignaciones;
+create trigger trg_cama_asignaciones_updated_at
+  before update on public.cama_asignaciones
   for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_observaciones_updated_at on public.observaciones_diarias;
@@ -3564,6 +4212,15 @@ grant execute on function public.registrar_movimiento_stock_medicamento(uuid, te
 revoke all on function public.conciliar_stock_controlado(uuid, numeric, text, uuid) from public;
 grant execute on function public.conciliar_stock_controlado(uuid, numeric, text, uuid) to authenticated;
 
+revoke all on function public.asignar_residente_a_cama(uuid, uuid, text) from public;
+grant execute on function public.asignar_residente_a_cama(uuid, uuid, text) to authenticated;
+
+revoke all on function public.liberar_cama_residente(uuid, text, text) from public;
+grant execute on function public.liberar_cama_residente(uuid, text, text) to authenticated;
+
+revoke all on function public.resolver_cama_hospitalizacion(uuid, text, text) from public;
+grant execute on function public.resolver_cama_hospitalizacion(uuid, text, text) to authenticated;
+
 -- ============================================================
 -- 8. Row Level Security
 -- ============================================================
@@ -3572,6 +4229,10 @@ alter table public.profiles enable row level security;
 alter table public.planes enable row level security;
 alter table public.eleams enable row level security;
 alter table public.residentes enable row level security;
+alter table public.habitaciones enable row level security;
+alter table public.camas enable row level security;
+alter table public.cama_asignaciones enable row level security;
+alter table public.camas_audit enable row level security;
 alter table public.signos_vitales enable row level security;
 alter table public.observaciones_diarias enable row level security;
 alter table public.turno_entregas enable row level security;
@@ -3716,6 +4377,200 @@ create policy "residentes_delete" on public.residentes
     public.is_superadmin()
     or (
       public.funcionario_can('eliminar_residentes')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+-- Habitaciones, camas y ocupacion
+drop policy if exists "habitaciones_select" on public.habitaciones;
+drop policy if exists "habitaciones_insert_admin" on public.habitaciones;
+drop policy if exists "habitaciones_update_admin" on public.habitaciones;
+drop policy if exists "habitaciones_delete_admin" on public.habitaciones;
+
+create policy "habitaciones_select" on public.habitaciones
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+    or (
+      public.my_rol() = 'familiar'
+      and id in (
+        select c.habitacion_id
+        from public.camas c
+        join public.residentes r on r.cama_actual_id = c.id
+        where r.id in (select public.my_familiar_residente_ids())
+      )
+    )
+  );
+
+create policy "habitaciones_insert_admin" on public.habitaciones
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "habitaciones_update_admin" on public.habitaciones
+  for update using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "habitaciones_delete_admin" on public.habitaciones
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "camas_select" on public.camas;
+drop policy if exists "camas_insert_admin" on public.camas;
+drop policy if exists "camas_update_admin" on public.camas;
+drop policy if exists "camas_delete_admin" on public.camas;
+
+create policy "camas_select" on public.camas
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+    or (
+      public.my_rol() = 'familiar'
+      and id in (
+        select r.cama_actual_id
+        from public.residentes r
+        where r.id in (select public.my_familiar_residente_ids())
+      )
+    )
+  );
+
+create policy "camas_insert_admin" on public.camas
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and habitacion_id in (
+        select id from public.habitaciones where eleam_id = public.my_eleam_id()
+      )
+    )
+  );
+
+create policy "camas_update_admin" on public.camas
+  for update using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and habitacion_id in (
+        select id from public.habitaciones where eleam_id = public.my_eleam_id()
+      )
+    )
+  );
+
+create policy "camas_delete_admin" on public.camas
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "cama_asignaciones_select" on public.cama_asignaciones;
+drop policy if exists "cama_asignaciones_insert" on public.cama_asignaciones;
+drop policy if exists "cama_asignaciones_update" on public.cama_asignaciones;
+drop policy if exists "cama_asignaciones_delete_admin" on public.cama_asignaciones;
+
+create policy "cama_asignaciones_select" on public.cama_asignaciones
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "cama_asignaciones_insert" on public.cama_asignaciones
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('asignar_camas')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "cama_asignaciones_update" on public.cama_asignaciones
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('asignar_camas')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('asignar_camas')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "cama_asignaciones_delete_admin" on public.cama_asignaciones
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+drop policy if exists "camas_audit_select" on public.camas_audit;
+create policy "camas_audit_select" on public.camas_audit
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )

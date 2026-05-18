@@ -330,7 +330,7 @@ function ClinicalRow({ r, navigate }) {
           </span>
         </div>
         <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-          {r.habitacion && <span>Hab. {r.habitacion}{r.cama ? ` · Cama ${r.cama}` : ""}</span>}
+          {r.ubicacion_label && <span>{r.ubicacion_label}</span>}
           {r.ultimoSigno ? (
             <span>
               Último: {timeAgo(r.ultimoSigno.fecha_hora)}

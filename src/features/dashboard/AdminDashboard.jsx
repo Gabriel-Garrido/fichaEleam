@@ -32,6 +32,7 @@ export default function AdminDashboard() {
   const errors  = data?.errors ?? {};
   const turno   = currentShift();
   const operational = data?.operationalSummary ?? null;
+  const beds = data?.bedSummary ?? null;
 
   const acreditacion = useMemo(() => {
     const s = data?.acreditacionSummary;
@@ -158,7 +159,7 @@ export default function AdminDashboard() {
 
       {/* Top KPIs — orden según rol */}
       {!errors.residentStats && (
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <section className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {rol === "funcionario" ? (
             <>
               <KpiCard
@@ -189,6 +190,15 @@ export default function AdminDashboard() {
                 onClick={() => navigate("/residents")}
               />
               <KpiCard
+                title="Ocupación camas"
+                help="Camas operativas ocupadas o reservadas por hospitalización."
+                value={loading || errors.beds ? "…" : `${beds?.porcentajeOcupacion ?? 0}%`}
+                sub={beds ? `${beds.disponibles} disponibles · ${beds.residentesSinCama} residentes sin cama` : "Sin inventario de camas"}
+                icon="beds"
+                tone={(beds?.disponibles ?? 0) > 0 ? "emerald" : "amber"}
+                onClick={() => navigate("/camas")}
+              />
+              <KpiCard
                 title="Cumplimiento SEREMI"
                 help="Avance de requisitos de acreditación marcados como cumple."
                 value={loading ? "…" : `${acreditacion.porcentaje}%`}
@@ -208,6 +218,15 @@ export default function AdminDashboard() {
                 icon="residents"
                 tone="primary"
                 onClick={() => navigate("/residents")}
+              />
+              <KpiCard
+                title="Ocupación camas"
+                help="Camas operativas ocupadas o reservadas por hospitalización."
+                value={loading || errors.beds ? "…" : `${beds?.porcentajeOcupacion ?? 0}%`}
+                sub={beds ? `${beds.disponibles} disponibles · ${beds.residentesSinCama} residentes sin cama` : "Sin inventario de camas"}
+                icon="beds"
+                tone={(beds?.disponibles ?? 0) > 0 ? "emerald" : "amber"}
+                onClick={() => navigate("/camas")}
               />
               <KpiCard
                 title="Estado clínico"

@@ -1,5 +1,6 @@
 import { supabase } from "../../services/supabaseConfig";
 import { isValidUUID } from "../../utils/validators";
+import { withResidentLocation } from "../beds/bedsUtils";
 
 const RESIDENT_SELECT = `
   id, eleam_id, nombre, apellido, rut, fecha_nacimiento, sexo,
@@ -7,10 +8,26 @@ const RESIDENT_SELECT = `
   nombre_contacto, telefono_contacto, parentesco_contacto,
   prevision, diagnostico_principal, diagnosticos_secundarios,
   alergias, grupo_sanguineo, fecha_ingreso, fecha_egreso,
-  motivo_egreso, habitacion, cama, estado,
+  motivo_egreso, estado, cama_actual_id,
   indice_barthel, escala_katz, nivel_dependencia,
-  creado_por, creado_en, actualizado_en
+  creado_por, creado_en, actualizado_en,
+  cama_actual:camas!residentes_cama_actual_id_fkey(
+    id, eleam_id, habitacion_id, codigo, nombre, tipo, estado, notas, orden,
+    habitacion:habitaciones!camas_habitacion_id_fkey(
+      id, eleam_id, codigo, nombre, piso, sector, estado, notas, orden
+    )
+  )
 `;
+
+function stripLocationFields(payload = {}) {
+  const clean = { ...payload };
+  delete clean.habitacion;
+  delete clean.cama;
+  delete clean.cama_actual;
+  delete clean.cama_actual_id;
+  delete clean.ubicacion_label;
+  return clean;
+}
 
 // Obtiene el eleam_id del perfil del usuario autenticado actual
 async function getMyEleamId() {
@@ -36,7 +53,7 @@ export const getResidents = async (estado = null) => {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data;
+  return (data ?? []).map(withResidentLocation);
 };
 
 export const getResidentById = async (id) => {
@@ -48,18 +65,19 @@ export const getResidentById = async (id) => {
     .eq("id", id)
     .single();
   if (error) throw error;
-  return data;
+  return withResidentLocation(data);
 };
 
 export const createResident = async (residentData) => {
   const { userId, eleamId } = await getMyEleamId();
+  const payload = stripLocationFields(residentData);
   const { data, error } = await supabase
     .from("residentes")
-    .insert({ ...residentData, creado_por: userId, eleam_id: eleamId })
+    .insert({ ...payload, creado_por: userId, eleam_id: eleamId })
     .select(RESIDENT_SELECT)
     .single();
   if (error) throw error;
-  return data;
+  return withResidentLocation(data);
 };
 
 export const createResidentsBatch = async (rows, onProgress = null) => {
@@ -72,13 +90,14 @@ export const createResidentsBatch = async (rows, onProgress = null) => {
 
   for (const row of rows) {
     try {
+      const payload = stripLocationFields(row.payload);
       const { data, error } = await supabase
         .from("residentes")
-        .insert({ ...row.payload, creado_por: userId, eleam_id: eleamId })
+        .insert({ ...payload, creado_por: userId, eleam_id: eleamId })
         .select(RESIDENT_SELECT)
         .single();
       if (error) throw error;
-      results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data });
+      results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data: withResidentLocation(data) });
     } catch (error) {
       const message =
         error?.code === "23505"
@@ -96,15 +115,16 @@ export const createResidentsBatch = async (rows, onProgress = null) => {
 
 export const updateResident = async (id, residentData) => {
   if (!isValidUUID(id)) throw new Error("ID de residente inválido.");
+  const payload = stripLocationFields(residentData);
   // La RLS garantiza que solo se puede actualizar si pertenece al ELEAM del usuario
   const { data, error } = await supabase
     .from("residentes")
-    .update({ ...residentData, actualizado_en: new Date().toISOString() })
+    .update({ ...payload, actualizado_en: new Date().toISOString() })
     .eq("id", id)
     .select(RESIDENT_SELECT)
     .single();
   if (error) throw error;
-  return data;
+  return withResidentLocation(data);
 };
 
 export const deleteResident = async (id) => {

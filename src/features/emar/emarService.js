@@ -1,5 +1,6 @@
 import { supabase } from "../../services/supabaseConfig";
 import { normalizeFamilyVisibility } from "../familiar/familyVisibility";
+import { withResidentLocation } from "../beds/bedsUtils";
 import {
   currentTurno, todayIso,
   getSessionProfile, nextFollowUpSlot, normalizeSchedule, previousTurnos, requireFollowUpSlot,
@@ -77,7 +78,13 @@ const RECONCILIATION_SELECT = `
 
 const ADMIN_SELECT = `
   ${ADMINISTRATION_SELECT},
-  residentes(id, nombre, apellido, habitacion, cama),
+  residentes(
+    id, nombre, apellido, cama_actual_id,
+    cama_actual:camas!residentes_cama_actual_id_fkey(
+      id, codigo, nombre, tipo, estado,
+      habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+    )
+  ),
   horario:medicamentos_horarios(id, tolerancia_min),
   indicacion:medicamentos_indicaciones(
     id, medicamento_nombre, principio_activo, concentracion, dosis, unidad_dosis,
@@ -85,6 +92,13 @@ const ADMIN_SELECT = `
   ),
   lote:medicamentos_stock_lotes(id, lote, cantidad_actual, unidad, fecha_vencimiento, ubicacion, es_controlado)
 `;
+
+function normalizeAdministrationRow(row) {
+  return {
+    ...row,
+    residentes: withResidentLocation(row.residentes),
+  };
+}
 
 export function medicationDueAt(row) {
   if (!row?.fecha || !row?.hora) return null;
@@ -139,7 +153,7 @@ export async function listMedicationAdministrations({
 
   const { data, error } = await query;
   if (error) throw error;
-  const currentRows = (data ?? []).map((row) => ({ ...row, _arrastre: false }));
+  const currentRows = (data ?? []).map((row) => ({ ...normalizeAdministrationRow(row), _arrastre: false }));
 
   if (!includeCarryOver || !turno || (estado && !["pendiente", "pendiente_validacion"].includes(estado))) {
     return currentRows;
@@ -176,7 +190,7 @@ export async function listMedicationAdministrations({
   const carryRows = [];
   for (const result of carryResults) {
     if (result.error) throw result.error;
-    carryRows.push(...(result.data ?? []).map((row) => ({ ...row, _arrastre: true })));
+    carryRows.push(...(result.data ?? []).map((row) => ({ ...normalizeAdministrationRow(row), _arrastre: true })));
   }
 
   const seen = new Set();

@@ -6,6 +6,7 @@ describe("team permission presets", () => {
     expect(PLANTILLAS_CARGO["Enfermero/a"]).toMatchObject({
       crear_residentes: true,
       editar_acreditacion: true,
+      asignar_camas: true,
     });
   });
 

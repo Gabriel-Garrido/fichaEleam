@@ -899,7 +899,7 @@ export default function TeamManagement() {
                       <option value="">Selecciona un residente...</option>
                       {residentes.filter(r => r.estado === "activo").map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.apellido}, {r.nombre}{r.habitacion ? ` · Hab. ${r.habitacion}` : ""}
+                          {r.apellido}, {r.nombre}{r.ubicacion_label ? ` · ${r.ubicacion_label}` : ""}
                         </option>
                       ))}
                     </select>

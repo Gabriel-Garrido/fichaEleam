@@ -1,5 +1,6 @@
 import { supabase } from "../../services/supabaseConfig";
 import { normalizeFamilyVisibility } from "../familiar/familyVisibility";
+import { withResidentLocation } from "../beds/bedsUtils";
 
 export const CARE_TURNOS = ["mañana", "tarde", "noche"];
 
@@ -257,10 +258,23 @@ export function requireFollowUpSlot({ requiereSeguimiento, seguimientoFecha, seg
 
 const TASK_SELECT = `
   ${CARE_TASK_SELECT},
-  residentes(id, nombre, apellido, habitacion, cama, nivel_dependencia),
+  residentes(
+    id, nombre, apellido, nivel_dependencia, cama_actual_id,
+    cama_actual:camas!residentes_cama_actual_id_fkey(
+      id, codigo, nombre, tipo, estado,
+      habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+    )
+  ),
   actividad:plan_cuidado_actividades(id, titulo, categoria, prioridad, descripcion, instrucciones, requiere_observacion, visible_familiar, resumen_familiar),
   horario:plan_cuidado_horarios(id, tolerancia_min)
 `;
+
+function normalizeCareTaskRow(row) {
+  return {
+    ...row,
+    residentes: withResidentLocation(row.residentes),
+  };
+}
 
 export function previousTurnos(turno) {
   const index = CARE_TURNOS.indexOf(turno);
@@ -591,7 +605,7 @@ export async function listCareTasks({
 
   const { data, error } = await query;
   if (error) throw error;
-  const currentRows = (data ?? []).map((row) => ({ ...row, _arrastre: false }));
+  const currentRows = (data ?? []).map((row) => ({ ...normalizeCareTaskRow(row), _arrastre: false }));
 
   if (!includeCarryOver || !turno || (estado && !CARE_OPEN_STATUSES.includes(estado))) {
     return currentRows;
@@ -628,7 +642,7 @@ export async function listCareTasks({
   const carryRows = [];
   for (const result of carryResults) {
     if (result.error) throw result.error;
-    carryRows.push(...(result.data ?? []).map((row) => ({ ...row, _arrastre: true })));
+    carryRows.push(...(result.data ?? []).map((row) => ({ ...normalizeCareTaskRow(row), _arrastre: true })));
   }
 
   const seen = new Set();

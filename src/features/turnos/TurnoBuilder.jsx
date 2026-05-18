@@ -277,7 +277,7 @@ function ResidentRow({ residente }) {
       <div>
         <div className="text-sm font-semibold text-slate-950">{residente.nombre}</div>
         <div className="text-xs text-slate-500">
-          {[residente.habitacion && `Hab. ${residente.habitacion}`, residente.cama && `Cama ${residente.cama}`].filter(Boolean).join(" · ") || "Sin ubicación"}
+          {residente.ubicacion_label || "Sin ubicación"}
         </div>
       </div>
       <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">Sin signos hoy</span>

@@ -300,7 +300,7 @@ for (const entry of sourceEntries) {
   for (const match of entry.text.matchAll(/["']([a-z]+_[a-z0-9_]+)["']/g)) {
     const key = match[1];
     if (
-      /^(crear|editar|eliminar|completar|administrar|validar|ajustar|subir|archivar|registrar)_/.test(key)
+      /^(crear|editar|eliminar|completar|administrar|validar|ajustar|subir|archivar|registrar|asignar)_/.test(key)
     ) {
       frontendPermKeys.add(key);
     }

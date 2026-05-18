@@ -21,6 +21,13 @@ export const FEATURE_CATALOG = [
     roles: ["admin_eleam", "funcionario"],
   },
   {
+    id: "beds",
+    label: "Camas y ocupación",
+    description: "Inventario, disponibilidad y asignaciones.",
+    group: "Operación",
+    roles: ["admin_eleam", "funcionario"],
+  },
+  {
     id: "care-plans",
     label: "Plan de cuidado",
     description: "Pautas no farmacológicas y tareas por turno.",

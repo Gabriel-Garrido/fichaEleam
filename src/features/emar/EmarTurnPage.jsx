@@ -347,9 +347,7 @@ function EmarRow({ row, currentUserId, canAdminister, canValidate, onAction }) {
             {dueWindow && row.estado === "pendiente" && (
               <span>Ventana hasta {dueWindow}</span>
             )}
-            {row.residentes?.habitacion && (
-              <span>Hab. {row.residentes.habitacion}{row.residentes?.cama ? ` · cama ${row.residentes.cama}` : ""}</span>
-            )}
+            {row.residentes?.ubicacion_label && <span>{row.residentes.ubicacion_label}</span>}
             {row.lote && (
               <span>
                 Lote {row.lote.lote || "s/l"} · stock actual {row.lote.cantidad_actual} {row.lote.unidad}

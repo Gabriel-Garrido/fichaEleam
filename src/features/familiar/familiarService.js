@@ -1,5 +1,6 @@
 import { supabase } from "../../services/supabaseConfig";
 import { applyOwnVisitFilter } from "./familiarUtils";
+import { withResidentLocation } from "../beds/bedsUtils";
 
 function ensureSupabase() {
   if (!supabase) throw new Error("Supabase no está configurado.");
@@ -21,7 +22,11 @@ export async function getMyResidentes() {
       residente_id,
       parentesco,
       residentes(
-        id, nombre, apellido, fecha_nacimiento, estado, habitacion, cama, nivel_dependencia
+        id, nombre, apellido, fecha_nacimiento, estado, nivel_dependencia, cama_actual_id,
+        cama_actual:camas!residentes_cama_actual_id_fkey(
+          id, codigo, nombre, tipo, estado,
+          habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+        )
       )
     `)
     .eq("profile_id", user.id);
@@ -29,7 +34,7 @@ export async function getMyResidentes() {
 
   return (vinculos ?? [])
     .filter((v) => v.residentes)
-    .map((v) => ({ ...v.residentes, parentesco: v.parentesco }));
+    .map((v) => ({ ...withResidentLocation(v.residentes), parentesco: v.parentesco }));
 }
 
 // Snapshot del residente para el portal familiar (vía RPC security definer).

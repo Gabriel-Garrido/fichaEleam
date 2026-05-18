@@ -423,10 +423,10 @@ function ResidentCard({ resident: r, onView, onEdit, onDelete }) {
           {r.rut && (
             <Field label="RUT" value={r.rut} />
           )}
-          {r.habitacion && (
+          {r.ubicacion_label && (
             <Field
               label="Ubicación"
-              value={`Hab. ${r.habitacion}${r.cama ? ` · Cama ${r.cama}` : ""}`}
+              value={r.ubicacion_label}
             />
           )}
           {r.fecha_ingreso && (
@@ -552,8 +552,8 @@ function ResidentRow({ resident: r, onView, onEdit, onDelete }) {
         <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
           {age != null && <span>{age} años</span>}
           {r.rut && <span>RUT: {r.rut}</span>}
-          {r.habitacion && (
-            <span>Hab. {r.habitacion}{r.cama ? ` · Cama ${r.cama}` : ""}</span>
+          {r.ubicacion_label && (
+            <span>{r.ubicacion_label}</span>
           )}
           {r.nivel_dependencia && <span className="capitalize">Dep.: {r.nivel_dependencia}</span>}
         </div>

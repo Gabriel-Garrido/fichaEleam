@@ -15,6 +15,12 @@ export const PERM_GROUPS = [
     ],
   },
   {
+    label: "Camas",
+    perms: [
+      { key: "asignar_camas", label: "Asignar y liberar" },
+    ],
+  },
+  {
     label: "Signos Vitales",
     perms: [
       { key: "crear_signos_vitales",    label: "Registrar" },
@@ -73,6 +79,7 @@ export const DEFAULT_PERMS = {
   editar_indicaciones_cuidado: false,
   crear_indicaciones_medicamentos: false, editar_indicaciones_medicamentos: false,
   administrar_medicamentos: true, validar_medicamentos_controlados: false, ajustar_stock_medicamentos: false,
+  asignar_camas: true,
   subir_acreditacion: true,   editar_acreditacion: true,   archivar_acreditacion: false,
   registrar_visitas: true,
 };
@@ -86,6 +93,7 @@ export const PLANTILLAS_CARGO = {
     editar_indicaciones_cuidado: false,
     crear_indicaciones_medicamentos: false, editar_indicaciones_medicamentos: false,
     administrar_medicamentos: true, validar_medicamentos_controlados: true, ajustar_stock_medicamentos: true,
+    asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
     registrar_visitas: true,
   },
@@ -97,6 +105,7 @@ export const PLANTILLAS_CARGO = {
     editar_indicaciones_cuidado: true,
     crear_indicaciones_medicamentos: false, editar_indicaciones_medicamentos: false,
     administrar_medicamentos: false, validar_medicamentos_controlados: false, ajustar_stock_medicamentos: false,
+    asignar_camas: true,
     subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
     registrar_visitas: false,
   },
@@ -108,6 +117,7 @@ export const PLANTILLAS_CARGO = {
     editar_indicaciones_cuidado: true,
     crear_indicaciones_medicamentos: true, editar_indicaciones_medicamentos: true,
     administrar_medicamentos: true, validar_medicamentos_controlados: true, ajustar_stock_medicamentos: true,
+    asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
     registrar_visitas: false,
   },
@@ -119,6 +129,7 @@ export const PLANTILLAS_CARGO = {
     editar_indicaciones_cuidado: false,
     crear_indicaciones_medicamentos: false, editar_indicaciones_medicamentos: false,
     administrar_medicamentos: true, validar_medicamentos_controlados: false, ajustar_stock_medicamentos: false,
+    asignar_camas: true,
     subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
     registrar_visitas: true,
   },
@@ -130,6 +141,7 @@ export const PLANTILLAS_CARGO = {
     editar_indicaciones_cuidado: false,
     crear_indicaciones_medicamentos: false, editar_indicaciones_medicamentos: false,
     administrar_medicamentos: false, validar_medicamentos_controlados: false, ajustar_stock_medicamentos: false,
+    asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: true,
     registrar_visitas: false,
   },

@@ -1,5 +1,6 @@
 import { supabase } from "../../services/supabaseConfig";
 import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
+import { withResidentLocation } from "../beds/bedsUtils";
 
 function ensureSupabase() {
   if (!supabase) throw new Error("Supabase no está configurado.");
@@ -41,11 +42,17 @@ export async function getEleamResidentes(eleamId) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("residentes")
-    .select("id, nombre, apellido, estado, habitacion")
+    .select(`
+      id, nombre, apellido, estado, cama_actual_id,
+      cama_actual:camas!residentes_cama_actual_id_fkey(
+        id, codigo, nombre, tipo, estado,
+        habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+      )
+    `)
     .eq("eleam_id", eleamId)
     .order("apellido", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(withResidentLocation);
 }
 
 // Lista los familiares vinculados a residentes del ELEAM (vista del admin).

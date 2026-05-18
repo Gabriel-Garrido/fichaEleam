@@ -48,6 +48,7 @@ src/
 │   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService (diseño consistente con landing: nav/footer dark slate-950)
 │   ├── dashboard/              # AdminDashboard (rol-aware: admin_eleam muestra gestión, funcionario muestra clínica)
 │   ├── residents/              # CRUD residentes + detalles; residentUtils.js exporta ESTADO_CONFIG, ESTADO_BADGE, DEPENDENCIA_TONE, TIPO_LABEL, TIPO_BADGE, initials(), calcAge()
+│   ├── beds/                   # Gestión de habitaciones/camas: inventario, ocupación, asignación, transferencia y liberación
 │   ├── vitalSigns/             # Formulario + lista + rangos clínicos
 │   ├── observations/           # 12 tipos de observaciones diarias
 │   ├── accreditation/          # Modelo v9: ámbitos, requisitos, evidencias, observaciones, auditoría
@@ -55,7 +56,7 @@ src/
 │   │   └── carePlansService.js # Funciones compartidas: getSessionProfile(), todayIso(), currentTurno(), normalizeSchedule(), previousTurnos()
 │   ├── emar/                   # Kardex electrónico: EmarTurnPage (administración por turno), EmarResidentTab (historial por residente), emarService
 │   ├── turnos/                 # Entrega de turno: TurnoEntregaPage, TurnoHistoryPage, turnosService; integra datos de eMAR + plan de cuidado + signos + acreditación
-│   ├── permissions/            # Gestión de features por ELEAM: featureCatalog.js (12 features), FeaturePermissionsPage (admin)
+│   ├── permissions/            # Gestión de features por ELEAM: featureCatalog.js (13 features), FeaturePermissionsPage (admin)
 │   ├── payment/                # PaymentPage, PaymentReturn (MercadoPago)
 │   ├── team/                   # TeamManagement (crear funcionarios/familiares), teamConstants.js (PERM_GROUPS, PLANTILLAS_CARGO, DEFAULT_PERMS) + ChangePasswordPage
 │   ├── familiar/               # Portal restringido + registro de visitas
@@ -163,6 +164,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | `/blog/:slug` | PublicBlogPost | — | Post público |
 | `/cambiar-clave` | ChangePasswordPage | `requireActive=false` | Forzado si `mustResetPassword=true`; opción Google para Gmail |
 | `/dashboard` | AdminDashboard | `allowedRoles=[admin_eleam, funcionario]` | Índice operativo. KPIs reordenados por rol: funcionario ve alertas clínicas primero, admin_eleam ve gestión |
+| `/camas` | BedsPage | STAFF + feature `beds` | Inventario y ocupación de habitaciones/camas; admin crea inventario, funcionarios con `asignar_camas` asignan/transfieren/liberan |
 | `/residents`, `/residents/new`, `/residents/:id`, `/residents/:id/edit` | Resident* | STAFF | CRUD residentes |
 | `/vital-signs`, `/vital-signs/new` | VitalSigns* | STAFF | CRUD + rangos visuales |
 | `/observations`, `/observations/new` | Observation* | STAFF | 12 tipos de observaciones |
@@ -194,7 +196,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 ## Base de Datos
 
-38 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
+42 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
 
 ### Tablas principales
 
@@ -236,8 +238,18 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | indice_barthel, nivel_dependencia | int, text | 0-100; leve/moderado/severo/total |
 | fecha_ingreso, fecha_egreso, motivo_egreso | date, date, text | Ciclo de vida |
 | estado | text (enum 4) | activo, hospitalizado, egresado, fallecido |
-| habitacion, cama | text | Ubicación |
+| cama_actual_id | uuid FK camas | Ubicación actual calculada desde `camas -> habitaciones` |
 | creado_en | timestamptz | |
+
+#### Gestión de camas y ocupación
+
+**`habitaciones`** — Inventario por ELEAM: código, nombre, piso, sector, estado (`operativa | mantenimiento | inactiva`), orden y notas.
+
+**`camas`** — Inventario de camas por habitación: código, nombre, tipo, estado (`operativa | mantenimiento | inactiva`), orden y notas. No se permite pasar a mantenimiento/inactiva si tiene una asignación abierta.
+
+**`cama_asignaciones`** — Historial de ocupación: residente, cama, estado (`ocupada | reservada_hospitalizacion`), fecha_inicio, fecha_fin, motivo_fin, notas y usuario. Índices únicos parciales garantizan una cama activa por residente y un residente activo por cama.
+
+**`camas_audit`** — Auditoría de creación/edición/asignación/traslado/liberación/reserva. Las asignaciones se hacen por RPC (`asignar_residente_a_cama`, `liberar_cama_residente`, `resolver_cama_hospitalizacion`) para mantener atomicidad y actualizar `residentes.cama_actual_id`.
 
 #### `signos_vitales`
 | Columna | Tipo | Notas |
@@ -288,7 +300,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 **`familiar_residentes`** — PK (profile_id, residente_id): parentesco, creado_por, creado_en.
 
-**`funcionario_permisos`** — Permisos granulares por funcionario. 22 columnas bool: residentes, signos vitales, observaciones, plan de cuidado, eMAR, acreditación y visitas. Ver sección "Permisos Granulares" para defaults.
+**`funcionario_permisos`** — Permisos granulares por funcionario. 23 columnas bool: residentes, camas, signos vitales, observaciones, plan de cuidado, eMAR, acreditación y visitas. Ver sección "Permisos Granulares" para defaults.
 
 **`visitas_familiar`** — Registro de visitas: residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por.
 
@@ -343,17 +355,17 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 1. **Onboarding vía demo**: Prospecto llena formulario en landing → superadmin aprueba en LeadsPanel → Edge Function `create-demo-user` crea el ELEAM demo, luego crea cuenta con contraseña temporal usando `app_metadata` server-side, reutiliza una cuenta `admin_eleam` existente o repara Auth huérfano → email enviado si aplica + resultado visible en modal UI. Suscripción activada con 30 días de prueba.
 2. **Primer acceso**: `must_reset_password=true` → forzado a `/cambiar-clave` → establece contraseña personal o vincula Google (si Gmail, usando `linkIdentity`).
 3. **Sin pago**: Redirige a `/pago?sinAcceso=1`. Solo ve "Activar ELEAM", "Demo", "Cerrar sesión".
-4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/equipo` + `/accreditation`.
+4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/camas` + `/equipo` + `/accreditation`.
 5. **Crear funcionarios**: Email + nombre + permisos → Edge Function `create-staff-user` crea o repara cuenta con contraseña temporal + envía email de bienvenida con credenciales.
 6. **Crear familiares**: Selecciona residente activo + email → mismo flujo; `familiar_residentes` vincula al residente asignado. También puede hacerlo un funcionario desde flujos operativos autorizados.
-7. **Carga masiva Excel**: Desde `/residents` puede importar residentes con plantilla `.xlsx`; desde `/equipo` puede importar funcionarios con plantilla `.xlsx`. Las plantillas incluyen validadores nativos de Excel para listas, fechas, rangos y campos obligatorios. Ambos flujos usan `ExcelImportModal`, validan antes de importar y están ocultos para funcionarios.
+7. **Carga masiva Excel**: Desde `/residents` puede importar residentes con plantilla `.xlsx`; desde `/equipo` puede importar funcionarios con plantilla `.xlsx`. La plantilla de residentes no incluye habitación/cama: la ubicación se asigna desde `/camas`. Las plantillas incluyen validadores nativos de Excel para listas, fechas, rangos y campos obligatorios. Ambos flujos usan `ExcelImportModal`, validan antes de importar y están ocultos para funcionarios.
 
 ### funcionario (Personal clínico)
 
 - Ruta home: `/dashboard` si el ELEAM tiene acceso vigente (sin `/equipo`, sin `/pago`).
 - Creado por admin_eleam desde `/equipo`; recibe email con contraseña temporal.
 - Primer acceso: forzado a `/cambiar-clave` (mismo flujo que admin).
-- Puede: crear/editar residentes, signos, observaciones, acreditación (según `funcionario_permisos`).
+- Puede: crear/editar residentes, asignar/transferir/liberar camas, signos, observaciones, acreditación (según `funcionario_permisos`).
 - Puede crear cuentas familiares vinculadas a residentes activos.
 - No puede: administrar planes ni crear funcionarios.
 
@@ -574,6 +586,7 @@ Tabla `funcionario_permisos` con columnas bool por acción. Verificación en UI 
 | `administrar_medicamentos` | Administración eMAR | true |
 | `validar_medicamentos_controlados` | Validar controlados en eMAR | **false** |
 | `ajustar_stock_medicamentos` | Ajuste manual de stock | **false** |
+| `asignar_camas` | Asignar, transferir y liberar camas | true |
 | `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación | true / true / **false** |
 | `registrar_visitas` | Visitas familiares | true |
 
@@ -752,7 +765,7 @@ Persistido en localStorage con clave `fichaeleam_onboarding_v2_{userId}`. Campos
 - `src/features/vitalSigns/vitalRanges.js` — Rangos clínicos.
 - `src/features/carePlans/carePlansService.js` — Helpers compartidos: `getSessionProfile()`, `todayIso()`, `currentTurno()`, `normalizeSchedule()`, `previousTurnos()`.
 - `src/features/team/teamConstants.js` — `PERM_GROUPS`, `DEFAULT_PERMS`, `PLANTILLAS_CARGO`.
-- `src/features/permissions/featureCatalog.js` — Catálogo de 12 features con IDs, labels y defaults.
+- `src/features/permissions/featureCatalog.js` — Catálogo de 13 features con IDs, labels y defaults.
 - `src/features/onboarding/onboardingConfig.js` — Pasos y colores del onboarding por rol.
 - `src/features/onboarding/OnboardingContext.jsx` — Lógica de estado, permisos y auto-complete.
 - `public/_headers` — Security headers para Netlify / Cloudflare Pages.

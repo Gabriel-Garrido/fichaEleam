@@ -4,74 +4,40 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
-} from 'react';
-import { useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { ONBOARDING_STORAGE_PREFIX, ROLE_CONFIG } from './onboardingConfig';
+} from "react";
+import { useLocation } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { ACTIVATION_STORAGE_PREFIX } from "./onboardingConfig";
+import { fetchActivationCompletionSnapshot } from "./onboardingService";
+import {
+  buildActivationState,
+  buildCompletionSnapshot,
+  buildStepStatuses,
+  filterAllowedSteps,
+  getActivationPlaybook,
+  getCurrentRouteStep,
+  getDevice,
+  getFirstPendingStep,
+  normalizeActivationState,
+} from "./onboardingUtils";
 
 const OnboardingContext = createContext(null);
 
-// ─── Device detection ──────────────────────────────────────────────────────────
-
-function getDevice() {
-  return typeof window !== 'undefined' && window.innerWidth < 768
-    ? 'mobile'
-    : 'desktop';
-}
-
-// ─── Storage helpers ───────────────────────────────────────────────────────────
-
 function storageKey(userId, device) {
-  return `${ONBOARDING_STORAGE_PREFIX}${userId}_${device}`;
-}
-
-function buildFreshState(role, device) {
-  const config = ROLE_CONFIG[role];
-  if (!config) return null;
-  const steps = {};
-  config.steps.forEach((s) => { steps[s.id] = false; });
-  return {
-    role,
-    device,
-    seenWelcome: false,
-    steps,
-    // Tracks which step IDs were visible at the last session.
-    // Used to detect newly-granted permissions between sessions.
-    knownAvailableIds: [],
-    dismissed: false,
-    completedAt: null,
-  };
+  return `${ACTIVATION_STORAGE_PREFIX}${userId}_${device}`;
 }
 
 function loadState(userId, role, device) {
   try {
     const raw = localStorage.getItem(storageKey(userId, device));
-    if (!raw) return buildFreshState(role, device);
-
-    const saved = JSON.parse(raw);
-    // Role changed → full reset
-    if (saved.role !== role) return buildFreshState(role, device);
-
-    // Forward-compat: add any step IDs added to config after the user's last session
-    ROLE_CONFIG[role]?.steps.forEach((s) => {
-      if (!(s.id in saved.steps)) saved.steps[s.id] = false;
-    });
-
-    // Forward-compat: field added in storage v2
-    if (!Array.isArray(saved.knownAvailableIds)) saved.knownAvailableIds = [];
-
-    // Store device in state if missing (migration for existing records)
-    if (!saved.device) saved.device = device;
-
-    return saved;
+    return normalizeActivationState(raw ? JSON.parse(raw) : null, role, device);
   } catch {
-    return buildFreshState(role, device);
+    return buildActivationState(role, device);
   }
 }
 
-function persist(userId, device, state) {
+function persistState(userId, device, state) {
   try {
     localStorage.setItem(storageKey(userId, device), JSON.stringify(state));
   } catch {
@@ -79,208 +45,189 @@ function persist(userId, device, state) {
   }
 }
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
-
 export function OnboardingProvider({ children }) {
   const { user, rol, can, canFeature, profileLoading } = useAuth();
   const location = useLocation();
-
-  // Device is stable for the lifetime of this session (determined at mount).
-  // We intentionally do NOT react to resize events — the device type is the
-  // one the user opened the app on, not whatever they resize to later.
   const [device] = useState(() => getDevice());
-
   const [state, setState] = useState(null);
-  const [checklistOpen, setChecklistOpen] = useState(false);
-  const timers = useRef({});
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [snapshot, setSnapshot] = useState(() => buildCompletionSnapshot());
+  const [activationError, setActivationError] = useState(null);
 
-  // ── 1. Bootstrap: load state when user + role are known ───────────────────
   useEffect(() => {
-    if (!user?.id || !rol || !ROLE_CONFIG[rol]) {
+    if (!user?.id || !rol || !getActivationPlaybook(rol, canFeature)) {
       setState(null);
       return;
     }
-    setState(loadState(user.id, rol, device));
-  }, [user?.id, rol, device]);
 
-  // ── 2. Persist every state change ────────────────────────────────────────
+    setState(loadState(user.id, rol, device));
+  }, [user?.id, rol, device, canFeature]);
+
   useEffect(() => {
-    if (state && user?.id) persist(user.id, device, state);
+    if (state && user?.id) persistState(user.id, device, state);
   }, [state, user?.id, device]);
 
-  // ── 3. Compute which steps are available given current permissions ────────
-  //
-  // We wait until profileLoading is false so `can()` reflects the real
-  // permission set (permisos=null triggers a fail-open default in can(), which
-  // would briefly show all steps and then hide them — better to wait).
-  const allSteps = useMemo(
-    () => ROLE_CONFIG[rol]?.steps ?? [],
-    [rol],
+  const playbook = useMemo(
+    () => (rol ? getActivationPlaybook(rol, canFeature) : null),
+    [rol, canFeature],
   );
 
-  const availableSteps = useMemo(() => {
-    if (profileLoading || !state) return [];
-    return allSteps.filter((step) => {
-      if (step.requiredPermission && !can(step.requiredPermission)) return false;
-      if (step.requiredFeature && !canFeature(step.requiredFeature)) return false;
-      return true;
-    });
-  }, [allSteps, profileLoading, state, can, canFeature]);
+  const steps = useMemo(() => {
+    if (profileLoading || !state || !playbook) return [];
+    return filterAllowedSteps(playbook, { can, canFeature });
+  }, [profileLoading, state, playbook, can, canFeature]);
 
-  // ── 4. Detect newly-granted permissions between sessions ─────────────────
-  //
-  // If a step was not previously visible (not in knownAvailableIds) but is now
-  // available AND still pending, we reactivate the onboarding so the user
-  // knows there's something new to discover.
+  const refresh = useCallback(async () => {
+    if (!steps.some((step) => step.completionRule)) return;
+
+    try {
+      const nextSnapshot = await fetchActivationCompletionSnapshot();
+      setSnapshot(nextSnapshot);
+      setActivationError(null);
+    } catch (error) {
+      console.warn("No se pudo actualizar el avance de activación:", error);
+      setActivationError(error);
+    }
+  }, [steps]);
+
   useEffect(() => {
-    if (profileLoading || !availableSteps.length) return;
+    if (!state || !steps.some((step) => step.completionRule)) return undefined;
 
-    const currentIds = availableSteps.map((s) => s.id);
-
-    setState((prev) => {
-      if (!prev) return prev;
-
-      const known = new Set(prev.knownAvailableIds);
-      const newlyVisible = currentIds.filter((id) => !known.has(id));
-
-      // Nothing new → just ensure knownAvailableIds is current
-      if (newlyVisible.length === 0) {
-        // Still sync if knownAvailableIds differs (e.g. a permission was removed)
-        const sameIds =
-          currentIds.length === prev.knownAvailableIds.length &&
-          currentIds.every((id) => known.has(id));
-        return sameIds ? prev : { ...prev, knownAvailableIds: currentIds };
-      }
-
-      const hasNewPending = newlyVisible.some((id) => prev.steps[id] === false);
-
-      return {
-        ...prev,
-        knownAvailableIds: currentIds,
-        // Reactivate guide when there are uncompleted newly-visible steps
-        dismissed: hasNewPending ? false : prev.dismissed,
-        // Reset completion stamp so the finished state reflects new reality
-        completedAt: hasNewPending ? null : prev.completedAt,
-      };
-    });
-  }, [availableSteps, profileLoading]);
-
-  // ── 5. Auto-complete: mark a step done after the user lingers on its route ─
-  useEffect(() => {
-    Object.values(timers.current).forEach(clearTimeout);
-    timers.current = {};
-
-    if (!state || state.dismissed || !availableSteps.length) return;
-
-    availableSteps.forEach((step) => {
-      if (state.steps[step.id]) return;
-      const onRoute = step.matchRoutes?.some((r) => location.pathname.startsWith(r));
-      if (!onRoute) return;
-
-      timers.current[step.id] = setTimeout(() => {
-        setState((prev) => {
-          if (!prev || prev.steps[step.id]) return prev;
-          return { ...prev, steps: { ...prev.steps, [step.id]: true } };
-        });
-      }, step.autoCompleteAfter ?? 6000);
-    });
+    refresh();
+    const intervalId = window.setInterval(refresh, 5000);
+    window.addEventListener("focus", refresh);
 
     return () => {
-      Object.values(timers.current).forEach(clearTimeout);
-      timers.current = {};
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refresh);
     };
-    // availableSteps reference is stable (useMemo) so this won't thrash.
-  }, [location.pathname, state?.dismissed, availableSteps]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, steps, refresh, location.pathname]);
 
-  // ── 6. Stamp completedAt when all available steps are done ───────────────
-  const doneCount = state
-    ? availableSteps.filter((s) => state.steps[s.id]).length
-    : 0;
-  const totalCount = availableSteps.length;
+  const statuses = useMemo(
+    () => buildStepStatuses(steps, state, snapshot),
+    [steps, state, snapshot],
+  );
+
+  const doneCount = steps.filter((step) => statuses[step.id]?.completed).length;
+  const totalCount = steps.length;
+  const progress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 100;
   const isComplete = totalCount > 0 && doneCount === totalCount;
+  const firstPendingStep = useMemo(
+    () => getFirstPendingStep(steps, statuses),
+    [steps, statuses],
+  );
+  const currentRouteStep = useMemo(
+    () => getCurrentRouteStep(steps, statuses, location.pathname),
+    [steps, statuses, location.pathname],
+  );
 
   useEffect(() => {
-    if (!isComplete) return;
+    if (!isComplete || !playbook?.id) return;
     setState((prev) => {
-      if (!prev || prev.completedAt) return prev;
-      return { ...prev, completedAt: new Date().toISOString() };
+      if (!prev || prev.completedMissions?.[playbook.id]) return prev;
+      return {
+        ...prev,
+        completedMissions: {
+          ...prev.completedMissions,
+          [playbook.id]: new Date().toISOString(),
+        },
+      };
     });
-  }, [isComplete]);
+  }, [isComplete, playbook?.id]);
 
-  // ── Public API ────────────────────────────────────────────────────────────
-
-  const markWelcomeSeen = useCallback(() => {
-    setState((prev) => (prev ? { ...prev, seenWelcome: true } : prev));
+  const markIntroSeen = useCallback(() => {
+    setState((prev) => (prev ? { ...prev, seenIntro: true, dismissed: false } : prev));
   }, []);
 
   const markStepDone = useCallback((stepId) => {
     setState((prev) => {
-      if (!prev || prev.steps[stepId]) return prev;
-      return { ...prev, steps: { ...prev.steps, [stepId]: true } };
+      if (!prev) return prev;
+      if (prev.manualSteps?.[stepId]) return prev;
+      return {
+        ...prev,
+        manualSteps: {
+          ...prev.manualSteps,
+          [stepId]: true,
+        },
+      };
+    });
+  }, []);
+
+  const hideNudge = useCallback((stepId) => {
+    setState((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        hiddenNudges: {
+          ...prev.hiddenNudges,
+          [stepId]: true,
+        },
+      };
     });
   }, []);
 
   const dismiss = useCallback(() => {
-    setState((prev) => (prev ? { ...prev, dismissed: true } : prev));
-    setChecklistOpen(false);
+    setState((prev) => (prev ? { ...prev, dismissed: true, seenIntro: true } : prev));
+    setPanelOpen(false);
   }, []);
 
   const reset = useCallback(() => {
     if (!rol) return;
-    setState(buildFreshState(rol, device));
+    setState(buildActivationState(rol, device));
+    setPanelOpen(false);
+    setSnapshot(buildCompletionSnapshot());
   }, [rol, device]);
 
-  // ── Derived UI flags ──────────────────────────────────────────────────────
-
-  const progress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 100;
-
-  // Only show welcome modal once permissions are loaded and there are steps to show
-  const showWelcome = !!(
+  const showIntro = !!(
     state &&
-    !state.seenWelcome &&
+    playbook &&
+    !state.seenIntro &&
     !state.dismissed &&
-    availableSteps.length > 0
+    steps.length > 0
   );
 
-  // Checklist button and banner are visible when not dismissed and there are steps
-  const isActive = !!(state && !state.dismissed && availableSteps.length > 0);
+  const isActive = !!(
+    state &&
+    playbook &&
+    !state.dismissed &&
+    steps.length > 0
+  );
 
-  // First pending step whose route matches the current page
-  const currentRouteStep = availableSteps.find(
-    (s) =>
-      !state?.steps[s.id] &&
-      s.matchRoutes?.some((r) => location.pathname.startsWith(r)),
-  ) ?? null;
-
-  // Index of currentRouteStep within availableSteps (for "Paso X de Y" display)
   const currentRouteStepIndex = currentRouteStep
-    ? availableSteps.indexOf(currentRouteStep)
+    ? steps.findIndex((step) => step.id === currentRouteStep.id)
     : -1;
-
-  const config = rol ? ROLE_CONFIG[rol] : null;
-  const isMobile = device === 'mobile';
 
   const value = {
     state,
-    config,
+    config: playbook,
+    playbook,
     device,
-    isMobile,
-    // Only expose available (permission-filtered) steps to UI components
-    steps: availableSteps,
+    isMobile: device === "mobile",
+    steps,
+    statuses,
+    snapshot,
     doneCount,
     totalCount,
     progress,
     isComplete,
-    showWelcome,
+    showIntro,
+    showWelcome: showIntro,
     isActive,
+    firstPendingStep,
     currentRouteStep,
     currentRouteStepIndex,
-    checklistOpen,
-    setChecklistOpen,
-    markWelcomeSeen,
+    panelOpen,
+    checklistOpen: panelOpen,
+    setPanelOpen,
+    setChecklistOpen: setPanelOpen,
+    markIntroSeen,
+    markWelcomeSeen: markIntroSeen,
     markStepDone,
+    hideNudge,
     dismiss,
     reset,
+    refresh,
+    activationError,
   };
 
   return (

@@ -1,6 +1,6 @@
 # FichaEleam
 
-Plataforma SaaS para digitalizar fichas clínicas, registros operativos, carpeta SEREMI y gestión comercial de ELEAM en Chile.
+Plataforma SaaS para digitalizar fichas clínicas, gestión de camas, registros operativos, carpeta SEREMI y gestión comercial de ELEAM en Chile.
 
 Stack principal: React 19, Vite 6, Tailwind CSS 4, Supabase (Auth, PostgreSQL, Storage, Edge Functions) y MercadoPago.
 
@@ -119,7 +119,7 @@ npx supabase login
 npx supabase link --project-ref <TU_PROJECT_REF>
 ```
 
-El schema es idempotente: puede re-ejecutarse. Incluye tablas base, RLS, triggers, seeds, permisos de funcionarios, permisos por feature, leads de landing y analytics. `supabase_schema.sql` completo es la única fuente SQL operativa del proyecto.
+El schema es idempotente: puede re-ejecutarse. Incluye tablas base, gestión de camas, RLS, triggers, seeds, permisos de funcionarios, permisos por feature, leads de landing y analytics. `supabase_schema.sql` completo es la única fuente SQL operativa del proyecto.
 
 Cuando cambie el flujo de autenticación, re-ejecuta el schema antes de desplegar las Edge Functions. `handle_new_user` depende de `app_metadata` server-side y rechazará registros/OAuth sin invitación válida.
 
@@ -255,9 +255,10 @@ Estados derivados usados por UI:
 
 ### Admin ELEAM
 
-- Administra residentes, signos vitales, observaciones, acreditación y equipo.
+- Administra residentes, camas, signos vitales, observaciones, acreditación y equipo.
 - Paga la suscripción del ELEAM.
 - Crea funcionarios/familiares desde `/equipo`.
+- Crea habitaciones/camas desde `/camas` y gestiona ocupación, disponibilidad, traslados y liberaciones.
 - Puede cargar residentes y funcionarios desde planillas Excel `.xlsx`; la importación está restringida a `admin_eleam`.
 - Ajusta features visibles para funcionarios y familiares solo dentro de lo habilitado por superadmin.
 - Usa un `AppShell` operacional: sidebar desktop abierto por defecto, colapsable a icon rail con preview por hover/focus en 0,3 segundos, y bottom nav en mobile.
@@ -265,7 +266,7 @@ Estados derivados usados por UI:
 
 ### Funcionario
 
-- Acceso operativo a `/dashboard`, turnos, residentes, signos, observaciones y acreditación según permisos por feature y `funcionario_permisos`.
+- Acceso operativo a `/dashboard`, turnos, camas, residentes, signos, observaciones y acreditación según permisos por feature y `funcionario_permisos`.
 - No paga ni gestiona equipo.
 - Puede crear cuentas familiares vinculadas a residentes activos desde flujos operativos autorizados.
 - Si el ELEAM pierde acceso vigente, queda bloqueado y debe contactar al admin ELEAM.
@@ -293,6 +294,7 @@ Estados derivados usados por UI:
 | `/pago`, `/pago/return` | Suscripción MercadoPago. |
 | `/dashboard` | Panel operativo staff. |
 | `/turnos*` | Entrega de turno, tareas diarias de cuidado y eMAR por turno. |
+| `/camas` | Inventario de habitaciones/camas, ocupación, asignación, transferencia y liberación. |
 | `/residents*` | Residentes, incluida carga masiva desde Excel para admin ELEAM. |
 | `/vital-signs*` | Signos vitales. |
 | `/observations*` | Observaciones diarias. |
@@ -321,7 +323,7 @@ Estados derivados usados por UI:
 
 ### Importación desde Excel
 
-- Residentes: en `/residents`, solo `admin_eleam` ve `Cargar residentes desde Excel`. La planilla oficial incluye columnas claras como `Nombres *`, `Apellidos *`, `RUT`, `Fecha ingreso *`, estado clínico, dependencia, contacto y alergias.
+- Residentes: en `/residents`, solo `admin_eleam` ve `Cargar residentes desde Excel`. La planilla oficial incluye columnas claras como `Nombres *`, `Apellidos *`, `RUT`, `Fecha ingreso *`, estado clínico, dependencia, contacto y alergias. No incluye habitación/cama: la ubicación se asigna desde `/camas`.
 - Funcionarios: en `/equipo`, solo `admin_eleam` puede usar `Cargar funcionarios desde Excel`. La planilla exige `Nombre completo *`, `Correo electrónico *` y `Cargo / plantilla de permisos *`.
 - El modal descarga una plantilla `.xlsx` generada en el navegador con validaciones nativas de Excel para listas, fechas, rangos numéricos, email y campos obligatorios; al subirla igualmente normaliza fechas/RUT/enums y bloquea la importación si hay filas con errores.
 - Residentes se crean fila a fila para reportar errores específicos sin perder los registros válidos ya creados. Funcionarios se crean mediante `create-staff-user`, por lo que se mantienen límites de plan, creación Auth, flujo Gmail/Google y correos de bienvenida.
@@ -331,10 +333,11 @@ Estados derivados usados por UI:
 
 ## Base de Datos
 
-`supabase_schema.sql` crea 38 tablas:
+`supabase_schema.sql` crea 42 tablas:
 
 - Multi-tenant: `profiles`, `eleams`, `planes`.
 - Clínica: `residentes`, `signos_vitales`, `observaciones_diarias`, `turno_entregas`.
+- Camas/ocupación: `habitaciones`, `camas`, `cama_asignaciones`, `camas_audit`.
 - Plan de cuidado: `planes_cuidado`, `plan_cuidado_actividades`, `plan_cuidado_horarios`, `tareas_cuidado`, `plan_cuidado_audit`.
 - eMAR: `medicamentos_indicaciones`, `medicamentos_horarios`, `medicamentos_administraciones`, `medicamentos_stock_lotes`, `medicamentos_stock_movimientos`, `medicamentos_conciliaciones`, `medicamentos_audit`.
 - Equipo: `funcionario_invitaciones` (accesos Google pendientes), `funcionario_permisos`, `eleam_feature_permissions`, `profile_feature_permissions`, `familiar_residentes`, `visitas_familiar`.
@@ -346,6 +349,8 @@ Estados derivados usados por UI:
 Todas las tablas sensibles tienen RLS. `superadmin` accede vía `public.is_superadmin()`. Staff y familiar quedan aislados por `eleam_id` o vínculo de residente.
 
 El acceso operativo también se filtra con `public.eleam_has_access(eleam_id)`: si el ELEAM no tiene demo/suscripción vigente, staff y familiares no pueden leer ni modificar fichas, registros, acreditación o documentos aunque conserven sesión de Supabase.
+
+La ubicación del residente no se escribe como texto libre en la ficha. `residentes.cama_actual_id` apunta a `camas`, y la habitación se obtiene por `camas.habitacion_id -> habitaciones`. Las asignaciones, reservas por hospitalización, traslados y liberaciones se gestionan mediante `cama_asignaciones` y RPCs transaccionales para mantener historial y evitar doble ocupación.
 
 ---
 
@@ -361,6 +366,7 @@ Permisos actuales:
 - `crear_planes_cuidado`, `editar_planes_cuidado`, `completar_tareas_cuidado`, `editar_indicaciones_cuidado`
 - `crear_indicaciones_medicamentos`, `editar_indicaciones_medicamentos`, `administrar_medicamentos`
 - `validar_medicamentos_controlados`, `ajustar_stock_medicamentos`
+- `asignar_camas`
 - `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion`
 - `registrar_visitas`
 

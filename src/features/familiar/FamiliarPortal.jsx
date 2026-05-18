@@ -175,9 +175,7 @@ function ResidentHero({ resident, eleam, onNavigateVisitas }) {
             <p className="text-sm text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
               {age != null && <span>{age} años</span>}
               {resident?.parentesco && <span className="capitalize">{resident.parentesco}</span>}
-              {resident?.habitacion && (
-                <span>Hab. {resident.habitacion}{resident.cama ? ` · Cama ${resident.cama}` : ""}</span>
-              )}
+              {resident?.ubicacion_label && <span>{resident.ubicacion_label}</span>}
               {eleam?.nombre && <span>{eleam.nombre}</span>}
             </p>
           </div>

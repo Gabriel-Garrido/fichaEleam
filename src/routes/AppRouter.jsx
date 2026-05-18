@@ -18,6 +18,7 @@ const ChangePasswordPage = lazy(() => import("../features/team/ChangePasswordPag
 const ResidentList = lazy(() => import("../features/residents/ResidentList"));
 const ResidentForm = lazy(() => import("../features/residents/ResidentForm"));
 const ResidentDetails = lazy(() => import("../features/residents/ResidentDetails"));
+const BedsPage = lazy(() => import("../features/beds/BedsPage"));
 const VitalSignsList = lazy(() => import("../features/vitalSigns/VitalSignsList"));
 const VitalSignsForm = lazy(() => import("../features/vitalSigns/VitalSignsForm"));
 const ObservationList = lazy(() => import("../features/observations/ObservationList"));
@@ -118,6 +119,10 @@ function AppRouter() {
           } />
           <Route path="/residents/:id/edit" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ResidentForm /></ProtectedRoute>
+          } />
+
+          <Route path="/camas" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="beds"><BedsPage /></ProtectedRoute>
           } />
 
           <Route path="/vital-signs" element={

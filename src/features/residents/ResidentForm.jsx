@@ -11,6 +11,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
+import Modal from "../../components/Modal";
+import { resolveHospitalizationBed } from "../beds/bedsService";
 
 const PARENTESCOS = [
   ["", "Seleccionar"],
@@ -29,7 +31,6 @@ const EMPTY = {
   nombre_contacto: "", telefono_contacto: "", parentesco_contacto: "",
   prevision: "", diagnostico_principal: "", alergias: "", grupo_sanguineo: "",
   fecha_ingreso: new Date().toISOString().split("T")[0],
-  habitacion: "", cama: "",
   estado: "activo", nivel_dependencia: "", indice_barthel: "",
   escala_katz: "", fecha_egreso: "", motivo_egreso: "",
 };
@@ -40,10 +41,12 @@ export default function ResidentForm() {
   const { id }    = useParams();
   const navigate  = useNavigate();
   const toast     = useToast();
-  const { eleam } = useAuth();
+  const { eleam, can } = useAuth();
   const isEditing = Boolean(id);
 
   const [form,    setForm]    = useState(EMPTY);
+  const [originalResident, setOriginalResident] = useState(null);
+  const [hospitalDecision, setHospitalDecision] = useState(null);
   const [errors,  setErrors]  = useState({});
   const [loading, setLoading] = useState(isEditing);
   const [saving,  setSaving]  = useState(false);
@@ -84,6 +87,7 @@ export default function ResidentForm() {
       getResidentById(id),
       getFamiliarForResidente(id).catch(() => null),
     ]).then(([data, familiar]) => {
+      setOriginalResident(data);
       setForm({
         ...EMPTY,
         ...data,
@@ -168,9 +172,23 @@ export default function ResidentForm() {
       };
 
       if (isEditing) {
-        await updateResident(id, payload);
-        toast("Residente actualizado.", "success");
-        navigate("/residents");
+        const mustResolveHospitalBed =
+          originalResident?.estado !== "hospitalizado" &&
+          payload.estado === "hospitalizado" &&
+          !!originalResident?.cama_actual_id;
+
+        if (mustResolveHospitalBed) {
+          if (!can("asignar_camas")) {
+            toast("No tienes permiso para reservar o liberar camas.", "error");
+            setSaving(false);
+            return;
+          }
+          setHospitalDecision({ payload });
+          setSaving(false);
+          return;
+        }
+
+        await saveEditedResident(payload);
         return;
       }
 
@@ -215,6 +233,29 @@ export default function ResidentForm() {
       setSaving(false);
     }
   };
+
+  async function saveEditedResident(payload, hospitalAction = null) {
+    setSaving(true);
+    try {
+      await updateResident(id, payload);
+      if (hospitalAction) {
+        await resolveHospitalizationBed(id, hospitalAction, null);
+      }
+      toast("Residente actualizado.", "success");
+      navigate("/residents");
+    } catch (err) {
+      toast(friendlyError(err, "No se pudo guardar el residente."), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleHospitalDecision(accion) {
+    if (!hospitalDecision?.payload) return;
+    const payload = hospitalDecision.payload;
+    setHospitalDecision(null);
+    await saveEditedResident(payload, accion);
+  }
 
   // Guardar familiar desde el modo edición
   const handleSaveFamiliarEdit = async () => {
@@ -340,6 +381,7 @@ export default function ResidentForm() {
   if (loading) return <Loading message="Cargando datos del residente..." />;
 
   return (
+    <>
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center gap-3 mb-6">
         <button
@@ -415,9 +457,27 @@ export default function ResidentForm() {
               value={form.fecha_ingreso} onChange={handleChange} error={errors.fecha_ingreso} />
             <SelectField label="Estado *" name="estado" value={form.estado} onChange={handleChange}
               options={[["activo","Activo"],["hospitalizado","Hospitalizado"],["egresado","Egresado"],["fallecido","Fallecido"]]} />
-            <Field label="Habitación" name="habitacion" value={form.habitacion} onChange={handleChange} />
-            <Field label="Cama"       name="cama"       value={form.cama}       onChange={handleChange} />
           </div>
+
+          {isEditing && (
+            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ubicación actual</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">
+                    {form.cama_actual_id ? form.ubicacion_label : "Sin cama asignada"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => navigate("/camas")}
+                  className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                >
+                  Gestionar cama
+                </Button>
+              </div>
+            </div>
+          )}
 
           {showEgreso && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
@@ -604,6 +664,48 @@ export default function ResidentForm() {
         </div>
       </form>
     </div>
+    {hospitalDecision && (
+      <Modal
+        isOpen
+        title="Resolver cama por hospitalización"
+        onClose={() => setHospitalDecision(null)}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            {originalResident?.nombre} {originalResident?.apellido} tiene asignada {originalResident?.ubicacion_label}. Selecciona qué ocurrirá con esa cama al guardar el estado hospitalizado.
+          </p>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
+            <span className="font-semibold">Reservar</span> mantiene la cama bloqueada para el regreso del residente. <span className="font-semibold">Liberar</span> deja la cama disponible para otra asignación.
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              onClick={() => setHospitalDecision(null)}
+              className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            >
+              Volver al formulario
+            </Button>
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={() => handleHospitalDecision("reservar")}
+              className="border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+            >
+              Reservar cama
+            </Button>
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={() => handleHospitalDecision("liberar")}
+              className="bg-teal-700 text-white hover:bg-teal-800"
+            >
+              Liberar cama
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    </>
   );
 }
 

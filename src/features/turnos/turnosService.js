@@ -3,10 +3,19 @@ import { getRequisitosEleam, getObservaciones, buildResumen } from "../accredita
 import { recordOverallStatus, recordOverallLabel, VITAL_DEFS } from "../vitalSigns/vitalRanges";
 import { CARE_OPEN_STATUSES, isCareTaskOverdue, listCareTasks, getSessionProfile, todayIso, currentTurno } from "../carePlans/carePlansService";
 import { listMedicationAdministrations } from "../emar/emarService";
+import { formatBedLocation, withResidentLocation } from "../beds/bedsUtils";
 
 export const TURNOS = ["mañana", "tarde", "noche"];
 
 export { todayIso, currentTurno };
+
+const RESIDENT_TURNO_SELECT = `
+  id, nombre, apellido, nivel_dependencia, estado, cama_actual_id,
+  cama_actual:camas!residentes_cama_actual_id_fkey(
+    id, codigo, nombre, tipo, estado,
+    habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+  )
+`;
 
 export function turnoLabel(turno) {
   return turno ? turno.charAt(0).toUpperCase() + turno.slice(1) : "Turno";
@@ -31,12 +40,17 @@ function fullName(residente) {
 }
 
 function residentMeta(residente) {
+  const located = withResidentLocation(residente);
+  const bed = located?.cama_actual ?? located?.camas ?? null;
+  const room = bed?.habitacion ?? bed?.habitaciones ?? null;
+
   return {
-    id: residente?.id,
-    nombre: fullName(residente),
-    habitacion: residente?.habitacion ?? null,
-    cama: residente?.cama ?? null,
-    nivel_dependencia: residente?.nivel_dependencia ?? null,
+    id: located?.id,
+    nombre: fullName(located),
+    ubicacion_label: located?.ubicacion_label ?? formatBedLocation(bed),
+    habitacion: room?.codigo ?? null,
+    cama: bed?.codigo ?? null,
+    nivel_dependencia: located?.nivel_dependencia ?? null,
   };
 }
 
@@ -63,11 +77,11 @@ function criticalDetails(record) {
 async function loadActiveResidents() {
   const { data, error } = await supabase
     .from("residentes")
-    .select("id, nombre, apellido, habitacion, cama, nivel_dependencia, estado")
+    .select(RESIDENT_TURNO_SELECT)
     .eq("estado", "activo")
     .order("apellido", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(withResidentLocation);
 }
 
 async function loadVitals(fecha) {
@@ -79,13 +93,16 @@ async function loadVitals(fecha) {
       presion_sistolica, presion_diastolica, frecuencia_cardiaca,
       frecuencia_respiratoria, temperatura, saturacion_oxigeno,
       glucosa, dolor_escala,
-      residentes(id, nombre, apellido, habitacion, cama, nivel_dependencia)
+      residentes(${RESIDENT_TURNO_SELECT})
     `)
     .gte("fecha_hora", start)
     .lt("fecha_hora", end)
     .order("fecha_hora", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    ...row,
+    residentes: withResidentLocation(row.residentes),
+  }));
 }
 
 async function loadObservations(fecha, turno) {
@@ -94,13 +111,13 @@ async function loadObservations(fecha, turno) {
   const [today, incidents, followups] = await Promise.all([
     supabase
       .from("observaciones_diarias")
-      .select("id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(id, nombre, apellido, habitacion, cama)")
+      .select(`id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(${RESIDENT_TURNO_SELECT})`)
       .gte("fecha_hora", start)
       .lt("fecha_hora", end)
       .order("fecha_hora", { ascending: false }),
     supabase
       .from("observaciones_diarias")
-      .select("id, residente_id, fecha_hora, turno, tipo, descripcion, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(id, nombre, apellido, habitacion, cama)")
+      .select(`id, residente_id, fecha_hora, turno, tipo, descripcion, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(${RESIDENT_TURNO_SELECT})`)
       .in("tipo", ["caida", "incidente"])
       .gte("fecha_hora", recent.start)
       .lte("fecha_hora", recent.end)
@@ -108,7 +125,7 @@ async function loadObservations(fecha, turno) {
       .limit(12),
     supabase
       .from("observaciones_diarias")
-      .select("id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(id, nombre, apellido, habitacion, cama)")
+      .select(`id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(${RESIDENT_TURNO_SELECT})`)
       .eq("requiere_seguimiento", true)
       .eq("seguimiento_fecha", fecha)
       .eq("seguimiento_turno", turno)
@@ -119,9 +136,9 @@ async function loadObservations(fecha, turno) {
   if (incidents.error) throw incidents.error;
   if (followups.error) throw followups.error;
   return {
-    today: today.data ?? [],
-    incidents: incidents.data ?? [],
-    followups: followups.data ?? [],
+    today: (today.data ?? []).map((row) => ({ ...row, residentes: withResidentLocation(row.residentes) })),
+    incidents: (incidents.data ?? []).map((row) => ({ ...row, residentes: withResidentLocation(row.residentes) })),
+    followups: (followups.data ?? []).map((row) => ({ ...row, residentes: withResidentLocation(row.residentes) })),
   };
 }
 

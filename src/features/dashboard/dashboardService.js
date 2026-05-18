@@ -7,6 +7,8 @@ import {
 import { currentTurno, getCareTaskSummary, todayIso } from "../carePlans/carePlansService";
 import { getEmarSummary } from "../emar/emarService";
 import { calcAge } from "../residents/residentUtils";
+import { getBedOccupancySummary } from "../beds/bedsService";
+import { withResidentLocation } from "../beds/bedsUtils";
 
 // Resumen para el dashboard del ELEAM: porcentaje global, por ámbito,
 // totales clave y un puñado de alertas.
@@ -139,7 +141,13 @@ async function getTodayActivityByShift() {
 export async function getActiveResidentsLatestVitals() {
   const { data: residentes, error: errR } = await supabase
     .from("residentes")
-    .select("id, nombre, apellido, habitacion, cama, nivel_dependencia, alergias")
+    .select(`
+      id, nombre, apellido, nivel_dependencia, alergias, cama_actual_id,
+      cama_actual:camas!residentes_cama_actual_id_fkey(
+        id, codigo, nombre, tipo, estado,
+        habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+      )
+    `)
     .eq("estado", "activo")
     .order("apellido", { ascending: true });
   if (errR) throw errR;
@@ -162,7 +170,7 @@ export async function getActiveResidentsLatestVitals() {
   for (const s of signos ?? []) {
     if (!latestBy[s.residente_id]) latestBy[s.residente_id] = s;
   }
-  return residentes.map((r) => ({
+  return residentes.map(withResidentLocation).map((r) => ({
     ...r,
     ultimoSigno: latestBy[r.id] ?? null,
   }));
@@ -236,6 +244,7 @@ export async function loadDashboard() {
     expiringResult,
     acreditacionResult,
     operationalResult,
+    bedsResult,
   ] = await Promise.allSettled([
     getResidentStats(),
     getTodayVitalSignsCount(),
@@ -247,6 +256,7 @@ export async function loadDashboard() {
     getExpiringDocuments(30),
     getAccreditationSummary(),
     getOperationalTurnSummary(),
+    getBedOccupancySummary(),
   ]);
 
   const ok = (r) => r.status === "fulfilled";
@@ -262,6 +272,7 @@ export async function loadDashboard() {
     expiringDocuments:    ok(expiringResult)         ? expiringResult.value         : [],
     acreditacionSummary:  ok(acreditacionResult)     ? acreditacionResult.value     : null,
     operationalSummary:   ok(operationalResult)      ? operationalResult.value      : null,
+    bedSummary:           ok(bedsResult)             ? bedsResult.value             : null,
     errors: {
       residentStats:    !ok(residentStatsResult),
       actividad:        !ok(signosHoyResult) || !ok(observacionesHoyResult),
@@ -272,6 +283,7 @@ export async function loadDashboard() {
       expiring:         !ok(expiringResult),
       acreditacion:     !ok(acreditacionResult),
       operational:       !ok(operationalResult),
+      beds:              !ok(bedsResult),
     },
   };
 }

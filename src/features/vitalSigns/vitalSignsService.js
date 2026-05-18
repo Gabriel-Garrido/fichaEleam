@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { withResidentLocation } from "../beds/bedsUtils";
 
 const TURNOS = ["mañana", "tarde", "noche"];
 
@@ -87,7 +88,13 @@ export const getLastVitalSigns = async (residenteId) => {
 export const getPendingVitalSignsResidents = async (fecha, turno) => {
   const { data: residents, error: resError } = await supabase
     .from("residentes")
-    .select("id, nombre, apellido, habitacion, cama, nivel_dependencia")
+    .select(`
+      id, nombre, apellido, nivel_dependencia, cama_actual_id,
+      cama_actual:camas!residentes_cama_actual_id_fkey(
+        id, codigo, nombre, tipo, estado,
+        habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+      )
+    `)
     .eq("estado", "activo")
     .order("apellido");
   if (resError) throw resError;
@@ -103,5 +110,5 @@ export const getPendingVitalSignsResidents = async (fecha, turno) => {
   if (vsError) throw vsError;
 
   const recorded = new Set((existing ?? []).map((r) => r.residente_id));
-  return residents.filter((r) => !recorded.has(r.id));
+  return residents.map(withResidentLocation).filter((r) => !recorded.has(r.id));
 };
