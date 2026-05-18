@@ -1773,7 +1773,6 @@ as $$
 declare
   v_caller_rol text;
   v_caller_email text;
-  v_is_repair boolean;
 begin
   if (select auth.uid()) is null then
     return new;
@@ -1791,19 +1790,6 @@ begin
     select lower(email) into v_caller_email
     from auth.users
     where id = (select auth.uid());
-
-    v_is_repair :=
-      current_setting('app.allow_platform_superadmin_repair', true) = 'on'
-      and old.id = (select auth.uid())
-      and new.id = old.id
-      and v_caller_email = 'gabrielgarrido89@gmail.com'
-      and lower(new.email) = 'gabrielgarrido89@gmail.com'
-      and new.rol = 'superadmin'
-      and new.eleam_id is null;
-
-    if v_is_repair then
-      return new;
-    end if;
 
     if new.rol is distinct from old.rol then
       raise exception 'No autorizado a modificar el rol' using errcode = '42501';
@@ -1847,7 +1833,10 @@ begin
     split_part(new.email, '@', 1)
   );
 
-  if v_email = 'gabrielgarrido89@gmail.com' then
+  -- Bootstrap del superadmin de plataforma. raw_app_meta_data solo lo
+  -- escribe la Admin API / service role: este origen no es falsificable
+  -- desde signUp ni OAuth, y es el unico camino para crear un superadmin.
+  if v_account_source = 'platform_superadmin' then
     insert into public.profiles (id, nombre, email, rol, eleam_id)
     values (new.id, v_nombre, new.email, 'superadmin', null)
     on conflict (id) do update set
@@ -1855,23 +1844,6 @@ begin
       email = excluded.email,
       rol = 'superadmin',
       eleam_id = null;
-    return new;
-  end if;
-
-  if v_email = 'demo@fichaeleam.cl' then
-    insert into public.profiles (id, nombre, email, rol, eleam_id)
-    values (
-      new.id,
-      v_nombre,
-      new.email,
-      'superadmin',
-      'a0000000-0000-0000-0000-000000000001'::uuid
-    )
-    on conflict (id) do update set
-      nombre = excluded.nombre,
-      email = excluded.email,
-      rol = 'superadmin',
-      eleam_id = excluded.eleam_id;
     return new;
   end if;
 
@@ -2094,53 +2066,6 @@ begin
 
   raise exception 'Cuenta no autorizada. Debe ser aprobada por superadmin o creada por un ELEAM activo.'
     using errcode = '42501';
-end;
-$$;
-
-create or replace function public.ensure_platform_superadmin()
-returns public.profiles
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_user_id uuid := auth.uid();
-  v_email text;
-  v_nombre text;
-  v_profile public.profiles;
-begin
-  if v_user_id is null then
-    raise exception 'Debe iniciar sesion' using errcode = '42501';
-  end if;
-
-  select
-    lower(u.email),
-    coalesce(
-      u.raw_user_meta_data->>'nombre',
-      u.raw_user_meta_data->>'full_name',
-      u.raw_user_meta_data->>'name',
-      split_part(u.email, '@', 1)
-    )
-  into v_email, v_nombre
-  from auth.users u
-  where u.id = v_user_id;
-
-  if v_email is distinct from 'gabrielgarrido89@gmail.com' then
-    raise exception 'No autorizado' using errcode = '42501';
-  end if;
-
-  perform set_config('app.allow_platform_superadmin_repair', 'on', true);
-
-  insert into public.profiles (id, nombre, email, rol, eleam_id)
-  values (v_user_id, v_nombre, v_email, 'superadmin', null)
-  on conflict (id) do update set
-    nombre = excluded.nombre,
-    email = excluded.email,
-    rol = 'superadmin',
-    eleam_id = null
-  returning * into v_profile;
-
-  return v_profile;
 end;
 $$;
 
@@ -4170,9 +4095,6 @@ grant execute on function public.request_demo_lead(text, text, text, text, text,
 revoke all on function public.demo_lead_status(text) from public;
 grant execute on function public.demo_lead_status(text) to anon, authenticated;
 
-revoke all on function public.ensure_platform_superadmin() from public;
-grant execute on function public.ensure_platform_superadmin() to authenticated;
-
 revoke all on function public.acred_provision_requisitos(uuid) from public;
 grant execute on function public.acred_provision_requisitos(uuid) to authenticated;
 
@@ -5838,48 +5760,6 @@ on conflict (codigo) do update set
   orden = excluded.orden,
   destacado = excluded.destacado,
   activo = true;
-
-insert into public.eleams (
-  id, nombre, email_admin, pago_activo, plan, subscription_status, crm_estado
-)
-values (
-  'a0000000-0000-0000-0000-000000000001'::uuid,
-  'ELEAM Demo - FichaEleam',
-  'demo@fichaeleam.cl',
-  true,
-  'demo',
-  'activo',
-  'cliente_activo'
-)
-on conflict (id) do update set
-  nombre = excluded.nombre,
-  email_admin = excluded.email_admin,
-  pago_activo = true,
-  plan = 'demo',
-  subscription_status = 'activo',
-  crm_estado = 'cliente_activo';
-
--- Superadmin real: funciona tanto para usuarios nuevos (trigger) como
--- para una cuenta ya creada con Google antes de ejecutar este schema.
-insert into public.profiles (id, nombre, email, rol, eleam_id)
-select
-  u.id,
-  coalesce(
-    u.raw_user_meta_data->>'nombre',
-    u.raw_user_meta_data->>'full_name',
-    u.raw_user_meta_data->>'name',
-    split_part(u.email, '@', 1)
-  ),
-  u.email,
-  'superadmin',
-  null
-from auth.users u
-where lower(u.email) = 'gabrielgarrido89@gmail.com'
-on conflict (id) do update set
-  nombre = excluded.nombre,
-  email = excluded.email,
-  rol = 'superadmin',
-  eleam_id = null;
 
 insert into public.acred_ambitos (codigo, nombre, descripcion, icono, orden) values
   ('A01','Antecedentes legales del ELEAM','Documentos que acreditan la existencia legal y vigencia de la entidad sostenedora.','📄',1),

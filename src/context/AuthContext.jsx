@@ -4,7 +4,6 @@ import Loading from "../components/Loading";
 
 const AuthContext = createContext();
 const LoadingContext = createContext();
-const PLATFORM_SUPERADMIN_EMAILS = new Set(["gabrielgarrido89@gmail.com"]);
 
 // Permisos que deben negar acceso por defecto cuando no hay row en funcionario_permisos.
 // Coincide con los campos que tienen DEFAULT FALSE en BD.
@@ -20,10 +19,6 @@ const FAIL_CLOSED_PERMS = new Set([
   "editar_indicaciones_cuidado",
 ]);
 const AUTH_NOTICE_STORAGE_KEY = "fichaeleam_auth_notice";
-
-function isPlatformSuperadminEmail(email) {
-  return PLATFORM_SUPERADMIN_EMAILS.has((email || "").trim().toLowerCase());
-}
 
 function takeStoredAuthNotice() {
   if (typeof window === "undefined") return null;
@@ -51,7 +46,6 @@ export function AuthProvider({ children }) {
   const fetchProfileAndEleam = useCallback(async (authUser, { silent = false } = {}) => {
     if (!supabase) return;
     const userId = typeof authUser === "string" ? authUser : authUser?.id;
-    const userEmail = typeof authUser === "string" ? "" : authUser?.email;
     if (!userId) return;
 
     if (!silent) setProfileLoading(true);
@@ -94,23 +88,6 @@ export function AuthProvider({ children }) {
           .maybeSingle();
         data = retry.data;
         if (retry.error) throw retry.error;
-      }
-
-      if (isPlatformSuperadminEmail(userEmail) && data?.rol !== "superadmin") {
-        const { error: promoteError } = await supabase.rpc("ensure_platform_superadmin");
-
-        if (promoteError) {
-          console.warn("No se pudo reparar el perfil superadmin:", promoteError);
-        } else {
-          const promoted = await supabase
-            .from("profiles")
-            .select(PROFILE_SELECT)
-            .eq("id", userId)
-            .maybeSingle();
-
-          if (promoted.error) throw promoted.error;
-          data = promoted.data;
-        }
       }
 
       if (!data) {

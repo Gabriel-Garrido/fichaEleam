@@ -635,11 +635,21 @@ Base consistente. Propagan className + rest para override.
 7. `npx supabase login && npx supabase link --project-ref <project-ref>`.
 8. `npx supabase functions deploy`.
 
-**Primer superadmin**: SQL en Supabase SQL Editor:
-```sql
-update public.profiles set rol = 'superadmin' where email = 'tu-email@gmail.com';
+**Primer superadmin**: el schema no auto-promueve a nadie. El operador
+inicial se crea una sola vez con la Auth Admin API (service role) — único
+origen capaz de escribir `app_metadata`:
+
+```bash
+curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
+  -H "apikey: $SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"operador@fichaeleam.cl","password":"<clave-fuerte>","email_confirm":true,"app_metadata":{"fichaeleam_account_source":"platform_superadmin"}}'
 ```
-(Alternativamente, el email de superadmin de plataforma definido en el schema queda promocionado automáticamente al ejecutar `supabase_schema.sql`.)
+
+`handle_new_user` detecta `fichaeleam_account_source = 'platform_superadmin'`
+y crea el perfil `superadmin`. Ningún otro flujo (signUp, OAuth, panel de
+Supabase) puede crear un superadmin.
 
 ---
 
