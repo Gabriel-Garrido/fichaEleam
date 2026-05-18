@@ -18,11 +18,6 @@ const kpiHelp = {
     source: "Fórmula: count(demo_leads) ÷ count(distinct session_id en page_view) × 100, redondeado al entero más cercano.",
     action: "Referencia SaaS B2B: < 2% bajo · 2–5% bueno · > 5% excelente. Si la conversión es baja con buen tráfico, el problema está en la landing (CTA, mensaje, formulario).",
   },
-  activeDemo: {
-    description: "Prospectos usando la demo en este momento (últimos 3 minutos).",
-    source: "demo_leads: estado = 'demo_activo' y demo_ultimo_ping >= hace 3 minutos. El demo envía ping automático mientras el prospecto tiene la sesión abierta.",
-    action: "Contacta ahora — es el mejor momento para resolver dudas y agendar una reunión mientras están explorando el producto.",
-  },
 };
 
 function interpretConversion(rate) {
@@ -105,14 +100,13 @@ function BarChart({ data, maxCount }) {
   );
 }
 
-export default function LandingMetrics({ metrics, activeInDemo }) {
+export default function LandingMetrics({ metrics }) {
   if (!metrics) {
     return <div className="text-center text-slate-400 py-8 text-sm">Cargando métricas...</div>;
   }
 
   const { totalVisits, totalLeads, conversionRate, topCtas, sources, dailyVisits } = metrics;
   const maxVisits  = Math.max(...dailyVisits.map((d) => d.count), 1);
-  const activeCount = activeInDemo?.length ?? 0;
   const convInterpret = interpretConversion(conversionRate);
   const totalPageViews = dailyVisits.reduce((s, d) => s + d.count, 0);
   const avgPerDay = dailyVisits.length > 0 ? Math.round(totalPageViews / dailyVisits.length) : 0;
@@ -120,7 +114,7 @@ export default function LandingMetrics({ metrics, activeInDemo }) {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <LandingMetricCard
           label="Visitas 30d"
           value={totalVisits.toLocaleString("es-CL")}
@@ -142,15 +136,6 @@ export default function LandingMetrics({ metrics, activeInDemo }) {
           help={kpiHelp.conversionRate}
           badge={convInterpret}
         />
-        <LandingMetricCard
-          label="En demo ahora"
-          value={activeCount}
-          tone={activeCount > 0 ? "border-teal-200 text-teal-700" : "border-slate-200 text-slate-600"}
-          help={kpiHelp.activeDemo}
-          badge={activeCount > 0
-            ? { text: "Contactar ahora — están usando el producto", cls: "text-teal-700" }
-            : { text: "Sin sesiones activas (últimos 3 min)", cls: "text-slate-400" }}
-        />
       </div>
 
       {/* Embudo */}
@@ -158,13 +143,13 @@ export default function LandingMetrics({ metrics, activeInDemo }) {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-slate-800">Embudo de captación — 30 días</h3>
-            <p className="text-xs text-slate-500">De visita única a demo activa.</p>
+            <p className="text-xs text-slate-500">De visita única a solicitud de demo.</p>
           </div>
           <MetricHelp
             title="Embudo de captación"
-            description="Muestra cuántas personas pasan por cada etapa: visitar la landing, enviar el formulario y estar activos en la demo."
-            source="Visitas: session_id únicos en page_view. Leads: filas en demo_leads. Demos activas: demo_leads con demo_ultimo_ping en los últimos 3 minutos."
-            action="Si hay muchas visitas pero pocos leads, mejorar el CTA o el mensaje. Si hay leads pero pocas demos activas, revisar el proceso de activación (email de bienvenida, acceso)."
+            description="Muestra cuántas personas pasan por cada etapa: visitar la landing y enviar el formulario de solicitud de demo."
+            source="Visitas: session_id únicos en page_view. Leads: filas en demo_leads."
+            action="Si hay muchas visitas pero pocos leads, mejorar el CTA o el mensaje de la landing."
           />
         </div>
         <div className="space-y-2.5">
@@ -177,29 +162,14 @@ export default function LandingMetrics({ metrics, activeInDemo }) {
             tooltip={`${totalVisits} sesiones únicas registradas en landing_events`}
           />
           <FunnelBar
-            label="Leads captados"
+            label="Solicitudes de demo"
             value={totalLeads}
             max={totalVisits || 1}
             color="bg-teal-500"
             pct={totalVisits > 0 ? Math.round((totalLeads / totalVisits) * 100) : 0}
             tooltip={`${totalLeads} formularios completados en demo_leads`}
           />
-          <FunnelBar
-            label="En demo ahora"
-            value={activeCount}
-            max={totalVisits || 1}
-            color="bg-violet-500"
-            pct={totalVisits > 0 ? Math.round((activeCount / totalVisits) * 100) : 0}
-            tooltip={`${activeCount} prospectos con ping en los últimos 3 minutos`}
-          />
         </div>
-        {totalLeads > 0 && (
-          <p className="mt-3 text-[11px] text-slate-400 border-t border-slate-100 pt-2">
-            De {totalLeads} lead{totalLeads !== 1 ? "s" : ""} captado{totalLeads !== 1 ? "s" : ""},{" "}
-            {activeCount} {activeCount !== 1 ? "están" : "está"} en demo activa
-            {" "}({Math.round((activeCount / totalLeads) * 100)}% activación del lead).
-          </p>
-        )}
       </section>
 
       {/* Gráfico diario */}

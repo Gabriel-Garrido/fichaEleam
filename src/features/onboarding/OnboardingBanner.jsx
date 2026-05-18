@@ -44,7 +44,7 @@ export default function OnboardingBanner() {
       <div className={`${colors.bg} border-b ${colors.border} px-4 py-2.5 flex items-center gap-3`}>
 
         {/* Step badge: colored pill with icon + step number */}
-        <div className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${colors.bgStrong} text-white`}>
+        <div className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-xl ${colors.bgStrong} text-white`}>
           <NavIcon id={currentRouteStep.icon} className="w-3 h-3" aria-hidden="true" />
           <span className="text-[10px] font-black tabular-nums leading-none">
             {displayIndex}/{totalCount}
@@ -68,7 +68,7 @@ export default function OnboardingBanner() {
           <button
             type="button"
             onClick={() => setChecklistOpen(true)}
-            className={`inline-flex items-center gap-1 text-xs font-bold ${colors.text} hover:opacity-70 transition-opacity px-2 py-1 rounded-lg hover:bg-white/40`}
+            className={`inline-flex items-center gap-1 text-xs font-bold ${colors.text} hover:opacity-70 transition-opacity px-2 py-1 rounded-xl hover:bg-white/40`}
             aria-label="Ver todos los pasos de la guía"
           >
             <span className="hidden sm:inline">Ver guía</span>

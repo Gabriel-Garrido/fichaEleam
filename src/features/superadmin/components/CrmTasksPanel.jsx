@@ -160,7 +160,7 @@ function TaskRow({ task, onComplete }) {
                   "border-l-emerald-200 bg-emerald-50/40 border-emerald-100"
     }`}>
       {/* Type icon */}
-      <div className={`shrink-0 mt-0.5 w-6 h-6 rounded-md flex items-center justify-center ${
+      <div className={`shrink-0 mt-0.5 w-6 h-6 rounded-xl flex items-center justify-center ${
         overdue ? "bg-rose-100 text-rose-600" :
         today   ? "bg-amber-100 text-amber-700" :
         isPendiente ? "bg-slate-100 text-slate-500" :
@@ -172,12 +172,12 @@ function TaskRow({ task, onComplete }) {
       <div className="min-w-0 flex-1">
         {/* Badges row */}
         <div className="flex items-center gap-1.5 flex-wrap mb-1">
-          <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md ${prio.cls}`}>
+          <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-xl ${prio.cls}`}>
             {prio.label}
           </span>
           <span className="text-[10px] font-medium uppercase text-slate-400 capitalize">{task.tipo}</span>
           {task.eleam?.nombre && (
-            <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md truncate max-w-[120px]" title={task.eleam.nombre}>
+            <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-xl truncate max-w-[120px]" title={task.eleam.nombre}>
               {task.eleam.nombre}
             </span>
           )}

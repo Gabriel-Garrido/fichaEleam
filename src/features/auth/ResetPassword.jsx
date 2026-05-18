@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../services/supabaseConfig";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
-import { authErrorMessage } from "./authService";
+import {
+  authErrorMessage,
+  getCurrentAuthSession,
+  isAuthConfigured,
+  subscribePasswordRecovery,
+  updatePasswordAndClearResetFlag,
+} from "./authService";
 import { validatePassword } from "../../utils/passwordValidation";
 
 function strengthLabel(pw) {
@@ -15,7 +20,7 @@ function strengthLabel(pw) {
   const score    = [hasUpper, hasNum, long, veryLong].filter(Boolean).length;
   if (score <= 1) return { txt: "Débil",   cls: "bg-rose-500",    bar: "w-1/4" };
   if (score === 2) return { txt: "Regular", cls: "bg-amber-400",  bar: "w-2/4" };
-  if (score === 3) return { txt: "Buena",   cls: "bg-blue-500",   bar: "w-3/4" };
+  if (score === 3) return { txt: "Buena",   cls: "bg-sky-500",    bar: "w-3/4" };
   return              { txt: "Muy fuerte", cls: "bg-emerald-500", bar: "w-full" };
 }
 
@@ -29,29 +34,27 @@ export default function ResetPassword() {
   const [done, setDone]           = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [linkExpired, setLinkExpired]   = useState(false);
-  const [configError] = useState(!supabase);
+  const [configError] = useState(!isAuthConfigured());
 
   const strength = strengthLabel(password);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!isAuthConfigured()) return;
 
     // Supabase inserta access_token en el hash después del reset.
     // El onAuthStateChange lo detecta y establece la sesión.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setSessionReady(true);
-    });
+    const unsubscribe = subscribePasswordRecovery(() => setSessionReady(true));
 
     // Si la sesión ya fue procesada antes de montar el componente
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getCurrentAuthSession().then((session) => {
       if (session) setSessionReady(true);
-    });
+    }).catch(() => {});
 
     // Timeout: si después de 8s el link no fue reconocido, es inválido/expirado
     const timer = setTimeout(() => setLinkExpired(true), 8000);
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribe();
       clearTimeout(timer);
     };
   }, []);
@@ -60,7 +63,7 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    if (!supabase) {
+    if (!isAuthConfigured()) {
       setError("Supabase no está configurado.");
       return;
     }
@@ -69,17 +72,7 @@ export default function ResetPassword() {
 
     setSubmitting(true);
     try {
-      const { error: err } = await supabase.auth.updateUser({ password });
-      if (err) throw err;
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) {
-        await supabase
-          .from("profiles")
-          .update({ must_reset_password: false })
-          .eq("id", user.id);
-      }
-
+      await updatePasswordAndClearResetFlag(password);
       setDone(true);
       setTimeout(() => navigate("/login"), 3000);
     } catch (err) {

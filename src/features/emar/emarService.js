@@ -1,7 +1,8 @@
 import { supabase } from "../../services/supabaseConfig";
+import { normalizeFamilyVisibility } from "../familiar/familyVisibility";
 import {
   currentTurno, todayIso,
-  getSessionProfile, normalizeSchedule, previousTurnos,
+  getSessionProfile, nextFollowUpSlot, normalizeSchedule, previousTurnos, requireFollowUpSlot,
 } from "../carePlans/carePlansService";
 
 export { currentTurno, todayIso };
@@ -77,12 +78,33 @@ const RECONCILIATION_SELECT = `
 const ADMIN_SELECT = `
   ${ADMINISTRATION_SELECT},
   residentes(id, nombre, apellido, habitacion, cama),
+  horario:medicamentos_horarios(id, tolerancia_min),
   indicacion:medicamentos_indicaciones(
     id, medicamento_nombre, principio_activo, concentracion, dosis, unidad_dosis,
-    via, es_controlado, tipo_controlado, requiere_stock, requiere_doble_validacion
+    via, instrucciones, es_controlado, tipo_controlado, requiere_stock, requiere_doble_validacion
   ),
-  lote:medicamentos_stock_lotes(id, lote, cantidad_actual, unidad, fecha_vencimiento, es_controlado)
+  lote:medicamentos_stock_lotes(id, lote, cantidad_actual, unidad, fecha_vencimiento, ubicacion, es_controlado)
 `;
+
+export function medicationDueAt(row) {
+  if (!row?.fecha || !row?.hora) return null;
+  const dueAt = new Date(`${row.fecha}T${row.hora}`);
+  if (Number.isNaN(dueAt.valueOf())) return null;
+
+  const tolerance = Number(row.horario?.tolerancia_min ?? 0);
+  if (Number.isFinite(tolerance) && tolerance > 0) {
+    dueAt.setMinutes(dueAt.getMinutes() + tolerance);
+  }
+
+  return dueAt;
+}
+
+export function isMedicationOverdue(row, now = new Date()) {
+  if (row?._arrastre) return true;
+  if (row?.estado !== "pendiente" || row?.fecha !== todayIso()) return false;
+  const dueAt = medicationDueAt(row);
+  return dueAt instanceof Date && dueAt < now;
+}
 
 export async function generateMedicationAdministrations({ fecha = todayIso(), turno = null } = {}) {
   const { data, error } = await supabase.rpc("generar_administraciones_medicamentos", {
@@ -221,8 +243,7 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
     tipo_controlado: indication.es_controlado ? indication.tipo_controlado || "psicotropico" : null,
     requiere_doble_validacion: indication.es_controlado === true,
     requiere_stock: indication.requiere_stock !== false,
-    visible_familiar: indication.visible_familiar === true,
-    resumen_familiar: indication.resumen_familiar?.trim() || null,
+    ...normalizeFamilyVisibility(indication),
     instrucciones: indication.instrucciones?.trim() || null,
     actualizado_por: userId,
   };
@@ -390,7 +411,27 @@ export async function listAvailableLots({ residenteId, indicacionId = null, cont
   return data ?? [];
 }
 
-export async function administerMedication({ id, estado, loteId, dosis, notas, motivoOmision, requiereSeguimiento }) {
+export async function administerMedication({
+  id,
+  estado,
+  loteId,
+  dosis,
+  notas,
+  motivoOmision,
+  requiereSeguimiento,
+  seguimientoFecha,
+  seguimientoTurno,
+}) {
+  const fallbackFollowUp = requiereSeguimiento && (!seguimientoFecha || !seguimientoTurno)
+    ? nextFollowUpSlot(todayIso(), currentTurno())
+    : null;
+  const finalSeguimientoFecha = seguimientoFecha || fallbackFollowUp?.fecha || null;
+  const finalSeguimientoTurno = seguimientoTurno || fallbackFollowUp?.turno || null;
+  requireFollowUpSlot({
+    requiereSeguimiento,
+    seguimientoFecha: finalSeguimientoFecha,
+    seguimientoTurno: finalSeguimientoTurno,
+  });
   const { data, error } = await supabase.rpc("registrar_administracion_medicamento", {
     p_administracion_id: id,
     p_estado: estado,
@@ -399,6 +440,8 @@ export async function administerMedication({ id, estado, loteId, dosis, notas, m
     p_notas: notas || null,
     p_motivo_omision: motivoOmision || null,
     p_requiere_seguimiento: requiereSeguimiento === true,
+    p_seguimiento_fecha: requiereSeguimiento ? finalSeguimientoFecha : null,
+    p_seguimiento_turno: requiereSeguimiento ? finalSeguimientoTurno : null,
   });
   if (error) throw error;
   return data;
@@ -451,12 +494,7 @@ export async function getEmarSummary({ fecha = todayIso(), turno = null } = {}) 
     acc.total += 1;
     acc[row.estado] = (acc[row.estado] ?? 0) + 1;
     if (row.indicacion?.es_controlado) acc.controlados += 1;
-    if (row._arrastre) {
-      acc.vencidas += 1;
-    } else if (row.estado === "pendiente" && row.fecha === todayIso() && row.hora) {
-      const due = new Date(`${row.fecha}T${row.hora}`);
-      if (!Number.isNaN(due.valueOf()) && due < new Date()) acc.vencidas += 1;
-    }
+    if (isMedicationOverdue(row)) acc.vencidas += 1;
     return acc;
   }, {
     total: 0,

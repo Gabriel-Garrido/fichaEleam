@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { applyOwnVisitFilter } from "./familiarUtils";
 
 function ensureSupabase() {
   if (!supabase) throw new Error("Supabase no está configurado.");
@@ -6,7 +7,7 @@ function ensureSupabase() {
 }
 
 const VISIT_SELECT =
-  "id, residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por, estado, validado_por, validado_en, salida_hora, creado_en";
+  "id, residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por, estado, validado_por, validado_en, salida_anunciada_en, salida_hora, salida_validada_por, salida_validada_en, creado_en";
 
 // Lista los residentes vinculados al familiar autenticado.
 export async function getMyResidentes() {
@@ -31,18 +32,19 @@ export async function getMyResidentes() {
     .map((v) => ({ ...v.residentes, parentesco: v.parentesco }));
 }
 
-// Snapshot completo del residente para el portal familiar (vía RPC security definer).
-// La función SQL ya NO filtra por visible_familiar: muestra todos los registros.
-export async function getFamiliarResidentSnapshot(residenteId) {
+// Snapshot del residente para el portal familiar (vía RPC security definer).
+// El SQL solo publica observaciones, cuidados y medicamentos marcados como visibles para familia.
+export async function getFamiliarResidentSnapshot(residenteId, fecha = new Date().toISOString().slice(0, 10)) {
   const sb = ensureSupabase();
   const { data, error } = await sb.rpc("get_familiar_resident_snapshot", {
     p_residente_id: residenteId,
+    p_fecha: fecha,
   });
   if (error) throw error;
   return data ?? {};
 }
 
-// Visitas del residente (todas, para el portal).
+// Visitas del residente (todas, para ficha clínica/staff).
 export async function getVisits(residenteId, limit = 50) {
   const sb = ensureSupabase();
   const { data, error } = await sb
@@ -50,9 +52,35 @@ export async function getVisits(residenteId, limit = 50) {
     .select(`
       ${VISIT_SELECT},
       profiles!visitas_familiar_profile_id_fkey(nombre),
-      validador:profiles!visitas_familiar_validado_por_fkey(nombre)
+      validador:profiles!visitas_familiar_validado_por_fkey(nombre),
+      validador_salida:profiles!visitas_familiar_salida_validada_por_fkey(nombre)
     `)
     .eq("residente_id", residenteId)
+    .order("fecha_hora", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Visitas propias del familiar autenticado (portal familiar).
+export async function getMyVisits(residenteId, limit = 50) {
+  const sb = ensureSupabase();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) throw new Error("No autenticado.");
+
+  let query = sb
+    .from("visitas_familiar")
+    .select(`
+      ${VISIT_SELECT},
+      profiles!visitas_familiar_profile_id_fkey(nombre),
+      validador:profiles!visitas_familiar_validado_por_fkey(nombre),
+      validador_salida:profiles!visitas_familiar_salida_validada_por_fkey(nombre)
+    `)
+    .eq("residente_id", residenteId);
+
+  query = applyOwnVisitFilter(query, user.id);
+
+  const { data, error } = await query
     .order("fecha_hora", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -69,7 +97,7 @@ export async function getPendingVisits(residenteId) {
       profiles!visitas_familiar_profile_id_fkey(nombre)
     `)
     .eq("residente_id", residenteId)
-    .in("estado", ["pendiente", "activa"])
+    .in("estado", ["pendiente", "activa", "salida_pendiente"])
     .order("fecha_hora", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -125,15 +153,45 @@ export async function validateVisitEntry(visitId) {
   return data;
 }
 
-// Staff registra la salida del familiar (estado activa → completada).
+// El familiar anuncia su salida; queda pendiente de validación por funcionario.
+export async function announceVisitExit(visitId) {
+  const sb = ensureSupabase();
+  const salidaAnunciada = new Date().toISOString();
+
+  const { data, error } = await sb
+    .from("visitas_familiar")
+    .update({
+      estado: "salida_pendiente",
+      salida_anunciada_en: salidaAnunciada,
+    })
+    .eq("id", visitId)
+    .eq("estado", "activa")
+    .select(VISIT_SELECT)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+function appendVisitNote(current, extra) {
+  const clean = extra?.trim();
+  if (!clean) return current || null;
+  if (!current?.trim()) return clean;
+  return `${current.trim()}\nSalida: ${clean}`;
+}
+
+// Staff valida la salida anunciada por el familiar (estado salida_pendiente → completada).
 export async function registerVisitExit({ visitId, notas }) {
   const sb = ensureSupabase();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) throw new Error("No autenticado.");
+
   const salidaHora = new Date().toISOString();
 
   const { data: visit } = await sb
     .from("visitas_familiar")
-    .select("fecha_hora")
+    .select("fecha_hora, notas")
     .eq("id", visitId)
+    .eq("estado", "salida_pendiente")
     .single();
 
   let duracionMin = null;
@@ -149,11 +207,13 @@ export async function registerVisitExit({ visitId, notas }) {
     .update({
       estado: "completada",
       salida_hora: salidaHora,
+      salida_validada_por: user.id,
+      salida_validada_en: salidaHora,
       duracion_min: duracionMin,
-      notas: notas?.trim() || null,
+      notas: appendVisitNote(visit?.notas, notas),
     })
     .eq("id", visitId)
-    .eq("estado", "activa")
+    .eq("estado", "salida_pendiente")
     .select(VISIT_SELECT)
     .single();
   if (error) throw error;
@@ -167,30 +227,7 @@ export async function cancelVisit(visitId) {
     .from("visitas_familiar")
     .update({ estado: "cancelada" })
     .eq("id", visitId)
-    .in("estado", ["pendiente", "activa"])
-    .select(VISIT_SELECT)
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-// Compatibilidad: logVisit usada en flujos legacy (crea visita completada directamente por staff).
-export async function logVisit({ residenteId, fechaHora, duracionMin, notas }) {
-  const sb = ensureSupabase();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) throw new Error("No autenticado.");
-
-  const { data, error } = await sb
-    .from("visitas_familiar")
-    .insert({
-      residente_id: residenteId,
-      profile_id: user.id,
-      registrado_por: user.id,
-      fecha_hora: fechaHora || new Date().toISOString(),
-      duracion_min: duracionMin || null,
-      notas: notas?.trim() || null,
-      estado: "completada",
-    })
+    .in("estado", ["pendiente", "activa", "salida_pendiente"])
     .select(VISIT_SELECT)
     .single();
   if (error) throw error;

@@ -1,12 +1,6 @@
 const TERMINAL_STATES = new Set(["descartado", "convertido"]);
 
-function isExpired(iso, now = new Date()) {
-  if (!iso) return false;
-  const expiresAt = new Date(iso);
-  return !Number.isNaN(expiresAt.valueOf()) && expiresAt < now;
-}
-
-export function getDemoLeadAccessState(lead = {}, now = new Date()) {
+export function getDemoLeadAccessState(lead = {}) {
   if (TERMINAL_STATES.has(lead.estado)) {
     return {
       key: "blocked_state",
@@ -26,28 +20,6 @@ export function getDemoLeadAccessState(lead = {}, now = new Date()) {
       canGrant: false,
       actionLabel: "Acceso ya aprobado",
       description: "El lead ya tiene una cuenta real para iniciar sesion.",
-    };
-  }
-
-  if (lead.demo_token && isExpired(lead.demo_expires_at, now)) {
-    return {
-      key: "expired_guided_demo",
-      label: "Demo vencido",
-      tone: "rose",
-      canGrant: true,
-      actionLabel: "Aprobar cuenta demo",
-      description: "El demo guiado vencio, pero se puede crear una cuenta real si corresponde.",
-    };
-  }
-
-  if (lead.demo_token) {
-    return {
-      key: "guided_demo",
-      label: "Demo guiado",
-      tone: "teal",
-      canGrant: true,
-      actionLabel: "Aprobar cuenta con login",
-      description: "El lead puede explorar el demo guiado, pero todavia no tiene cuenta para iniciar sesion.",
     };
   }
 

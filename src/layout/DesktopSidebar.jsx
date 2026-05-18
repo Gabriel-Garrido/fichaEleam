@@ -65,7 +65,7 @@ export default function DesktopSidebar({ collapsed, onToggle, sections, auth, on
         <button
           type="button"
           onClick={() => navigate(auth.homePath || "/dashboard")}
-          className="min-w-0 rounded-lg p-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+          className="min-w-0 rounded-xl p-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
           title="Inicio"
         >
           <div className="flex items-center gap-2.5">

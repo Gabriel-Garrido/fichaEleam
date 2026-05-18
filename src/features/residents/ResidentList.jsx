@@ -85,7 +85,7 @@ export default function ResidentList() {
     <PageLayout
       title="Residentes"
       eyebrow="Operación clínica"
-      description={`${stats.total} residente${stats.total !== 1 ? "s" : ""} registrado${stats.total !== 1 ? "s" : ""}${filtroEstado ? ` · filtrando por ${ESTADO_CONFIG[filtroEstado]?.label.toLowerCase() ?? filtroEstado}` : ""}`}
+      description={stats.total === 0 ? "Registra y gestiona el historial clínico de cada residente del ELEAM." : `${stats.total} residente${stats.total !== 1 ? "s" : ""} registrado${stats.total !== 1 ? "s" : ""}${filtroEstado ? ` · filtrando por ${ESTADO_CONFIG[filtroEstado]?.label.toLowerCase() ?? filtroEstado}` : ""}`}
       actions={
         canCreate ? (
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -125,135 +125,230 @@ export default function ResidentList() {
         </div>
       )}
 
-      {/* Stats / chips de filtro rápido por estado */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
-        <StatChip
-          label="Total"
-          value={stats.total}
-          tone="primary"
-          active={filtroEstado === ""}
-          onClick={() => setFiltroEstado("")}
-        />
-        <StatChip
-          label="Activos"
-          value={stats.activo}
-          tone="emerald"
-          active={filtroEstado === "activo"}
-          onClick={() => setFiltroEstado(filtroEstado === "activo" ? "" : "activo")}
-        />
-        <StatChip
-          label="Hospitalizados"
-          value={stats.hospitalizado}
-          tone="amber"
-          active={filtroEstado === "hospitalizado"}
-          onClick={() => setFiltroEstado(filtroEstado === "hospitalizado" ? "" : "hospitalizado")}
-        />
-        <StatChip
-          label="Egresados"
-          value={stats.egresado}
-          tone="slate"
-          active={filtroEstado === "egresado"}
-          onClick={() => setFiltroEstado(filtroEstado === "egresado" ? "" : "egresado")}
-        />
-        <StatChip
-          label="Fallecidos"
-          value={stats.fallecido}
-          tone="rose"
-          active={filtroEstado === "fallecido"}
-          onClick={() => setFiltroEstado(filtroEstado === "fallecido" ? "" : "fallecido")}
-        />
-      </div>
-
-      {/* Toolbar: búsqueda + selector vista */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-5 flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-        <div className="relative flex-1">
-          <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-            </svg>
-          </span>
-          <input
-            type="search"
-            placeholder="Buscar por nombre, apellido o RUT..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-200"
-          />
-        </div>
-        <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch md:self-auto">
-          <button
-            type="button"
-            onClick={() => setView("grid")}
-            aria-pressed={view === "grid"}
-            className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium ${
-              view === "grid"
-                ? "bg-teal-700 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Tarjetas
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("list")}
-            aria-pressed={view === "list"}
-            className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium border-l border-slate-200 ${
-              view === "list"
-                ? "bg-teal-700 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Lista
-          </button>
-        </div>
-      </div>
-
-      {/* Lista */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-20 text-slate-400 bg-white rounded-xl border border-slate-100">
-          <div className="flex justify-center mb-4">
-            <svg className="w-16 h-16 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-            </svg>
+      {residents.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white shadow-sm overflow-hidden">
+          {/* Hero */}
+          <div className="px-6 py-12 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50">
+              <svg className="w-8 h-8 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-slate-900">Aún no hay residentes registrados</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500 max-w-sm mx-auto">
+              {canCreate
+                ? "Elige cómo quieres comenzar: agrega residentes de a uno o carga varios a la vez desde un archivo Excel."
+                : "Consulta con el administrador del ELEAM para registrar los primeros residentes."}
+            </p>
           </div>
-          <p className="text-lg font-medium text-slate-600">
-            {busqueda || filtroEstado
-              ? "Sin resultados para esta búsqueda."
-              : "No hay residentes registrados."}
-          </p>
-          {!busqueda && !filtroEstado && (
-            <Button
-              onClick={() => navigate("/residents/new")}
-              className="mt-6 bg-teal-700 text-white px-6 py-2.5 rounded-xl hover:bg-teal-800"
-            >
-              Agregar primer residente
-            </Button>
+
+          {canCreate && (
+            <>
+              <div className="mx-6 border-t border-slate-100" />
+              <div className={`p-6 grid gap-4 ${canImport ? "sm:grid-cols-2" : "max-w-sm mx-auto"}`}>
+                {/* Opción 1: agregar uno a uno */}
+                <button
+                  type="button"
+                  onClick={() => navigate("/residents/new")}
+                  className="group flex flex-col gap-4 rounded-2xl border-2 border-slate-100 p-5 text-left transition-all hover:border-teal-200 hover:bg-teal-50/40"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 transition-colors group-hover:bg-teal-100">
+                      <svg className="w-5 h-5 text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+                      </svg>
+                    </div>
+                    <span className="font-semibold text-slate-800">Agregar uno a uno</span>
+                  </div>
+                  <p className="text-sm leading-5 text-slate-500">
+                    Completa el formulario con los datos del residente. Ideal para ingresos individuales o casos únicos.
+                  </p>
+                  <span className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-teal-700 transition-all group-hover:gap-2">
+                    Abrir formulario
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                    </svg>
+                  </span>
+                </button>
+
+                {/* Opción 2: importar desde Excel */}
+                {canImport ? (
+                  <button
+                    type="button"
+                    onClick={() => setImportModal(true)}
+                    className="group flex flex-col gap-4 rounded-2xl border-2 border-slate-100 p-5 text-left transition-all hover:border-teal-200 hover:bg-teal-50/40"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 transition-colors group-hover:bg-teal-100">
+                        <svg className="w-5 h-5 text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                      </div>
+                      <span className="font-semibold text-slate-800">Importar desde Excel</span>
+                    </div>
+                    <p className="text-sm leading-5 text-slate-500">
+                      Carga varios residentes a la vez con nuestra plantilla. Ideal si ya tienes una lista existente.
+                    </p>
+                    <span className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-teal-700 transition-all group-hover:gap-2">
+                      Cargar archivo
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                      </svg>
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-4 rounded-2xl border-2 border-dashed border-slate-100 p-5 opacity-50">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50">
+                        <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                      </div>
+                      <span className="font-semibold text-slate-500">Importar desde Excel</span>
+                    </div>
+                    <p className="text-sm leading-5 text-slate-400">
+                      Solo disponible para el administrador del ELEAM.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <p className="pb-8 text-center text-xs text-slate-400">
+                Puedes combinar ambos métodos en cualquier momento.
+              </p>
+            </>
           )}
         </div>
-      ) : view === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((r) => (
-            <ResidentCard
-              key={r.id}
-              resident={r}
-              onView={() => navigate(`/residents/${r.id}`)}
-              onEdit={() => navigate(`/residents/${r.id}/edit`)}
-              onDelete={canDelete ? () => handleDelete(r.id, `${r.nombre} ${r.apellido}`) : null}
-            />
-          ))}
-        </div>
       ) : (
-        <div className="grid gap-3">
-          {filtered.map((r) => (
-            <ResidentRow
-              key={r.id}
-              resident={r}
-              onView={() => navigate(`/residents/${r.id}`)}
-              onEdit={() => navigate(`/residents/${r.id}/edit`)}
-              onDelete={canDelete ? () => handleDelete(r.id, `${r.nombre} ${r.apellido}`) : null}
+        <>
+          {/* Stats / chips de filtro rápido por estado */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+            <StatChip
+              label="Total"
+              value={stats.total}
+              tone="primary"
+              active={filtroEstado === ""}
+              onClick={() => setFiltroEstado("")}
             />
-          ))}
-        </div>
+            <StatChip
+              label="Activos"
+              value={stats.activo}
+              tone="emerald"
+              active={filtroEstado === "activo"}
+              onClick={() => setFiltroEstado(filtroEstado === "activo" ? "" : "activo")}
+            />
+            <StatChip
+              label="Hospitalizados"
+              value={stats.hospitalizado}
+              tone="amber"
+              active={filtroEstado === "hospitalizado"}
+              onClick={() => setFiltroEstado(filtroEstado === "hospitalizado" ? "" : "hospitalizado")}
+            />
+            <StatChip
+              label="Egresados"
+              value={stats.egresado}
+              tone="slate"
+              active={filtroEstado === "egresado"}
+              onClick={() => setFiltroEstado(filtroEstado === "egresado" ? "" : "egresado")}
+            />
+            <StatChip
+              label="Fallecidos"
+              value={stats.fallecido}
+              tone="rose"
+              active={filtroEstado === "fallecido"}
+              onClick={() => setFiltroEstado(filtroEstado === "fallecido" ? "" : "fallecido")}
+            />
+          </div>
+
+          {/* Toolbar: búsqueda + selector vista */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-5 flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+            <div className="relative flex-1">
+              <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+              </span>
+              <input
+                type="search"
+                placeholder="Buscar por nombre, apellido o RUT..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-200"
+              />
+            </div>
+            <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch md:self-auto">
+              <button
+                type="button"
+                onClick={() => setView("grid")}
+                aria-pressed={view === "grid"}
+                className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium ${
+                  view === "grid"
+                    ? "bg-teal-700 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Tarjetas
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("list")}
+                aria-pressed={view === "list"}
+                className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium border-l border-slate-200 ${
+                  view === "list"
+                    ? "bg-teal-700 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Lista
+              </button>
+            </div>
+          </div>
+
+          {/* Lista */}
+          {filtered.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center shadow-sm">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50">
+                <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-slate-700">Sin resultados</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Ningún residente coincide con los filtros aplicados.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setBusqueda(""); setFiltroEstado(""); }}
+                className="mt-4 text-sm font-semibold text-teal-700 hover:underline"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          ) : view === "grid" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map((r) => (
+                <ResidentCard
+                  key={r.id}
+                  resident={r}
+                  onView={() => navigate(`/residents/${r.id}`)}
+                  onEdit={() => navigate(`/residents/${r.id}/edit`)}
+                  onDelete={canDelete ? () => handleDelete(r.id, `${r.nombre} ${r.apellido}`) : null}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {filtered.map((r) => (
+                <ResidentRow
+                  key={r.id}
+                  resident={r}
+                  onView={() => navigate(`/residents/${r.id}`)}
+                  onEdit={() => navigate(`/residents/${r.id}/edit`)}
+                  onDelete={canDelete ? () => handleDelete(r.id, `${r.nombre} ${r.apellido}`) : null}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </PageLayout>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
@@ -8,6 +8,7 @@ import PageLayout from "../../layout/PageLayout";
 import {
   getRequisitosEleam,
   getObservaciones,
+  provisionAccreditationRequirements,
   buildResumen,
   estadoMeta,
   diasHasta,
@@ -147,7 +148,7 @@ function firstRequirementPath(items) {
   return item?.id ? `/accreditation/requisito/${item.id}` : "/accreditation";
 }
 
-function AccreditationNextStep({ resumen, observaciones, navigate }) {
+function AccreditationNextStep({ resumen, observaciones, navigate, onReload, busy }) {
   const firstPending = [
     ...(resumen.sinEvidencia ?? []),
     ...(resumen.porEstadoList?.pendiente ?? []),
@@ -158,10 +159,10 @@ function AccreditationNextStep({ resumen, observaciones, navigate }) {
   const step = resumen.total === 0
     ? {
         tone: "amber",
-        title: "Preparando requisitos",
-        text: "La carpeta aún no tiene requisitos provisionados. Recarga en unos segundos o revisa la configuración inicial.",
-        action: "Recargar",
-        path: "/accreditation",
+        title: "Inicializar requisitos SEREMI",
+        text: "Este ELEAM aún no tiene requisitos asignados. Intenta inicializarlos; si el catálogo base ya existe, quedarán pendientes automáticamente.",
+        action: "Inicializar requisitos",
+        onClick: onReload,
       }
     : resumen.vencidos.length > 0
     ? {
@@ -227,10 +228,11 @@ function AccreditationNextStep({ resumen, observaciones, navigate }) {
         </div>
         <button
           type="button"
-          onClick={() => navigate(step.path)}
+          onClick={() => step.onClick ? step.onClick() : navigate(step.path)}
+          disabled={busy}
           className="w-full sm:w-auto rounded-xl bg-white/80 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-white"
         >
-          {step.action}
+          {busy ? "Preparando..." : step.action}
         </button>
       </div>
     </section>
@@ -239,6 +241,7 @@ function AccreditationNextStep({ resumen, observaciones, navigate }) {
 
 function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
   const pendienteTotal = resumen.pendientes;
+  const evaluables = resumen.evaluables ?? Math.max(0, resumen.total - resumen.noAplica);
   return (
     <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6">
       <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-5 lg:items-center">
@@ -247,7 +250,9 @@ function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
           <div className="mt-2 flex items-end gap-3">
             <p className="text-5xl font-black text-teal-700 tabular-nums">{resumen.porcentaje}%</p>
             <p className="pb-2 text-sm text-slate-500">
-              {resumen.cumple} de {resumen.total - resumen.noAplica} requisitos al día
+              {resumen.total === 0
+                ? "0 requisitos provisionados"
+                : `${resumen.cumple} de ${evaluables} requisitos al día`}
             </p>
           </div>
           <div className="mt-4">
@@ -346,29 +351,53 @@ export default function AccreditationDashboard() {
   const [requisitos, setRequisitos] = useState([]);
   const [observaciones, setObservaciones] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [provisioning, setProvisioning] = useState(false);
 
   // La carpeta es por ELEAM. Si el usuario no tiene uno (típico del
   // superadmin sin ELEAM), no tiene sentido cargar datos: mostramos un
   // mensaje claro en lugar de un dashboard vacío.
   const sinEleam = !profile?.eleam_id;
 
+  const loadPanel = useCallback(async ({ forceProvision = false, silent = false } = {}) => {
+    if (sinEleam) {
+      setLoading(false);
+      return;
+    }
+
+    if (!silent) setLoading(true);
+    if (forceProvision) setProvisioning(true);
+
+    try {
+      if (forceProvision) {
+        await provisionAccreditationRequirements();
+      }
+
+      const [r, o] = await Promise.all([
+        getRequisitosEleam(),
+        getObservaciones({ soloAbiertas: true }),
+      ]);
+
+      setRequisitos(r);
+      setObservaciones(o);
+
+      if (forceProvision) {
+        toast((r ?? []).length > 0
+          ? "Requisitos SEREMI inicializados."
+          : "No se encontraron requisitos base para provisionar. Revisa que el schema SEREMI esté cargado.",
+          (r ?? []).length > 0 ? "success" : "info"
+        );
+      }
+    } catch (e) {
+      toast(friendlyError(e, "No se pudo cargar el panel de acreditación. Recarga la página."), "error");
+    } finally {
+      setLoading(false);
+      setProvisioning(false);
+    }
+  }, [sinEleam, toast]);
+
   useEffect(() => {
-    if (sinEleam) { setLoading(false); return; }
-    let active = true;
-    setLoading(true);
-    Promise.all([
-      getRequisitosEleam(),
-      getObservaciones({ soloAbiertas: true }),
-    ])
-      .then(([r, o]) => {
-        if (!active) return;
-        setRequisitos(r);
-        setObservaciones(o);
-      })
-      .catch((e) => active && toast(friendlyError(e, "No se pudo cargar el panel de acreditación. Recarga la página."), "error"))
-      .finally(() => active && setLoading(false));
-    return () => { active = false; };
-  }, [toast, sinEleam]);
+    loadPanel();
+  }, [loadPanel]);
 
   const resumen = useMemo(() => buildResumen(requisitos), [requisitos]);
   const priorityAmbitos = useMemo(() => {
@@ -425,7 +454,13 @@ export default function AccreditationDashboard() {
       className="space-y-6"
     >
 
-      <AccreditationNextStep resumen={resumen} observaciones={observaciones} navigate={navigate} />
+      <AccreditationNextStep
+        resumen={resumen}
+        observaciones={observaciones}
+        navigate={navigate}
+        onReload={() => loadPanel({ forceProvision: true, silent: true })}
+        busy={provisioning}
+      />
 
       <ComplianceOverview
         resumen={resumen}
@@ -537,6 +572,10 @@ export default function AccreditationDashboard() {
               />
             ))}
           </div>
+        ) : resumen.total === 0 ? (
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Aún no hay ámbitos provisionados para este ELEAM. Usa “Inicializar requisitos” arriba; después verás todos los ámbitos con sus requisitos pendientes.
+          </div>
         ) : (
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             No hay ámbitos con alertas. Mantén la carpeta al día revisando vencimientos próximos.
@@ -553,15 +592,21 @@ export default function AccreditationDashboard() {
           <span className="text-xs font-semibold text-teal-700 group-open:hidden">Ver listado</span>
           <span className="hidden text-xs font-semibold text-slate-500 group-open:inline">Ocultar</span>
         </summary>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-slate-100 p-4 sm:p-5">
-          {resumen.ambitos.map((a) => (
-            <AmbitoCard
-              key={a.codigo}
-              ambito={a}
-              onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
-            />
-          ))}
-        </div>
+        {resumen.ambitos.length === 0 ? (
+          <div className="border-t border-slate-100 p-4 text-sm text-slate-500 sm:p-5">
+            No hay ámbitos cargados para este ELEAM todavía.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-slate-100 p-4 sm:p-5">
+            {resumen.ambitos.map((a) => (
+              <AmbitoCard
+                key={a.codigo}
+                ambito={a}
+                onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
+              />
+            ))}
+          </div>
+        )}
       </details>
 
       {/* Leyenda */}

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { summarizeFamilySnapshot } from "./familiarUtils";
+import { describe, expect, it, vi } from "vitest";
+import { applyOwnVisitFilter, summarizeFamilySnapshot } from "./familiarUtils";
 
 describe("summarizeFamilySnapshot", () => {
   it("counts visible care and medication states for family cards", () => {
@@ -20,5 +20,14 @@ describe("summarizeFamilySnapshot", () => {
       medicationsDone: 2,
       medicationsPending: 1,
     });
+  });
+});
+
+describe("applyOwnVisitFilter", () => {
+  it("filters family visit queries by authenticated profile", () => {
+    const query = { eq: vi.fn().mockReturnThis() };
+
+    expect(applyOwnVisitFilter(query, "profile-123")).toBe(query);
+    expect(query.eq).toHaveBeenCalledWith("profile_id", "profile-123");
   });
 });

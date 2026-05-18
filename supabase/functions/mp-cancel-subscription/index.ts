@@ -45,10 +45,16 @@ Deno.serve(async (req) => {
 
     await updatePreapprovalStatus(eleam.mp_preapproval_id, "cancelled");
 
-    await sb.from("eleams").update({
+    const { error: updateErr } = await sb.from("eleams").update({
       subscription_status: "cancelado",
       cancelado_en: new Date().toISOString(),
     }).eq("id", eleam.id);
+    if (updateErr) {
+      console.error("mp-cancel local update", updateErr);
+      return jsonResponse(req, {
+        error: "MercadoPago canceló la suscripción, pero no se pudo actualizar el estado local. Contacta a soporte.",
+      }, 500);
+    }
 
     return jsonResponse(req, { ok: true });
   } catch (e) {

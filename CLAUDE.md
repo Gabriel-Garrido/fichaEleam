@@ -59,7 +59,6 @@ src/
 │   ├── payment/                # PaymentPage, PaymentReturn (MercadoPago)
 │   ├── team/                   # TeamManagement (crear funcionarios/familiares), teamConstants.js (PERM_GROUPS, PLANTILLAS_CARGO, DEFAULT_PERMS) + ChangePasswordPage
 │   ├── familiar/               # Portal restringido + registro de visitas
-│   ├── demo/                   # Demo guiado por token, datos mock y guía interactiva
 │   ├── onboarding/             # Sistema de onboarding adaptativo por rol/permisos
 │   │   ├── onboardingConfig.js # ROLE_CONFIG por rol + COLOR_CLASSES (Tailwind estático)
 │   │   ├── OnboardingContext.jsx  # Provider: estado localStorage, auto-complete, detección nuevos permisos
@@ -110,7 +109,7 @@ supabase/functions/
 
 **No existe auto-registro público.** La landing solo muestra "Iniciar sesión" y CTA de demo. Los nuevos admins entran vía el flujo de aprobación de demo:
 
-1. **Demo → Admin**: Prospecto llena formulario en landing → row en `demo_leads` → puede explorar `/demo/:token` si existe token, pero el login real requiere `demo_user_id` → superadmin aprueba desde `/superadmin` → Edge Function `create-demo-user` crea ELEAM demo + cuenta `admin_eleam` con `app_metadata` server-side, reutiliza cuenta compatible o repara Auth huérfano → activa demo por 30 días → email con credenciales si aplica (vía Resend) + superadmin ve el resultado en modal UI.
+1. **Demo → Admin**: Prospecto llena formulario en landing → row en `demo_leads` (estado `nuevo`) → la UI confirma "solicitud enviada, respuesta en menos de 24 h". No hay acceso hasta que el superadmin apruebe desde `/superadmin` → Edge Function `create-demo-user` crea ELEAM demo + cuenta `admin_eleam` con `app_metadata` server-side, reutiliza cuenta compatible o repara Auth huérfano → activa demo por 30 días → email con credenciales si aplica (vía Resend) + superadmin ve el resultado en modal UI. Si el prospecto intenta iniciar sesión antes de la aprobación, el login muestra un aviso claro (RPC `demo_lead_status`).
 2. **Funcionario/Familiar creado por ELEAM**: Admin crea funcionarios/familiares desde `/equipo`; funcionarios pueden crear familiares vinculados a residentes activos desde flujos operativos. Edge Function `create-staff-user` crea o repara cuenta con contraseña temporal + email de bienvenida.
 3. **Primer acceso (cualquier rol)**: Si `must_reset_password=true`, `ProtectedRoute` fuerza redirect a `/cambiar-clave`. Allí puede establecer nueva contraseña o, si tiene Gmail, vincular Google con `supabase.auth.linkIdentity` (no crea cuenta duplicada). La bandera solo se limpia después del callback exitoso `/cambiar-clave?linked=google`.
 4. **Recuperación de contraseña**: `/recuperar-acceso` → `supabase.auth.resetPasswordForEmail` → email con link → `/reset-password` → nueva contraseña vía `supabase.auth.updateUser`; al guardar se limpia `must_reset_password`.
@@ -158,7 +157,6 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | `/login` | Login | — | Público; redirige si ya autenticado |
 | `/recuperar-acceso` | RecuperarAcceso | — | Solicita email para reset de contraseña |
 | `/reset-password` | ResetPassword | — | Procesa callback de Supabase; timeout 8s para links expirados |
-| `/demo/:token` | GuidedDemoPage | — | Demo guiado para lead aprobado; token en `demo_leads` |
 | `/pago` | PaymentPage | `requireActive=false` | Planes MercadoPago |
 | `/pago/return` | PaymentReturn | — | Post-checkout; polling |
 | `/blog` | PublicBlogList | — | Blog público |
@@ -196,7 +194,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 ## Base de Datos
 
-23 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
+38 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
 
 ### Tablas principales
 
@@ -290,7 +288,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 **`familiar_residentes`** — PK (profile_id, residente_id): parentesco, creado_por, creado_en.
 
-**`funcionario_permisos`** — Permisos granulares por funcionario. 21 columnas bool: las 13 originales (`crear/editar/eliminar_residentes`, `crear/editar/eliminar_signos_vitales`, `crear/editar/eliminar_observaciones`, `subir/editar/archivar_acreditacion`, `registrar_visitas`) más 8 nuevas (`crear_indicaciones_medicamentos`, `editar_indicaciones_medicamentos`, `validar_medicamentos_controlados`, `ajustar_stock_medicamentos`, `completar_tareas_cuidado`, `editar_indicaciones_cuidado`, `ver_costos_medicamentos`, `exportar_reportes`). Ver sección "Permisos Granulares" para defaults.
+**`funcionario_permisos`** — Permisos granulares por funcionario. 22 columnas bool: residentes, signos vitales, observaciones, plan de cuidado, eMAR, acreditación y visitas. Ver sección "Permisos Granulares" para defaults.
 
 **`visitas_familiar`** — Registro de visitas: residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por.
 
@@ -302,7 +300,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 **`crm_interactions`** — tipo, canal, resumen, resultado, proxima_accion, creado_por, eleam_id, fecha.
 
-**`demo_leads`** — Leads del formulario de landing: nombre, cargo, eleam_nombre, email, telefono, num_residentes, UTM/referrer, estado (nuevo|contactado|demo_activo|demo_completado|descartado|convertido), demo_token, demo_user_id (uuid FK auth.users; vincula al usuario real cuando superadmin aprueba demo), demo_progreso, solicitudes de contacto y vencimiento.
+**`demo_leads`** — Leads del formulario de landing: nombre, cargo, eleam_nombre, email, telefono, num_residentes, UTM/referrer, estado (nuevo|contactado|demo_activo|descartado|convertido), demo_user_id (uuid FK auth.users; vincula al usuario real cuando superadmin aprueba demo), demo_access_granted_at, demo_expires_at.
 
 **`landing_events`** — Eventos anónimos de landing: tipo, página, elemento, valor, session_id, UTM/referrer, creado_en. Solo anon/authenticated insertan; superadmin lee.
 
@@ -474,13 +472,15 @@ Setear con `npx supabase secrets set NOMBRE=valor`.
 
 ## Demo
 
-### Demo guiado (flujo principal)
+### Flujo de solicitud y aprobación
 
-Prospecto llena formulario en landing → row en `demo_leads` → superadmin aprueba en LeadsPanel (`/superadmin`) → Edge Function `create-demo-user` crea ELEAM demo y cuenta `admin_eleam` real con 30 días de prueba mediante `app_metadata` de Admin API, reutiliza una cuenta compatible o repara un usuario Auth huérfano del mismo correo → email con credenciales si se generó contraseña y Resend está configurado → superadmin ve temp_password solo cuando existe → prospecto inicia sesión y completa `/cambiar-clave`.
+1. Prospecto llena formulario en landing → row en `demo_leads` con estado `nuevo` → mensaje en UI: "Solicitud enviada, te contactaremos en menos de 24 horas".
+2. Si el prospecto intenta iniciar sesión antes de ser aprobado → Login llama `demo_lead_status(email)` (RPC security-definer accesible desde anon) → si retorna `'pendiente'`, muestra aviso claro: "Tu solicitud de demo está en revisión — te enviaremos las credenciales por correo cuando esté habilitada".
+3. Superadmin aprueba desde `/superadmin/leads` → Edge Function `create-demo-user` crea ELEAM demo + cuenta `admin_eleam` real con 30 días de prueba mediante `app_metadata` de Admin API, reutiliza cuenta compatible o repara Auth huérfano → email con credenciales si Resend está configurado → superadmin ve `temp_password` en modal solo cuando se generó.
+4. Prospecto inicia sesión con credenciales recibidas → `must_reset_password=true` → forzado a `/cambiar-clave`.
+5. Tras el período demo (30 días), debe contratar un plan para continuar.
 
-Ruta pública: `/demo/:token`. Guarda progreso en `demo_leads.demo_progreso`, actualiza `demo_ultimo_ping` y permite solicitar contacto desde el demo.
-
-Los datos clínicos del demo viven en `src/features/demo/demoData.js`; no escriben tablas clínicas reales.
+No existe ruta pública `/demo/:token` ni demo guiado; el demo ES la cuenta real del ELEAM en modo prueba.
 
 ### Detección de plan demo en el frontend
 
@@ -514,7 +514,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 
 ### Funcionalidades
 
-- **Métricas**: ELEAMs totales, activos, demos (`plan='demo'`), nuevos este mes, residentes, MRR (CLP), leads últimos 7 días, sesiones demo activas.
+- **Métricas**: ELEAMs totales, activos, demos (`plan='demo'`), nuevos este mes, residentes, MRR (CLP), leads últimos 7 días.
 - **Tabla de ELEAMs**: Búsqueda, filtro por estado, plan, vencimiento. Edición inline: activar/desactivar, cambiar plan, max_residentes, fecha_vencimiento, notas.
 - **Registrar pago**: Monto, plan, método, fecha inicio/fin → RPC transaccional `registrar_pago_y_activar_eleam`.
 - **Historial de pagos**: Últimos 20 con ELEAM, monto, plan, estado.
@@ -522,7 +522,7 @@ Ruta `/superadmin`. Solo operador (rol=superadmin sin ELEAM).
 - **Ficha 360 del ELEAM**: Contacto, estado, suscripción, riesgo churn, tareas vencidas, interacciones recientes, salud cliente (healthy/warning/risk).
 - **Tareas**: Crear, asignar, marcar completadas, vencimiento, prioridad.
 - **Interacciones**: Registro de contactos (call, email, meeting, etc.); proxima acción; audit trail.
-- **LeadsPanel**: Tabla de `demo_leads` con estado comercial y estado de acceso derivado: solicitud pendiente, demo guiado, demo vencido o cuenta demo aprobada. El botón contextual invoca `create-demo-user`; muestra modal con email + contraseña temporal si se creó/reparó cuenta, aviso de reutilización si existe cuenta compatible, o credenciales manuales si falla Resend.
+- **LeadsPanel**: Tabla de `demo_leads` con estado comercial y estado de acceso derivado: solicitud pendiente o cuenta demo aprobada. El botón contextual invoca `create-demo-user`; muestra modal con email + contraseña temporal si se creó/reparó cuenta, aviso de reutilización si existe cuenta compatible, o credenciales manuales si falla Resend.
 
 **Salud del cliente** (`utils/customerHealth.js`): Combina pago, vencimiento, último contacto, riesgo, tareas vencidas, estado CRM → `healthy | warning | risk | unknown`.
 
@@ -569,15 +569,13 @@ Tabla `funcionario_permisos` con columnas bool por acción. Verificación en UI 
 | `crear_residentes`, `editar_residentes`, `eliminar_residentes` | CRUD residentes | true / true / **false** |
 | `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales` | Signos vitales | true / true / **false** |
 | `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones` | Observaciones | true / true / **false** |
-| `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación | true / true / **false** |
-| `registrar_visitas` | Visitas familiares | true |
+| `crear_planes_cuidado`, `editar_planes_cuidado`, `completar_tareas_cuidado`, `editar_indicaciones_cuidado` | Plan de cuidado | true / true / true / **false** |
 | `crear_indicaciones_medicamentos`, `editar_indicaciones_medicamentos` | Indicaciones eMAR | **false** / **false** |
+| `administrar_medicamentos` | Administración eMAR | true |
 | `validar_medicamentos_controlados` | Validar controlados en eMAR | **false** |
 | `ajustar_stock_medicamentos` | Ajuste manual de stock | **false** |
-| `completar_tareas_cuidado` | Registrar cumplimiento de tareas del plan de cuidado | **false** |
-| `editar_indicaciones_cuidado` | Editar plan de cuidado del residente | **false** |
-| `ver_costos_medicamentos` | Ver costos en módulo eMAR | true |
-| `exportar_reportes` | Exportar reportes clínicos | true |
+| `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación | true / true / **false** |
+| `registrar_visitas` | Visitas familiares | true |
 
 `can()` en AuthContext: fail-closed para permisos marcados **false** — cuando no hay row en `funcionario_permisos`, esos permisos se deniegan explícitamente (set `FAIL_CLOSED_PERMS` en AuthContext.jsx). El schema crea filas para funcionarios nuevos y existentes.
 
@@ -616,7 +614,7 @@ Base consistente. Propagan className + rest para override.
 ## Inicialización
 
 1. Crear proyecto en supabase.com.
-2. SQL Editor → ejecutar `supabase_schema.sql`.
+2. SQL Editor → ejecutar `supabase_schema.sql` completo como única fuente SQL canónica.
 3. Storage Dashboard → crear bucket `documentos-acreditacion` (privado).
 4. Project Settings → API → copiar URL + anon key.
 5. `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
@@ -628,7 +626,7 @@ Base consistente. Propagan className + rest para override.
 ```sql
 update public.profiles set rol = 'superadmin' where email = 'tu-email@gmail.com';
 ```
-(Alternativamente, ejecutar `supabase_schema.sql` con tu email ya será promocionado automáticamente.)
+(Alternativamente, el email de superadmin de plataforma definido en el schema queda promocionado automáticamente al ejecutar `supabase_schema.sql`.)
 
 ---
 
@@ -734,7 +732,7 @@ Persistido en localStorage con clave `fichaeleam_onboarding_v2_{userId}`. Campos
 
 ## Qué Hacer Ahora
 
-1. **Permisos granulares de funcionario**: Si necesitas más permisos o cambiar defaults, edita `FAIL_CLOSED_PERMS` en `AuthContext.jsx`, `PERM_GROUPS`/`DEFAULT_PERMS` en `teamConstants.js` y el ALTER TABLE en `supabase_schema.sql`.
+1. **Permisos granulares de funcionario**: Si necesitas más permisos o cambiar defaults, edita `FAIL_CLOSED_PERMS` en `AuthContext.jsx`, `PERM_GROUPS`/`DEFAULT_PERMS` en `teamConstants.js` y `funcionario_permisos`/`funcionario_can` en `supabase_schema.sql`.
 2. **Onboarding**: Para agregar pasos, edita `ROLE_CONFIG` en `onboardingConfig.js` (sin cambiar los componentes). Las clases Tailwind del color deben ser estáticas en `COLOR_CLASSES`.
 3. **Acreditación**: Si el modelo v9 requiere cambios (ámbitos, requisitos, estados), edita `supabase_schema.sql` + servicios.
 4. **Blog/CRM**: Editable desde UI; no requiere cambios de código.
@@ -747,7 +745,7 @@ Persistido en localStorage con clave `fichaeleam_onboarding_v2_{userId}`. Campos
 
 ## Archivos de Referencia
 
-- `supabase_schema.sql` — Schema completo (tablas, RLS, funciones, triggers, ALTER TABLE permisos).
+- `supabase_schema.sql` — Schema canónico completo (tablas, RLS, funciones, triggers, seeds y grants).
 - `src/routes/AppRouter.jsx` — Definición de todas las rutas.
 - `src/context/AuthContext.jsx` — useAuth(), FAIL_CLOSED_PERMS, helpers, derivados.
 - `src/components/ProtectedRoute.jsx` — Guarding de sesión, pago, rol.

@@ -162,7 +162,7 @@ export default function BlogManagement() {
                           href={`/blog/${p.slug}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline text-xs mr-2"
+                          className="text-teal-700 hover:underline text-xs mr-2"
                         >
                           Ver
                         </a>

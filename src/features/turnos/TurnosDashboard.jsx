@@ -21,6 +21,11 @@ function summaryNested(summary, group, key) {
   return summary?.[group]?.resumen?.[key] ?? 0;
 }
 
+function carePending(summary) {
+  return summaryNested(summary, "tareas_cuidado", "pendientes_operativos")
+    || (summaryNested(summary, "tareas_cuidado", "pendiente") + summaryNested(summary, "tareas_cuidado", "reprogramada"));
+}
+
 export default function TurnosDashboard() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +71,7 @@ export default function TurnosDashboard() {
       )}
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-slate-950">Historial</h2>
@@ -117,7 +122,7 @@ export default function TurnosDashboard() {
                   </div>
                   <div className="grid grid-cols-5 gap-2 text-center text-xs text-slate-500">
                     <Metric label="eMAR" value={summaryNested(item.resumen_json, "emar", "pendiente") + summaryNested(item.resumen_json, "emar", "pendiente_validacion")} />
-                    <Metric label="Tareas" value={summaryNested(item.resumen_json, "tareas_cuidado", "pendiente")} />
+                    <Metric label="Tareas" value={carePending(item.resumen_json)} />
                     <Metric label="Sin signos" value={summaryCount(item.resumen_json, "sin_signos_hoy")} />
                     <Metric label="Atención" value={summaryCount(item.resumen_json, "signos_atencion")} />
                     <Metric label="Seguim." value={summaryCount(item.resumen_json, "seguimientos")} />
@@ -128,7 +133,7 @@ export default function TurnosDashboard() {
           )}
         </div>
 
-        <aside className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Cómo usarlo</h2>
           <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
             <Step n="1" text="Revisa alertas y residentes sin control." />

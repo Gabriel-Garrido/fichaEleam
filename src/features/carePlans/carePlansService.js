@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { normalizeFamilyVisibility } from "../familiar/familyVisibility";
 
 export const CARE_TURNOS = ["mañana", "tarde", "noche"];
 
@@ -186,6 +187,8 @@ export const CARE_STATUS_LABEL = {
   cancelada: "Cancelada",
 };
 
+export const CARE_OPEN_STATUSES = ["pendiente", "reprogramada"];
+
 export const OMISSION_REASONS = [
   ["rechazo", "Rechazo del residente"],
   ["no_disponible", "Recurso no disponible"],
@@ -217,7 +220,7 @@ const CARE_SCHEDULE_SELECT = `
 const CARE_TASK_SELECT = `
   id, eleam_id, residente_id, plan_id, actividad_id, horario_id,
   fecha, turno, hora, estado, motivo_omision, notas,
-  requiere_seguimiento, observacion_id, reprogramada_para,
+  requiere_seguimiento, observacion_id, fecha_original, reprogramada_para,
   cumplida_por, cumplida_en, creado_en, actualizado_en
 `;
 
@@ -236,10 +239,27 @@ export function currentTurno(date = new Date()) {
   return "noche";
 }
 
+export function nextFollowUpSlot(fecha = todayIso(), turno = currentTurno()) {
+  const base = new Date(`${fecha || todayIso()}T12:00:00`);
+  if (Number.isNaN(base.valueOf())) return { fecha: todayIso(), turno: currentTurno() };
+  if (turno === "mañana") return { fecha: dateIsoFrom(base), turno: "tarde" };
+  if (turno === "tarde") return { fecha: dateIsoFrom(base), turno: "noche" };
+  base.setDate(base.getDate() + 1);
+  return { fecha: dateIsoFrom(base), turno: "mañana" };
+}
+
+export function requireFollowUpSlot({ requiereSeguimiento, seguimientoFecha, seguimientoTurno }) {
+  if (!requiereSeguimiento) return;
+  if (!seguimientoFecha || !CARE_TURNOS.includes(seguimientoTurno)) {
+    throw new Error("Debes indicar fecha y turno para dejar el seguimiento pendiente.");
+  }
+}
+
 const TASK_SELECT = `
   ${CARE_TASK_SELECT},
   residentes(id, nombre, apellido, habitacion, cama, nivel_dependencia),
-  actividad:plan_cuidado_actividades(id, titulo, categoria, prioridad, instrucciones, requiere_observacion)
+  actividad:plan_cuidado_actividades(id, titulo, categoria, prioridad, descripcion, instrucciones, requiere_observacion, visible_familiar, resumen_familiar),
+  horario:plan_cuidado_horarios(id, tolerancia_min)
 `;
 
 export function previousTurnos(turno) {
@@ -282,6 +302,45 @@ export function normalizeSchedule(schedule = {}) {
     tolerancia_min: Number.isFinite(tolerancia) ? Math.max(0, Math.min(720, tolerancia)) : 60,
     activo: schedule.activo !== false,
   };
+}
+
+export function normalizeSchedules(schedules = []) {
+  const source = Array.isArray(schedules) ? schedules : [schedules];
+  return source
+    .filter(Boolean)
+    .map((schedule) => ({
+      id: schedule.id ?? null,
+      ...normalizeSchedule(schedule),
+    }));
+}
+
+function dateIsoFrom(date = new Date()) {
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.valueOf())) return todayIso();
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function careTaskDueAt(task) {
+  if (!task?.fecha || !task?.hora) return null;
+  const due = new Date(`${task.fecha}T${String(task.hora).slice(0, 5)}`);
+  if (Number.isNaN(due.valueOf())) return null;
+
+  const tolerance = Number(task.horario?.tolerancia_min ?? 0);
+  if (Number.isFinite(tolerance) && tolerance > 0) {
+    due.setMinutes(due.getMinutes() + Math.min(720, tolerance));
+  }
+  return due;
+}
+
+export function isCareTaskOverdue(task, now = new Date()) {
+  if (!task || !CARE_OPEN_STATUSES.includes(task.estado)) return false;
+  if (task._arrastre) return true;
+  if (task.fecha !== dateIsoFrom(now)) return false;
+  const dueAt = careTaskDueAt(task);
+  return !!dueAt && dueAt < now;
 }
 
 export async function getResidentCarePlan(residenteId) {
@@ -341,6 +400,11 @@ export async function saveCarePlan(residenteId, payload = {}) {
 
 export async function saveCareActivity({ plan, activity, schedule }) {
   const { userId } = await getSessionProfile();
+  const schedules = normalizeSchedules(activity.schedules ?? schedule);
+  if (schedules.length === 0) {
+    throw new Error("Debes programar al menos un horario para la actividad.");
+  }
+
   const payload = {
     eleam_id: plan.eleam_id,
     residente_id: plan.residente_id,
@@ -351,8 +415,7 @@ export async function saveCareActivity({ plan, activity, schedule }) {
     instrucciones: activity.instrucciones?.trim() || null,
     prioridad: activity.prioridad || "media",
     requiere_observacion: activity.requiere_observacion === true,
-    visible_familiar: activity.visible_familiar === true,
-    resumen_familiar: activity.resumen_familiar?.trim() || null,
+    ...normalizeFamilyVisibility(activity),
     activo: activity.activo !== false,
     actualizado_por: userId,
   };
@@ -380,31 +443,30 @@ export async function saveCareActivity({ plan, activity, schedule }) {
     saved = data;
   }
 
-  const horario = normalizeSchedule(schedule);
-  let scheduleError;
-  if (schedule?.id) {
-    const result = await supabase
-      .from("plan_cuidado_horarios")
-      .update({
-        ...horario,
-        eleam_id: plan.eleam_id,
-        residente_id: plan.residente_id,
-        actividad_id: saved.id,
-      })
-      .eq("id", schedule.id);
-    scheduleError = result.error;
-  } else {
-    const result = await supabase
-      .from("plan_cuidado_horarios")
-      .insert({
-        ...horario,
-        eleam_id: plan.eleam_id,
-        residente_id: plan.residente_id,
-        actividad_id: saved.id,
-      });
-    scheduleError = result.error;
+  const keptScheduleIds = schedules.map((item) => item.id).filter(Boolean);
+  let deactivateQuery = supabase
+    .from("plan_cuidado_horarios")
+    .update({ activo: false })
+    .eq("actividad_id", saved.id);
+  if (keptScheduleIds.length > 0) {
+    deactivateQuery = deactivateQuery.not("id", "in", `(${keptScheduleIds.join(",")})`);
   }
-  if (scheduleError) throw scheduleError;
+  const { error: deactivateError } = await deactivateQuery;
+  if (deactivateError) throw deactivateError;
+
+  for (const horario of schedules) {
+    const { id: horarioId, ...schedulePayload } = horario;
+    const row = {
+      ...schedulePayload,
+      eleam_id: plan.eleam_id,
+      residente_id: plan.residente_id,
+      actividad_id: saved.id,
+    };
+    const result = horarioId
+      ? await supabase.from("plan_cuidado_horarios").update(row).eq("id", horarioId)
+      : await supabase.from("plan_cuidado_horarios").insert(row);
+    if (result.error) throw result.error;
+  }
 
   return saved;
 }
@@ -441,6 +503,8 @@ export async function createCarePresetActivities({ plan, presetIds = [], existin
         instrucciones: activity.instrucciones || null,
         prioridad: activity.prioridad || "media",
         requiere_observacion: activity.requiere_observacion === true,
+        visible_familiar: false,
+        resumen_familiar: null,
         activo: true,
         creado_por: userId,
         actualizado_por: userId,
@@ -480,6 +544,20 @@ export async function deactivateCareActivity(activityId) {
   if (scheduleError) throw scheduleError;
 }
 
+export async function reactivateCareActivity(activityId) {
+  const { error } = await supabase
+    .from("plan_cuidado_actividades")
+    .update({ activo: true })
+    .eq("id", activityId);
+  if (error) throw error;
+
+  const { error: scheduleError } = await supabase
+    .from("plan_cuidado_horarios")
+    .update({ activo: true })
+    .eq("actividad_id", activityId);
+  if (scheduleError) throw scheduleError;
+}
+
 export async function generateCareTasks({ fecha = todayIso(), turno = null } = {}) {
   const { data, error } = await supabase.rpc("generar_tareas_cuidado", {
     p_fecha: fecha,
@@ -515,15 +593,16 @@ export async function listCareTasks({
   if (error) throw error;
   const currentRows = (data ?? []).map((row) => ({ ...row, _arrastre: false }));
 
-  if (!includeCarryOver || !turno || (estado && estado !== "pendiente")) {
+  if (!includeCarryOver || !turno || (estado && !CARE_OPEN_STATUSES.includes(estado))) {
     return currentRows;
   }
 
+  const carryStatuses = estado ? [estado] : CARE_OPEN_STATUSES;
   const carryQueries = [];
   let older = supabase
     .from("tareas_cuidado")
     .select(TASK_SELECT)
-    .eq("estado", "pendiente")
+    .in("estado", carryStatuses)
     .lt("fecha", fecha)
     .order("fecha", { ascending: true })
     .order("hora", { ascending: true })
@@ -536,7 +615,7 @@ export async function listCareTasks({
     let sameDay = supabase
       .from("tareas_cuidado")
       .select(TASK_SELECT)
-      .eq("estado", "pendiente")
+      .in("estado", carryStatuses)
       .eq("fecha", fecha)
       .in("turno", previous)
       .order("hora", { ascending: true })
@@ -562,13 +641,49 @@ export async function listCareTasks({
     .sort((a, b) => `${a.fecha}T${a.hora ?? "00:00"}`.localeCompare(`${b.fecha}T${b.hora ?? "00:00"}`));
 }
 
-export async function completeCareTask({ id, estado, notas, motivoOmision, requiereSeguimiento }) {
+export async function completeCareTask({
+  id,
+  estado,
+  notas,
+  motivoOmision,
+  requiereSeguimiento,
+  seguimientoFecha,
+  seguimientoTurno,
+}) {
+  requireFollowUpSlot({ requiereSeguimiento, seguimientoFecha, seguimientoTurno });
   const { data, error } = await supabase.rpc("completar_tarea_cuidado", {
     p_tarea_id: id,
     p_estado: estado,
     p_notas: notas || null,
     p_motivo_omision: motivoOmision || null,
     p_requiere_seguimiento: requiereSeguimiento === true,
+    p_seguimiento_fecha: requiereSeguimiento ? seguimientoFecha : null,
+    p_seguimiento_turno: requiereSeguimiento ? seguimientoTurno : null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function rescheduleCareTask({
+  id,
+  fecha,
+  turno,
+  hora,
+  notas,
+  requiereSeguimiento,
+  seguimientoFecha,
+  seguimientoTurno,
+}) {
+  requireFollowUpSlot({ requiereSeguimiento, seguimientoFecha, seguimientoTurno });
+  const { data, error } = await supabase.rpc("reprogramar_tarea_cuidado", {
+    p_tarea_id: id,
+    p_fecha: fecha,
+    p_turno: turno,
+    p_hora: hora,
+    p_notas: notas || null,
+    p_requiere_seguimiento: requiereSeguimiento === true,
+    p_seguimiento_fecha: requiereSeguimiento ? seguimientoFecha : null,
+    p_seguimiento_turno: requiereSeguimiento ? seguimientoTurno : null,
   });
   if (error) throw error;
   return data;
@@ -579,12 +694,17 @@ export async function getCareTaskSummary({ fecha = todayIso(), turno = null } = 
   return tasks.reduce((acc, task) => {
     acc.total += 1;
     acc[task.estado] = (acc[task.estado] ?? 0) + 1;
-    if (task._arrastre) {
-      acc.vencidas += 1;
-    } else if (task.estado === "pendiente" && task.hora && task.fecha === todayIso()) {
-      const due = new Date(`${task.fecha}T${task.hora}`);
-      if (!Number.isNaN(due.valueOf()) && due < new Date()) acc.vencidas += 1;
-    }
+    if (CARE_OPEN_STATUSES.includes(task.estado)) acc.pendientes_operativos += 1;
+    if (isCareTaskOverdue(task)) acc.vencidas += 1;
     return acc;
-  }, { total: 0, pendiente: 0, cumplida: 0, omitida: 0, reprogramada: 0, cancelada: 0, vencidas: 0 });
+  }, {
+    total: 0,
+    pendiente: 0,
+    cumplida: 0,
+    omitida: 0,
+    reprogramada: 0,
+    cancelada: 0,
+    vencidas: 0,
+    pendientes_operativos: 0,
+  });
 }

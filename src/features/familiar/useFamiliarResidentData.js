@@ -2,9 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { friendlyError } from "../../utils/errorMessages";
 import { getFamiliarResidentSnapshot, getMyResidentes } from "./familiarService";
 
+function todayIso() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function useFamiliarResidentData({ toast } = {}) {
   const [residentes, setResidentes] = useState([]);
   const [activeId, setActiveId] = useState(null);
+  const [selectedDate, setSelectedDateState] = useState(todayIso());
   const [snapshot, setSnapshot] = useState(null);
   const [loadingResidents, setLoadingResidents] = useState(true);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
@@ -15,7 +24,7 @@ export function useFamiliarResidentData({ toast } = {}) {
     [activeId, residentes],
   );
 
-  const loadSnapshot = useCallback(async (residentId) => {
+  const loadSnapshot = useCallback(async (residentId, fecha) => {
     if (!residentId) {
       setSnapshot(null);
       return null;
@@ -24,7 +33,7 @@ export function useFamiliarResidentData({ toast } = {}) {
     setLoadingSnapshot(true);
     setError(null);
     try {
-      const data = await getFamiliarResidentSnapshot(residentId);
+      const data = await getFamiliarResidentSnapshot(residentId, fecha);
       setSnapshot(data);
       return data;
     } catch (err) {
@@ -39,10 +48,15 @@ export function useFamiliarResidentData({ toast } = {}) {
 
   const selectResident = useCallback((residentId) => {
     setActiveId(residentId);
-    return loadSnapshot(residentId);
-  }, [loadSnapshot]);
+    return loadSnapshot(residentId, selectedDate);
+  }, [loadSnapshot, selectedDate]);
 
-  const reload = useCallback(() => loadSnapshot(activeId), [activeId, loadSnapshot]);
+  const reload = useCallback(() => loadSnapshot(activeId, selectedDate), [activeId, loadSnapshot, selectedDate]);
+
+  const setSelectedDate = useCallback((fecha) => {
+    setSelectedDateState(fecha);
+    return loadSnapshot(activeId, fecha);
+  }, [activeId, loadSnapshot]);
 
   useEffect(() => {
     let mounted = true;
@@ -55,7 +69,7 @@ export function useFamiliarResidentData({ toast } = {}) {
         setResidentes(rows);
         const firstId = rows[0]?.id ?? null;
         setActiveId(firstId);
-        if (firstId) await loadSnapshot(firstId);
+        if (firstId) await loadSnapshot(firstId, todayIso());
       })
       .catch((err) => {
         if (!mounted) return;
@@ -76,11 +90,13 @@ export function useFamiliarResidentData({ toast } = {}) {
     residentes,
     activeId,
     activeResident,
+    selectedDate,
     snapshot,
     loading: loadingResidents || (loadingSnapshot && !snapshot),
     loadingSnapshot,
     error,
     selectResident,
+    setSelectedDate,
     reload,
   };
 }

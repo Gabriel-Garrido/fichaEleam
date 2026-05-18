@@ -142,7 +142,7 @@ export async function getRequisitosEleam() {
 
   // Asegurar provisionamiento (idempotente). Algunos ELEAMs antiguos
   // pueden no tener filas en acred_requisitos_eleam todavía.
-  await ensureProvision(eleamId);
+  await provisionForEleam(eleamId);
 
   // Marcamos vencidos antes de leer (server function).
   await markExpired(eleamId);
@@ -194,12 +194,19 @@ export async function getRequisitoEleam(reId) {
 
 async function ensureProvision(eleamIdOverride = null) {
   // RPC seguro (security definer) — idempotente.
-  try {
-    const eleamId = eleamIdOverride ?? (await getMyContext()).eleamId;
-    await supabase.rpc("acred_provision_requisitos", { p_eleam_id: eleamId });
-  } catch {
-    // Sin contexto (e.g. superadmin sin ELEAM): no-op
-  }
+  const eleamId = eleamIdOverride ?? (await getMyContext()).eleamId;
+  return provisionForEleam(eleamId);
+}
+
+async function provisionForEleam(eleamId) {
+  const { data, error } = await supabase.rpc("acred_provision_requisitos", { p_eleam_id: eleamId });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+export async function provisionAccreditationRequirements() {
+  const { eleamId } = await getMyContext();
+  return ensureProvision(eleamId);
 }
 
 async function markExpired(eleamIdOverride = null) {
@@ -543,7 +550,11 @@ export function buildResumen(requisitosEleam) {
   const noAplica = all.filter((r) => r.estado === "no_aplica").length;
   const cumple   = all.filter((r) => r.estado === "cumple").length;
   const denominador = all.length - noAplica;
-  const porcentaje = denominador > 0 ? Math.round((cumple / denominador) * 100) : 100;
+  const porcentaje = all.length === 0
+    ? 0
+    : denominador > 0
+      ? Math.round((cumple / denominador) * 100)
+      : 100;
 
   const porEstado = {};
   const porEstadoList = {};
@@ -581,7 +592,7 @@ export function buildResumen(requisitosEleam) {
   const ambitos = Object.values(porAmbito)
     .map((a) => {
       const denom = a.total - (a.no_aplica ?? 0);
-      const pct   = denom > 0 ? Math.round(((a.cumple ?? 0) / denom) * 100) : 100;
+      const pct   = a.total === 0 ? 0 : denom > 0 ? Math.round(((a.cumple ?? 0) / denom) * 100) : 100;
       return { ...a, porcentaje: pct };
     })
     .sort((a, b) => a.codigo.localeCompare(b.codigo));
@@ -603,6 +614,7 @@ export function buildResumen(requisitosEleam) {
 
   return {
     total: all.length,
+    evaluables: denominador,
     porEstado,
     porEstadoList,
     porcentaje,

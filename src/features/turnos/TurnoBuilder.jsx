@@ -44,7 +44,8 @@ export default function TurnoBuilder() {
     const emarValidation = summary.emar?.resumen?.pendiente_validacion ?? 0;
     const emarOverdue = summary.emar?.resumen?.vencidas ?? 0;
     const careOverdue = summary.tareas_cuidado?.resumen?.vencidas ?? 0;
-    const carePending = summary.tareas_cuidado?.resumen?.pendiente ?? 0;
+    const carePending = summary.tareas_cuidado?.resumen?.pendientes_operativos
+      ?? ((summary.tareas_cuidado?.resumen?.pendiente ?? 0) + (summary.tareas_cuidado?.resumen?.reprogramada ?? 0));
     const urgent = summary.signos_atencion?.filter((item) => item.status === "critical").length ?? 0;
     const sinSignos = summary.sin_signos_hoy?.length ?? 0;
     const seguimientos = summary.seguimientos?.length ?? 0;
@@ -88,7 +89,7 @@ export default function TurnoBuilder() {
         </button>
       }
     >
-      <div className="mb-4 grid gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_160px_160px]">
+      <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_160px_160px]">
         <div className="rounded-2xl bg-teal-50 p-4">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Siguiente foco</div>
           <div className="mt-1 text-sm font-semibold text-teal-950">{loading ? "Preparando resumen..." : nextText}</div>
@@ -184,7 +185,7 @@ export default function TurnoBuilder() {
           </section>
 
           <aside className="space-y-4">
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-base font-semibold text-slate-950">Notas del turno</h2>
               <textarea
                 value={notas}
@@ -194,7 +195,7 @@ export default function TurnoBuilder() {
                 className="mt-3 w-full resize-none rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
               />
             </div>
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-base font-semibold text-slate-950">Pendientes para siguiente turno</h2>
               <textarea
                 value={pendientes}
@@ -204,7 +205,7 @@ export default function TurnoBuilder() {
                 className="mt-3 w-full resize-none rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
               />
             </div>
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-base font-semibold text-slate-950">Actividad del turno</h2>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <SmallMetric label="Signos" value={summary.actividad_turno?.signos ?? 0} />
@@ -226,10 +227,10 @@ function LoadingSummary() {
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-4">
-        {[0, 1, 2, 3].map((i) => <div key={i} className="h-36 animate-pulse rounded-3xl bg-slate-100" />)}
+        {[0, 1, 2, 3].map((i) => <div key={i} className="h-36 animate-pulse rounded-2xl bg-slate-100" />)}
       </div>
       <div className="space-y-4">
-        {[0, 1, 2].map((i) => <div key={i} className="h-44 animate-pulse rounded-3xl bg-slate-100" />)}
+        {[0, 1, 2].map((i) => <div key={i} className="h-44 animate-pulse rounded-2xl bg-slate-100" />)}
       </div>
     </div>
   );
@@ -238,7 +239,7 @@ function LoadingSummary() {
 function SummarySection({ title, children, empty }) {
   const hasContent = Array.isArray(children) ? children.some(Boolean) : Boolean(children);
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="text-base font-semibold text-slate-950">{title}</h2>
       <div className="mt-3 space-y-2">
         {hasContent ? children : (
@@ -329,6 +330,9 @@ function CareRow({ item }) {
           {item.hora?.slice(0, 5) ?? "--:--"} · {item.prioridad}
         </span>
       </div>
+      {item.estado === "reprogramada" && (
+        <p className="mt-1 text-xs font-semibold text-sky-700">Reprogramada para este bloque.</p>
+      )}
       <p className="mt-1 text-sm text-slate-600">{item.residente?.nombre ?? "Residente"}</p>
       {item.instrucciones && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{item.instrucciones}</p>}
     </div>

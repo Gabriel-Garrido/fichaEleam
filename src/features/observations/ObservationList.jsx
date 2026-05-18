@@ -284,6 +284,15 @@ function ObservationList() {
                         {formatFollowUpLabel(r)}
                       </span>
                     )}
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        r.visible_familiar
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {r.visible_familiar ? "Visible familia" : "Interno"}
+                    </span>
                     <span className="text-xs text-slate-400 capitalize">{r.turno}</span>
                   </div>
                   <p className="text-sm text-slate-700 mb-1">{r.descripcion}</p>

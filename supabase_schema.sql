@@ -80,6 +80,7 @@ alter table public.profiles
   add column if not exists must_reset_password boolean not null default false;
 
 create index if not exists idx_profiles_eleam_id on public.profiles(eleam_id);
+create index if not exists idx_profiles_eleam_rol on public.profiles(eleam_id, rol);
 create index if not exists idx_profiles_email_lower on public.profiles(lower(email));
 create index if not exists idx_eleams_subscription_status on public.eleams(subscription_status);
 create index if not exists idx_eleams_mp_preapproval_id on public.eleams(mp_preapproval_id);
@@ -173,16 +174,9 @@ create table if not exists public.observaciones_diarias (
   resumen_familiar      text,
   registrado_por        uuid references auth.users(id) on delete set null,
   creado_en             timestamptz not null default now(),
-  actualizado_en        timestamptz not null default now()
+  actualizado_en        timestamptz not null default now(),
+  check (visible_familiar = false or nullif(trim(coalesce(resumen_familiar, '')), '') is not null)
 );
-
-alter table public.observaciones_diarias
-  add column if not exists visible_familiar boolean not null default false,
-  add column if not exists resumen_familiar text,
-  add column if not exists seguimiento_fecha date,
-  add column if not exists seguimiento_turno text check (seguimiento_turno in ('mañana','tarde','noche') or seguimiento_turno is null),
-  add column if not exists seguimiento_estado text not null default 'pendiente'
-    check (seguimiento_estado in ('pendiente','resuelto','cancelado'));
 
 create index if not exists idx_observaciones_residente_fecha on public.observaciones_diarias(residente_id, fecha_hora desc);
 create index if not exists idx_observaciones_tipo on public.observaciones_diarias(tipo);
@@ -265,12 +259,9 @@ create table if not exists public.plan_cuidado_actividades (
   creado_por            uuid references auth.users(id) on delete set null,
   actualizado_por       uuid references auth.users(id) on delete set null,
   creado_en             timestamptz not null default now(),
-  actualizado_en        timestamptz not null default now()
+  actualizado_en        timestamptz not null default now(),
+  check (visible_familiar = false or nullif(trim(coalesce(resumen_familiar, '')), '') is not null)
 );
-
-alter table public.plan_cuidado_actividades
-  add column if not exists visible_familiar boolean not null default false,
-  add column if not exists resumen_familiar text;
 
 create index if not exists idx_plan_actividades_plan
   on public.plan_cuidado_actividades(plan_id, activo);
@@ -330,6 +321,8 @@ create table if not exists public.tareas_cuidado (
   notas                 text,
   requiere_seguimiento  boolean not null default false,
   observacion_id        uuid references public.observaciones_diarias(id) on delete set null,
+  fecha_original        date,
+  fechas_programadas    date[] not null default '{}'::date[],
   reprogramada_para     timestamptz,
   cumplida_por          uuid references auth.users(id) on delete set null,
   cumplida_en           timestamptz,
@@ -342,6 +335,10 @@ create index if not exists idx_tareas_cuidado_eleam_fecha_turno
   on public.tareas_cuidado(eleam_id, fecha desc, turno, estado);
 create index if not exists idx_tareas_cuidado_residente_fecha
   on public.tareas_cuidado(residente_id, fecha desc, turno);
+create index if not exists idx_tareas_cuidado_horario_fecha_original
+  on public.tareas_cuidado(horario_id, (coalesce(fecha_original, fecha)));
+create index if not exists idx_tareas_cuidado_fechas_programadas
+  on public.tareas_cuidado using gin(fechas_programadas);
 
 create table if not exists public.plan_cuidado_audit (
   id             uuid primary key default gen_random_uuid(),
@@ -386,12 +383,9 @@ create table if not exists public.medicamentos_indicaciones (
   actualizado_por            uuid references auth.users(id) on delete set null,
   creado_en                  timestamptz not null default now(),
   actualizado_en             timestamptz not null default now(),
+  check (visible_familiar = false or nullif(trim(coalesce(resumen_familiar, '')), '') is not null),
   check (es_controlado = false or tipo_controlado is not null)
 );
-
-alter table public.medicamentos_indicaciones
-  add column if not exists visible_familiar boolean not null default false,
-  add column if not exists resumen_familiar text;
 
 create index if not exists idx_med_indicaciones_residente
   on public.medicamentos_indicaciones(residente_id, estado);
@@ -572,6 +566,8 @@ create table if not exists public.funcionario_invitaciones (
 
 create index if not exists idx_inv_eleam on public.funcionario_invitaciones(eleam_id);
 create index if not exists idx_inv_email on public.funcionario_invitaciones(lower(email));
+create index if not exists idx_inv_eleam_email_active
+  on public.funcionario_invitaciones(eleam_id, lower(email), usado, expira_en desc);
 
 create table if not exists public.familiar_residentes (
   profile_id    uuid not null references public.profiles(id) on delete cascade,
@@ -596,24 +592,36 @@ create table if not exists public.funcionario_permisos (
   crear_observaciones     boolean not null default true,
   editar_observaciones    boolean not null default true,
   eliminar_observaciones  boolean not null default false,
+  crear_planes_cuidado    boolean not null default true,
+  editar_planes_cuidado   boolean not null default true,
+  completar_tareas_cuidado boolean not null default true,
+  crear_indicaciones_medicamentos boolean not null default false,
+  editar_indicaciones_medicamentos boolean not null default false,
+  administrar_medicamentos boolean not null default true,
+  validar_medicamentos_controlados boolean not null default false,
+  ajustar_stock_medicamentos boolean not null default false,
   subir_acreditacion      boolean not null default true,
   editar_acreditacion     boolean not null default true,
   archivar_acreditacion   boolean not null default false,
-  registrar_visitas       boolean not null default true,
-  actualizado_en          timestamptz not null default now()
+  registrar_visitas            boolean not null default true,
+  editar_indicaciones_cuidado  boolean not null default false,
+  actualizado_en               timestamptz not null default now()
 );
 
+create index if not exists idx_func_permisos_profile on public.funcionario_permisos(profile_id);
+
+-- Migraciones: columnas añadidas después de la creación inicial de la tabla.
+-- ADD COLUMN IF NOT EXISTS es idempotente: seguro de re-ejecutar en cualquier BD.
 alter table public.funcionario_permisos
-  add column if not exists crear_planes_cuidado boolean not null default true,
-  add column if not exists editar_planes_cuidado boolean not null default true,
-  add column if not exists completar_tareas_cuidado boolean not null default true,
+  add column if not exists crear_planes_cuidado            boolean not null default true,
+  add column if not exists editar_planes_cuidado           boolean not null default true,
+  add column if not exists completar_tareas_cuidado        boolean not null default true,
   add column if not exists crear_indicaciones_medicamentos boolean not null default false,
   add column if not exists editar_indicaciones_medicamentos boolean not null default false,
-  add column if not exists administrar_medicamentos boolean not null default true,
+  add column if not exists administrar_medicamentos        boolean not null default true,
   add column if not exists validar_medicamentos_controlados boolean not null default false,
-  add column if not exists ajustar_stock_medicamentos boolean not null default false;
-
-create index if not exists idx_func_permisos_profile on public.funcionario_permisos(profile_id);
+  add column if not exists ajustar_stock_medicamentos      boolean not null default false,
+  add column if not exists editar_indicaciones_cuidado     boolean not null default false;
 
 create table if not exists public.eleam_feature_permissions (
   id              uuid primary key default gen_random_uuid(),
@@ -650,21 +658,22 @@ create table if not exists public.visitas_familiar (
   duracion_min    integer check (duracion_min is null or duracion_min between 1 and 1440),
   notas           text,
   registrado_por  uuid references auth.users(id) on delete set null,
-  estado          text not null default 'completada' check (estado in ('pendiente','activa','completada','cancelada')),
+  estado          text not null default 'completada'
+                  check (estado in ('pendiente','activa','salida_pendiente','completada','cancelada')),
   validado_por    uuid references public.profiles(id) on delete set null,
   validado_en     timestamptz,
+  salida_anunciada_en timestamptz,
   salida_hora     timestamptz,
+  salida_validada_por uuid references public.profiles(id) on delete set null,
+  salida_validada_en timestamptz,
   creado_en       timestamptz not null default now()
 );
 
-create index if not exists idx_visitas_residente_fecha on public.visitas_familiar(residente_id, fecha_hora desc);
-create index if not exists idx_visitas_estado on public.visitas_familiar(residente_id, estado) where estado in ('pendiente','activa');
-
--- visitas_familiar: workflow columns (idempotent for existing DBs)
-alter table public.visitas_familiar add column if not exists estado text not null default 'completada' check (estado in ('pendiente','activa','completada','cancelada'));
-alter table public.visitas_familiar add column if not exists validado_por uuid references public.profiles(id) on delete set null;
-alter table public.visitas_familiar add column if not exists validado_en timestamptz;
-alter table public.visitas_familiar add column if not exists salida_hora timestamptz;
+create index if not exists idx_visitas_residente_fecha
+  on public.visitas_familiar(residente_id, fecha_hora desc);
+create index if not exists idx_visitas_estado
+  on public.visitas_familiar(residente_id, estado)
+  where estado in ('pendiente','activa','salida_pendiente');
 
 -- ============================================================
 -- 4. Pagos, MercadoPago y webhooks
@@ -694,6 +703,7 @@ create table if not exists public.pagos (
 );
 
 create index if not exists idx_pagos_eleam_id on public.pagos(eleam_id);
+create index if not exists idx_pagos_eleam_fecha on public.pagos(eleam_id, fecha_pago desc);
 create index if not exists idx_pagos_fecha_pago on public.pagos(fecha_pago desc);
 create index if not exists idx_pagos_mp_preapproval on public.pagos(mp_preapproval_id);
 
@@ -892,9 +902,214 @@ create table if not exists public.blog_posts (
 create index if not exists idx_blog_posts_estado_pub on public.blog_posts(estado, publicado_en desc);
 create index if not exists idx_blog_posts_slug on public.blog_posts(slug);
 
+create table if not exists public.demo_leads (
+  id                        uuid default gen_random_uuid() primary key,
+  nombre                    text not null,
+  cargo                     text not null,
+  eleam_nombre              text not null,
+  email                     text not null,
+  telefono                  text not null,
+  num_residentes            text,
+  utm_source                text,
+  utm_medium                text,
+  utm_campaign              text,
+  pagina_origen             text,
+  referrer                  text,
+  estado                    text not null default 'nuevo'
+    check (estado in ('nuevo','contactado','demo_activo','descartado','convertido')),
+  notas_admin               text,
+  demo_access_granted_at    timestamptz,
+  demo_expires_at           timestamptz,
+  demo_user_id              uuid references auth.users(id) on delete set null,
+  creado_en                 timestamptz default now() not null
+);
+
+create index if not exists idx_demo_leads_estado on public.demo_leads(estado);
+create index if not exists idx_demo_leads_email_estado on public.demo_leads(lower(email), estado);
+create unique index if not exists demo_leads_active_email_unique
+  on public.demo_leads(lower(email))
+  where estado in ('nuevo','contactado','demo_activo')
+    and demo_user_id is null;
+
+create table if not exists public.landing_events (
+  id           uuid default gen_random_uuid() primary key,
+  tipo         text not null,
+  pagina       text,
+  elemento     text,
+  valor        text,
+  session_id   text,
+  utm_source   text,
+  utm_medium   text,
+  utm_campaign text,
+  referrer     text,
+  creado_en    timestamptz default now() not null
+);
+
+create index if not exists idx_landing_events_tipo
+  on public.landing_events(tipo, creado_en desc);
+create index if not exists idx_landing_events_session
+  on public.landing_events(session_id);
+
 -- ============================================================
 -- 7. Funciones y triggers
 -- ============================================================
+
+create or replace function public.request_demo_lead(
+  p_nombre text,
+  p_cargo text,
+  p_eleam_nombre text,
+  p_email text,
+  p_telefono text,
+  p_num_residentes text default null,
+  p_utm_source text default null,
+  p_utm_medium text default null,
+  p_utm_campaign text default null,
+  p_pagina_origen text default null,
+  p_referrer text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_nombre text := nullif(trim(coalesce(p_nombre, '')), '');
+  v_cargo text := nullif(trim(coalesce(p_cargo, '')), '');
+  v_eleam_nombre text := nullif(trim(coalesce(p_eleam_nombre, '')), '');
+  v_email text := lower(nullif(trim(coalesce(p_email, '')), ''));
+  v_telefono text := nullif(regexp_replace(trim(coalesce(p_telefono, '')), '\s+', ' ', 'g'), '');
+  v_num_residentes text := nullif(trim(coalesce(p_num_residentes, '')), '');
+  v_existing public.demo_leads;
+  v_lead public.demo_leads;
+begin
+  if v_nombre is null then
+    raise exception 'El nombre es obligatorio' using errcode = 'P0001';
+  end if;
+  if v_cargo is null then
+    raise exception 'El cargo es obligatorio' using errcode = 'P0001';
+  end if;
+  if v_eleam_nombre is null then
+    raise exception 'El nombre del ELEAM es obligatorio' using errcode = 'P0001';
+  end if;
+  if v_email is null or v_email !~* '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$' then
+    raise exception 'El email no es valido' using errcode = 'P0001';
+  end if;
+  if v_telefono is null or length(regexp_replace(v_telefono, '[^0-9+]', '', 'g')) < 8 then
+    raise exception 'El telefono es obligatorio' using errcode = 'P0001';
+  end if;
+  if length(v_nombre) > 120 then
+    raise exception 'El nombre no puede superar 120 caracteres' using errcode = 'P0001';
+  end if;
+  if length(v_cargo) > 80 then
+    raise exception 'El cargo no puede superar 80 caracteres' using errcode = 'P0001';
+  end if;
+  if length(v_eleam_nombre) > 160 then
+    raise exception 'El nombre del ELEAM no puede superar 160 caracteres' using errcode = 'P0001';
+  end if;
+  if length(v_email) > 254 then
+    raise exception 'El email no puede superar 254 caracteres' using errcode = 'P0001';
+  end if;
+  if length(v_telefono) > 40 then
+    raise exception 'El telefono no puede superar 40 caracteres' using errcode = 'P0001';
+  end if;
+  if v_num_residentes is not null and length(v_num_residentes) > 40 then
+    raise exception 'El numero de residentes no puede superar 40 caracteres' using errcode = 'P0001';
+  end if;
+
+  select *
+  into v_existing
+  from public.demo_leads
+  where lower(email) = v_email
+    and estado in ('nuevo','contactado','demo_activo')
+  order by creado_en desc
+  limit 1;
+
+  if found then
+    if v_existing.demo_user_id is not null then
+      return jsonb_build_object(
+        'ok', true,
+        'duplicate', true,
+        'account_approved', true,
+        'estado', v_existing.estado,
+        'lead_id', v_existing.id
+      );
+    end if;
+
+    update public.demo_leads
+    set nombre = v_nombre,
+        cargo = v_cargo,
+        eleam_nombre = v_eleam_nombre,
+        telefono = v_telefono,
+        num_residentes = v_num_residentes,
+        utm_source = coalesce(nullif(trim(coalesce(p_utm_source, '')), ''), utm_source),
+        utm_medium = coalesce(nullif(trim(coalesce(p_utm_medium, '')), ''), utm_medium),
+        utm_campaign = coalesce(nullif(trim(coalesce(p_utm_campaign, '')), ''), utm_campaign),
+        pagina_origen = coalesce(nullif(trim(coalesce(p_pagina_origen, '')), ''), pagina_origen),
+        referrer = coalesce(nullif(trim(coalesce(p_referrer, '')), ''), referrer)
+    where id = v_existing.id
+    returning * into v_lead;
+
+    return jsonb_build_object(
+      'ok', true,
+      'duplicate', true,
+      'account_approved', false,
+      'estado', v_lead.estado,
+      'lead_id', v_lead.id
+    );
+  end if;
+
+  insert into public.demo_leads (
+    nombre, cargo, eleam_nombre, email, telefono, num_residentes,
+    utm_source, utm_medium, utm_campaign, pagina_origen, referrer
+  )
+  values (
+    v_nombre, v_cargo, v_eleam_nombre, v_email, v_telefono, v_num_residentes,
+    nullif(trim(coalesce(p_utm_source, '')), ''),
+    nullif(trim(coalesce(p_utm_medium, '')), ''),
+    nullif(trim(coalesce(p_utm_campaign, '')), ''),
+    nullif(trim(coalesce(p_pagina_origen, '')), ''),
+    nullif(trim(coalesce(p_referrer, '')), '')
+  )
+  returning * into v_lead;
+
+  return jsonb_build_object(
+    'ok', true,
+    'duplicate', false,
+    'account_approved', false,
+    'estado', v_lead.estado,
+    'lead_id', v_lead.id
+  );
+exception
+  when unique_violation then
+    raise exception 'Ya existe una solicitud activa para este email' using errcode = '23505';
+end;
+$$;
+
+-- Estado de la solicitud de demo asociada a un correo. Lo usa el login
+-- para mostrar un aviso claro cuando el usuario solicito un demo pero el
+-- equipo aun no habilita su cuenta. No expone datos del lead, solo el estado.
+create or replace function public.demo_lead_status(p_email text)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when exists (
+      select 1 from public.demo_leads
+      where lower(email) = lower(nullif(trim(coalesce(p_email, '')), ''))
+        and demo_user_id is not null
+    ) then 'aprobado'
+    when exists (
+      select 1 from public.demo_leads
+      where lower(email) = lower(nullif(trim(coalesce(p_email, '')), ''))
+        and demo_user_id is null
+        and estado in ('nuevo','contactado','demo_activo')
+    ) then 'pendiente'
+    else 'none'
+  end;
+$$;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -1015,6 +1230,12 @@ as $$
         e.pago_activo = true
         or e.subscription_status in ('activo','en_gracia')
         or (
+          e.plan = 'demo'
+          and e.subscription_status = 'pendiente'
+          and e.fecha_vencimiento_suscripcion is not null
+          and e.fecha_vencimiento_suscripcion > now()
+        )
+        or (
           e.subscription_status = 'cancelado'
           and e.fecha_vencimiento_suscripcion is not null
           and e.fecha_vencimiento_suscripcion > now()
@@ -1054,9 +1275,10 @@ as $$
     and public.eleam_has_access(r.eleam_id);
 $$;
 
-drop function if exists public.validate_invitation_token(text, text);
-
-create or replace function public.get_familiar_resident_snapshot(p_residente_id uuid)
+create or replace function public.get_familiar_resident_snapshot(
+  p_residente_id uuid,
+  p_fecha date default current_date
+)
 returns jsonb
 language plpgsql
 stable
@@ -1064,6 +1286,7 @@ security definer
 set search_path = public
 as $$
 declare
+  v_fecha date := coalesce(p_fecha, current_date);
   v_residente jsonb;
   v_vitales jsonb;
   v_observaciones jsonb;
@@ -1084,6 +1307,17 @@ begin
     'habitacion', r.habitacion,
     'cama', r.cama,
     'nivel_dependencia', r.nivel_dependencia,
+    'fecha_ingreso', r.fecha_ingreso,
+    'prevision', r.prevision,
+    'diagnostico_principal', r.diagnostico_principal,
+    'diagnosticos_secundarios', coalesce(to_jsonb(r.diagnosticos_secundarios), '[]'::jsonb),
+    'alergias', coalesce(to_jsonb(r.alergias), '[]'::jsonb),
+    'grupo_sanguineo', r.grupo_sanguineo,
+    'indice_barthel', r.indice_barthel,
+    'escala_katz', r.escala_katz,
+    'nombre_contacto', r.nombre_contacto,
+    'telefono_contacto', r.telefono_contacto,
+    'parentesco_contacto', r.parentesco_contacto,
     'parentesco', fr.parentesco
   )
   into v_residente
@@ -1099,11 +1333,13 @@ begin
     select
       id, fecha_hora, turno, presion_sistolica, presion_diastolica,
       frecuencia_cardiaca, frecuencia_respiratoria, temperatura,
-      saturacion_oxigeno, glucosa, dolor_escala
+      saturacion_oxigeno, glucosa, peso, dolor_escala, estado_conciencia,
+      observaciones
     from public.signos_vitales
     where residente_id = p_residente_id
+      and (fecha_hora at time zone 'America/Santiago')::date = v_fecha
     order by fecha_hora desc
-    limit 5
+    limit 12
   ) v;
 
   select coalesce(jsonb_agg(to_jsonb(o) order by o.fecha_hora desc), '[]'::jsonb)
@@ -1112,13 +1348,19 @@ begin
     select
       id,
       fecha_hora,
+      turno,
       tipo,
-      coalesce(nullif(trim(resumen_familiar), ''), descripcion) as resumen,
-      requiere_seguimiento
+      nullif(trim(resumen_familiar), '') as resumen,
+      requiere_seguimiento,
+      seguimiento_fecha,
+      seguimiento_turno,
+      seguimiento_estado
     from public.observaciones_diarias
     where residente_id = p_residente_id
+      and visible_familiar = true
+      and (fecha_hora at time zone 'America/Santiago')::date = v_fecha
     order by fecha_hora desc
-    limit 8
+    limit 30
   ) o;
 
   select coalesce(jsonb_agg(to_jsonb(c) order by c.hora asc), '[]'::jsonb)
@@ -1130,15 +1372,19 @@ begin
       t.turno,
       t.hora,
       t.estado,
+      t.motivo_omision,
+      t.requiere_seguimiento,
+      t.reprogramada_para,
       a.categoria,
-      a.titulo,
-      coalesce(nullif(trim(a.resumen_familiar), ''), a.descripcion, a.titulo) as resumen
+      nullif(trim(a.resumen_familiar), '') as titulo,
+      nullif(trim(a.resumen_familiar), '') as resumen
     from public.tareas_cuidado t
     join public.plan_cuidado_actividades a on a.id = t.actividad_id
     where t.residente_id = p_residente_id
-      and t.fecha = current_date
+      and a.visible_familiar = true
+      and t.fecha = v_fecha
     order by t.hora asc
-    limit 12
+    limit 40
   ) c;
 
   select coalesce(jsonb_agg(to_jsonb(m) order by m.hora asc), '[]'::jsonb)
@@ -1150,28 +1396,42 @@ begin
       ma.turno,
       ma.hora,
       ma.estado,
+      ma.motivo_omision,
+      ma.requiere_seguimiento,
       i.via,
-      coalesce(nullif(trim(i.resumen_familiar), ''), i.medicamento_nombre) as resumen
+      nullif(trim(i.resumen_familiar), '') as resumen
     from public.medicamentos_administraciones ma
     join public.medicamentos_indicaciones i on i.id = ma.indicacion_id
     where ma.residente_id = p_residente_id
-      and ma.fecha = current_date
+      and i.visible_familiar = true
+      and ma.fecha = v_fecha
     order by ma.hora asc
-    limit 12
+    limit 40
   ) m;
 
   select coalesce(jsonb_agg(to_jsonb(vis) order by vis.fecha_hora desc), '[]'::jsonb)
   into v_visitas
   from (
-    select id, fecha_hora, duracion_min, notas, estado, validado_en, salida_hora
+    select
+      id,
+      fecha_hora,
+      duracion_min,
+      notas,
+      estado,
+      validado_en,
+      salida_anunciada_en,
+      salida_hora,
+      salida_validada_en
     from public.visitas_familiar
     where residente_id = p_residente_id
       and profile_id = (select auth.uid())
+      and (fecha_hora at time zone 'America/Santiago')::date = v_fecha
     order by fecha_hora desc
-    limit 10
+    limit 20
   ) vis;
 
   return jsonb_build_object(
+    'date', v_fecha,
     'resident', v_residente,
     'vitals', v_vitales,
     'observations', v_observaciones,
@@ -1183,8 +1443,8 @@ begin
 end;
 $$;
 
-revoke all on function public.get_familiar_resident_snapshot(uuid) from public;
-grant execute on function public.get_familiar_resident_snapshot(uuid) to authenticated;
+revoke all on function public.get_familiar_resident_snapshot(uuid, date) from public;
+grant execute on function public.get_familiar_resident_snapshot(uuid, date) to authenticated;
 
 create or replace function public.funcionario_can(perm text)
 returns boolean
@@ -1225,7 +1485,8 @@ begin
     when 'editar_indicaciones_medicamentos' then editar_indicaciones_medicamentos
     when 'administrar_medicamentos' then administrar_medicamentos
     when 'validar_medicamentos_controlados' then validar_medicamentos_controlados
-    when 'ajustar_stock_medicamentos' then ajustar_stock_medicamentos
+    when 'ajustar_stock_medicamentos'    then ajustar_stock_medicamentos
+    when 'editar_indicaciones_cuidado'  then editar_indicaciones_cuidado
     else false
   end
   into v_result
@@ -1272,12 +1533,18 @@ as $$
 begin
   if new.subscription_status in ('activo','en_gracia') then
     new.pago_activo := true;
+  elsif new.subscription_status = 'pendiente' then
+    new.pago_activo := (
+      new.plan = 'demo'
+      and new.fecha_vencimiento_suscripcion is not null
+      and new.fecha_vencimiento_suscripcion > now()
+    );
   elsif new.subscription_status = 'cancelado' then
     new.pago_activo := (
       new.fecha_vencimiento_suscripcion is not null
       and new.fecha_vencimiento_suscripcion > now()
     );
-  elsif new.subscription_status in ('inactivo','vencido','pausado','pendiente') then
+  elsif new.subscription_status in ('inactivo','vencido','pausado') then
     new.pago_activo := false;
   end if;
   return new;
@@ -1309,7 +1576,7 @@ begin
   left join public.planes p on p.id = e.plan_id
   where e.id = new.eleam_id;
 
-  if v_status not in ('activo','en_gracia','pendiente') then
+  if v_status is null or v_status not in ('activo','en_gracia','pendiente') then
     raise exception 'La suscripcion del ELEAM no esta activa (%). Activa el plan antes de agregar residentes.', coalesce(v_status, 'sin_estado')
       using errcode = 'P0001';
   end if;
@@ -1693,7 +1960,7 @@ begin
       from public.demo_leads dl
       where lower(dl.email) = v_email
         and dl.demo_user_id is null
-        and dl.estado in ('nuevo','contactado','demo_activo','demo_completado')
+        and dl.estado in ('nuevo','contactado','demo_activo')
       order by dl.creado_en desc
       limit 1
     ) then
@@ -1763,6 +2030,18 @@ as $$
 declare
   v_count integer := 0;
 begin
+  if p_eleam_id is null or not exists (select 1 from public.eleams where id = p_eleam_id) then
+    raise exception 'ELEAM no encontrado para provisionar requisitos SEREMI'
+      using errcode = 'P0001';
+  end if;
+
+  if (select auth.uid()) is not null
+     and not public.is_superadmin()
+     and p_eleam_id is distinct from public.my_eleam_id() then
+    raise exception 'No autorizado a provisionar requisitos para este ELEAM'
+      using errcode = '42501';
+  end if;
+
   insert into public.acred_requisitos_eleam (eleam_id, requisito_id, estado)
   select p_eleam_id, r.id, 'pendiente'
   from public.acred_requisitos r
@@ -1785,6 +2064,22 @@ begin
 end;
 $$;
 
+create or replace function public.acred_on_requisito_created()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.acred_requisitos_eleam (eleam_id, requisito_id, estado)
+  select e.id, new.id, 'pendiente'
+  from public.eleams e
+  on conflict (eleam_id, requisito_id) do nothing;
+
+  return new;
+end;
+$$;
+
 create or replace function public.acred_marcar_vencidos(p_eleam_id uuid)
 returns integer
 language plpgsql
@@ -1794,6 +2089,21 @@ as $$
 declare
   v_count integer := 0;
 begin
+  if p_eleam_id is null or not exists (select 1 from public.eleams where id = p_eleam_id) then
+    raise exception 'ELEAM no encontrado para marcar vencidos'
+      using errcode = 'P0001';
+  end if;
+
+  if (select auth.uid()) is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if not public.is_superadmin()
+     and p_eleam_id is distinct from public.my_eleam_id() then
+    raise exception 'No autorizado a marcar vencidos para este ELEAM'
+      using errcode = '42501';
+  end if;
+
   update public.acred_requisitos_eleam
   set estado = 'vencido'
   where eleam_id = p_eleam_id
@@ -1832,6 +2142,18 @@ begin
     raise exception 'Monto invalido' using errcode = 'P0001';
   end if;
 
+  if p_plan is null or p_plan not in ('mensual','anual') then
+    raise exception 'Plan de pago invalido' using errcode = 'P0001';
+  end if;
+
+  if p_fecha_inicio is null then
+    raise exception 'Fecha de inicio obligatoria' using errcode = 'P0001';
+  end if;
+
+  if p_fecha_fin is not null and p_fecha_fin < p_fecha_inicio then
+    raise exception 'Fecha de fin no puede ser anterior a fecha de inicio' using errcode = 'P0001';
+  end if;
+
   if not exists (select 1 from public.eleams where id = p_eleam_id) then
     raise exception 'ELEAM no encontrado' using errcode = 'P0001';
   end if;
@@ -1841,14 +2163,14 @@ begin
     metodo_pago, notas, estado, registrado_por
   )
   values (
-    p_eleam_id, p_monto, coalesce(p_plan, 'mensual'), p_fecha_inicio, p_fecha_fin,
+    p_eleam_id, p_monto, p_plan, p_fecha_inicio, p_fecha_fin,
     p_metodo_pago, p_notas, 'completado', v_user
   )
   returning id into v_pago_id;
 
   update public.eleams
   set pago_activo = true,
-      plan = coalesce(p_plan, 'mensual'),
+      plan = p_plan,
       subscription_status = 'activo',
       fecha_pago = now(),
       fecha_vencimiento_suscripcion = p_fecha_fin::timestamptz,
@@ -1858,13 +2180,23 @@ begin
       ultimo_contacto = now()
   where id = p_eleam_id;
 
+  update public.demo_leads dl
+  set estado = 'convertido'
+  where dl.demo_user_id in (
+    select p.id
+    from public.profiles p
+    where p.eleam_id = p_eleam_id
+      and p.rol = 'admin_eleam'
+  )
+    and dl.estado <> 'convertido';
+
   insert into public.crm_interactions (
     eleam_id, tipo, canal, resumen, resultado, creado_por
   )
   values (
     p_eleam_id, 'sistema', 'sistema',
     'Pago registrado por ' || coalesce(p_metodo_pago, 'metodo no especificado') ||
-      ' - ' || p_monto::text || ' CLP - plan ' || coalesce(p_plan, 'mensual'),
+      ' - ' || p_monto::text || ' CLP - plan ' || p_plan,
     'positivo', v_user
   );
 
@@ -1902,6 +2234,140 @@ as $$
   end;
 $$;
 
+create or replace function public.registrar_signos_vitales(
+  p_residente_id uuid,
+  p_fecha_hora timestamptz default now(),
+  p_turno text default null,
+  p_presion_sistolica integer default null,
+  p_presion_diastolica integer default null,
+  p_frecuencia_cardiaca integer default null,
+  p_frecuencia_respiratoria integer default null,
+  p_temperatura numeric default null,
+  p_saturacion_oxigeno integer default null,
+  p_glucosa integer default null,
+  p_peso numeric default null,
+  p_dolor_escala integer default null,
+  p_estado_conciencia text default null,
+  p_observaciones text default null,
+  p_requiere_seguimiento boolean default false,
+  p_seguimiento_fecha date default null,
+  p_seguimiento_turno text default null
+)
+returns public.signos_vitales
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_residente public.residentes;
+  v_signos public.signos_vitales;
+  v_resumen text;
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_residente_id is null then
+    raise exception 'Residente obligatorio' using errcode = 'P0001';
+  end if;
+
+  if p_turno is not null and p_turno not in ('mañana','tarde','noche') then
+    raise exception 'Turno invalido' using errcode = 'P0001';
+  end if;
+
+  if p_requiere_seguimiento
+     and (
+       p_seguimiento_fecha is null
+       or p_seguimiento_turno is null
+       or p_seguimiento_turno not in ('mañana','tarde','noche')
+     ) then
+    raise exception 'Fecha y turno de seguimiento son obligatorios' using errcode = 'P0001';
+  end if;
+
+  select *
+  into v_residente
+  from public.residentes
+  where id = p_residente_id;
+
+  if not found then
+    raise exception 'Residente no encontrado' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_residente.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_residente.eleam_id)
+       or not public.funcionario_can('crear_signos_vitales') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  insert into public.signos_vitales (
+    residente_id, fecha_hora, turno, presion_sistolica, presion_diastolica,
+    frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno,
+    glucosa, peso, dolor_escala, estado_conciencia, observaciones, registrado_por
+  )
+  values (
+    p_residente_id,
+    coalesce(p_fecha_hora, now()),
+    p_turno,
+    p_presion_sistolica,
+    p_presion_diastolica,
+    p_frecuencia_cardiaca,
+    p_frecuencia_respiratoria,
+    p_temperatura,
+    p_saturacion_oxigeno,
+    p_glucosa,
+    p_peso,
+    p_dolor_escala,
+    p_estado_conciencia,
+    nullif(trim(coalesce(p_observaciones, '')), ''),
+    v_user
+  )
+  returning * into v_signos;
+
+  if p_requiere_seguimiento then
+    v_resumen := concat_ws(
+      ' · ',
+      case
+        when p_presion_sistolica is not null or p_presion_diastolica is not null
+        then 'PA ' || coalesce(p_presion_sistolica::text, '-') || '/' || coalesce(p_presion_diastolica::text, '-')
+        else null
+      end,
+      case when p_frecuencia_cardiaca is not null then 'FC ' || p_frecuencia_cardiaca::text else null end,
+      case when p_frecuencia_respiratoria is not null then 'FR ' || p_frecuencia_respiratoria::text else null end,
+      case when p_temperatura is not null then 'Temp ' || p_temperatura::text || ' C' else null end,
+      case when p_saturacion_oxigeno is not null then 'SatO2 ' || p_saturacion_oxigeno::text || '%' else null end,
+      case when p_glucosa is not null then 'Glucosa ' || p_glucosa::text else null end,
+      case when p_dolor_escala is not null then 'Dolor ' || p_dolor_escala::text || '/10' else null end
+    );
+
+    insert into public.observaciones_diarias (
+      residente_id, fecha_hora, turno, tipo, descripcion,
+      acciones_tomadas, requiere_seguimiento, seguimiento_fecha,
+      seguimiento_turno, seguimiento_estado, visible_familiar, registrado_por
+    )
+    values (
+      p_residente_id,
+      coalesce(p_fecha_hora, now()),
+      p_turno,
+      'observacion_general',
+      'Seguimiento de signos vitales' ||
+        case when nullif(trim(coalesce(v_resumen, '')), '') is not null then ': ' || v_resumen else '' end,
+      nullif(trim(coalesce(p_observaciones, '')), ''),
+      true,
+      p_seguimiento_fecha,
+      p_seguimiento_turno,
+      'pendiente',
+      false,
+      v_user
+    );
+  end if;
+
+  return v_signos;
+end;
+$$;
+
 create or replace function public.generar_tareas_cuidado(
   p_fecha date default current_date,
   p_turno text default null
@@ -1935,11 +2401,11 @@ begin
 
   insert into public.tareas_cuidado (
     eleam_id, residente_id, plan_id, actividad_id, horario_id,
-    fecha, turno, hora, estado
+    fecha, turno, hora, estado, fecha_original, fechas_programadas
   )
   select
     h.eleam_id, h.residente_id, a.plan_id, a.id, h.id,
-    p_fecha, h.turno, h.hora, 'pendiente'
+    p_fecha, h.turno, h.hora, 'pendiente', p_fecha, array[p_fecha]::date[]
   from public.plan_cuidado_horarios h
   join public.plan_cuidado_actividades a on a.id = h.actividad_id
   join public.planes_cuidado p on p.id = a.plan_id
@@ -1956,6 +2422,22 @@ begin
       or (h.frecuencia = 'mensual' and extract(day from p_fecha)::smallint = any(h.dias_mes))
       or (h.frecuencia = 'una_vez' and h.fecha_unica = p_fecha)
     )
+    and not exists (
+      select 1
+      from public.tareas_cuidado t
+      where t.horario_id = h.id
+        and (
+          p_fecha = t.fecha
+          or p_fecha = coalesce(t.fecha_original, t.fecha)
+          or p_fecha = any(
+            case
+              when cardinality(coalesce(t.fechas_programadas, '{}'::date[])) = 0
+              then array[coalesce(t.fecha_original, t.fecha)]::date[]
+              else t.fechas_programadas
+            end
+          )
+        )
+    )
   on conflict (horario_id, fecha) do nothing;
 
   get diagnostics v_count = row_count;
@@ -1968,7 +2450,9 @@ create or replace function public.completar_tarea_cuidado(
   p_estado text,
   p_notas text default null,
   p_motivo_omision text default null,
-  p_requiere_seguimiento boolean default false
+  p_requiere_seguimiento boolean default false,
+  p_seguimiento_fecha date default null,
+  p_seguimiento_turno text default null
 )
 returns public.tareas_cuidado
 language plpgsql
@@ -1980,12 +2464,13 @@ declare
   v_row record;
   v_obs_id uuid;
   v_updated public.tareas_cuidado;
+  v_requires_followup boolean;
 begin
   if v_user is null then
     raise exception 'Debe iniciar sesion' using errcode = '42501';
   end if;
 
-  if p_estado not in ('cumplida','omitida') then
+  if p_estado is null or p_estado not in ('cumplida','omitida') then
     raise exception 'Estado invalido' using errcode = 'P0001';
   end if;
 
@@ -2016,15 +2501,30 @@ begin
     raise exception 'La tarea ya fue cerrada' using errcode = 'P0001';
   end if;
 
-  if p_estado = 'omitida' and p_motivo_omision not in ('rechazo','no_disponible','contraindicado','residente_ausente','otro') then
+  if p_estado = 'omitida'
+     and (
+       p_motivo_omision is null
+       or p_motivo_omision not in ('rechazo','no_disponible','contraindicado','residente_ausente','otro')
+     ) then
     raise exception 'Motivo de omision obligatorio' using errcode = 'P0001';
+  end if;
+
+  v_requires_followup := coalesce(p_requiere_seguimiento, false) or coalesce(v_row.actividad_requiere_observacion, false);
+
+  if v_requires_followup
+     and (
+       p_seguimiento_fecha is null
+       or p_seguimiento_turno is null
+       or p_seguimiento_turno not in ('mañana','tarde','noche')
+     ) then
+    raise exception 'Fecha y turno de seguimiento son obligatorios' using errcode = 'P0001';
   end if;
 
   update public.tareas_cuidado
   set estado = p_estado,
       motivo_omision = case when p_estado = 'omitida' then p_motivo_omision else null end,
       notas = nullif(trim(coalesce(p_notas, '')), ''),
-      requiere_seguimiento = coalesce(p_requiere_seguimiento, false) or coalesce(v_row.actividad_requiere_observacion, false),
+      requiere_seguimiento = v_requires_followup,
       cumplida_por = v_user,
       cumplida_en = now(),
       actualizado_en = now()
@@ -2034,7 +2534,8 @@ begin
   if v_updated.requiere_seguimiento then
     insert into public.observaciones_diarias (
       residente_id, fecha_hora, turno, tipo, descripcion,
-      acciones_tomadas, requiere_seguimiento, registrado_por
+      acciones_tomadas, requiere_seguimiento, seguimiento_fecha,
+      seguimiento_turno, seguimiento_estado, visible_familiar, registrado_por
     )
     values (
       v_row.residente_id,
@@ -2045,6 +2546,10 @@ begin
         ': ' || v_row.actividad_titulo,
       nullif(trim(coalesce(p_notas, '')), ''),
       true,
+      p_seguimiento_fecha,
+      p_seguimiento_turno,
+      'pendiente',
+      false,
       v_user
     )
     returning id into v_obs_id;
@@ -2060,7 +2565,174 @@ begin
   )
   values (
     v_row.eleam_id, v_row.residente_id, 'tareas_cuidado', p_tarea_id, p_estado,
-    jsonb_build_object('notas', p_notas, 'motivo_omision', p_motivo_omision),
+    jsonb_build_object(
+      'notas', p_notas,
+      'motivo_omision', p_motivo_omision,
+      'seguimiento_fecha', p_seguimiento_fecha,
+      'seguimiento_turno', p_seguimiento_turno
+    ),
+    v_user
+  );
+
+  return v_updated;
+end;
+$$;
+
+create or replace function public.reprogramar_tarea_cuidado(
+  p_tarea_id uuid,
+  p_fecha date,
+  p_turno text,
+  p_hora time,
+  p_notas text default null,
+  p_requiere_seguimiento boolean default false,
+  p_seguimiento_fecha date default null,
+  p_seguimiento_turno text default null
+)
+returns public.tareas_cuidado
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_row record;
+  v_updated public.tareas_cuidado;
+  v_obs_id uuid;
+  v_requires_followup boolean;
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_fecha is null or p_hora is null or p_turno is null or p_turno not in ('mañana','tarde','noche') then
+    raise exception 'Fecha, turno y hora son obligatorios para reprogramar' using errcode = 'P0001';
+  end if;
+
+  select
+    t.*,
+    a.titulo as actividad_titulo,
+    a.categoria as actividad_categoria
+  into v_row
+  from public.tareas_cuidado t
+  join public.plan_cuidado_actividades a on a.id = t.actividad_id
+  where t.id = p_tarea_id
+  for update;
+
+  if not found then
+    raise exception 'Tarea no encontrada' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_row.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_row.eleam_id)
+       or not public.funcionario_can('completar_tareas_cuidado') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  if v_row.estado not in ('pendiente','reprogramada') then
+    raise exception 'Solo se pueden reprogramar tareas pendientes o reprogramadas' using errcode = 'P0001';
+  end if;
+
+  v_requires_followup := coalesce(p_requiere_seguimiento, false) or coalesce(v_row.requiere_seguimiento, false);
+
+  if v_requires_followup
+     and (
+       p_seguimiento_fecha is null
+       or p_seguimiento_turno is null
+       or p_seguimiento_turno not in ('mañana','tarde','noche')
+     ) then
+    raise exception 'Fecha y turno de seguimiento son obligatorios' using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
+    from public.tareas_cuidado t
+    where t.horario_id = v_row.horario_id
+      and t.id <> p_tarea_id
+      and (
+        t.fecha = p_fecha
+        or p_fecha = any(
+          case
+            when cardinality(coalesce(t.fechas_programadas, '{}'::date[])) = 0
+            then array[coalesce(t.fecha_original, t.fecha)]::date[]
+            else t.fechas_programadas
+          end
+        )
+      )
+  ) then
+    raise exception 'Ya existe otra tarea de este horario para la fecha destino' using errcode = 'P0001';
+  end if;
+
+  update public.tareas_cuidado
+  set estado = 'reprogramada',
+      fecha = p_fecha,
+      turno = p_turno,
+      hora = p_hora,
+      fecha_original = coalesce(v_row.fecha_original, v_row.fecha),
+      fechas_programadas = (
+        select array_agg(distinct d order by d)
+        from unnest(
+          coalesce(v_row.fechas_programadas, '{}'::date[])
+          || array[coalesce(v_row.fecha_original, v_row.fecha), v_row.fecha, p_fecha]::date[]
+        ) as d
+        where d is not null
+      ),
+      reprogramada_para = (p_fecha + p_hora)::timestamptz,
+      notas = nullif(trim(coalesce(p_notas, '')), ''),
+      requiere_seguimiento = v_requires_followup,
+      cumplida_por = null,
+      cumplida_en = null,
+      actualizado_en = now()
+  where id = p_tarea_id
+  returning * into v_updated;
+
+  if v_updated.requiere_seguimiento then
+    insert into public.observaciones_diarias (
+      residente_id, fecha_hora, turno, tipo, descripcion,
+      acciones_tomadas, requiere_seguimiento, seguimiento_fecha,
+      seguimiento_turno, seguimiento_estado, visible_familiar, registrado_por
+    )
+    values (
+      v_row.residente_id,
+      now(),
+      v_row.turno,
+      public.cuidado_tipo_observacion(v_row.actividad_categoria),
+      'Tarea de cuidado reprogramada: ' || v_row.actividad_titulo,
+      nullif(trim(coalesce(p_notas, '')), ''),
+      true,
+      p_seguimiento_fecha,
+      p_seguimiento_turno,
+      'pendiente',
+      false,
+      v_user
+    )
+    returning id into v_obs_id;
+
+    update public.tareas_cuidado
+    set observacion_id = v_obs_id
+    where id = p_tarea_id
+    returning * into v_updated;
+  end if;
+
+  insert into public.plan_cuidado_audit (
+    eleam_id, residente_id, entidad, entidad_id, accion, detalle, realizado_por
+  )
+  values (
+    v_row.eleam_id, v_row.residente_id, 'tareas_cuidado', p_tarea_id, 'reprogramada',
+    jsonb_build_object(
+      'actividad', v_row.actividad_titulo,
+      'fecha_anterior', v_row.fecha,
+      'turno_anterior', v_row.turno,
+      'hora_anterior', v_row.hora,
+      'fecha_nueva', p_fecha,
+      'turno_nuevo', p_turno,
+      'hora_nueva', p_hora,
+      'notas', p_notas,
+      'requiere_seguimiento', p_requiere_seguimiento,
+      'seguimiento_fecha', p_seguimiento_fecha,
+      'seguimiento_turno', p_seguimiento_turno
+    ),
     v_user
   );
 
@@ -2136,7 +2808,9 @@ create or replace function public.registrar_administracion_medicamento(
   p_dosis_administrada numeric default null,
   p_notas text default null,
   p_motivo_omision text default null,
-  p_requiere_seguimiento boolean default false
+  p_requiere_seguimiento boolean default false,
+  p_seguimiento_fecha date default null,
+  p_seguimiento_turno text default null
 )
 returns public.medicamentos_administraciones
 language plpgsql
@@ -2157,7 +2831,7 @@ begin
     raise exception 'Debe iniciar sesion' using errcode = '42501';
   end if;
 
-  if p_estado not in ('administrado','omitido') then
+  if p_estado is null or p_estado not in ('administrado','omitido') then
     raise exception 'Estado invalido' using errcode = 'P0001';
   end if;
 
@@ -2190,8 +2864,21 @@ begin
     raise exception 'La administracion ya fue cerrada' using errcode = 'P0001';
   end if;
 
-  if p_estado = 'omitido' and p_motivo_omision not in ('rechazo','no_disponible','contraindicado','residente_ausente','otro') then
+  if p_estado = 'omitido'
+     and (
+       p_motivo_omision is null
+       or p_motivo_omision not in ('rechazo','no_disponible','contraindicado','residente_ausente','otro')
+     ) then
     raise exception 'Motivo de omision obligatorio' using errcode = 'P0001';
+  end if;
+
+  if coalesce(p_requiere_seguimiento, false)
+     and (
+       p_seguimiento_fecha is null
+       or p_seguimiento_turno is null
+       or p_seguimiento_turno not in ('mañana','tarde','noche')
+     ) then
+    raise exception 'Fecha y turno de seguimiento son obligatorios' using errcode = 'P0001';
   end if;
 
   if p_estado = 'omitido' then
@@ -2282,7 +2969,8 @@ begin
   if v_updated.requiere_seguimiento then
     insert into public.observaciones_diarias (
       residente_id, fecha_hora, turno, tipo, descripcion,
-      acciones_tomadas, requiere_seguimiento, registrado_por
+      acciones_tomadas, requiere_seguimiento, seguimiento_fecha,
+      seguimiento_turno, seguimiento_estado, visible_familiar, registrado_por
     )
     values (
       v_admin.residente_id,
@@ -2293,6 +2981,10 @@ begin
         ': ' || v_admin.medicamento_nombre,
       nullif(trim(coalesce(p_notas, '')), ''),
       true,
+      p_seguimiento_fecha,
+      p_seguimiento_turno,
+      'pendiente',
+      false,
       v_user
     )
     returning id into v_obs_id;
@@ -2309,7 +3001,13 @@ begin
   values (
     v_admin.eleam_id, v_admin.residente_id, 'medicamentos_administraciones',
     p_administracion_id, p_estado,
-    jsonb_build_object('lote_id', p_lote_id, 'dosis', p_dosis_administrada, 'motivo_omision', p_motivo_omision),
+    jsonb_build_object(
+      'lote_id', p_lote_id,
+      'dosis', p_dosis_administrada,
+      'motivo_omision', p_motivo_omision,
+      'seguimiento_fecha', p_seguimiento_fecha,
+      'seguimiento_turno', p_seguimiento_turno
+    ),
     v_user
   );
 
@@ -2416,11 +3114,15 @@ begin
     raise exception 'Debe iniciar sesion' using errcode = '42501';
   end if;
 
-  if p_tipo not in ('recepcion','ajuste','reversa','merma','retiro') then
+  if p_lote_id is null then
+    raise exception 'Lote obligatorio' using errcode = 'P0001';
+  end if;
+
+  if p_tipo is null or p_tipo not in ('recepcion','ajuste','reversa','merma','retiro') then
     raise exception 'Tipo de movimiento invalido' using errcode = 'P0001';
   end if;
 
-  if p_cantidad = 0 then
+  if p_cantidad is null or p_cantidad = 0 then
     raise exception 'Cantidad invalida' using errcode = 'P0001';
   end if;
 
@@ -2536,6 +3238,10 @@ begin
   else
     if p_lote_id is null or p_cantidad_fisica is null or nullif(trim(coalesce(p_motivo, '')), '') is null then
       raise exception 'Lote, cantidad fisica y motivo son obligatorios' using errcode = 'P0001';
+    end if;
+
+    if p_cantidad_fisica < 0 then
+      raise exception 'Cantidad fisica invalida' using errcode = 'P0001';
     end if;
 
     select * into v_lote
@@ -2774,6 +3480,11 @@ create trigger trg_med_admin_updated_at
   before update on public.medicamentos_administraciones
   for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_func_permisos_updated_at on public.funcionario_permisos;
+create trigger trg_func_permisos_updated_at
+  before update on public.funcionario_permisos
+  for each row execute function public.set_updated_at();
+
 drop trigger if exists trg_acred_re_updated_at on public.acred_requisitos_eleam;
 create trigger trg_acred_re_updated_at
   before update on public.acred_requisitos_eleam
@@ -2799,7 +3510,18 @@ create trigger trg_acred_provision_on_eleam
   after insert on public.eleams
   for each row execute function public.acred_on_eleam_created();
 
+drop trigger if exists trg_acred_provision_on_requisito on public.acred_requisitos;
+create trigger trg_acred_provision_on_requisito
+  after insert on public.acred_requisitos
+  for each row execute function public.acred_on_requisito_created();
+
 -- RPC permissions
+revoke all on function public.request_demo_lead(text, text, text, text, text, text, text, text, text, text, text) from public;
+grant execute on function public.request_demo_lead(text, text, text, text, text, text, text, text, text, text, text) to anon, authenticated;
+
+revoke all on function public.demo_lead_status(text) from public;
+grant execute on function public.demo_lead_status(text) to anon, authenticated;
+
 revoke all on function public.ensure_platform_superadmin() from public;
 grant execute on function public.ensure_platform_superadmin() to authenticated;
 
@@ -2815,17 +3537,23 @@ grant execute on function public.registrar_pago_y_activar_eleam(uuid, integer, t
 revoke all on function public.blog_increment_views(text) from public;
 grant execute on function public.blog_increment_views(text) to anon, authenticated;
 
+revoke all on function public.registrar_signos_vitales(uuid, timestamptz, text, integer, integer, integer, integer, numeric, integer, integer, numeric, integer, text, text, boolean, date, text) from public;
+grant execute on function public.registrar_signos_vitales(uuid, timestamptz, text, integer, integer, integer, integer, numeric, integer, integer, numeric, integer, text, text, boolean, date, text) to authenticated;
+
 revoke all on function public.generar_tareas_cuidado(date, text) from public;
 grant execute on function public.generar_tareas_cuidado(date, text) to authenticated;
 
-revoke all on function public.completar_tarea_cuidado(uuid, text, text, text, boolean) from public;
-grant execute on function public.completar_tarea_cuidado(uuid, text, text, text, boolean) to authenticated;
+revoke all on function public.completar_tarea_cuidado(uuid, text, text, text, boolean, date, text) from public;
+grant execute on function public.completar_tarea_cuidado(uuid, text, text, text, boolean, date, text) to authenticated;
+
+revoke all on function public.reprogramar_tarea_cuidado(uuid, date, text, time, text, boolean, date, text) from public;
+grant execute on function public.reprogramar_tarea_cuidado(uuid, date, text, time, text, boolean, date, text) to authenticated;
 
 revoke all on function public.generar_administraciones_medicamentos(date, text) from public;
 grant execute on function public.generar_administraciones_medicamentos(date, text) to authenticated;
 
-revoke all on function public.registrar_administracion_medicamento(uuid, text, uuid, numeric, text, text, boolean) from public;
-grant execute on function public.registrar_administracion_medicamento(uuid, text, uuid, numeric, text, text, boolean) to authenticated;
+revoke all on function public.registrar_administracion_medicamento(uuid, text, uuid, numeric, text, text, boolean, date, text) from public;
+grant execute on function public.registrar_administracion_medicamento(uuid, text, uuid, numeric, text, text, boolean, date, text) to authenticated;
 
 revoke all on function public.validar_administracion_controlada(uuid, text) from public;
 grant execute on function public.validar_administracion_controlada(uuid, text) to authenticated;
@@ -2875,6 +3603,8 @@ alter table public.acred_audit enable row level security;
 alter table public.crm_tasks enable row level security;
 alter table public.crm_interactions enable row level security;
 alter table public.blog_posts enable row level security;
+alter table public.demo_leads enable row level security;
+alter table public.landing_events enable row level security;
 
 -- Profiles
 drop policy if exists "profiles_own_select" on public.profiles;
@@ -3056,6 +3786,7 @@ create policy "obs_select" on public.observaciones_diarias
     )
     or (
       public.my_rol() = 'familiar'
+      and visible_familiar = true
       and residente_id in (select public.my_familiar_residente_ids())
     )
   );
@@ -3810,6 +4541,8 @@ create policy "pfp_admin_all" on public.profile_feature_permissions
 drop policy if exists "vf_select" on public.visitas_familiar;
 drop policy if exists "vf_insert" on public.visitas_familiar;
 drop policy if exists "vf_update" on public.visitas_familiar;
+drop policy if exists "vf_update_familiar_salida" on public.visitas_familiar;
+drop policy if exists "vf_update_familiar_cancel_pending" on public.visitas_familiar;
 drop policy if exists "vf_delete" on public.visitas_familiar;
 
 create policy "vf_select" on public.visitas_familiar
@@ -3817,6 +4550,7 @@ create policy "vf_select" on public.visitas_familiar
     public.is_superadmin()
     or (
       public.my_rol() = 'familiar'
+      and profile_id = (select auth.uid())
       and residente_id in (select public.my_familiar_residente_ids())
     )
     or (
@@ -3848,6 +4582,44 @@ create policy "vf_update" on public.visitas_familiar
       (public.my_rol() = 'admin_eleam' or public.funcionario_can('registrar_visitas'))
       and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
     )
+  );
+
+create policy "vf_update_familiar_salida" on public.visitas_familiar
+  for update using (
+    public.my_rol() = 'familiar'
+    and profile_id = (select auth.uid())
+    and estado = 'activa'
+    and residente_id in (select public.my_familiar_residente_ids())
+  )
+  with check (
+    public.my_rol() = 'familiar'
+    and profile_id = (select auth.uid())
+    and estado = 'salida_pendiente'
+    and salida_anunciada_en is not null
+    and salida_hora is null
+    and salida_validada_por is null
+    and salida_validada_en is null
+    and residente_id in (select public.my_familiar_residente_ids())
+  );
+
+create policy "vf_update_familiar_cancel_pending" on public.visitas_familiar
+  for update using (
+    public.my_rol() = 'familiar'
+    and profile_id = (select auth.uid())
+    and estado = 'pendiente'
+    and validado_en is null
+    and residente_id in (select public.my_familiar_residente_ids())
+  )
+  with check (
+    public.my_rol() = 'familiar'
+    and profile_id = (select auth.uid())
+    and estado = 'cancelada'
+    and validado_en is null
+    and salida_anunciada_en is null
+    and salida_hora is null
+    and salida_validada_por is null
+    and salida_validada_en is null
+    and residente_id in (select public.my_familiar_residente_ids())
   );
 
 create policy "vf_delete" on public.visitas_familiar
@@ -4105,6 +4877,23 @@ create policy "blog_select_public" on public.blog_posts
 create policy "blog_superadmin_all" on public.blog_posts
   for all using (public.is_superadmin())
   with check (public.is_superadmin());
+
+-- Landing: leads de demo y eventos anonimos
+drop policy if exists "anon_insert_leads" on public.demo_leads;
+drop policy if exists "superadmin_manage_leads" on public.demo_leads;
+
+create policy "superadmin_manage_leads" on public.demo_leads
+  for all to authenticated using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+drop policy if exists "anon_insert_events" on public.landing_events;
+drop policy if exists "superadmin_read_events" on public.landing_events;
+
+create policy "anon_insert_events" on public.landing_events
+  for insert to anon, authenticated with check (true);
+
+create policy "superadmin_read_events" on public.landing_events
+  for select to authenticated using (public.is_superadmin());
 
 -- ============================================================
 -- 9. Storage
@@ -4367,114 +5156,3 @@ where crm_estado = 'lead'
   and (pago_activo = true or subscription_status in ('activo','en_gracia'));
 
 -- El seed del blog publico vive en supabase_blog_seed.sql.
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Leads de landing page y acceso al demo guiado
--- ─────────────────────────────────────────────────────────────────────────────
-create table if not exists public.demo_leads (
-  id                        uuid default gen_random_uuid() primary key,
-  nombre                    text not null,
-  cargo                     text not null,
-  eleam_nombre              text not null,
-  email                     text not null,
-  telefono                  text not null,
-  num_residentes            text,
-  utm_source                text,
-  utm_medium                text,
-  utm_campaign              text,
-  pagina_origen             text,
-  referrer                  text,
-  estado                    text not null default 'nuevo'
-    check (estado in ('nuevo','contactado','demo_activo','demo_completado','descartado','convertido')),
-  notas_admin               text,
-  demo_token                uuid unique,
-  demo_access_granted_at    timestamptz,
-  demo_expires_at           timestamptz,
-  demo_ultimo_ping          timestamptz,
-  demo_progreso             jsonb default '{}'::jsonb,
-  solicita_contacto         boolean default false,
-  solicita_contacto_en      timestamptz,
-  solicita_contacto_mensaje text,
-  demo_user_id              uuid references auth.users(id) on delete set null,
-  creado_en                 timestamptz default now() not null
-);
-
--- Añadir columnas si la tabla ya existía antes de esta versión del schema.
-alter table public.demo_leads
-  add column if not exists cargo text,
-  add column if not exists eleam_nombre text,
-  add column if not exists telefono text,
-  add column if not exists num_residentes text,
-  add column if not exists utm_source text,
-  add column if not exists utm_medium text,
-  add column if not exists utm_campaign text,
-  add column if not exists pagina_origen text,
-  add column if not exists referrer text,
-  add column if not exists estado text not null default 'nuevo',
-  add column if not exists notas_admin text,
-  add column if not exists demo_token uuid,
-  add column if not exists demo_access_granted_at timestamptz,
-  add column if not exists demo_expires_at timestamptz,
-  add column if not exists demo_ultimo_ping timestamptz,
-  add column if not exists demo_progreso jsonb default '{}'::jsonb,
-  add column if not exists solicita_contacto boolean default false,
-  add column if not exists solicita_contacto_en timestamptz,
-  add column if not exists solicita_contacto_mensaje text,
-  add column if not exists demo_user_id uuid references auth.users(id) on delete set null;
-
-alter table public.demo_leads enable row level security;
-
-drop policy if exists "anon_insert_leads" on public.demo_leads;
-drop policy if exists "superadmin_manage_leads" on public.demo_leads;
-drop policy if exists "token_read_demo" on public.demo_leads;
-drop policy if exists "token_update_demo" on public.demo_leads;
-
-create policy "anon_insert_leads" on public.demo_leads
-  for insert to anon, authenticated with check (true);
-
-create policy "superadmin_manage_leads" on public.demo_leads
-  for all to authenticated using (public.is_superadmin());
-
-create policy "token_read_demo" on public.demo_leads
-  for select to anon
-  using (demo_token is not null and demo_expires_at > now());
-
-create policy "token_update_demo" on public.demo_leads
-  for update to anon
-  using (demo_token is not null and demo_expires_at > now())
-  with check (true);
-
-create index if not exists idx_demo_leads_token  on public.demo_leads(demo_token) where demo_token is not null;
-create index if not exists idx_demo_leads_estado on public.demo_leads(estado);
-create index if not exists idx_demo_leads_ping   on public.demo_leads(demo_ultimo_ping) where estado = 'demo_activo';
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Eventos de analytics de landing (anónimos)
--- ─────────────────────────────────────────────────────────────────────────────
-create table if not exists public.landing_events (
-  id          uuid default gen_random_uuid() primary key,
-  tipo        text not null,
-  pagina      text,
-  elemento    text,
-  valor       text,
-  session_id  text,
-  utm_source  text,
-  utm_medium  text,
-  utm_campaign text,
-  referrer    text,
-  creado_en   timestamptz default now() not null
-);
-
-alter table public.landing_events enable row level security;
-
-drop policy if exists "anon_insert_events" on public.landing_events;
-drop policy if exists "superadmin_read_events" on public.landing_events;
-
-create policy "anon_insert_events" on public.landing_events
-  for insert to anon, authenticated with check (true);
-
-create policy "superadmin_read_events" on public.landing_events
-  for select to authenticated using (public.is_superadmin());
-
-create index if not exists idx_landing_events_tipo    on public.landing_events(tipo, creado_en desc);
-create index if not exists idx_landing_events_session on public.landing_events(session_id);

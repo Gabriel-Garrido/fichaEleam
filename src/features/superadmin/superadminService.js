@@ -39,9 +39,8 @@ const CRM_INTERACTION_SELECT = `
 const DEMO_LEAD_SELECT = `
   id, nombre, cargo, eleam_nombre, email, telefono, num_residentes,
   utm_source, utm_medium, utm_campaign, pagina_origen, referrer,
-  estado, notas_admin, demo_token, demo_access_granted_at, demo_expires_at,
-  demo_ultimo_ping, demo_progreso, solicita_contacto, solicita_contacto_en,
-  solicita_contacto_mensaje, demo_user_id, creado_en
+  estado, notas_admin, demo_access_granted_at, demo_expires_at,
+  demo_user_id, creado_en
 `;
 
 // ─────────────────────────────────────────────────────────────
@@ -54,7 +53,9 @@ export async function getMetrics() {
     1,
   ).toISOString();
 
-  const [eleamsRes, residentsRes, pagosRes] = await Promise.allSettled([
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+  const [eleamsRes, residentsRes, pagosRes, leadsRes] = await Promise.allSettled([
     supabase.from("eleams").select("id, pago_activo, plan, crm_estado, riesgo_churn, creado_en"),
     supabase.from("residentes").select("id, estado"),
     supabase
@@ -62,11 +63,16 @@ export async function getMetrics() {
       .select("monto, fecha_pago, estado")
       .gte("fecha_pago", thisMonthStart)
       .eq("estado", "completado"),
+    supabase
+      .from("demo_leads")
+      .select("id", { count: "exact", head: true })
+      .gte("creado_en", sevenDaysAgo),
   ]);
 
   const eleams    = eleamsRes.status    === "fulfilled" ? (eleamsRes.value.data ?? []) : [];
   const residents = residentsRes.status === "fulfilled" ? (residentsRes.value.data ?? []) : [];
   const pagos     = pagosRes.status     === "fulfilled" ? (pagosRes.value.data ?? []) : [];
+  const newLeadsLast7d = leadsRes.status === "fulfilled" ? (leadsRes.value.count ?? 0) : 0;
 
   const thisMonth = new Date(thisMonthStart);
   const leadStates = new Set(["lead", "contactado", "demo_agendada", "demo_realizada", "prueba"]);
@@ -82,6 +88,7 @@ export async function getMetrics() {
     totalResidents:      residents.length,
     activeResidents:     residents.filter((r) => r.estado === "activo").length,
     mrrCLP:              pagos.reduce((sum, p) => sum + (p.monto ?? 0), 0),
+    newLeadsLast7d,
   };
 }
 
@@ -340,28 +347,6 @@ export async function grantDemoAccess(leadId) {
     _already_active: data.already_active === true,
     _repaired_existing_auth_user: data.repaired_existing_auth_user === true,
   };
-}
-
-export async function getActiveInDemo() {
-  const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from("demo_leads")
-    .select("id, nombre, eleam_nombre, demo_ultimo_ping, demo_progreso, solicita_contacto")
-    .eq("estado", "demo_activo")
-    .gte("demo_ultimo_ping", cutoff);
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function getContactRequests() {
-  const { data, error } = await supabase
-    .from("demo_leads")
-    .select(DEMO_LEAD_SELECT)
-    .eq("solicita_contacto", true)
-    .order("solicita_contacto_en", { ascending: false })
-    .limit(50);
-  if (error) throw error;
-  return data ?? [];
 }
 
 export async function getLandingMetrics(days = 30) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getResidentById } from "./residentService";
 import { getVitalSigns } from "../vitalSigns/vitalSignsService";
@@ -8,24 +8,42 @@ import { isValidUUID } from "../../utils/validators";
 import { formatDateTime } from "../../utils/dateUtils";
 import Loading from "../../components/Loading";
 import { useToast } from "../../components/Toast";
+import HelpTooltip from "../../components/HelpTooltip";
 import VitalCard from "../vitalSigns/VitalCard";
 import CarePlanTab from "../carePlans/CarePlanTab";
 import EmarResidentTab from "../emar/EmarResidentTab";
 import {
   listCareTasks,
   completeCareTask,
+  rescheduleCareTask,
   todayIso,
   currentTurno,
-  CARE_CATEGORY_LABEL,
-  OMISSION_REASONS,
 } from "../carePlans/carePlansService";
 import {
+  CareTaskModal,
+  MedicationTaskModal,
+  Metric,
+  RescheduleCareTaskModal,
+  TurnWorkflowGuide,
+  WorkItemRow,
+} from "../carePlans/CareTasksPage";
+import {
+  FILTER_LABEL,
+  matchesFilter,
+  matchesType,
+  normalizeCareTask,
+  normalizeMedication,
+} from "../carePlans/careTasksBoardUtils";
+import {
+  administerMedication,
+  listMedicationAdministrations,
+  validateControlledAdministration,
+} from "../emar/emarService";
+import {
   getVisits,
-  getPendingVisits,
   validateVisitEntry,
   registerVisitExit,
   cancelVisit,
-  logVisit,
 } from "../familiar/familiarService";
 import {
   VITAL_DEFS,
@@ -103,7 +121,7 @@ function ResidentDetails() {
     { id: "info",          label: "Información" },
     { id: "signos",        label: "Signos Vitales" },
     { id: "observaciones", label: "Observaciones" },
-    canFeature("care-plans") && { id: "tareas",  label: "Tareas hoy" },
+    canFeature("care-plans") && { id: "tareas",  label: "Tareas diarias" },
     canFeature("care-plans") && { id: "care",    label: "Plan de cuidado" },
     canFeature("emar")       && { id: "emar",    label: "eMAR" },
     can("registrar_visitas") && { id: "visitas", label: "Visitas" },
@@ -253,7 +271,7 @@ function ResidentDetails() {
       {tab === "info"          && <InfoTab resident={resident} />}
       {tab === "signos"        && <SignosTab residenteId={id} navigate={navigate} />}
       {tab === "observaciones" && <ObservacionesTab residenteId={id} navigate={navigate} />}
-      {tab === "tareas"        && <TareasTab residenteId={id} />}
+      {tab === "tareas"        && <ResidentDailyTasksTab residenteId={id} />}
       {tab === "care"          && <CarePlanTab resident={resident} />}
       {tab === "emar"          && <EmarResidentTab resident={resident} />}
       {tab === "visitas"       && <VisitasTab residenteId={id} />}
@@ -704,6 +722,7 @@ function ObservacionesTab({ residenteId, navigate }) {
 const VF_STATUS = {
   pendiente:  { label: "Esperando validación", pill: "bg-amber-100 text-amber-800",    dot: "bg-amber-400 animate-pulse" },
   activa:     { label: "En visita",            pill: "bg-teal-100 text-teal-800",      dot: "bg-teal-500 animate-pulse" },
+  salida_pendiente: { label: "Salida por validar", pill: "bg-sky-100 text-sky-800",    dot: "bg-sky-500 animate-pulse" },
   completada: { label: "Completada",           pill: "bg-emerald-100 text-emerald-700",dot: "bg-emerald-500" },
   cancelada:  { label: "Cancelada",            pill: "bg-slate-100 text-slate-500",    dot: "bg-slate-300" },
 };
@@ -715,8 +734,6 @@ function VisitasTab({ residenteId }) {
   const [busyId, setBusyId]         = useState(null);
   const [exitModal, setExitModal]   = useState(null);
   const [exitNotes, setExitNotes]   = useState("");
-  const [logModal, setLogModal]     = useState(false);
-  const [logForm, setLogForm]       = useState({ notas: "" });
   const loaded                      = useRef(false);
 
   const load = useCallback(async (silent = false) => {
@@ -756,26 +773,11 @@ function VisitasTab({ residenteId }) {
     try {
       const updated = await registerVisitExit({ visitId: exitModal.id, notas: exitNotes });
       setVisitas((prev) => prev.map((v) => v.id === exitModal.id ? { ...v, ...updated } : v));
-      toast("Salida registrada.", "success");
+      toast("Salida validada correctamente.", "success");
       setExitModal(null);
       setExitNotes("");
     } catch {
-      toast("No se pudo registrar la salida.", "error");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const doLogVisit = async () => {
-    setBusyId("log");
-    try {
-      const created = await logVisit({ residenteId, notas: logForm.notas });
-      setVisitas((prev) => [created, ...prev]);
-      toast("Visita registrada.", "success");
-      setLogModal(false);
-      setLogForm({ notas: "" });
-    } catch {
-      toast("No se pudo registrar la visita.", "error");
+      toast("No se pudo validar la salida.", "error");
     } finally {
       setBusyId(null);
     }
@@ -798,30 +800,30 @@ function VisitasTab({ residenteId }) {
 
   const pending  = visitas.filter((v) => v.estado === "pendiente");
   const active   = visitas.filter((v) => v.estado === "activa");
-  const history  = visitas.filter((v) => !["pendiente", "activa"].includes(v.estado));
+  const exitPending = visitas.filter((v) => v.estado === "salida_pendiente");
+  const history  = visitas.filter((v) => !["pendiente", "activa", "salida_pendiente"].includes(v.estado));
 
   return (
     <div className="space-y-5">
-      {/* Header with manual log button */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-semibold text-slate-800">Registro de visitas</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-slate-800">Registro de visitas</h3>
+            <HelpTooltip label="Ayuda: flujo de visitas">
+              El familiar anuncia llegada y salida desde su portal. El funcionario solo valida el ingreso y luego valida la salida anunciada.
+            </HelpTooltip>
+          </div>
           <p className="text-xs text-slate-400 mt-0.5">
             {pending.length > 0 && `${pending.length} esperando validación · `}
             {active.length > 0 && `${active.length} en curso · `}
+            {exitPending.length > 0 && `${exitPending.length} salida por validar · `}
             {visitas.length} total
           </p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => load(true)} className="text-xs text-slate-400 hover:text-slate-600 underline">
             Actualizar
-          </button>
-          <button
-            type="button"
-            onClick={() => setLogModal(true)}
-            className="rounded-xl bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800"
-          >
-            + Registrar visita
           </button>
         </div>
       </div>
@@ -852,7 +854,7 @@ function VisitasTab({ residenteId }) {
                     type="button"
                     onClick={() => doValidateEntry(v.id)}
                     disabled={busyId === v.id}
-                    className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                    className="rounded-xl bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
                   >
                     {busyId === v.id ? "..." : "Validar ingreso"}
                   </button>
@@ -860,7 +862,7 @@ function VisitasTab({ residenteId }) {
                     type="button"
                     onClick={() => doCancel(v.id)}
                     disabled={busyId === v.id}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
                   >
                     Cancelar
                   </button>
@@ -871,7 +873,7 @@ function VisitasTab({ residenteId }) {
         </section>
       )}
 
-      {/* Active visits — need exit registration */}
+      {/* Active visits — waiting for family exit announcement */}
       {active.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-2">
@@ -879,10 +881,13 @@ function VisitasTab({ residenteId }) {
               <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
               En visita ahora
             </span>
+            <HelpTooltip label="Ayuda: visita activa">
+              La salida debe iniciarla el familiar con el botón "Anunciar salida" desde su portal. Después aparecerá aquí para validación.
+            </HelpTooltip>
           </div>
           <div className="space-y-2">
             {active.map((v) => (
-              <div key={v.id} className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 flex items-start gap-3">
+              <div key={v.id} className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-start">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800">
                     {v.profiles?.nombre ?? "Familiar"}
@@ -892,14 +897,48 @@ function VisitasTab({ residenteId }) {
                     {v.validado_en && ` · Validado: ${formatDateTime(v.validado_en)}`}
                   </p>
                   {v.notas && <p className="text-xs text-slate-500 italic mt-0.5">{v.notas}</p>}
+                  <p className="text-xs text-teal-700 mt-2">
+                    Esperando que el familiar anuncie su salida.
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Exit pending visits — staff validates the announced exit */}
+      {exitPending.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 border border-sky-200 px-2.5 py-1 text-xs font-semibold text-sky-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
+              Salida anunciada
+            </span>
+            <HelpTooltip label="Ayuda: validar salida">
+              Valida la salida cuando el familiar ya se retiró. Esa validación guarda la hora oficial de salida y calcula la duración de la visita.
+            </HelpTooltip>
+          </div>
+          <div className="space-y-2">
+            {exitPending.map((v) => (
+              <div key={v.id} className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {v.profiles?.nombre ?? "Familiar"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Ingresó: {formatDateTime(v.fecha_hora)}
+                    {v.salida_anunciada_en && ` · Salida anunciada: ${formatDateTime(v.salida_anunciada_en)}`}
+                  </p>
+                  {v.notas && <p className="text-xs text-slate-500 italic mt-0.5">{v.notas}</p>}
                 </div>
                 <button
                   type="button"
                   onClick={() => setExitModal(v)}
                   disabled={!!busyId}
-                  className="shrink-0 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
+                  className="shrink-0 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
                 >
-                  Registrar salida
+                  Validar salida
                 </button>
               </div>
             ))}
@@ -933,7 +972,10 @@ function VisitasTab({ residenteId }) {
                     <div className="flex flex-wrap gap-x-3 mt-0.5 text-xs text-slate-400">
                       <span>{formatDateTime(v.fecha_hora)}</span>
                       {v.duracion_min && <span>{v.duracion_min} min</span>}
-                      {v.salida_hora && <span>Salida: {formatDateTime(v.salida_hora)}</span>}
+                      {v.validado_en && <span>Ingreso validado: {formatDateTime(v.validado_en)}</span>}
+                      {v.salida_anunciada_en && <span>Salida anunciada: {formatDateTime(v.salida_anunciada_en)}</span>}
+                      {v.salida_validada_en && <span>Salida validada: {formatDateTime(v.salida_validada_en)}</span>}
+                      {v.salida_hora && !v.salida_validada_en && <span>Salida: {formatDateTime(v.salida_hora)}</span>}
                     </div>
                     {v.notas && <p className="text-xs text-slate-400 italic mt-0.5">{v.notas}</p>}
                   </div>
@@ -950,14 +992,14 @@ function VisitasTab({ residenteId }) {
         </div>
       )}
 
-      {/* Exit registration modal */}
+      {/* Exit validation modal */}
       {exitModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
-            <h3 className="font-semibold text-slate-800">Registrar salida</h3>
+            <h3 className="font-semibold text-slate-800">Validar salida</h3>
             <p className="text-sm text-slate-600">
               <span className="font-medium">{exitModal.profiles?.nombre ?? "Familiar"}</span>
-              <span className="text-slate-400"> · ingresó {formatDateTime(exitModal.fecha_hora)}</span>
+              <span className="text-slate-400"> · salida anunciada {formatDateTime(exitModal.salida_anunciada_en ?? exitModal.fecha_hora)}</span>
             </p>
             <div>
               <label htmlFor="exit-notes" className="text-xs font-semibold uppercase tracking-wide text-slate-500 block mb-1">
@@ -986,49 +1028,7 @@ function VisitasTab({ residenteId }) {
                 disabled={!!busyId}
                 className="flex-1 rounded-xl bg-slate-800 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
               >
-                {busyId ? "Guardando..." : "Confirmar salida"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Manual log modal */}
-      {logModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
-            <h3 className="font-semibold text-slate-800">Registrar visita completada</h3>
-            <p className="text-sm text-slate-500">
-              Registra una visita que ya ocurrió. La hora de entrada y salida se guardan como ahora.
-            </p>
-            <div>
-              <label htmlFor="log-notes" className="text-xs font-semibold uppercase tracking-wide text-slate-500 block mb-1">
-                Notas (opcional)
-              </label>
-              <textarea
-                id="log-notes"
-                rows={2}
-                value={logForm.notas}
-                onChange={(e) => setLogForm((f) => ({ ...f, notas: e.target.value }))}
-                placeholder="Familiar visitó al residente..."
-                className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 resize-none"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => { setLogModal(false); setLogForm({ notas: "" }); }}
-                className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={doLogVisit}
-                disabled={busyId === "log"}
-                className="flex-1 rounded-xl bg-teal-700 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
-              >
-                {busyId === "log" ? "Guardando..." : "Guardar"}
+                {busyId ? "Guardando..." : "Validar salida"}
               </button>
             </div>
           </div>
@@ -1038,93 +1038,156 @@ function VisitasTab({ residenteId }) {
   );
 }
 
-/* ─── Tareas de hoy Tab (lazy-loaded) ───────────────────────── */
+/* ─── Tareas diarias del residente ──────────────────────────── */
 
-const PRIORITY_DOT = {
-  alta:  "bg-rose-500",
-  media: "bg-amber-400",
-  baja:  "bg-slate-300",
-};
-
-const TASK_STATUS_STYLE = {
-  pendiente:    { pill: "bg-amber-100 text-amber-800",    label: "Pendiente" },
-  cumplida:     { pill: "bg-emerald-100 text-emerald-800", label: "Cumplida" },
-  omitida:      { pill: "bg-rose-100 text-rose-700",      label: "Omitida" },
-  reprogramada: { pill: "bg-sky-100 text-sky-700",        label: "Reprogramada" },
-  cancelada:    { pill: "bg-slate-100 text-slate-500",    label: "Cancelada" },
-};
-
-const TURNO_LABEL = { mañana: "Mañana", tarde: "Tarde", noche: "Noche" };
-const TURNO_COLOR = {
-  mañana: "bg-amber-50 border-amber-200 text-amber-800",
-  tarde:  "bg-sky-50 border-sky-200 text-sky-800",
-  noche:  "bg-violet-50 border-violet-200 text-violet-800",
-};
-
-function TareasTab({ residenteId }) {
-  const { can } = useAuth();
+function ResidentDailyTasksTab({ residenteId }) {
+  const toast = useToast();
+  const { can, profile } = useAuth();
   const canComplete = can("completar_tareas_cuidado");
+  const canAdminister = can("administrar_medicamentos");
+  const canValidate = can("validar_medicamentos_controlados");
 
-  const [tasks, setTasks]           = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(null);
-  const [busyId, setBusyId]         = useState(null);
-  const [omitTask, setOmitTask]     = useState(null);
-  const [omitReason, setOmitReason] = useState("rechazo");
-  const [omitNotes, setOmitNotes]   = useState("");
-  const loaded = useRef(false);
-
-  const today = todayIso();
-  const turno = currentTurno();
+  const [fecha, setFecha] = useState(todayIso());
+  const [turno, setTurno] = useState(currentTurno());
+  const [filter, setFilter] = useState("pendientes");
+  const [type, setType] = useState("todos");
+  const [query, setQuery] = useState("");
+  const [allItems, setAllItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [careModal, setCareModal] = useState(null);
+  const [rescheduleModal, setRescheduleModal] = useState(null);
+  const [medModal, setMedModal] = useState(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const data = await listCareTasks({ residenteId, fecha: today, generate: true });
-      setTasks(data);
-      loaded.current = true;
-    } catch {
-      setError("No se pudieron cargar las tareas del día.");
+      const [careRows, medRows] = await Promise.all([
+        listCareTasks({ residenteId, fecha, turno, estado: null, generate: true, limit: 500 }),
+        listMedicationAdministrations({ residenteId, fecha, turno, estado: null, generate: true, limit: 500 }),
+      ]);
+      setAllItems([
+        ...careRows.map(normalizeCareTask),
+        ...medRows.map(normalizeMedication),
+      ].sort((a, b) => `${a.fecha}T${a.hora ?? "00:00"}`.localeCompare(`${b.fecha}T${b.hora ?? "00:00"}`)));
+    } catch (err) {
+      console.error(err);
+      setError("No se pudieron cargar las tareas del residente.");
     } finally {
       setLoading(false);
     }
-  }, [residenteId, today]);
+  }, [fecha, residenteId, turno]);
 
   useEffect(() => {
-    if (loaded.current) return;
     load();
   }, [load]);
 
-  const doComplete = async (taskId) => {
-    setBusyId(taskId);
-    try {
-      await completeCareTask({ id: taskId, estado: "cumplida" });
-      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, estado: "cumplida" } : t));
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const items = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return allItems
+      .filter((item) => matchesType(item, type))
+      .filter((item) => matchesFilter(item, filter))
+      .filter((item) => {
+        if (!term) return true;
+        return [item.title, item.meta, item.detail, item.statusLabel, item.typeLabel]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(term));
+      });
+  }, [allItems, filter, query, type]);
 
-  const doOmit = async () => {
-    if (!omitTask) return;
-    setBusyId(omitTask.id);
+  const metrics = useMemo(() => {
+    return allItems.reduce((acc, item) => {
+      acc.total += 1;
+      if (item.source === "care") acc.cuidado += 1;
+      if (item.source === "med") acc.medicamentos += 1;
+      if (item.open) acc.pendientes += 1;
+      if (item.estado === "reprogramada") acc.reprogramadas += 1;
+      if (item.estado === "pendiente_validacion") acc.porValidar += 1;
+      if (item.overdue) acc.vencidas += 1;
+      return acc;
+    }, { total: 0, pendientes: 0, vencidas: 0, cuidado: 0, medicamentos: 0, porValidar: 0, reprogramadas: 0 });
+  }, [allItems]);
+
+  const handleCareClose = async ({ action, notas, motivo, seguimiento, seguimientoFecha, seguimientoTurno }) => {
+    if (!careModal) return;
+    setSaving(true);
     try {
       await completeCareTask({
-        id: omitTask.id,
-        estado: "omitida",
-        motivoOmision: omitReason,
-        notas: omitNotes.trim() || null,
+        id: careModal.row.id,
+        estado: action,
+        notas,
+        motivoOmision: motivo,
+        requiereSeguimiento: seguimiento,
+        seguimientoFecha,
+        seguimientoTurno,
       });
-      setTasks((prev) => prev.map((t) => t.id === omitTask.id ? { ...t, estado: "omitida" } : t));
-      setOmitTask(null);
-      setOmitNotes("");
+      toast(action === "cumplida" ? "Tarea marcada como cumplida." : "Omisión registrada.", "success");
+      setCareModal(null);
+      await load(true);
+    } catch (err) {
+      console.error(err);
+      toast(err.message || "No se pudo cerrar la tarea.", "error");
     } finally {
-      setBusyId(null);
+      setSaving(false);
     }
   };
 
-  if (loading) return <Loading message="Cargando tareas del día..." />;
+  const handleCareReschedule = async ({ fecha: nextFecha, turno: nextTurno, hora, notas, seguimiento, seguimientoFecha, seguimientoTurno }) => {
+    if (!rescheduleModal) return;
+    setSaving(true);
+    try {
+      await rescheduleCareTask({
+        id: rescheduleModal.row.id,
+        fecha: nextFecha,
+        turno: nextTurno,
+        hora,
+        notas,
+        requiereSeguimiento: seguimiento,
+        seguimientoFecha,
+        seguimientoTurno,
+      });
+      toast("Tarea reprogramada.", "success");
+      setRescheduleModal(null);
+      await load(true);
+    } catch (err) {
+      console.error(err);
+      toast(err.message || "No se pudo reprogramar la tarea.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMedicationSubmit = async (payload) => {
+    setSaving(true);
+    try {
+      if (payload.action === "validar") {
+        await validateControlledAdministration({ id: payload.row.id, notas: payload.notas });
+        toast("Administración controlada validada.", "success");
+      } else {
+        await administerMedication({
+          id: payload.row.id,
+          estado: payload.action,
+          loteId: payload.loteId,
+          dosis: payload.dosis,
+          notas: payload.notas,
+          motivoOmision: payload.motivo,
+          requiereSeguimiento: payload.seguimiento,
+          seguimientoFecha: payload.seguimientoFecha,
+          seguimientoTurno: payload.seguimientoTurno,
+        });
+        toast(payload.action === "administrado" ? "Administración registrada." : "Omisión registrada.", "success");
+      }
+      setMedModal(null);
+      await load(true);
+    } catch (err) {
+      console.error(err);
+      toast(err.message || "No se pudo guardar el registro eMAR.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (error) return (
     <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
@@ -1133,256 +1196,115 @@ function TareasTab({ residenteId }) {
     </div>
   );
 
-  const carryOver  = tasks.filter((t) => t._arrastre);
-  const todayTasks = tasks.filter((t) => !t._arrastre);
-  const byTurno    = { mañana: [], tarde: [], noche: [] };
-  for (const t of todayTasks) {
-    if (byTurno[t.turno]) byTurno[t.turno].push(t);
-  }
-
-  const total   = tasks.length;
-  const done    = tasks.filter((t) => t.estado === "cumplida").length;
-  const omitted = tasks.filter((t) => t.estado === "omitida").length;
-  const pending = tasks.filter((t) => t.estado === "pendiente").length;
-
-  if (total === 0) return (
-    <div className="text-center py-12 bg-white rounded-2xl border border-slate-100">
-      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-teal-50">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-teal-600">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-        </svg>
-      </div>
-      <p className="text-sm font-medium text-slate-600">Sin tareas programadas para hoy</p>
-      <p className="text-xs text-slate-400 mt-1">Configura el plan de cuidado en la pestaña "Plan de cuidado"</p>
-    </div>
-  );
-
-  const progress = Math.round(((done + omitted) / total) * 100);
-
   return (
     <div className="space-y-5">
-      {/* Summary strip */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-400 font-medium">Progreso del día</p>
-            <p className="text-sm font-semibold text-slate-700 capitalize">
-              Turno actual: {TURNO_LABEL[turno]}
-            </p>
+      <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_145px_145px_150px_145px]">
+        <div className="rounded-xl bg-teal-50 p-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-teal-700">
+            Tareas del residente
+            <HelpTooltip label="Ayuda: tareas del residente">
+              Esta vista genera y muestra solo las tareas de cuidado y eMAR del residente para la fecha y turno seleccionados. Reintentar no duplica registros.
+            </HelpTooltip>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-teal-700">{progress}%</p>
-            <p className="text-xs text-slate-400">{done + omitted} de {total} completadas</p>
+          <div className="mt-1 text-sm font-semibold text-teal-950">
+            {metrics.pendientes} pendiente{metrics.pendientes === 1 ? "" : "s"} · {metrics.vencidas} vencida{metrics.vencidas === 1 ? "" : "s"}
           </div>
         </div>
-        <div className="w-full bg-slate-100 rounded-full h-1.5 mb-3">
-          <div
-            className="bg-teal-500 h-1.5 rounded-full transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <div className="flex gap-4 text-xs flex-wrap">
-          <span className="flex items-center gap-1 text-amber-700">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            {pending} pendiente{pending !== 1 ? "s" : ""}
-          </span>
-          <span className="flex items-center gap-1 text-emerald-700">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            {done} cumplida{done !== 1 ? "s" : ""}
-          </span>
-          <span className="flex items-center gap-1 text-rose-600">
-            <span className="w-2 h-2 rounded-full bg-rose-400" />
-            {omitted} omitida{omitted !== 1 ? "s" : ""}
-          </span>
-          <button type="button" onClick={() => load(true)} className="ml-auto text-slate-400 hover:text-slate-600 underline">
-            Actualizar
-          </button>
-        </div>
-      </div>
+        <label className="text-sm font-medium text-slate-700">
+          Fecha
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+        </label>
+        <label className="text-sm font-medium text-slate-700">
+          Turno
+          <select value={turno} onChange={(e) => setTurno(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+            {["mañana", "tarde", "noche"].map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <label className="text-sm font-medium text-slate-700">
+          Estado
+          <select value={filter} onChange={(e) => setFilter(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+            {Object.entries(FILTER_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label className="text-sm font-medium text-slate-700">
+          Tipo
+          <select value={type} onChange={(e) => setType(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+            <option value="todos">Todo</option>
+            <option value="cuidado">Cuidado</option>
+            <option value="medicamentos">eMAR</option>
+          </select>
+        </label>
+      </section>
 
-      {/* Carry-over tasks */}
-      {carryOver.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 border border-rose-200 px-2.5 py-1 text-xs font-semibold text-rose-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-              Arrastre de turnos anteriores
-            </span>
+      <TurnWorkflowGuide />
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-7">
+        <Metric label="Total" value={metrics.total} />
+        <Metric label="Pendientes" value={metrics.pendientes} tone="amber" />
+        <Metric label="Vencidas" value={metrics.vencidas} tone="rose" />
+        <Metric label="Reprogramadas" value={metrics.reprogramadas} tone="sky" />
+        <Metric label="Cuidado" value={metrics.cuidado} tone="teal" />
+        <Metric label="eMAR" value={metrics.medicamentos} tone="sky" />
+        <Metric label="Por validar" value={metrics.porValidar} tone="sky" />
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <label className="block text-sm font-medium text-slate-700">
+          Buscar
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por actividad, medicamento, estado o detalle..."
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+        </label>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {loading ? (
+          <div className="space-y-3 p-4">
+            {[0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />)}
           </div>
-          <div className="space-y-2">
-            {carryOver.map((task) => (
-              <TareaCard
-                key={task.id}
-                task={task}
+        ) : items.length === 0 ? (
+          <div className="p-8 text-center">
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-teal-50">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-teal-600">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-slate-950">Sin tareas para estos filtros</p>
+            <p className="mt-1 text-sm text-slate-500">Cambia fecha, turno o configura el plan/eMAR del residente.</p>
+            <button type="button" onClick={() => load(true)} className="mt-4 rounded-xl border border-teal-200 px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">
+              Generar / actualizar
+            </button>
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {items.map((item) => (
+              <WorkItemRow
+                key={item.key}
+                item={item}
                 canComplete={canComplete}
-                busyId={busyId}
-                onComplete={doComplete}
-                onOmit={setOmitTask}
-                isCarryOver
+                canAdminister={canAdminister}
+                canValidate={canValidate}
+                currentUserId={profile?.id ?? null}
+                onCareAction={(action) => setCareModal({ action, row: item.row })}
+                onCareReschedule={() => setRescheduleModal({ row: item.row })}
+                onMedicationAction={(action) => setMedModal({ action, row: item.row })}
               />
             ))}
-          </div>
-        </section>
-      )}
-
-      {/* Tasks grouped by turno */}
-      {["mañana", "tarde", "noche"].map((t) => {
-        const list = byTurno[t];
-        if (list.length === 0) return null;
-        const isCurrent = t === turno;
-        return (
-          <section key={t}>
-            <div className={`inline-flex items-center gap-2 mb-2 px-3 py-1.5 rounded-xl border text-xs font-semibold ${TURNO_COLOR[t]} ${isCurrent ? "ring-2 ring-offset-1 ring-teal-400" : ""}`}>
-              {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />}
-              {TURNO_LABEL[t]}
-              {isCurrent && <span className="font-normal opacity-75">(turno actual)</span>}
-            </div>
-            <div className="space-y-2">
-              {list.map((task) => (
-                <TareaCard
-                  key={task.id}
-                  task={task}
-                  canComplete={canComplete}
-                  busyId={busyId}
-                  onComplete={doComplete}
-                  onOmit={setOmitTask}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
-
-      {/* Omit confirmation sheet */}
-      {omitTask && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
-            <h3 className="font-semibold text-slate-800">Omitir tarea</h3>
-            <p className="text-sm text-slate-600 font-medium">{omitTask.actividad?.titulo}</p>
-            <div>
-              <label htmlFor="omit-reason" className="text-xs text-slate-500 uppercase tracking-wide block mb-1">
-                Motivo de omisión
-              </label>
-              <select
-                id="omit-reason"
-                value={omitReason}
-                onChange={(e) => setOmitReason(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-              >
-                {OMISSION_REASONS.map(([v, label]) => (
-                  <option key={v} value={v}>{label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="omit-notes" className="text-xs text-slate-500 uppercase tracking-wide block mb-1">
-                Notas adicionales (opcional)
-              </label>
-              <textarea
-                id="omit-notes"
-                rows={2}
-                value={omitNotes}
-                onChange={(e) => setOmitNotes(e.target.value)}
-                placeholder="Detalles relevantes..."
-                className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 resize-none"
-              />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => { setOmitTask(null); setOmitNotes(""); }}
-                className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={doOmit}
-                disabled={!!busyId}
-                className="flex-1 rounded-xl bg-rose-600 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
-              >
-                {busyId ? "Guardando..." : "Confirmar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TareaCard({ task, canComplete, busyId, onComplete, onOmit, isCarryOver }) {
-  const status   = TASK_STATUS_STYLE[task.estado] ?? { pill: "bg-slate-100 text-slate-500", label: task.estado };
-  const priority = task.actividad?.prioridad;
-  const isBusy   = busyId === task.id;
-  const isPending = task.estado === "pendiente";
-
-  return (
-    <div className={`bg-white rounded-xl border px-4 py-3 flex gap-3 ${isCarryOver ? "border-rose-200 bg-rose-50/30" : "border-slate-100"}`}>
-      <div className="pt-1.5 shrink-0">
-        <span
-          className={`block w-2.5 h-2.5 rounded-full ${PRIORITY_DOT[priority] ?? "bg-slate-200"}`}
-          title={priority ? `Prioridad ${priority}` : ""}
-        />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2 flex-wrap">
-          <span className="text-sm font-medium text-slate-800 leading-snug flex-1">
-            {task.actividad?.titulo ?? "Tarea"}
-          </span>
-          <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${status.pill}`}>
-            {status.label}
-          </span>
-        </div>
-
-        {task.actividad?.instrucciones && (
-          <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{task.actividad.instrucciones}</p>
+          </ul>
         )}
+      </section>
 
-        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-          {task.hora && (
-            <span className="text-xs text-slate-400">{task.hora.slice(0, 5)}</span>
-          )}
-          {CARE_CATEGORY_LABEL[task.actividad?.categoria] && (
-            <span className="text-xs text-slate-400">{CARE_CATEGORY_LABEL[task.actividad.categoria]}</span>
-          )}
-          {task.motivo_omision && (
-            <span className="text-xs text-rose-500 italic">
-              {OMISSION_REASONS.find(([v]) => v === task.motivo_omision)?.[1] ?? task.motivo_omision}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {canComplete && isPending ? (
-        <div className="shrink-0 flex flex-col gap-1.5 ml-1">
-          <button
-            type="button"
-            onClick={() => onComplete(task.id)}
-            disabled={isBusy}
-            className="rounded-lg bg-teal-700 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50 transition-colors"
-          >
-            {isBusy ? "..." : "Cumplir"}
-          </button>
-          <button
-            type="button"
-            onClick={() => onOmit(task)}
-            disabled={isBusy}
-            className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-          >
-            Omitir
-          </button>
-        </div>
-      ) : task.estado === "cumplida" ? (
-        <div className="shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 ml-1">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4 text-emerald-600">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-          </svg>
-        </div>
-      ) : null}
+      <CareTaskModal modal={careModal} saving={saving} onClose={() => !saving && setCareModal(null)} onSubmit={handleCareClose} />
+      <RescheduleCareTaskModal modal={rescheduleModal} saving={saving} onClose={() => !saving && setRescheduleModal(null)} onSubmit={handleCareReschedule} />
+      <MedicationTaskModal modal={medModal} saving={saving} onClose={() => !saving && setMedModal(null)} onSubmit={handleMedicationSubmit} />
     </div>
   );
 }
+
+
 
 export default ResidentDetails;

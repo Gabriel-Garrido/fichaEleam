@@ -37,7 +37,7 @@ export const TIPO_LABEL = {
 export const TIPO_BADGE = {
   caida:                      "bg-rose-100 text-rose-700",
   incidente:                  "bg-orange-100 text-orange-700",
-  visita_medica:              "bg-blue-100 text-blue-700",
+  visita_medica:              "bg-sky-100 text-sky-700",
   curacion:                   "bg-purple-100 text-purple-700",
   administracion_medicamento: "bg-amber-100 text-amber-700",
   observacion_general:        "bg-slate-100 text-slate-700",

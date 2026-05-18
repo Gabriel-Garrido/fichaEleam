@@ -303,7 +303,7 @@ export default function EleamCustomerDrawer({
               ) : (
                 <ul className="space-y-1.5">
                   {slot.payments.slice(0, 6).map((p) => (
-                    <li key={p.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5 gap-3">
+                    <li key={p.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-800">
                           {formatCLP(p.monto)}

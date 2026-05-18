@@ -122,7 +122,8 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
   const emarValidation = operational?.emar?.pendiente_validacion ?? 0;
   const emarOverdue = operational?.emar?.vencidas ?? 0;
   const careOverdue = operational?.care?.vencidas ?? 0;
-  const carePending = operational?.care?.pendiente ?? 0;
+  const carePending = operational?.care?.pendientes_operativos
+    ?? ((operational?.care?.pendiente ?? 0) + (operational?.care?.reprogramada ?? 0));
   let nextAction;
   if (emarOverdue) {
     nextAction = { label: "Administrar eMAR vencido", hint: `${emarOverdue} medicamento${emarOverdue === 1 ? "" : "s"} fuera de horario`, path: "/turnos/emar", tone: "rose" };

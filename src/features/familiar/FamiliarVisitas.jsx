@@ -5,13 +5,15 @@ import { friendlyError } from "../../utils/errorMessages";
 import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
 import Button from "../../components/Button";
-import { getVisits, requestVisit, cancelVisit } from "./familiarService";
+import HelpTooltip from "../../components/HelpTooltip";
+import { getMyVisits, requestVisit, announceVisitExit, cancelVisit } from "./familiarService";
 import { useFamiliarResidentData } from "./useFamiliarResidentData";
 import { formatDateTime } from "../../utils/dateUtils";
 
 const VISIT_STATUS = {
   pendiente:  { label: "Esperando validación", pill: "bg-amber-100 text-amber-800",    dot: "bg-amber-400 animate-pulse" },
   activa:     { label: "En visita",            pill: "bg-teal-100 text-teal-800",      dot: "bg-teal-500 animate-pulse" },
+  salida_pendiente: { label: "Salida por validar", pill: "bg-sky-100 text-sky-800",    dot: "bg-sky-500 animate-pulse" },
   completada: { label: "Completada",           pill: "bg-emerald-100 text-emerald-700",dot: "bg-emerald-500" },
   cancelada:  { label: "Cancelada",            pill: "bg-slate-100 text-slate-500",    dot: "bg-slate-300" },
 };
@@ -22,6 +24,7 @@ export default function FamiliarVisitas() {
   const [visitas, setVisitas]       = useState([]);
   const [loadingVisits, setLoadingVisits] = useState(false);
   const [announcing, setAnnouncing] = useState(false);
+  const [announcingExit, setAnnouncingExit] = useState(false);
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [announceNotes, setAnnounceNotes] = useState("");
   const [cancelling, setCancelling] = useState(null);
@@ -38,7 +41,7 @@ export default function FamiliarVisitas() {
     if (!id) return;
     setLoadingVisits(true);
     try {
-      const v = await getVisits(id, 100);
+      const v = await getMyVisits(id, 100);
       setVisitas(v);
     } catch (e) {
       toast(friendlyError(e, "No se pudieron cargar las visitas."), "error");
@@ -80,6 +83,19 @@ export default function FamiliarVisitas() {
     }
   };
 
+  const handleAnnounceExit = async (visitId) => {
+    setAnnouncingExit(true);
+    try {
+      await announceVisitExit(visitId);
+      toast("Salida anunciada. Un funcionario validará tu salida.", "success");
+      await loadVisits(activeId);
+    } catch (err) {
+      toast(friendlyError(err, "No se pudo anunciar la salida."), "error");
+    } finally {
+      setAnnouncingExit(false);
+    }
+  };
+
   if (loading) return <Loading message="Cargando visitas..." />;
 
   if (residentes.length === 0) {
@@ -91,7 +107,10 @@ export default function FamiliarVisitas() {
     );
   }
 
-  const hasPendingOrActive = visitas.some((v) => ["pendiente", "activa"].includes(v.estado));
+  const pendingVisit = visitas.find((v) => v.estado === "pendiente");
+  const activeVisit = visitas.find((v) => v.estado === "activa");
+  const exitPendingVisit = visitas.find((v) => v.estado === "salida_pendiente");
+  const hasOpenVisit = Boolean(pendingVisit || activeVisit || exitPendingVisit);
 
   return (
     <PageLayout
@@ -130,7 +149,12 @@ export default function FamiliarVisitas() {
 
       {/* How it works */}
       <div className="bg-teal-50 border border-teal-100 rounded-2xl px-5 py-4">
-        <p className="text-sm font-semibold text-teal-800 mb-2">¿Cómo funciona el registro de visitas?</p>
+        <div className="mb-2 flex items-center gap-2">
+          <p className="text-sm font-semibold text-teal-800">¿Cómo funciona el registro de visitas?</p>
+          <HelpTooltip label="Ayuda sobre visitas">
+            No debes elegir fechas ni horarios. El sistema registra la hora real cuando anuncias llegada o salida y cuando el funcionario valida cada paso.
+          </HelpTooltip>
+        </div>
         <ol className="text-sm text-teal-700 space-y-1 list-none">
           <li className="flex items-start gap-2">
             <span className="shrink-0 grid h-5 w-5 place-items-center rounded-full bg-teal-700 text-white text-[10px] font-bold mt-0.5">1</span>
@@ -142,18 +166,27 @@ export default function FamiliarVisitas() {
           </li>
           <li className="flex items-start gap-2">
             <span className="shrink-0 grid h-5 w-5 place-items-center rounded-full bg-teal-700 text-white text-[10px] font-bold mt-0.5">3</span>
-            Al terminar tu visita, el funcionario registra la salida.
+            Al terminar, anuncia tu salida desde este mismo portal.
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="shrink-0 grid h-5 w-5 place-items-center rounded-full bg-teal-700 text-white text-[10px] font-bold mt-0.5">4</span>
+            Un funcionario valida tu salida y queda guardado el registro.
           </li>
         </ol>
       </div>
 
       {/* Announce panel */}
-      {!hasPendingOrActive && (
+      {!hasOpenVisit && (
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="font-bold text-slate-800">Anunciar mi llegada</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-slate-800">Anunciar visita</h2>
+              <HelpTooltip label="Ayuda: anunciar visita">
+                Usa este botón cuando llegues al ELEAM. La visita queda pendiente hasta que un funcionario valide tu ingreso.
+              </HelpTooltip>
+            </div>
             <p className="text-sm text-slate-500 mt-0.5">
-              Notifica al equipo que estás en camino o ya llegaste.
+              Notifica al equipo que llegaste. La hora se registra automáticamente.
             </p>
           </div>
           <div className="p-5">
@@ -186,7 +219,7 @@ export default function FamiliarVisitas() {
                     disabled={announcing}
                     className="flex-1 rounded-xl bg-teal-700 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
                   >
-                    {announcing ? "Enviando…" : "Confirmar llegada"}
+                    {announcing ? "Enviando…" : "Anunciar visita"}
                   </button>
                 </div>
               </div>
@@ -196,7 +229,7 @@ export default function FamiliarVisitas() {
                 onClick={() => setShowAnnounce(true)}
                 className="w-full rounded-xl bg-teal-700 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 transition-colors"
               >
-                Anunciar mi llegada
+                Anunciar visita
               </button>
             )}
           </div>
@@ -204,19 +237,38 @@ export default function FamiliarVisitas() {
       )}
 
       {/* Active/pending notice */}
-      {hasPendingOrActive && (
-        <div className="bg-teal-50 border border-teal-200 rounded-2xl px-5 py-4 flex items-center gap-3">
-          <span className="h-3 w-3 rounded-full bg-teal-500 animate-pulse shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-teal-800">
-              {visitas.find((v) => v.estado === "activa") ? "Visita en curso" : "Solicitud pendiente de validación"}
-            </p>
-            <p className="text-xs text-teal-700 mt-0.5">
-              {visitas.find((v) => v.estado === "activa")
-                ? "El equipo registrará tu salida al finalizar la visita."
-                : "Un funcionario del ELEAM validará tu ingreso en breve."}
-            </p>
+      {hasOpenVisit && (
+        <div className="bg-teal-50 border border-teal-200 rounded-2xl px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-1 h-3 w-3 rounded-full bg-teal-500 animate-pulse shrink-0" />
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-teal-800">
+                  {activeVisit ? "Visita en curso" : exitPendingVisit ? "Salida pendiente de validación" : "Solicitud pendiente de validación"}
+                </p>
+                <HelpTooltip label="Ayuda: estado de visita">
+                  Mientras haya una visita abierta no puedes iniciar otra. Si tu ingreso ya fue validado, al terminar debes anunciar tu salida.
+                </HelpTooltip>
+              </div>
+              <p className="text-xs text-teal-700 mt-0.5">
+                {activeVisit
+                  ? "Cuando termines, anuncia tu salida para que un funcionario la valide."
+                  : exitPendingVisit
+                    ? "Tu salida ya fue anunciada. Espera la validación del funcionario."
+                    : "Un funcionario del ELEAM validará tu ingreso en breve."}
+              </p>
+            </div>
           </div>
+          {activeVisit && (
+            <button
+              type="button"
+              onClick={() => handleAnnounceExit(activeVisit.id)}
+              disabled={announcingExit}
+              className="w-full rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50 sm:w-auto"
+            >
+              {announcingExit ? "Enviando…" : "Anunciar salida"}
+            </button>
+          )}
         </div>
       )}
 
@@ -259,7 +311,9 @@ export default function FamiliarVisitas() {
                       </div>
                       <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-400">
                         {v.duracion_min && <span>{v.duracion_min} min</span>}
-                        {v.salida_hora && <span>Salida: {formatDateTime(v.salida_hora)}</span>}
+                        {v.salida_anunciada_en && <span>Salida anunciada {formatDateTime(v.salida_anunciada_en)}</span>}
+                        {v.salida_validada_en && <span>Salida validada {formatDateTime(v.salida_validada_en)}</span>}
+                        {v.salida_hora && !v.salida_validada_en && <span>Salida: {formatDateTime(v.salida_hora)}</span>}
                         {v.validado_en && <span>Ingreso validado {formatDateTime(v.validado_en)}</span>}
                       </div>
                       {v.notas && (

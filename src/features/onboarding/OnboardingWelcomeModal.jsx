@@ -31,7 +31,7 @@ function StepPreview({ steps, colors, compact = false }) {
               {i + 1}
             </div>
             {/* Icon */}
-            <div className={`shrink-0 w-6 h-6 rounded-lg bg-slate-50 flex items-center justify-center ${colors.text}`}>
+            <div className={`shrink-0 w-6 h-6 rounded-xl bg-slate-50 flex items-center justify-center ${colors.text}`}>
               <NavIcon id={step.icon} className="w-3.5 h-3.5" aria-hidden="true" />
             </div>
             {/* Label */}
@@ -119,7 +119,7 @@ export default function OnboardingWelcomeModal() {
         <div
           ref={dialogRef}
           tabIndex={-1}
-          className={`absolute bottom-0 left-0 right-0 outline-none bg-white rounded-t-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col transition-transform duration-300 ${
+          className={`absolute bottom-0 left-0 right-0 outline-none bg-white rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col transition-transform duration-300 ${
             visible ? 'translate-y-0' : 'translate-y-full'
           }`}
         >
@@ -135,10 +135,10 @@ export default function OnboardingWelcomeModal() {
             {/* Hero row */}
             <div className="flex items-center gap-4 mb-4">
               <div
-                className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${colors.bg} text-3xl flex-shrink-0 shadow-sm select-none`}
+                className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${colors.bg} ${colors.text} flex-shrink-0 shadow-sm`}
                 aria-hidden="true"
               >
-                {config.welcomeEmoji}
+                <NavIcon id={config.welcomeIcon} className="w-7 h-7" />
               </div>
               <div className="flex-1 min-w-0">
                 <h1
@@ -216,17 +216,17 @@ export default function OnboardingWelcomeModal() {
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className={`relative w-full max-w-md outline-none rounded-3xl bg-white shadow-2xl overflow-hidden transition-all duration-300 ${
+        className={`relative w-full max-w-md outline-none rounded-2xl bg-white shadow-2xl overflow-hidden transition-all duration-300 ${
           visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-4'
         }`}
       >
         {/* Gradient header with emoji — replaces the flat accent bar */}
         <div className={`${colors.bg} px-8 pt-8 pb-6 text-center border-b ${colors.border}`}>
           <div
-            className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-sm text-4xl mb-4 select-none`}
+            className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white ${colors.text} shadow-sm mb-4`}
             aria-hidden="true"
           >
-            {config.welcomeEmoji}
+            <NavIcon id={config.welcomeIcon} className="w-8 h-8" />
           </div>
 
           <h1

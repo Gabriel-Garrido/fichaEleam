@@ -156,6 +156,8 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "residente_id tiene formato inválido" }, 400);
     }
 
+    const isGmail = GMAIL_RE.test(cleanEmail);
+
     const sb = adminClient();
 
     // Verificar estado del ELEAM
@@ -182,6 +184,60 @@ Deno.serve(async (req) => {
       }
       if (res.estado !== "activo") {
         return jsonResponse(req, { error: "Solo puedes vincular familiares a residentes activos" }, 400);
+      }
+    }
+
+    // Dedupe de invitaciones Gmail antes de contar límites: reintentar el alta
+    // de la misma persona no debe consumir cupos ni crear invitaciones paralelas.
+    if (isGmail) {
+      const nowIso = new Date().toISOString();
+      const { data: existingInvite, error: inviteLookupErr } = await sb
+        .from("funcionario_invitaciones")
+        .select("id")
+        .eq("eleam_id", eleam.id)
+        .ilike("email", cleanEmail)
+        .eq("usado", false)
+        .gt("expira_en", nowIso)
+        .order("creado_en", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (inviteLookupErr) {
+        console.error("gmail invitation lookup", inviteLookupErr);
+        return jsonResponse(req, { error: "No se pudo validar si ya existe una invitación pendiente." }, 500);
+      }
+
+      if (existingInvite) {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const { error: inviteUpdateErr } = await sb
+          .from("funcionario_invitaciones")
+          .update({
+            rol,
+            residente_id: residenteId || null,
+            expira_en: expiresAt,
+            creado_por: user.id,
+          })
+          .eq("id", existingInvite.id);
+
+        if (inviteUpdateErr) {
+          console.error("gmail invitation refresh", inviteUpdateErr);
+          return jsonResponse(req, { error: "No se pudo actualizar la invitación pendiente." }, 500);
+        }
+
+        const emailResult = await sendGmailInvite({ email: cleanEmail, nombre, eleamNombre: eleam.nombre, rol });
+
+        return jsonResponse(req, {
+          ok: true,
+          is_gmail: true,
+          google_only: true,
+          pending_invitation: true,
+          profile_id: null,
+          email: cleanEmail,
+          rol,
+          email_sent: emailResult.sent,
+          email_skipped: emailResult.skipped === true,
+          ...(emailResult.error ? { email_error: emailResult.error } : {}),
+        });
       }
     }
 
@@ -233,8 +289,6 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
-    const isGmail = GMAIL_RE.test(cleanEmail);
-
     // ── Flujo Gmail: invitación para login con Google ────────────────────────
     if (isGmail) {
       const { user: existingAuthUser, error: authLookupErr } = await findAuthUserByEmail(sb, cleanEmail);
@@ -272,13 +326,18 @@ Deno.serve(async (req) => {
         }
 
         if (rol === "familiar" && residenteId) {
-          await sb.from("familiar_residentes").insert({
+          const { error: linkErr } = await sb.from("familiar_residentes").insert({
             profile_id: existingAuthUser.id,
             residente_id: residenteId,
             creado_por: user.id,
-          }).then(({ error: linkErr }) => {
-            if (linkErr) console.error("gmail familiar link for existing user", linkErr);
           });
+          if (linkErr) {
+            await sb.from("profiles").delete().eq("id", existingAuthUser.id);
+            console.error("gmail familiar link for existing user", linkErr);
+            return jsonResponse(req, {
+              error: "No se pudo vincular el familiar al residente seleccionado.",
+            }, 500);
+          }
         }
 
         const currentAppMeta =

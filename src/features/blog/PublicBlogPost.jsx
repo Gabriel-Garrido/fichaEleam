@@ -109,19 +109,19 @@ export default function PublicBlogPost() {
           <div className="flex items-center gap-1">
             <Link
               to="/blog"
-              className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all"
+              className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
             >
               Blog
             </Link>
             <button type="button"
               onClick={() => navigate("/login")}
-              className="text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-lg hover:border-white/40 hover:text-white transition-all ml-1"
+              className="text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-xl hover:border-white/40 hover:text-white transition-all ml-1"
             >
               Iniciar sesión
             </button>
             <button type="button"
               onClick={() => { setModal(true); trackEvent("cta_click", "blog_post_nav_demo"); }}
-              className="hidden sm:inline-flex text-sm bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
+              className="hidden sm:inline-flex text-sm bg-teal-500 text-white px-4 py-2 rounded-xl hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
             >
               Solicitar Demo
             </button>

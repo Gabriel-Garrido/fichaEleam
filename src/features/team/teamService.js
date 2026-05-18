@@ -99,16 +99,7 @@ export async function getFuncionarioPermisos(profileId) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("funcionario_permisos")
-    .select(`
-      profile_id, crear_residentes, editar_residentes, eliminar_residentes,
-      crear_signos_vitales, editar_signos_vitales, eliminar_signos_vitales,
-      crear_observaciones, editar_observaciones, eliminar_observaciones,
-      crear_planes_cuidado, editar_planes_cuidado, completar_tareas_cuidado,
-      crear_indicaciones_medicamentos, editar_indicaciones_medicamentos,
-      administrar_medicamentos, validar_medicamentos_controlados,
-      ajustar_stock_medicamentos, subir_acreditacion, editar_acreditacion,
-      archivar_acreditacion, registrar_visitas, actualizado_en
-    `)
+    .select("*")
     .eq("profile_id", profileId)
     .maybeSingle();
   if (error) throw error;

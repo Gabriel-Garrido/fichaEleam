@@ -7,6 +7,10 @@ function requireSupabase() {
   return supabase;
 }
 
+export function isAuthConfigured() {
+  return Boolean(supabase);
+}
+
 export function authErrorMessage(error, fallback = "No pudimos completar la operación. Intenta nuevamente.") {
   const kind = classifyAuthError(error);
   const raw = String(error?.message || error?.error_description || error || "");
@@ -76,6 +80,66 @@ export const login = async ({ email, password }) => {
   if (error) throw error;
   return data.user;
 };
+
+// Estado de la solicitud de demo de un correo: "aprobado" | "pendiente" | "none".
+// Permite que el login muestre un aviso claro cuando alguien intenta entrar
+// con un correo cuya demo todavía no fue habilitada por el equipo.
+export const getDemoRequestStatus = async (email) => {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("demo_lead_status", {
+    p_email: String(email ?? "").trim(),
+  });
+  if (error) return "none";
+  return data ?? "none";
+};
+
+export function subscribePasswordRecovery(onRecovery) {
+  const client = requireSupabase();
+  const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") onRecovery?.();
+  });
+  return () => subscription.unsubscribe();
+}
+
+export async function getCurrentAuthSession() {
+  const client = requireSupabase();
+  const { data, error } = await client.auth.getSession();
+  if (error) throw error;
+  return data?.session ?? null;
+}
+
+export async function requestPasswordReset(email, redirectTo) {
+  const client = requireSupabase();
+  const { error } = await client.auth.resetPasswordForEmail(String(email ?? "").trim(), {
+    redirectTo,
+  });
+  if (error) throw error;
+}
+
+export async function clearMustResetPassword(userId) {
+  const client = requireSupabase();
+  if (!userId) throw new Error("Usuario no autenticado.");
+  const { error } = await client
+    .from("profiles")
+    .update({ must_reset_password: false })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
+export async function updatePasswordAndClearResetFlag(password, userId = null) {
+  const client = requireSupabase();
+  const { error } = await client.auth.updateUser({ password });
+  if (error) throw error;
+
+  if (userId) {
+    await clearMustResetPassword(userId);
+    return;
+  }
+
+  const { data, error: userError } = await client.auth.getUser();
+  if (userError) throw userError;
+  if (data?.user?.id) await clearMustResetPassword(data.user.id);
+}
 
 export const loginWithGoogle = async () => {
   const client = requireSupabase();

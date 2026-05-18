@@ -131,16 +131,16 @@ const PLANS = [
 ];
 
 const HOW_IT_WORKS = [
-  { step: "01", title: "Solicita tu demo", text: "Completa el formulario. En menos de 24 horas recibes tu acceso personalizado para explorar la plataforma." },
-  { step: "02", title: "Explora sin límites", text: "Navega las vistas de admin, funcionario y familiar con datos de ejemplo. Un especialista te acompaña si lo deseas." },
-  { step: "03", title: "Activa y digitaliza", text: "Elige tu plan y activa con MercadoPago. El equipo te ayuda a cargar los datos iniciales sin costo adicional." },
+  { step: "01", title: "Solicita tu demo", text: "Completa el formulario con los datos de tu ELEAM. Revisamos cada solicitud y te respondemos en menos de 24 horas." },
+  { step: "02", title: "Recibe tu acceso", text: "Habilitamos tu cuenta con 30 días de prueba completa y te enviamos las credenciales por correo para que entres con datos reales." },
+  { step: "03", title: "Activa y digitaliza", text: "Cuando termine la prueba eliges tu plan y activas con MercadoPago. El equipo te ayuda a cargar los datos iniciales sin costo adicional." },
 ];
 
 const FAQ_ITEMS = [
   { q: "¿Qué es FichaEleam?", a: "FichaEleam es un software diseñado exclusivamente para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile. Cubre los 14 ámbitos del DS 14/2017 e incluye ficha clínica digital, signos vitales con alertas clínicas, observaciones por turno, Carpeta SEREMI y portal para familias — todo en una sola plataforma web." },
   { q: "¿FichaEleam incluye el DS 14/2017?", a: "Sí. La sección Carpeta SEREMI implementa los 14 ámbitos con más de 70 requisitos del catálogo oficial pre-cargados, evidencias versionadas, estados de cumplimiento y alertas automáticas cuando un documento vence o se acerca su vencimiento." },
   { q: "¿Cuánto cuesta?", a: "La suscripción es mensual por establecimiento, sin cobros por usuario. Los planes parten desde $50.000 CLP/mes para hasta 14 residentes. Todos los funcionarios y familiares del ELEAM acceden incluidos sin costo adicional." },
-  { q: "¿Cómo funciona el demo?", a: "Solicitas el demo completando el formulario. El equipo revisa tu solicitud y te avisa cuando el acceso esté habilitado para explorar la plataforma con datos de ejemplo, sin compromiso ni tarjeta de crédito." },
+  { q: "¿Cómo funciona el demo?", a: "Completas el formulario de solicitud y nuestro equipo revisa tu caso. En menos de 24 horas habilitamos tu cuenta con 30 días de prueba gratuita y te enviamos las credenciales por correo, sin compromiso ni tarjeta de crédito." },
   { q: "¿Cuánto tarda el equipo en aprender a usarla?", a: "La interfaz está diseñada para equipos sin experiencia técnica previa. Cada rol accede solo a lo que le corresponde, lo que simplifica el aprendizaje. La mayoría del equipo opera con fluidez desde el primer día." },
   { q: "¿Qué pasa con los datos que tengo en papel o Excel?", a: "Te acompañamos en la migración inicial sin costo adicional. Cargamos los datos básicos de tus residentes para que el equipo parta con la plataforma al día desde el primer momento." },
   { q: "¿Puedo exportar mis datos si decido salir?", a: "Sí. Tus datos son tuyos. Puedes exportar fichas, registros clínicos y documentación en cualquier momento desde el panel, sin depender de nuestro equipo." },
@@ -160,7 +160,7 @@ function FaqItem({ q, a }) {
         aria-expanded={open}
       >
         <span className="font-semibold text-slate-800 text-sm leading-snug">{q}</span>
-        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-all ${open ? "bg-teal-100 rotate-180" : "bg-slate-100"}`}>
+        <div className={`w-6 h-6 rounded-xl flex items-center justify-center shrink-0 transition-all ${open ? "bg-teal-100 rotate-180" : "bg-slate-100"}`}>
           <Icon d="M19 9l-7 7-7-7" className={`w-3.5 h-3.5 ${open ? "text-teal-600" : "text-slate-400"}`} />
         </div>
       </button>
@@ -240,25 +240,25 @@ export default function LandingPage() {
           <div className="flex items-center gap-1">
             <button type="button"
               onClick={() => { navigate("/blog"); trackEvent("nav_click", "blog"); }}
-              className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all"
+              className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
             >
               Blog
             </button>
             <button type="button"
               onClick={() => { document.getElementById("precios")?.scrollIntoView({ behavior: "smooth" }); trackEvent("nav_click", "precios"); }}
-              className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all"
+              className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
             >
               Precios
             </button>
             <button type="button"
               onClick={() => { navigate("/login"); trackEvent("nav_click", "login"); }}
-              className="text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-lg hover:border-white/40 hover:text-white transition-all ml-1"
+              className="text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-xl hover:border-white/40 hover:text-white transition-all ml-1"
             >
               Iniciar sesión
             </button>
             <button type="button"
               onClick={() => openModal("nav_demo")}
-              className="hidden sm:inline-flex text-sm bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
+              className="hidden sm:inline-flex text-sm bg-teal-500 text-white px-4 py-2 rounded-xl hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
             >
               Solicitar Demo
             </button>

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useToast } from "../../../components/Toast";
 import Modal from "../../../components/Modal";
 import { friendlyError } from "../../../utils/errorMessages";
-import { formatDate, formatDateTime } from "../../../utils/dateUtils";
+import { formatDate } from "../../../utils/dateUtils";
 import {
   demoAccessToneClasses,
   demoGrantResultMessage,
@@ -10,22 +10,14 @@ import {
 } from "../utils/demoAccess";
 
 const ESTADO_LABELS = {
-  nuevo:           { txt: "Nuevo",           cls: "bg-sky-100 text-sky-700" },
-  contactado:      { txt: "Contactado",       cls: "bg-blue-100 text-blue-700" },
-  demo_activo:     { txt: "Demo en curso",    cls: "bg-teal-100 text-teal-700" },
-  demo_completado: { txt: "Demo completado",  cls: "bg-emerald-100 text-emerald-700" },
-  descartado:      { txt: "Descartado",       cls: "bg-slate-100 text-slate-500" },
-  convertido:      { txt: "Convertido",       cls: "bg-emerald-100 text-emerald-700" },
+  nuevo:       { txt: "Nuevo",            cls: "bg-sky-100 text-sky-700" },
+  contactado:  { txt: "Contactado",       cls: "bg-sky-100 text-sky-700" },
+  demo_activo: { txt: "Demo en curso",    cls: "bg-teal-100 text-teal-700" },
+  descartado:  { txt: "Descartado",       cls: "bg-slate-100 text-slate-500" },
+  convertido:  { txt: "Convertido",       cls: "bg-emerald-100 text-emerald-700" },
 };
 
 const ESTADOS = Object.keys(ESTADO_LABELS);
-
-function demoPct(progreso) {
-  if (!progreso) return 0;
-  const total = 6 + 4 + 4;
-  const done  = (progreso.admin_steps ?? 0) + (progreso.func_steps ?? 0) + (progreso.fam_steps ?? 0);
-  return Math.min(100, Math.round((done / total) * 100));
-}
 
 function copyToClipboard(text) {
   navigator.clipboard?.writeText(text).catch(() => {});
@@ -52,8 +44,6 @@ function ChevronIcon({ open }) {
 
 export default function LeadsPanel({
   leads,
-  activeInDemo,
-  contactRequests,
   loading,
   onGrantDemo,
   onUpdateLead,
@@ -67,9 +57,6 @@ export default function LeadsPanel({
   const [credenciales, setCredenciales] = useState(null);
   const [grantingLeadId, setGrantingLeadId] = useState(null);
 
-  const activeIds  = useMemo(() => new Set(activeInDemo.map((a) => a.id)), [activeInDemo]);
-  const contactIds = useMemo(() => new Set(contactRequests.map((c) => c.id)), [contactRequests]);
-
   const filtered = useMemo(() => leads.filter((l) => {
     if (filterEstado && l.estado !== filterEstado) return false;
     if (search.trim()) {
@@ -77,12 +64,7 @@ export default function LeadsPanel({
       if (!(l.nombre + l.email + (l.eleam_nombre ?? "")).toLowerCase().includes(s)) return false;
     }
     return true;
-  }).sort((a, b) => {
-    const aPri = contactIds.has(a.id) ? 0 : activeIds.has(a.id) ? 1 : 2;
-    const bPri = contactIds.has(b.id) ? 0 : activeIds.has(b.id) ? 1 : 2;
-    if (aPri !== bPri) return aPri - bPri;
-    return new Date(b.creado_en) - new Date(a.creado_en);
-  }), [leads, filterEstado, search, activeIds, contactIds]);
+  }).sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en)), [leads, filterEstado, search]);
 
   async function handleGrant(lead) {
     if (grantingLeadId) return;
@@ -165,7 +147,7 @@ export default function LeadsPanel({
                   <button
                     type="button"
                     onClick={() => { copyToClipboard(credenciales.temp_password); toast("Copiada", "success"); }}
-                    className="text-xs text-teal-700 border border-teal-200 bg-teal-50 rounded-lg px-2.5 py-1 hover:bg-teal-100 font-medium"
+                    className="text-xs text-teal-700 border border-teal-200 bg-teal-50 rounded-xl px-2.5 py-1 hover:bg-teal-100 font-medium"
                   >
                     Copiar
                   </button>
@@ -215,32 +197,6 @@ export default function LeadsPanel({
         </Modal>
       )}
 
-      {/* Alert banners */}
-      {(contactRequests.length > 0 || activeInDemo.length > 0) && (
-        <div className="flex flex-wrap gap-2">
-          {contactRequests.length > 0 && (
-            <div className="inline-flex items-center gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700">
-              <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-              </svg>
-              <span className="text-base font-bold tabular-nums">{contactRequests.length}</span>
-              solicitan contacto — aparecen al inicio
-            </div>
-          )}
-          {activeInDemo.length > 0 && (
-            <div className="inline-flex items-center gap-2.5 rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-2.5 text-xs font-semibold text-teal-700">
-              <span className="h-2 w-2 rounded-full bg-teal-500 animate-pulse shrink-0" />
-              <span className="text-base font-bold tabular-nums">{activeInDemo.length}</span>
-              en demo ahora:&nbsp;
-              {activeInDemo.slice(0, 2).map((a, i) => (
-                <span key={a.id}>{i > 0 ? ", " : ""}<strong>{a.nombre}</strong></span>
-              ))}
-              {activeInDemo.length > 2 && <span className="opacity-70"> +{activeInDemo.length - 2} más</span>}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Filters */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-48">
@@ -287,10 +243,7 @@ export default function LeadsPanel({
       ) : (
         <div className="space-y-2">
           {filtered.map((lead) => {
-            const isActive     = activeIds.has(lead.id);
-            const wantsContact = contactIds.has(lead.id);
             const estado       = ESTADO_LABELS[lead.estado] ?? ESTADO_LABELS.nuevo;
-            const pct          = demoPct(lead.demo_progreso);
             const isExpanded   = expanded === lead.id;
             const notesVal     = editNotes[lead.id] !== undefined ? editNotes[lead.id] : (lead.notas_admin ?? "");
             const accessState  = getDemoLeadAccessState(lead);
@@ -299,9 +252,7 @@ export default function LeadsPanel({
             return (
               <div
                 key={lead.id}
-                className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-colors ${
-                  wantsContact ? "border-rose-200" : isActive ? "border-teal-200" : "border-slate-100"
-                }`}
+                className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden"
               >
                 {/* Card header — clickable */}
                 <div
@@ -312,13 +263,6 @@ export default function LeadsPanel({
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded(isExpanded ? null : lead.id); } }}
                   className="p-4 cursor-pointer flex items-start gap-3 hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-inset"
                 >
-                  {/* Status dots column */}
-                  <div className="flex flex-col gap-1 pt-1 shrink-0 w-2.5">
-                    {wantsContact && <span className="w-2.5 h-2.5 rounded-full bg-rose-500" title="Solicita contacto" />}
-                    {isActive && <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" title="En demo ahora" />}
-                    {!wantsContact && !isActive && <span className="w-2.5 h-2.5 rounded-full bg-transparent" />}
-                  </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div>
@@ -336,38 +280,17 @@ export default function LeadsPanel({
                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${estado.cls}`}>
                           {estado.txt}
                         </span>
-                        {wantsContact && (
-                          <span className="bg-rose-100 text-rose-700 text-[11px] px-2 py-0.5 rounded-full font-semibold">
-                            Contacto
-                          </span>
-                        )}
-                        {isActive && (
-                          <span className="bg-teal-50 text-teal-700 text-[11px] px-2 py-0.5 rounded-full font-semibold border border-teal-200">
-                            En demo
-                          </span>
-                        )}
                         <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold border ${demoAccessToneClasses(accessState.tone)}`}>
                           {accessState.label}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 mt-1.5 flex-wrap">
-                      <span className="text-[11px] text-slate-400">
-                        {formatDate(lead.creado_en)}
-                        {lead.utm_source ? ` · ${lead.utm_source}` : ""}
-                        {lead.num_residentes ? ` · ${lead.num_residentes} res.` : ""}
-                      </span>
-                      {lead.demo_token && !lead.demo_user_id && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-slate-400">Demo guiado</span>
-                          <div className="w-16 bg-slate-100 rounded-full h-1.5">
-                            <div className="bg-teal-500 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="text-[11px] text-teal-700 font-medium">{pct}%</span>
-                        </div>
-                      )}
-                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5">
+                      {formatDate(lead.creado_en)}
+                      {lead.utm_source ? ` · ${lead.utm_source}` : ""}
+                      {lead.num_residentes ? ` · ${lead.num_residentes} res.` : ""}
+                    </p>
                   </div>
 
                   <ChevronIcon open={isExpanded} />
@@ -376,25 +299,16 @@ export default function LeadsPanel({
                 {/* Expanded content */}
                 {isExpanded && (
                   <div className="border-t border-slate-100 p-4 space-y-4 bg-slate-50/70">
-                    {/* Contact request message */}
-                    {wantsContact && lead.solicita_contacto_mensaje && (
-                      <div className="bg-rose-50 border border-rose-200 rounded-xl p-3">
-                        <p className="text-xs font-semibold text-rose-800 mb-1">Mensaje del prospecto:</p>
-                        <p className="text-sm text-rose-700 leading-snug">{lead.solicita_contacto_mensaje}</p>
-                        <p className="text-[11px] text-rose-400 mt-1.5">{formatDateTime(lead.solicita_contacto_en)}</p>
-                      </div>
-                    )}
-
                     {/* Stats grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {[ 
+                      {[
                         { label: "Cargo", value: lead.cargo },
                         { label: "Residentes", value: lead.num_residentes ?? "—" },
                         { label: "Origen", value: lead.utm_source ?? lead.referrer ?? "Directo" },
                         { label: "Acceso demo", value: accessState.label },
                         { label: "Demo expira", value: formatDate(lead.demo_expires_at) },
                       ].map(({ label, value }) => (
-                        <div key={label} className="bg-white rounded-lg border border-slate-100 px-2.5 py-2">
+                        <div key={label} className="bg-white rounded-xl border border-slate-100 px-2.5 py-2">
                           <p className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">{label}</p>
                           <p className="text-xs font-medium text-slate-700 mt-0.5">{value ?? "—"}</p>
                         </div>
@@ -452,20 +366,6 @@ export default function LeadsPanel({
                           className="bg-slate-700 text-white text-sm px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors"
                         >
                           Guardar notas
-                        </button>
-                      )}
-
-                      {lead.solicita_contacto && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onUpdateLead(lead.id, { solicita_contacto: false }).then(() =>
-                              toast("Marcado como contactado", "success"),
-                            )
-                          }
-                          className="bg-emerald-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-emerald-700 transition-colors"
-                        >
-                          Marcar contactado
                         </button>
                       )}
                     </div>

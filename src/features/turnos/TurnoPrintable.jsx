@@ -60,18 +60,24 @@ export default function TurnoPrintable() {
       }
     >
       {loading ? (
-        <div className="h-80 animate-pulse rounded-3xl bg-slate-100" />
+        <div className="h-80 animate-pulse rounded-2xl bg-slate-100" />
       ) : error || !item ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {error || "Entrega no encontrada."}
         </div>
       ) : (
-        <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print:border-0 print:shadow-none">
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:border-0 print:shadow-none">
           <div className="grid gap-4 md:grid-cols-5">
             <PrintMetric label="Residentes activos" value={item.resumen_json?.residentes_activos ?? 0} />
             <PrintMetric label="Sin signos hoy" value={item.resumen_json?.sin_signos_hoy?.length ?? 0} />
             <PrintMetric label="Alertas clínicas" value={item.resumen_json?.signos_atencion?.length ?? 0} />
-            <PrintMetric label="Tareas pendientes" value={item.resumen_json?.tareas_cuidado?.resumen?.pendiente ?? 0} />
+            <PrintMetric
+              label="Tareas pendientes"
+              value={
+                item.resumen_json?.tareas_cuidado?.resumen?.pendientes_operativos
+                ?? ((item.resumen_json?.tareas_cuidado?.resumen?.pendiente ?? 0) + (item.resumen_json?.tareas_cuidado?.resumen?.reprogramada ?? 0))
+              }
+            />
             <PrintMetric label="eMAR pendiente" value={(item.resumen_json?.emar?.resumen?.pendiente ?? 0) + (item.resumen_json?.emar?.resumen?.pendiente_validacion ?? 0)} />
           </div>
 

@@ -3,17 +3,10 @@ import { useNavigate } from "react-router-dom";
 import Loading from "../../components/Loading";
 import SuperAdminMetrics from "./components/SuperAdminMetrics";
 import CrmPipeline from "./components/CrmPipeline";
-import { getActiveInDemo, getAllEleams, getContactRequests, getCrmTasks, getMetrics } from "./superadminService";
+import { getAllEleams, getCrmTasks, getMetrics } from "./superadminService";
 import { daysUntil, formatDate } from "./utils/superadminFormatters";
 
 // Icons
-function IconPhone() {
-  return (
-    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
-    </svg>
-  );
-}
 function IconWarning() {
   return (
     <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -42,14 +35,6 @@ function IconArrowRight() {
     </svg>
   );
 }
-function IconCheck() {
-  return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-    </svg>
-  );
-}
-
 // Alert strip: items that require immediate attention
 function AlertItem({ icon, count, label, sub, color, onClick }) {
   const colorMap = {
@@ -80,7 +65,7 @@ function OverdueTaskRow({ task }) {
   const d = daysUntil(task.fecha_vencimiento);
   return (
     <div className="flex items-start gap-2.5 py-2 border-b border-slate-50 last:border-0">
-      <div className="shrink-0 mt-0.5 w-5 h-5 rounded-md bg-rose-100 flex items-center justify-center">
+      <div className="shrink-0 mt-0.5 w-5 h-5 rounded-xl bg-rose-100 flex items-center justify-center">
         <IconWarning />
       </div>
       <div className="min-w-0 flex-1">
@@ -100,7 +85,7 @@ function RenewalRow({ eleam }) {
   const urgent = d != null && d <= 7;
   return (
     <div className="flex items-start gap-2.5 py-2 border-b border-slate-50 last:border-0">
-      <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-md flex items-center justify-center ${urgent ? "bg-rose-100" : "bg-amber-100"}`}>
+      <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-xl flex items-center justify-center ${urgent ? "bg-rose-100" : "bg-amber-100"}`}>
         <IconClock />
       </div>
       <div className="min-w-0 flex-1">
@@ -108,24 +93,6 @@ function RenewalRow({ eleam }) {
         <p className={`text-xs font-medium ${urgent ? "text-rose-600" : "text-amber-700"}`}>
           Vence {d === 0 ? "hoy" : d === 1 ? "mañana" : `en ${d} días`}
           <span className="text-slate-400 font-normal"> · {formatDate(eleam.fecha_vencimiento_suscripcion)}</span>
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// Contact request row
-function ContactRow({ lead }) {
-  return (
-    <div className="flex items-start gap-2.5 py-2 border-b border-slate-50 last:border-0">
-      <div className="shrink-0 mt-0.5 w-5 h-5 rounded-md bg-rose-100 flex items-center justify-center">
-        <IconPhone />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-slate-800 truncate">{lead.nombre}</p>
-        <p className="text-xs text-slate-500 truncate">
-          {lead.eleam_nombre ?? "Sin ELEAM"}
-          {lead.cargo ? <span className="text-slate-400"> · {lead.cargo}</span> : null}
         </p>
       </div>
     </div>
@@ -178,8 +145,6 @@ export default function SuperAdminDashboard() {
   const [metrics, setMetrics] = useState(null);
   const [eleams, setEleams] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [activeInDemo, setActiveInDemo] = useState([]);
-  const [contactRequests, setContactRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -190,18 +155,14 @@ export default function SuperAdminDashboard() {
     else setLoading(true);
     setError("");
     try {
-      const [m, e, t, active, contacts] = await Promise.all([
+      const [m, e, t] = await Promise.all([
         getMetrics(),
         getAllEleams(),
         getCrmTasks({ soloPendientes: true, limit: 80 }),
-        getActiveInDemo(),
-        getContactRequests(),
       ]);
       setMetrics(m);
       setEleams(e);
       setTasks(t);
-      setActiveInDemo(active);
-      setContactRequests(contacts);
       setLastUpdated(new Date());
     } catch (err) {
       console.error(err);
@@ -232,16 +193,12 @@ export default function SuperAdminDashboard() {
 
   const alertItems = useMemo(() => {
     const items = [];
-    if (contactRequests.length > 0)
-      items.push({ key: "contacts", icon: <IconPhone />, count: contactRequests.length, label: "Solicitan contacto", color: "rose", onClick: () => navigate("/superadmin/leads") });
     if (overdueTasks.length > 0)
       items.push({ key: "tasks", icon: <IconWarning />, count: overdueTasks.length, label: "Tareas vencidas", color: "amber", onClick: () => navigate("/superadmin/tareas") });
     if (renewals.length > 0)
       items.push({ key: "renewals", icon: <IconClock />, count: renewals.length, label: "Renuevan en 14 días", sub: renewals[0] ? `próximo: ${renewals[0].nombre}` : null, color: "sky", onClick: () => navigate("/superadmin/clientes") });
-    if (activeInDemo.length > 0)
-      items.push({ key: "demo", icon: <IconCheck />, count: activeInDemo.length, label: "En demo ahora", color: "emerald", onClick: () => navigate("/superadmin/leads") });
     return items;
-  }, [contactRequests, overdueTasks, renewals, activeInDemo, navigate]);
+  }, [overdueTasks, renewals, navigate]);
 
   if (loading) return <Loading message="Cargando resumen superadmin..." />;
 
@@ -299,8 +256,6 @@ export default function SuperAdminDashboard() {
 
       {/* Metrics */}
       <SuperAdminMetrics
-        leadsNuevos={contactRequests.length}
-        activeInDemoCount={activeInDemo.length}
         metrics={metrics}
         onFilterRisk={() => navigate("/superadmin/clientes")}
         onFilterLeads={() => navigate("/superadmin/leads")}
@@ -325,7 +280,7 @@ export default function SuperAdminDashboard() {
       </section>
 
       {/* Bottom action grid */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <ActionCard
           title="Tareas vencidas"
           count={overdueTasks.length}
@@ -345,16 +300,6 @@ export default function SuperAdminDashboard() {
           emptyText="Sin renovaciones en 14 días"
           onAction={() => navigate("/superadmin/clientes")}
           actionLabel="Ver cartera"
-        />
-        <ActionCard
-          title="Solicitan contacto"
-          count={contactRequests.length}
-          color="rose"
-          items={contactRequests}
-          renderRow={(l) => <ContactRow key={l.id} lead={l} />}
-          emptyText="Sin solicitudes de contacto"
-          onAction={() => navigate("/superadmin/leads")}
-          actionLabel="Ver leads"
         />
       </div>
     </div>

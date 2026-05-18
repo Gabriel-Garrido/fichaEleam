@@ -79,7 +79,8 @@ export default function AdminDashboard() {
     const emarValidation = data?.operationalSummary?.emar?.pendiente_validacion ?? 0;
     const emarOverdue = data?.operationalSummary?.emar?.vencidas ?? 0;
     const careOverdue = data?.operationalSummary?.care?.vencidas ?? 0;
-    const carePending = data?.operationalSummary?.care?.pendiente ?? 0;
+    const carePending = data?.operationalSummary?.care?.pendientes_operativos
+      ?? ((data?.operationalSummary?.care?.pendiente ?? 0) + (data?.operationalSummary?.care?.reprogramada ?? 0));
     const totalAlerts =
       clinicalSummary.critical +
       clinicalSummary.warning +
@@ -339,7 +340,7 @@ function OperationalTurnPanel({ loading, summary, navigate }) {
   const care = summary.care ?? {};
   const emar = summary.emar ?? {};
   const emarPending = (emar.pendiente ?? 0) + (emar.pendiente_validacion ?? 0);
-  const carePending = care.pendiente ?? 0;
+  const carePending = care.pendientes_operativos ?? ((care.pendiente ?? 0) + (care.reprogramada ?? 0));
   const emarTone = (emar.vencidas ?? 0) || (emar.pendiente_validacion ?? 0) ? "rose" : emarPending ? "amber" : "emerald";
   const careTone = (care.vencidas ?? 0) ? "rose" : carePending ? "amber" : "emerald";
 
@@ -357,7 +358,7 @@ function OperationalTurnPanel({ loading, summary, navigate }) {
         title="Tareas de cuidado"
         value={carePending}
         tone={careTone}
-        sub={`${care.cumplida ?? 0} cumplidas · ${care.omitida ?? 0} omitidas · ${care.vencidas ?? 0} vencidas`}
+        sub={`${care.pendiente ?? 0} pendientes · ${care.reprogramada ?? 0} reprogramadas · ${care.vencidas ?? 0} vencidas`}
         action="Abrir tareas"
         onClick={() => navigate("/turnos/tareas")}
       />

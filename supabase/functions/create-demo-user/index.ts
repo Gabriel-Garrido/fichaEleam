@@ -22,7 +22,8 @@ import {
 } from "../_shared/authUsers.ts";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-const AUTHORIZABLE_STATES = new Set(["nuevo", "contactado", "demo_activo", "demo_completado"]);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const AUTHORIZABLE_STATES = new Set(["nuevo", "contactado", "demo_activo"]);
 
 function success(req: Request, code: string, message: string, payload: Record<string, unknown> = {}) {
   return jsonResponse(req, {
@@ -108,13 +109,16 @@ Deno.serve(async (req) => {
     if (!leadId) {
       return fail(req, "validation_error", "lead_id es obligatorio", 400);
     }
+    if (!UUID_RE.test(leadId)) {
+      return fail(req, "validation_error", "lead_id tiene formato inválido", 400);
+    }
 
     const sb = adminClient();
 
     // Obtener datos del lead
     const { data: lead, error: leadErr } = await sb
       .from("demo_leads")
-      .select("id, nombre, email, eleam_nombre, estado, demo_token, demo_expires_at, demo_user_id")
+      .select("id, nombre, email, eleam_nombre, estado, demo_expires_at, demo_user_id")
       .eq("id", leadId)
       .maybeSingle();
 

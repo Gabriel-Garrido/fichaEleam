@@ -5,8 +5,6 @@ import LeadsPanel from "./components/LeadsPanel";
 import LandingMetrics from "./components/LandingMetrics";
 import SuperAdminPageHeader from "./components/SuperAdminPageHeader";
 import {
-  getActiveInDemo,
-  getContactRequests,
   getLandingMetrics,
   getLeads,
   grantDemoAccess,
@@ -16,27 +14,17 @@ import {
 export default function SuperAdminLeads() {
   const [tab, setTab] = useState("leads");
   const [leads, setLeads] = useState([]);
-  const [activeInDemo, setActiveInDemo] = useState([]);
-  const [contactRequests, setContactRequests] = useState([]);
   const [landingMetrics, setLandingMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const metricsLoadedRef = useRef(false);
 
-  // Carga rápida: leads + estado en vivo. Metrics se cargan aparte al cambiar de tab.
   const loadCore = useCallback(async (filters = {}, silent = false) => {
     if (silent) setRefreshing(true);
     else setLoading(true);
     try {
-      const [l, active, contacts] = await Promise.all([
-        getLeads(filters),
-        getActiveInDemo(),
-        getContactRequests(),
-      ]);
-      setLeads(l);
-      setActiveInDemo(active);
-      setContactRequests(contacts);
+      setLeads(await getLeads(filters));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -82,7 +70,7 @@ export default function SuperAdminLeads() {
     <div className="mx-auto max-w-7xl px-4 py-6">
       <SuperAdminPageHeader
         title="Leads y demo"
-        description="Prospectos captados desde la landing, actividad del demo guiado y métricas de conversión."
+        description="Solicitudes de demo captadas desde la landing y métricas de conversión."
         actions={
           <button
             type="button"
@@ -127,19 +115,6 @@ export default function SuperAdminLeads() {
             )}
           </button>
         ))}
-
-        {!loading && contactRequests.length > 0 && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-1 text-[11px] font-semibold text-rose-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            {contactRequests.length} solicitan contacto
-          </span>
-        )}
-        {!loading && activeInDemo.length > 0 && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 border border-teal-200 px-2.5 py-1 text-[11px] font-semibold text-teal-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
-            {activeInDemo.length} en demo ahora
-          </span>
-        )}
       </div>
 
       {tab === "leads" ? (
@@ -148,8 +123,6 @@ export default function SuperAdminLeads() {
         ) : (
           <LeadsPanel
             leads={leads}
-            activeInDemo={activeInDemo}
-            contactRequests={contactRequests}
             loading={false}
             onGrantDemo={handleGrantDemo}
             onUpdateLead={handleUpdateLead}
@@ -159,7 +132,7 @@ export default function SuperAdminLeads() {
       ) : metricsLoading ? (
         <Loading message="Cargando métricas..." />
       ) : (
-        <LandingMetrics metrics={landingMetrics} activeInDemo={activeInDemo} />
+        <LandingMetrics metrics={landingMetrics} />
       )}
     </div>
   );

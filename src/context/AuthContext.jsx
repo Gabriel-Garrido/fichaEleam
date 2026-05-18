@@ -17,7 +17,6 @@ const FAIL_CLOSED_PERMS = new Set([
   "ajustar_stock_medicamentos",
   "crear_indicaciones_medicamentos",
   "editar_indicaciones_medicamentos",
-  "completar_tareas_cuidado",
   "editar_indicaciones_cuidado",
 ]);
 const AUTH_NOTICE_STORAGE_KEY = "fichaeleam_auth_notice";
@@ -49,13 +48,13 @@ export function AuthProvider({ children }) {
   const [supabaseError, setSupabaseError]   = useState(false);
   const [authNotice, setAuthNotice]         = useState(() => takeStoredAuthNotice());
 
-  const fetchProfileAndEleam = useCallback(async (authUser) => {
+  const fetchProfileAndEleam = useCallback(async (authUser, { silent = false } = {}) => {
     if (!supabase) return;
     const userId = typeof authUser === "string" ? authUser : authUser?.id;
     const userEmail = typeof authUser === "string" ? "" : authUser?.email;
     if (!userId) return;
 
-    setProfileLoading(true);
+    if (!silent) setProfileLoading(true);
     setAuthNotice(null);
     try {
       // El profile y el ELEAM (si corresponde) los crea el trigger
@@ -149,16 +148,7 @@ export function AuthProvider({ children }) {
       if (data.rol === "funcionario") {
         const { data: perms } = await supabase
           .from("funcionario_permisos")
-          .select(`
-            profile_id, crear_residentes, editar_residentes, eliminar_residentes,
-            crear_signos_vitales, editar_signos_vitales, eliminar_signos_vitales,
-            crear_observaciones, editar_observaciones, eliminar_observaciones,
-            subir_acreditacion, editar_acreditacion, archivar_acreditacion,
-            registrar_visitas, crear_planes_cuidado, editar_planes_cuidado,
-            completar_tareas_cuidado, crear_indicaciones_medicamentos,
-            editar_indicaciones_medicamentos, administrar_medicamentos,
-            validar_medicamentos_controlados, ajustar_stock_medicamentos
-          `)
+          .select("*")
           .eq("profile_id", data.id)
           .maybeSingle();
         setPermisos(perms ?? null);
@@ -167,7 +157,7 @@ export function AuthProvider({ children }) {
       }
 
       // Permisos por feature: controlan sidebar y acceso directo a rutas.
-      // Fallan abierto para no bloquear usuarios antes de ejecutar la migración.
+      // Una fila ausente significa feature habilitada por defecto.
       try {
         if (data.eleam_id && data.rol !== "superadmin") {
           const profileFeatureQuery = data.rol === "funcionario" || data.rol === "familiar"
@@ -204,7 +194,7 @@ export function AuthProvider({ children }) {
       console.warn("No se pudo cargar el perfil:", error);
       setAuthNotice("Iniciaste sesión, pero no pudimos cargar todos los datos de tu cuenta.");
     } finally {
-      setProfileLoading(false);
+      if (!silent) setProfileLoading(false);
     }
   }, []);
 
@@ -227,10 +217,14 @@ export function AuthProvider({ children }) {
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
-          fetchProfileAndEleam(session.user);
+          if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+            fetchProfileAndEleam(session.user);
+          } else if (event === "TOKEN_REFRESHED") {
+            fetchProfileAndEleam(session.user, { silent: true });
+          }
         } else {
           setProfile(null);
           setEleam(null);
@@ -247,6 +241,7 @@ export function AuthProvider({ children }) {
   // El pago se considera activo si:
   //  - el usuario es superadmin, o
   //  - el ELEAM está en estado 'activo' o 'en_gracia', o
+  //  - el ELEAM demo inició un pago y sigue dentro del período demo, o
   //  - el ELEAM está 'cancelado' pero todavía dentro del período pagado
   //    (fecha_vencimiento_suscripcion futura).
   // Esto coincide con el trigger sync_pago_activo del backend.
@@ -258,10 +253,17 @@ export function AuthProvider({ children }) {
     eleamGraceUntil instanceof Date &&
     !Number.isNaN(eleamGraceUntil.valueOf()) &&
     eleamGraceUntil > new Date();
+  const pendingDemoAccess =
+    eleam?.plan === "demo" &&
+    eleam?.subscription_status === "pendiente" &&
+    eleamGraceUntil instanceof Date &&
+    !Number.isNaN(eleamGraceUntil.valueOf()) &&
+    eleamGraceUntil > new Date();
 
   const pagoActivo =
     profile?.rol === "superadmin" ||
     ["activo", "en_gracia"].includes(eleam?.subscription_status) ||
+    pendingDemoAccess ||
     inGrace ||
     eleam?.pago_activo === true;
 

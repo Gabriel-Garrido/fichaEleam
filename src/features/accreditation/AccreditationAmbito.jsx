@@ -97,8 +97,16 @@ function requisitoPriorityScore(re) {
   return estadoScore + vencScore + evidenceScore;
 }
 
-function FocusRequirement({ requisito, onOpen }) {
+function FocusRequirement({ requisito, total, onOpen }) {
   if (!requisito) {
+    if (total === 0) {
+      return (
+        <section className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Este ámbito existe en el catálogo, pero aún no tiene requisitos provisionados para el ELEAM. Vuelve a la carpeta SEREMI e inicializa los requisitos.
+        </section>
+      );
+    }
+
     return (
       <section className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
         Este ámbito no tiene pendientes críticos. Puedes revisar requisitos cumplidos o volver a la carpeta.
@@ -230,6 +238,7 @@ export default function AccreditationAmbito() {
 
       <FocusRequirement
         requisito={nextRequisito}
+        total={requisitos.length}
         onOpen={() => navigate(`/accreditation/requisito/${nextRequisito.id}`)}
       />
 
@@ -259,7 +268,9 @@ export default function AccreditationAmbito() {
       {/* Lista */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-500">
-          No hay requisitos en este filtro.
+          {requisitos.length === 0
+            ? "Este ámbito aún no tiene requisitos provisionados para este ELEAM."
+            : "No hay requisitos en este filtro."}
         </div>
       ) : (
         <div className="space-y-3">

@@ -27,6 +27,7 @@ npm run dev       # Desarrollo con HMR
 npm run build     # Build de producción en /dist
 npm run lint      # ESLint
 npm run test:run  # Tests unitarios Vitest
+npm run test:contracts # Auditoría frontend-backend Supabase
 npm run preview   # Preview local del build
 ```
 
@@ -109,7 +110,7 @@ Los correos de recuperación de contraseña, confirmación de email o magic link
 
 1. Crea un proyecto en Supabase.
 2. Copia `Project URL` y `anon public key` a `.env`.
-3. Ejecuta `supabase_schema.sql` completo en SQL Editor.
+3. Ejecuta `supabase_schema.sql` completo en SQL Editor. Es la única fuente SQL canónica del proyecto.
 4. Crea el bucket privado `documentos-acreditacion` si la sección Storage falla por permisos.
 5. Instala y enlaza CLI:
 
@@ -118,7 +119,7 @@ npx supabase login
 npx supabase link --project-ref <TU_PROJECT_REF>
 ```
 
-El schema es idempotente: puede re-ejecutarse. Incluye tablas base, RLS, triggers, seeds, permisos de funcionarios, permisos por feature, leads de landing y analytics.
+El schema es idempotente: puede re-ejecutarse. Incluye tablas base, RLS, triggers, seeds, permisos de funcionarios, permisos por feature, leads de landing y analytics. `supabase_schema.sql` completo es la única fuente SQL operativa del proyecto.
 
 Cuando cambie el flujo de autenticación, re-ejecuta el schema antes de desplegar las Edge Functions. `handle_new_user` depende de `app_metadata` server-side y rechazará registros/OAuth sin invitación válida.
 
@@ -330,10 +331,12 @@ Estados derivados usados por UI:
 
 ## Base de Datos
 
-`supabase_schema.sql` crea 26 tablas:
+`supabase_schema.sql` crea 38 tablas:
 
 - Multi-tenant: `profiles`, `eleams`, `planes`.
 - Clínica: `residentes`, `signos_vitales`, `observaciones_diarias`, `turno_entregas`.
+- Plan de cuidado: `planes_cuidado`, `plan_cuidado_actividades`, `plan_cuidado_horarios`, `tareas_cuidado`, `plan_cuidado_audit`.
+- eMAR: `medicamentos_indicaciones`, `medicamentos_horarios`, `medicamentos_administraciones`, `medicamentos_stock_lotes`, `medicamentos_stock_movimientos`, `medicamentos_conciliaciones`, `medicamentos_audit`.
 - Equipo: `funcionario_invitaciones` (accesos Google pendientes), `funcionario_permisos`, `eleam_feature_permissions`, `profile_feature_permissions`, `familiar_residentes`, `visitas_familiar`.
 - Pagos: `pagos`, `mp_webhook_events`.
 - Acreditación: `acred_ambitos`, `acred_requisitos`, `acred_requisitos_eleam`, `acred_documentos`, `acred_observaciones`, `acred_audit`.
@@ -355,6 +358,9 @@ Permisos actuales:
 - `crear_residentes`, `editar_residentes`, `eliminar_residentes`
 - `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales`
 - `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones`
+- `crear_planes_cuidado`, `editar_planes_cuidado`, `completar_tareas_cuidado`, `editar_indicaciones_cuidado`
+- `crear_indicaciones_medicamentos`, `editar_indicaciones_medicamentos`, `administrar_medicamentos`
+- `validar_medicamentos_controlados`, `ajustar_stock_medicamentos`
 - `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion`
 - `registrar_visitas`
 
@@ -369,7 +375,7 @@ Tablas:
 
 Reglas:
 
-- Si no existe una fila, la feature queda habilitada por defecto para conservar compatibilidad.
+- Si no existe una fila, la feature queda habilitada por defecto.
 - Si superadmin bloquea una feature para un rol del ELEAM, el admin ELEAM no puede habilitarla en usuarios.
 - La navegación usa `useAuth().canFeature(featureId)` y las rutas usan `ProtectedRoute requiredFeature`.
 - La función SQL `public.can_access_feature(feature_id)` queda disponible para políticas RLS específicas cuando una feature requiera validación server-side adicional.
@@ -390,6 +396,7 @@ Reglas:
 ```bash
 npm run lint
 npm run test:run
+npm run test:contracts
 npm run build
 npx supabase functions list
 ```
@@ -400,8 +407,7 @@ Después de cambios en autenticación/autorización:
 2. Despliega Edge Functions actualizadas:
 
 ```bash
-npx supabase functions deploy create-demo-user
-npx supabase functions deploy create-staff-user
+npx supabase functions deploy
 ```
 
 Smoke manual recomendado para demo/login:

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
-import { authErrorMessage, isPendingDemoError, login, loginWithGoogle } from "./authService";
+import { authErrorMessage, getDemoRequestStatus, isPendingDemoError, login, loginWithGoogle } from "./authService";
 import { useAuth, useLoading } from "../../context/AuthContext";
 import { isSupabaseConfigured, supabaseConfigError } from "../../services/supabaseConfig";
 import Loading from "../../components/Loading";
@@ -37,9 +37,9 @@ function DemoPendingNotice({ onHome }) {
             </svg>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-amber-950">Tu demo está registrado</p>
+            <p className="text-sm font-bold text-amber-950">Tu solicitud de demo está en revisión</p>
             <p className="mt-1 text-sm leading-relaxed text-amber-900">
-              El inicio de sesión se habilita cuando el equipo aprueba una cuenta demo para este correo. No necesitas crear otra solicitud.
+              Revisamos cada solicitud y habilitamos tu cuenta dentro de las próximas 24 horas. Cuando esté lista te enviaremos tus credenciales por correo. No necesitas crear otra solicitud.
             </p>
           </div>
         </div>
@@ -61,11 +61,11 @@ function DemoPendingNotice({ onHome }) {
       </div>
 
       <div className="flex flex-col gap-2 border-t border-amber-200 bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-amber-900">Si ya estás explorando el demo guiado, ese enlace no reemplaza el login con cuenta aprobada.</p>
+        <p className="text-xs text-amber-900">Te avisaremos por correo apenas tu demo esté habilitado.</p>
         <button
           type="button"
           onClick={onHome}
-          className="shrink-0 rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950"
+          className="shrink-0 rounded-xl bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950"
         >
           Volver al inicio
         </button>
@@ -157,7 +157,14 @@ export default function Login() {
       await login({ email, password });
     } catch (err) {
       console.warn("Error de login:", err);
-      setError(authErrorMessage(err, "No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente."));
+      // Si el correo tiene una solicitud de demo aún sin habilitar, mostramos
+      // el aviso claro en vez de un error genérico de credenciales.
+      const demoStatus = await getDemoRequestStatus(email).catch(() => "none");
+      if (demoStatus === "pendiente") {
+        setDemoPending(true);
+      } else {
+        setError(authErrorMessage(err, "No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente."));
+      }
     } finally {
       setLoading(false);
     }

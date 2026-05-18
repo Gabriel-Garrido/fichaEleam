@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:contracts": "node scripts/check-supabase-contracts.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

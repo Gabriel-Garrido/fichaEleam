@@ -92,7 +92,7 @@ export default function SuperAdminPermisos() {
       {notice && <div className="mb-4 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-800">{notice}</div>}
 
       <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Buscar ELEAM</label>
           <input
             value={query}
@@ -116,7 +116,7 @@ export default function SuperAdminPermisos() {
         </aside>
 
         <section>
-          <div className="mb-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-slate-950">{selectedEleam?.nombre ?? "Selecciona un ELEAM"}</h2>

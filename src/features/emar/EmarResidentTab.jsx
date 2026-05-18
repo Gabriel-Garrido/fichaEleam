@@ -303,6 +303,8 @@ export default function EmarResidentTab({ resident }) {
           </div>
         )}
 
+        <EmarResidentWorkflow />
+
         {activeIndications.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
             <h3 className="text-sm font-semibold text-slate-950">Configura la primera indicación</h3>
@@ -354,7 +356,12 @@ export default function EmarResidentTab({ resident }) {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold text-slate-950">Stock por lote</h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-semibold text-slate-950">Stock por lote</h2>
+                <HelpTooltip label="Ayuda: stock eMAR">
+                  Cada administración con stock obligatorio descuenta del lote seleccionado. Editar un lote no cambia cantidades; las cantidades se mueven con acciones auditadas.
+                </HelpTooltip>
+              </div>
               <p className="text-sm text-slate-500">Entradas, salidas y ajustes quedan auditados por movimiento.</p>
             </div>
             {canAdjustStock && data.lotes.length > 0 && (
@@ -390,7 +397,12 @@ export default function EmarResidentTab({ resident }) {
 
         <div className="space-y-5">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-slate-950">Controlados</h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-base font-semibold text-slate-950">Controlados</h2>
+              <HelpTooltip label="Ayuda: controlados eMAR">
+                Los controlados requieren lote marcado como controlado. La administración queda por validar y las diferencias de stock se corrigen mediante conciliación.
+              </HelpTooltip>
+            </div>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <MiniMetric label="Lotes" value={controlledLots.length} />
               <MiniMetric label="Por validar" value={pendingReconciliations.length} tone={pendingReconciliations.length ? "amber" : "emerald"} />
@@ -467,6 +479,31 @@ export default function EmarResidentTab({ resident }) {
   );
 }
 
+function EmarResidentWorkflow() {
+  const steps = [
+    ["Indicación", "Define medicamento, dosis, vía, prescriptor y vigencia clínica."],
+    ["Horarios", "Cada horario crea administraciones en el turno correspondiente."],
+    ["Stock", "Los lotes alimentan el inventario que se descuenta al administrar."],
+    ["Controlados", "Psicotrópicos y estupefacientes exigen lote controlado, conciliación y segundo usuario."],
+  ];
+
+  return (
+    <div className="mt-4 grid gap-3 lg:grid-cols-4">
+      {steps.map(([title, text], index) => (
+        <div key={title} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-teal-50 text-xs font-semibold text-teal-700">
+              {index + 1}
+            </span>
+            <span className="text-sm font-semibold text-slate-950">{title}</span>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">{text}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot }) {
   const needsStock = item.requiere_stock || item.es_controlado;
   const hasStock = Number(stock?.cantidad ?? 0) > 0;
@@ -483,11 +520,26 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
                 Controlado
               </span>
             )}
+            {item.requiere_stock && (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                Stock obligatorio
+              </span>
+            )}
+            {item.requiere_doble_validacion && (
+              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                Doble validación
+              </span>
+            )}
             {item.fecha_fin && (
               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
                 Hasta {formatDateOnly(item.fecha_fin)}
               </span>
             )}
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+              item.visible_familiar ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
+            }`}>
+              {item.visible_familiar ? "Visible familia" : "Interno"}
+            </span>
           </div>
           <h3 className="mt-2 text-sm font-semibold text-slate-950">{item.medicamento_nombre}</h3>
           <p className="mt-1 text-sm text-slate-600">
@@ -498,6 +550,11 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
               {hasStock
                 ? `Stock disponible: ${stock.cantidad} ${stock.unidad}`
                 : "Sin stock disponible para esta indicación"}
+            </p>
+          )}
+          {needsStock && !hasStock && (
+            <p className="mt-1 text-xs text-slate-500">
+              En el turno no se podrá administrar hasta registrar un lote activo con cantidad disponible.
             </p>
           )}
           {item.instrucciones && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.instrucciones}</p>}
@@ -512,12 +569,12 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
         <div className="flex shrink-0 flex-wrap gap-2">
           {canAdjustStock && (
             <button type="button" onClick={onNewLot} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              Lote
+              Agregar lote
             </button>
           )}
           {canEdit && (
             <button type="button" onClick={onEdit} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
-              Editar
+              Editar indicación
             </button>
           )}
         </div>
@@ -638,7 +695,12 @@ function ScheduleFields({ schedule, setSchedule, saving, title = "Horario", onRe
   return (
     <div className="rounded-2xl border border-slate-200 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-slate-950">{title}</div>
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-950">
+          {title}
+          <HelpTooltip label="Ayuda: horario eMAR">
+            La frecuencia define cuándo se genera la administración. La tolerancia indica cuántos minutos puede pasar la hora antes de marcar la dosis como vencida.
+          </HelpTooltip>
+        </div>
         {onRemove && (
           <button
             type="button"
@@ -677,7 +739,7 @@ function ScheduleFields({ schedule, setSchedule, saving, title = "Horario", onRe
           </select>
         </label>
         <Field label="Hora" type="time" value={schedule.hora} onChange={(value) => setSchedule((p) => ({ ...p, hora: value }))} disabled={saving} />
-        <Field label="Tolerancia (min)" type="number" min="0" step="5" value={schedule.tolerancia_min} onChange={(value) => setSchedule((p) => ({ ...p, tolerancia_min: value }))} disabled={saving} />
+        <Field label="Tolerancia antes de vencer (min)" type="number" min="0" step="5" value={schedule.tolerancia_min} onChange={(value) => setSchedule((p) => ({ ...p, tolerancia_min: value }))} disabled={saving} />
       </div>
 
       {schedule.frecuencia === "semanal" && (
@@ -746,6 +808,7 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
       tipo_controlado: checked ? prev.tipo_controlado || "psicotropico" : "psicotropico",
     }));
   };
+  const familySummaryMissing = indication.visible_familiar && !indication.resumen_familiar?.trim();
 
   return (
     <Modal isOpen={!!modal} onClose={onClose} title={indication.id ? "Editar indicación" : "Nueva indicación"}>
@@ -756,6 +819,13 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
           onSubmit({ indication: { ...indication, schedules }, schedule: schedules });
         }}
       >
+        <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
+          <div className="font-semibold">Cómo impacta esta indicación</div>
+          <p className="mt-1 text-xs leading-relaxed">
+            Al guardar, cada horario activo generará dosis en eMAR para la fecha y turno correspondiente. Si marcas stock obligatorio, el turno exigirá un lote activo antes de administrar.
+          </p>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <Field label="Medicamento" value={indication.medicamento_nombre} onChange={(value) => setIndication((p) => ({ ...p, medicamento_nombre: value }))} disabled={saving} required />
@@ -781,38 +851,57 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
           <div className="col-span-2">
             <TextArea label="Instrucciones" value={indication.instrucciones ?? ""} onChange={(value) => setIndication((p) => ({ ...p, instrucciones: value }))} disabled={saving} />
           </div>
-          <div className="col-span-2 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <input
-                type="checkbox"
-                checked={indication.visible_familiar === true}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={indication.visible_familiar}
+              disabled={saving}
+              onChange={(e) => setIndication((p) => ({
+                ...p,
+                visible_familiar: e.target.checked,
+                resumen_familiar: e.target.checked ? p.resumen_familiar ?? "" : "",
+              }))}
+              className="mt-0.5 h-4 w-4 accent-teal-700"
+            />
+            <span>
+              <span className="block font-semibold text-slate-800">Publicar en portal familiar</span>
+              <span className="block text-xs text-slate-500">
+                Desactivado por defecto. El portal mostrará solo el resumen para familia.
+              </span>
+            </span>
+          </label>
+          {indication.visible_familiar && (
+            <div className="mt-3">
+              <TextArea
+                label="Resumen para familia"
+                value={indication.resumen_familiar ?? ""}
+                onChange={(value) => setIndication((p) => ({ ...p, resumen_familiar: value }))}
                 disabled={saving}
-                onChange={(e) => setIndication((p) => ({ ...p, visible_familiar: e.target.checked }))}
-                className="h-4 w-4 accent-teal-700"
               />
-              Mostrar esta indicación en el portal familiar
-            </label>
-            {indication.visible_familiar && (
-              <div className="mt-3">
-                <TextArea
-                  label="Resumen para familia"
-                  value={indication.resumen_familiar ?? ""}
-                  onChange={(value) => setIndication((p) => ({ ...p, resumen_familiar: value }))}
-                  disabled={saving}
-                />
-              </div>
-            )}
-          </div>
+              {familySummaryMissing && (
+                <p className="mt-1 text-xs text-rose-600">Es obligatorio para publicar la indicación.</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-            <input type="checkbox" checked={indication.requiere_stock} disabled={saving || indication.es_controlado} onChange={(e) => setIndication((p) => ({ ...p, requiere_stock: e.target.checked }))} className="h-4 w-4 accent-teal-700" />
-            Requiere stock
+          <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
+            <input type="checkbox" checked={indication.requiere_stock} disabled={saving || indication.es_controlado} onChange={(e) => setIndication((p) => ({ ...p, requiere_stock: e.target.checked }))} className="mt-0.5 h-4 w-4 accent-teal-700" />
+            <span>
+              Requiere stock
+              <span className="block text-xs text-slate-500">Obliga a elegir lote y descuenta inventario al administrar.</span>
+            </span>
           </label>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-            <input type="checkbox" checked={indication.es_controlado} disabled={saving} onChange={(e) => setControlled(e.target.checked)} className="h-4 w-4 accent-teal-700" />
-            Medicamento controlado
+          <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
+            <input type="checkbox" checked={indication.es_controlado} disabled={saving} onChange={(e) => setControlled(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal-700" />
+            <span>
+              Medicamento controlado
+              <span className="block text-xs text-slate-500">Activa stock obligatorio, lote controlado y validación por segundo usuario.</span>
+            </span>
           </label>
         </div>
 
@@ -867,7 +956,7 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
           <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
             Cancelar
           </button>
-          <button type="submit" disabled={saving || !indication.medicamento_nombre?.trim() || !indication.dosis?.trim() || schedules.length === 0} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving || !indication.medicamento_nombre?.trim() || !indication.dosis?.trim() || schedules.length === 0 || familySummaryMissing} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
             {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -908,6 +997,13 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
           });
         }}
       >
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="font-semibold">Trazabilidad de inventario</div>
+          <p className="mt-1 text-xs leading-relaxed">
+            El stock inicial se registra como movimiento de recepción. Después, la cantidad solo cambia por movimientos, administraciones eMAR o conciliaciones.
+          </p>
+        </div>
+
         <label className="block text-sm font-medium text-slate-700">
           Indicación asociada
           <select
@@ -931,6 +1027,9 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
             <option value="">Sin asociar</option>
             {indications.map((item) => <option key={item.id} value={item.id}>{item.medicamento_nombre}</option>)}
           </select>
+          <span className="mt-1 block text-xs text-slate-500">
+            Asociar el lote ayuda a que eMAR sugiera el stock correcto al administrar la indicación.
+          </span>
         </label>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
@@ -944,9 +1043,12 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
           <Field label="Unidad" value={lot.unidad ?? ""} onChange={(value) => setLot((p) => ({ ...p, unidad: value }))} disabled={saving} />
           <Field label="Ubicación" value={lot.ubicacion ?? ""} onChange={(value) => setLot((p) => ({ ...p, ubicacion: value }))} disabled={saving} />
         </div>
-        <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-          <input type="checkbox" checked={effectiveControlled} disabled={saving || indication?.es_controlado} onChange={(e) => setLot((p) => ({ ...p, es_controlado: e.target.checked }))} className="h-4 w-4 accent-teal-700" />
-          Lote controlado
+        <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
+          <input type="checkbox" checked={effectiveControlled} disabled={saving || indication?.es_controlado} onChange={(e) => setLot((p) => ({ ...p, es_controlado: e.target.checked }))} className="mt-0.5 h-4 w-4 accent-teal-700" />
+          <span>
+            Lote controlado
+            <span className="block text-xs text-slate-500">Usa esta marca para psicotrópicos o estupefacientes; los ajustes se hacen por conciliación.</span>
+          </span>
         </label>
         {indication?.es_controlado && (
           <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-xs text-teal-900">
@@ -1009,6 +1111,13 @@ function MovementModal({ modal, lots, saving, onClose, onSubmit }) {
           onSubmit({ loteId, tipo, cantidad: signedQuantity, motivo });
         }}
       >
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
+          <div className="font-semibold text-slate-950">Regla de stock</div>
+          <p className="mt-1 text-xs leading-relaxed">
+            Recepción aumenta inventario. Merma y retiro descuentan. Ajuste y reversa solo están disponibles para lotes no controlados; los controlados se corrigen por conciliación con segundo usuario.
+          </p>
+        </div>
+
         <label className="block text-sm font-medium text-slate-700">
           Lote
           <select
@@ -1085,6 +1194,15 @@ function ReconcileModal({ modal, saving, onClose, onSubmit }) {
           });
         }}
       >
+        <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
+          <div className="font-semibold">{isValidation ? "Validación secundaria" : "Conciliación de controlado"}</div>
+          <p className="mt-1 text-xs leading-relaxed">
+            {isValidation
+              ? "Al validar, el stock del sistema se ajusta a la cantidad física contada y el movimiento queda firmado por un segundo usuario."
+              : "Registra el conteo físico y el motivo. El ajuste no cambia el stock hasta que otro usuario autorizado lo valide."}
+          </p>
+        </div>
+
         <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
           <div className="font-semibold text-slate-950">{lot?.medicamento_nombre ?? "Medicamento"}</div>
           {modal.reconciliation ? (

@@ -1,7 +1,7 @@
 import { supabase } from "../../services/supabaseConfig";
 import { getRequisitosEleam, getObservaciones, buildResumen } from "../accreditation/accreditationService";
 import { recordOverallStatus, recordOverallLabel, VITAL_DEFS } from "../vitalSigns/vitalRanges";
-import { listCareTasks, getSessionProfile, todayIso, currentTurno } from "../carePlans/carePlansService";
+import { CARE_OPEN_STATUSES, isCareTaskOverdue, listCareTasks, getSessionProfile, todayIso, currentTurno } from "../carePlans/carePlansService";
 import { listMedicationAdministrations } from "../emar/emarService";
 
 export const TURNOS = ["mañana", "tarde", "noche"];
@@ -162,11 +162,12 @@ async function loadCareTurno(fecha, turno) {
   try {
     const rows = await listCareTasks({ fecha, turno, estado: null, generate: true, limit: 300 });
     const resumen = summarizeRows(rows, ["pendiente", "cumplida", "omitida", "reprogramada", "cancelada"]);
-    resumen.vencidas = rows.filter((row) => isDueNow(row)).length;
+    resumen.pendientes_operativos = rows.filter((row) => CARE_OPEN_STATUSES.includes(row.estado)).length;
+    resumen.vencidas = rows.filter((row) => isCareTaskOverdue(row)).length;
     return {
       resumen,
       pendientes: rows
-        .filter((row) => row.estado === "pendiente")
+        .filter((row) => CARE_OPEN_STATUSES.includes(row.estado))
         .slice(0, 12)
         .map((row) => ({
           id: row.id,
@@ -177,7 +178,8 @@ async function loadCareTurno(fecha, turno) {
           prioridad: row.actividad?.prioridad ?? "media",
           instrucciones: row.actividad?.instrucciones ?? null,
           residente: residentMeta(row.residentes),
-          vencida: isDueNow(row),
+          vencida: isCareTaskOverdue(row),
+          reprogramada_para: row.reprogramada_para ?? null,
         })),
       omitidas: rows
         .filter((row) => row.estado === "omitida")
@@ -193,7 +195,7 @@ async function loadCareTurno(fecha, turno) {
   } catch (error) {
     console.warn("No se pudo cargar tareas de cuidado para entrega de turno:", error);
     return {
-      resumen: { total: 0, pendiente: 0, cumplida: 0, omitida: 0, reprogramada: 0, cancelada: 0, vencidas: 0 },
+      resumen: { total: 0, pendiente: 0, cumplida: 0, omitida: 0, reprogramada: 0, cancelada: 0, vencidas: 0, pendientes_operativos: 0 },
       pendientes: [],
       omitidas: [],
       error: true,
@@ -310,7 +312,7 @@ export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTur
     signos: signos.filter((item) => item.turno === turno).length,
     observaciones: obs.today.filter((item) => item.turno === turno).length,
     tareas_cuidado: careTurno.resumen.total,
-    tareas_cuidado_pendientes: careTurno.resumen.pendiente,
+    tareas_cuidado_pendientes: careTurno.resumen.pendientes_operativos ?? ((careTurno.resumen.pendiente ?? 0) + (careTurno.resumen.reprogramada ?? 0)),
     medicamentos: emarTurno.resumen.total,
     medicamentos_pendientes: emarTurno.resumen.pendiente,
     medicamentos_por_validar: emarTurno.resumen.pendiente_validacion,

@@ -1,5 +1,7 @@
 import { supabase } from "../../services/supabaseConfig";
 
+const TURNOS = ["mañana", "tarde", "noche"];
+
 const VITAL_SIGNS_SELECT = `
   id, residente_id, fecha_hora, turno,
   presion_sistolica, presion_diastolica,
@@ -27,13 +29,40 @@ export const getVitalSigns = async (residenteId = null, { limit = 50, desde = nu
   return data;
 };
 
+export function requireVitalSignsFollowUpSlot({ requiereSeguimiento, seguimientoFecha, seguimientoTurno }) {
+  if (!requiereSeguimiento) return;
+  if (!seguimientoFecha || !TURNOS.includes(seguimientoTurno)) {
+    throw new Error("Debes indicar fecha y turno para dejar el seguimiento pendiente.");
+  }
+}
+
 export const createVitalSigns = async (payload) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data, error } = await supabase
-    .from("signos_vitales")
-    .insert({ ...payload, registrado_por: user?.id })
-    .select(VITAL_SIGNS_SELECT)
-    .single();
+  const requiereSeguimiento = payload.requiere_seguimiento === true;
+  requireVitalSignsFollowUpSlot({
+    requiereSeguimiento,
+    seguimientoFecha: payload.seguimiento_fecha,
+    seguimientoTurno: payload.seguimiento_turno,
+  });
+
+  const { data, error } = await supabase.rpc("registrar_signos_vitales", {
+    p_residente_id: payload.residente_id,
+    p_fecha_hora: payload.fecha_hora,
+    p_turno: payload.turno || null,
+    p_presion_sistolica: payload.presion_sistolica ?? null,
+    p_presion_diastolica: payload.presion_diastolica ?? null,
+    p_frecuencia_cardiaca: payload.frecuencia_cardiaca ?? null,
+    p_frecuencia_respiratoria: payload.frecuencia_respiratoria ?? null,
+    p_temperatura: payload.temperatura ?? null,
+    p_saturacion_oxigeno: payload.saturacion_oxigeno ?? null,
+    p_glucosa: payload.glucosa ?? null,
+    p_peso: payload.peso ?? null,
+    p_dolor_escala: payload.dolor_escala ?? null,
+    p_estado_conciencia: payload.estado_conciencia || null,
+    p_observaciones: payload.observaciones || null,
+    p_requiere_seguimiento: requiereSeguimiento,
+    p_seguimiento_fecha: requiereSeguimiento ? payload.seguimiento_fecha : null,
+    p_seguimiento_turno: requiereSeguimiento ? payload.seguimiento_turno : null,
+  });
   if (error) throw error;
   return data;
 };
@@ -53,4 +82,26 @@ export const getLastVitalSigns = async (residenteId) => {
     .single();
   if (error && error.code !== "PGRST116") throw error;
   return data;
+};
+
+export const getPendingVitalSignsResidents = async (fecha, turno) => {
+  const { data: residents, error: resError } = await supabase
+    .from("residentes")
+    .select("id, nombre, apellido, habitacion, cama, nivel_dependencia")
+    .eq("estado", "activo")
+    .order("apellido");
+  if (resError) throw resError;
+  if (!residents?.length) return [];
+
+  const { data: existing, error: vsError } = await supabase
+    .from("signos_vitales")
+    .select("residente_id")
+    .gte("fecha_hora", new Date(fecha + "T00:00:00").toISOString())
+    .lte("fecha_hora", new Date(fecha + "T23:59:59").toISOString())
+    .eq("turno", turno)
+    .in("residente_id", residents.map((r) => r.id));
+  if (vsError) throw vsError;
+
+  const recorded = new Set((existing ?? []).map((r) => r.residente_id));
+  return residents.filter((r) => !recorded.has(r.id));
 };

@@ -87,6 +87,10 @@ function ObservationForm() {
         };
       }
 
+      if (name === "visible_familiar" && !checked) {
+        return { ...prev, visible_familiar: false, resumen_familiar: "" };
+      }
+
       const nextValue = type === "checkbox" ? checked : value;
       const nextForm = { ...prev, [name]: nextValue };
       if ((name === "fecha_hora" || name === "turno") && prev.requiere_seguimiento) {
@@ -110,6 +114,10 @@ function ObservationForm() {
       setError("Indica fecha y turno para dejar el seguimiento como tarea pendiente.");
       return;
     }
+    if (form.visible_familiar && !form.resumen_familiar.trim()) {
+      setError("Escribe un resumen para familia antes de publicar esta observación.");
+      return;
+    }
     setSaving(true);
     try {
       await createObservation({
@@ -117,12 +125,16 @@ function ObservationForm() {
         seguimiento_fecha: form.requiere_seguimiento ? form.seguimiento_fecha : null,
         seguimiento_turno: form.requiere_seguimiento ? form.seguimiento_turno : null,
         seguimiento_estado: "pendiente",
+        visible_familiar: form.visible_familiar,
+        resumen_familiar: form.visible_familiar ? form.resumen_familiar : null,
       });
       toast("Observación guardada correctamente.", "success");
       if (preselectedId) navigate(`/residents/${preselectedId}`);
       else navigate("/observations");
-    } catch {
-      toast("No se pudo guardar la observación.", "error");
+    } catch (err) {
+      const message = err?.message || "No se pudo guardar la observación.";
+      setError(message);
+      toast(message, "error");
     } finally {
       setSaving(false);
     }
@@ -215,6 +227,37 @@ function ObservationForm() {
                 placeholder="Describa las acciones realizadas..."
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="visible_familiar"
+                  checked={form.visible_familiar}
+                  onChange={handleChange}
+                  className="mt-0.5 w-4 h-4 accent-teal-700"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-slate-800">Publicar en portal familiar</span>
+                  <span className="block text-xs text-slate-500">
+                    Desactivado por defecto. Al publicar, solo se mostrará el resumen escrito para la familia.
+                  </span>
+                </span>
+              </label>
+              {form.visible_familiar && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Resumen para familia *</label>
+                  <textarea
+                    name="resumen_familiar"
+                    value={form.resumen_familiar}
+                    onChange={handleChange}
+                    required={form.visible_familiar}
+                    rows={3}
+                    placeholder="Escribe una versión clara y segura para el portal familiar..."
+                    className="w-full border border-slate-300 bg-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              )}
+            </div>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" name="requiere_seguimiento" checked={form.requiere_seguimiento} onChange={handleChange}
                 className="w-4 h-4 accent-teal-700" />
@@ -252,22 +295,6 @@ function ObservationForm() {
                 </div>
                 <p className="mt-2 text-xs text-amber-800">
                   Esta observación aparecerá como pendiente en la entrega del turno seleccionado hasta que sea resuelta o cancelada.
-                </p>
-              </div>
-            )}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" name="visible_familiar" checked={form.visible_familiar} onChange={handleChange}
-                className="w-4 h-4 accent-teal-700" />
-              <span className="text-sm text-slate-700">Publicar resumen en portal familiar</span>
-            </label>
-            {form.visible_familiar && (
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Resumen para familia</label>
-                <textarea name="resumen_familiar" value={form.resumen_familiar} onChange={handleChange} rows={3}
-                  placeholder="Escribe una versión clara y apropiada para familiares..."
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                <p className="mt-1 text-xs text-slate-500">
-                  Si lo dejas vacío, se mostrará la descripción completa marcada como visible.
                 </p>
               </div>
             )}

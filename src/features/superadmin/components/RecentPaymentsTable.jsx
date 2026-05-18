@@ -138,7 +138,7 @@ export default function RecentPaymentsTable({ payments, onSelectEleam }) {
                     </td>
                     <td className="px-4 py-2.5 text-center text-xs text-slate-500">
                       {p.metodo_pago ? (
-                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md capitalize">
+                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-xl capitalize">
                           {p.metodo_pago}
                         </span>
                       ) : <span className="text-slate-300">—</span>}

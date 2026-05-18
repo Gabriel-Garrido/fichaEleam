@@ -2,11 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
-import { supabase } from "../../services/supabaseConfig";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
-import { authErrorMessage } from "../auth/authService";
+import { authErrorMessage, clearMustResetPassword, updatePasswordAndClearResetFlag } from "../auth/authService";
 import { validatePassword } from "../../utils/passwordValidation";
 
 function strengthLabel(pw) {
@@ -18,7 +17,7 @@ function strengthLabel(pw) {
   const score    = [hasUpper, hasNum, long, veryLong].filter(Boolean).length;
   if (score <= 1) return { txt: "Débil",    cls: "bg-rose-500",    bar: "w-1/4" };
   if (score === 2) return { txt: "Regular",  cls: "bg-amber-400",  bar: "w-2/4" };
-  if (score === 3) return { txt: "Buena",    cls: "bg-blue-500",   bar: "w-3/4" };
+  if (score === 3) return { txt: "Buena",    cls: "bg-sky-500",    bar: "w-3/4" };
   return              { txt: "Muy fuerte", cls: "bg-emerald-500", bar: "w-full" };
 }
 
@@ -59,12 +58,7 @@ export default function ChangePasswordPage() {
           throw new Error(oauthError);
         }
 
-        const { error: profileErr } = await supabase
-          .from("profiles")
-          .update({ must_reset_password: false })
-          .eq("id", user.id);
-        if (profileErr) throw profileErr;
-
+        await clearMustResetPassword(user.id);
         await refetchProfile();
         if (cancelled) return;
         toast("Acceso con Google confirmado", "success");
@@ -88,12 +82,7 @@ export default function ChangePasswordPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const { error: profileErr } = await supabase
-        .from("profiles")
-        .update({ must_reset_password: false })
-        .eq("id", user.id);
-      if (profileErr) throw profileErr;
-
+      await clearMustResetPassword(user.id);
       await refetchProfile();
       toast("Acceso confirmado", "success");
       navigate(homePath || "/dashboard", { replace: true });
@@ -111,15 +100,7 @@ export default function ChangePasswordPage() {
 
     setSubmitting(true);
     try {
-      const { error: pwErr } = await supabase.auth.updateUser({ password });
-      if (pwErr) throw pwErr;
-
-      const { error: profileErr } = await supabase
-        .from("profiles")
-        .update({ must_reset_password: false })
-        .eq("id", user.id);
-      if (profileErr) throw profileErr;
-
+      await updatePasswordAndClearResetFlag(password, user.id);
       await refetchProfile();
       toast("Contraseña actualizada correctamente", "success");
       navigate(homePath || "/dashboard", { replace: true });

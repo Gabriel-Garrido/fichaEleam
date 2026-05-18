@@ -49,7 +49,7 @@ export const RIESGO_MAP = Object.fromEntries(RIESGO_CHURN.map((r) => [r.key, r])
 export const PLAN_LABEL = { demo: "Demo", mensual: "Mensual", anual: "Anual", inactivo: "Inactivo" };
 export const PLAN_BADGE = {
   demo:     "bg-amber-100 text-amber-800 border border-amber-200",
-  mensual:  "bg-blue-100 text-blue-700",
+  mensual:  "bg-sky-100 text-sky-700",
   anual:    "bg-purple-100 text-purple-700",
   inactivo: "bg-rose-100 text-rose-600",
 };

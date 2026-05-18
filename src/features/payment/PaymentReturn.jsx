@@ -30,6 +30,10 @@ export default function PaymentReturn() {
 
   const isActive = ["activo", "en_gracia"].includes(subscriptionStatus);
   const isPending = ["pendiente"].includes(subscriptionStatus);
+  const isRejected = ["rejected", "cancelled", "failure"].includes(mpStatus);
+  const statusText = mpStatus
+    ? `MercadoPago informó estado "${mpStatus}".`
+    : "MercadoPago todavía no envió la confirmación.";
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
@@ -38,7 +42,7 @@ export default function PaymentReturn() {
           <>
             <Loading message="Confirmando tu pago con MercadoPago..." />
             <p className="text-xs text-slate-400 mt-4">
-              Esto puede tomar unos segundos. No cierres esta página.
+              Esto puede tomar unos segundos. Si vienes desde un demo, tu acceso sigue disponible mientras llega la confirmación.
             </p>
           </>
         ) : isActive ? (
@@ -66,14 +70,11 @@ export default function PaymentReturn() {
           <>
             <div className="text-amber-500 text-5xl mb-3">!</div>
             <h1 className="text-2xl font-black text-slate-800 mb-2">
-              Tu pago aún no se ha confirmado
+              {isRejected ? "MercadoPago no aprobó el pago" : "Tu pago aún no se ha confirmado"}
             </h1>
             <p className="text-slate-500 mb-6 text-sm">
-              {mpStatus
-                ? `Estado reportado por MercadoPago: ${mpStatus}.`
-                : "MercadoPago todavía no envió la confirmación."}
-              {" "}
-              Puedes esperar unos minutos o revisar la página de pago para reintentar.
+              {statusText} Puedes esperar unos minutos y reintentar la verificación. Si el pago fue rechazado,
+              vuelve a la página de pago para iniciar un nuevo intento.
             </p>
             <div className="flex justify-center gap-3">
               <button

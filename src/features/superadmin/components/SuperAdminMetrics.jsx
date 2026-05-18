@@ -46,7 +46,7 @@ function MetricCard({
   );
 }
 
-export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads, leadsNuevos = 0, activeInDemoCount = 0 }) {
+export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads }) {
   if (!metrics) return null;
 
   const activeRatio = metrics.totalEleams
@@ -140,8 +140,8 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
       ],
     },
     {
-      title: "Operacion y demo",
-      description: "Uso operativo del producto y actividad reciente de la landing.",
+      title: "Operacion y captacion",
+      description: "Uso operativo del producto y solicitudes recientes desde la landing.",
       items: [
         {
           label: "Residentes",
@@ -155,25 +155,16 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
           },
         },
         {
-          label: "Leads nuevos 7d",
-          value: leadsNuevos,
+          label: "Solicitudes demo 7d",
+          value: metrics.newLeadsLast7d ?? 0,
           sub: "Landing page",
           tone: "amber",
+          onClick: onFilterLeads,
+          actionLabel: "Ver leads",
           help: {
-            description: "Leads captados por la landing durante los ultimos siete dias.",
-            source: "public.demo_leads.creado_en, calculado en esta vista.",
-            action: "Indica si las campanas recientes estan generando demanda.",
-          },
-        },
-        {
-          label: "En demo ahora",
-          value: activeInDemoCount,
-          sub: activeInDemoCount > 0 ? "Sesiones activas" : "Sin sesiones activas",
-          tone: activeInDemoCount > 0 ? "teal" : "slate",
-          help: {
-            description: "Leads con acceso demo y actividad reciente detectada por ping.",
-            source: "public.demo_leads.estado = demo_activo y demo_ultimo_ping reciente.",
-            action: "Permite contactar al prospecto mientras esta probando el producto.",
+            description: "Solicitudes de demo recibidas desde la landing en los ultimos siete dias.",
+            source: "public.demo_leads.creado_en mayor o igual a hace 7 dias.",
+            action: "Revisa y aprueba las solicitudes pendientes dentro de las 24 horas.",
           },
         },
       ],

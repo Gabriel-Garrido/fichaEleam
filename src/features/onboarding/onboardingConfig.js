@@ -7,7 +7,7 @@ export const ONBOARDING_STORAGE_PREFIX = 'fichaeleam_onboarding_v2_';
 export const ROLE_CONFIG = {
   admin_eleam: {
     color: 'teal',
-    welcomeEmoji: '🏥',
+    welcomeIcon: 'clients',
     welcomeTagline: 'Tu ELEAM digital ya está listo para operar.',
     welcomeBody:
       'En pocos minutos tendrás fichas clínicas, signos vitales con alertas, carpeta SEREMI y tu equipo completo funcionando desde cualquier dispositivo.',
@@ -116,7 +116,7 @@ export const ROLE_CONFIG = {
 
   funcionario: {
     color: 'rose',
-    welcomeEmoji: '🩺',
+    welcomeIcon: 'vitals',
     welcomeTagline: 'Tu espacio de trabajo clínico está listo.',
     welcomeBody:
       'Accede solo a los módulos que te asignó el administrador del establecimiento. Todo lo que registres queda firmado digitalmente con tu nombre y timestamp.',
@@ -200,8 +200,8 @@ export const ROLE_CONFIG = {
   },
 
   familiar: {
-    color: 'blue',
-    welcomeEmoji: '💙',
+    color: 'sky',
+    welcomeIcon: 'familiar',
     welcomeTagline: 'Sigue de cerca a tu familiar en el ELEAM.',
     welcomeBody:
       'Consulta su estado de salud actualizado, revisa las notas del equipo clínico y registra tus visitas cuando lo necesites, desde cualquier dispositivo.',
@@ -251,7 +251,7 @@ export const ROLE_CONFIG = {
 
   superadmin: {
     color: 'slate',
-    welcomeEmoji: '📊',
+    welcomeIcon: 'overview',
     welcomeTagline: 'Panel de operación de la plataforma FichaEleam.',
     welcomeBody:
       'Gestiona todos los ELEAMs suscriptos, aprueba solicitudes de demo, registra pagos manualmente y publica contenido editorial desde un solo lugar.',
@@ -316,15 +316,15 @@ export const COLOR_CLASSES = {
     progressColor: '#e11d48',
     pill: 'bg-rose-600',
   },
-  blue: {
-    bg: 'bg-blue-50',
-    bgStrong: 'bg-blue-600',
-    text: 'text-blue-700',
-    textStrong: 'text-blue-900',
-    border: 'border-blue-200',
-    btn: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500',
-    progressColor: '#2563eb',
-    pill: 'bg-blue-600',
+  sky: {
+    bg: 'bg-sky-50',
+    bgStrong: 'bg-sky-600',
+    text: 'text-sky-700',
+    textStrong: 'text-sky-900',
+    border: 'border-sky-200',
+    btn: 'bg-sky-600 hover:bg-sky-700 focus:ring-sky-500',
+    progressColor: '#0284c7',
+    pill: 'bg-sky-600',
   },
   slate: {
     bg: 'bg-slate-100',

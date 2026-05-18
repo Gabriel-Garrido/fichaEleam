@@ -10,8 +10,10 @@ import {
   OMISSION_REASONS,
   administerMedication,
   currentTurno,
+  isMedicationOverdue,
   listAvailableLots,
   listMedicationAdministrations,
+  medicationDueAt,
   todayIso,
   validateControlledAdministration,
 } from "./emarService";
@@ -22,6 +24,7 @@ const STATUS_TONE = {
   validado: "bg-emerald-50 text-emerald-700 border-emerald-200",
   omitido: "bg-rose-50 text-rose-700 border-rose-200",
   pendiente_validacion: "bg-sky-50 text-sky-700 border-sky-200",
+  revertido: "bg-slate-50 text-slate-600 border-slate-200",
   cancelado: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
@@ -30,16 +33,26 @@ function residentName(row) {
   return [r?.apellido, r?.nombre].filter(Boolean).join(", ") || "Residente";
 }
 
-function isOverdue(row) {
-  if (row._arrastre) return true;
-  if (row.estado !== "pendiente" || row.fecha !== todayIso() || !row.hora) return false;
-  const due = new Date(`${row.fecha}T${row.hora}`);
-  return !Number.isNaN(due.valueOf()) && due < new Date();
+function formatTime(value) {
+  return value?.slice?.(0, 5) ?? "--:--";
+}
+
+function formatDueWindow(row) {
+  const dueAt = medicationDueAt(row);
+  if (!dueAt) return null;
+  return dueAt.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+}
+
+function actionGuidance(metrics) {
+  if (metrics.vencidas > 0) return "Primero resuelve administraciones vencidas o arrastradas.";
+  if (metrics.pendiente_validacion > 0) return "Luego valida controlados con un segundo usuario autorizado.";
+  if (metrics.pendiente > 0) return "Continúa administrando u omitiendo cada indicación pendiente.";
+  return "Turno eMAR sin pendientes operativos para este filtro de fecha y turno.";
 }
 
 export default function EmarTurnPage() {
   const toast = useToast();
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const [fecha, setFecha] = useState(todayIso());
   const [turno, setTurno] = useState(currentTurno());
   const [estado, setEstado] = useState("pendiente");
@@ -51,6 +64,7 @@ export default function EmarTurnPage() {
 
   const canAdminister = can("administrar_medicamentos");
   const canValidate = can("validar_medicamentos_controlados");
+  const currentUserId = profile?.id ?? null;
 
   const load = async () => {
     setLoading(true);
@@ -59,7 +73,7 @@ export default function EmarTurnPage() {
       const data = await listMedicationAdministrations({
         fecha,
         turno,
-        estado: estado === "todas" ? null : estado,
+        estado: null,
       });
       setRows(data);
     } catch (err) {
@@ -73,14 +87,19 @@ export default function EmarTurnPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fecha, turno, estado]);
+  }, [fecha, turno]);
+
+  const visibleRows = useMemo(() => {
+    if (estado === "todas") return rows;
+    return rows.filter((row) => row.estado === estado);
+  }, [estado, rows]);
 
   const metrics = useMemo(() => {
     return rows.reduce((acc, row) => {
       acc.total += 1;
       acc[row.estado] = (acc[row.estado] ?? 0) + 1;
       if (row.indicacion?.es_controlado) acc.controlados += 1;
-      if (isOverdue(row)) acc.vencidas += 1;
+      if (isMedicationOverdue(row)) acc.vencidas += 1;
       return acc;
     }, { total: 0, pendiente: 0, administrado: 0, omitido: 0, pendiente_validacion: 0, validado: 0, controlados: 0, vencidas: 0 });
   }, [rows]);
@@ -125,7 +144,7 @@ export default function EmarTurnPage() {
           disabled={loading}
           className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
         >
-          Actualizar
+          Generar / actualizar
         </button>
       }
       className="space-y-5"
@@ -135,13 +154,11 @@ export default function EmarTurnPage() {
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-sky-700">
             Prioridad eMAR
             <HelpTooltip label="Ayuda: eMAR">
-              Los medicamentos controlados quedan pendientes hasta que un segundo usuario autorizado valide la administración.
+              Al cargar esta vista se generan las administraciones programadas del turno. La generación es idempotente: reintentar no duplica registros.
             </HelpTooltip>
           </div>
           <div className="mt-1 text-sm font-semibold text-sky-950">
-            {metrics.pendiente_validacion
-              ? `${metrics.pendiente_validacion} controlado${metrics.pendiente_validacion === 1 ? "" : "s"} por validar`
-              : `${metrics.pendiente} pendiente${metrics.pendiente === 1 ? "" : "s"}`}
+            {actionGuidance(metrics)}
           </div>
         </div>
         <label className="text-sm font-medium text-slate-700">
@@ -179,6 +196,8 @@ export default function EmarTurnPage() {
         </label>
       </section>
 
+      <EmarWorkflowGuide metrics={metrics} />
+
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Metric label="Total" value={metrics.total} />
         <Metric label="Pendientes" value={metrics.pendiente} tone="amber" />
@@ -211,71 +230,24 @@ export default function EmarTurnPage() {
               Configura indicaciones y horarios desde la ficha del residente en la pestaña eMAR.
             </p>
           </div>
+        ) : visibleRows.length === 0 ? (
+          <div className="p-8 text-center">
+            <h2 className="text-sm font-semibold text-slate-950">No hay registros en este estado</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              El turno tiene administraciones cargadas, pero ninguna coincide con el filtro seleccionado.
+            </p>
+          </div>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {rows.map((row) => (
-              <li key={row.id} className="p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[row.estado]}`}>
-                        {MED_STATUS_LABEL[row.estado] ?? row.estado}
-                      </span>
-                      {row.indicacion?.es_controlado && (
-                        <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
-                          Controlado
-                        </span>
-                      )}
-                      {isOverdue(row) && (
-                        <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
-                          {row._arrastre ? "Arrastre" : "Vencido"}
-                        </span>
-                      )}
-                      <span className="text-xs font-medium text-slate-500">{row.hora?.slice(0, 5)}</span>
-                    </div>
-                    <h3 className="mt-2 text-sm font-semibold text-slate-950">
-                      {row.indicacion?.medicamento_nombre}
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {residentName(row)} · {row.indicacion?.dosis} · vía {row.indicacion?.via}
-                    </p>
-                    {row.lote && (
-                      <p className="mt-1 text-xs text-slate-400">
-                        Lote {row.lote.lote || "s/l"} · stock actual {row.lote.cantidad_actual} {row.lote.unidad}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    {row.estado === "pendiente" && canAdminister && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setModal({ action: "administrado", row })}
-                          className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"
-                        >
-                          Administrar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setModal({ action: "omitido", row })}
-                          className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                        >
-                          Omitir
-                        </button>
-                      </>
-                    )}
-                    {row.estado === "pendiente_validacion" && canValidate && (
-                      <button
-                        type="button"
-                        onClick={() => setModal({ action: "validar", row })}
-                        className="rounded-xl bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800"
-                      >
-                        Validar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </li>
+            {visibleRows.map((row) => (
+              <EmarRow
+                key={row.id}
+                row={row}
+                currentUserId={currentUserId}
+                canAdminister={canAdminister}
+                canValidate={canValidate}
+                onAction={(action) => setModal({ action, row })}
+              />
             ))}
           </ul>
         )}
@@ -288,6 +260,161 @@ export default function EmarTurnPage() {
         onSubmit={handleSubmit}
       />
     </PageLayout>
+  );
+}
+
+function EmarWorkflowGuide({ metrics }) {
+  const steps = [
+    {
+      title: "1. Programar",
+      text: "Las indicaciones activas del residente crean dosis por fecha, turno y horario.",
+      tone: "border-slate-200 bg-white text-slate-700",
+    },
+    {
+      title: "2. Administrar u omitir",
+      text: "Administrar descuenta stock si corresponde; omitir exige motivo y puede abrir seguimiento.",
+      tone: metrics.pendiente || metrics.vencidas ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700",
+    },
+    {
+      title: "3. Validar controlados",
+      text: "Controlados o doble validación quedan pendientes para un segundo usuario autorizado.",
+      tone: metrics.pendiente_validacion ? "border-sky-200 bg-sky-50 text-sky-900" : "border-slate-200 bg-white text-slate-700",
+    },
+    {
+      title: "4. Cerrar turno",
+      text: "Revisa arrastres, notas y controlados antes de entregar el turno.",
+      tone: metrics.vencidas ? "border-rose-200 bg-rose-50 text-rose-900" : "border-slate-200 bg-white text-slate-700",
+    },
+  ];
+
+  return (
+    <section className="grid gap-3 lg:grid-cols-4">
+      {steps.map((step) => (
+        <div key={step.title} className={`rounded-2xl border p-4 shadow-sm ${step.tone}`}>
+          <div className="text-sm font-semibold">{step.title}</div>
+          <p className="mt-1 text-sm opacity-80">{step.text}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function EmarRow({ row, currentUserId, canAdminister, canValidate, onAction }) {
+  const overdue = isMedicationOverdue(row);
+  const canValidateThis = canValidate && row.administrado_por !== currentUserId;
+  const needsStock = row.indicacion?.requiere_stock || row.indicacion?.es_controlado;
+  const dueWindow = formatDueWindow(row);
+
+  return (
+    <li className="p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[row.estado]}`}>
+              {MED_STATUS_LABEL[row.estado] ?? row.estado}
+            </span>
+            {row.indicacion?.es_controlado && (
+              <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                Controlado
+              </span>
+            )}
+            {row.indicacion?.requiere_doble_validacion && (
+              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                Doble validación
+              </span>
+            )}
+            {needsStock && (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                Requiere stock
+              </span>
+            )}
+            {overdue && (
+              <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                {row._arrastre ? "Arrastre" : "Vencido"}
+              </span>
+            )}
+            <span className="text-xs font-medium text-slate-500">
+              {row._arrastre ? `${row.fecha} · ` : ""}{formatTime(row.hora)}
+            </span>
+          </div>
+          <h3 className="mt-2 text-sm font-semibold text-slate-950">
+            {row.indicacion?.medicamento_nombre}
+          </h3>
+          <p className="mt-1 text-sm text-slate-600">
+            {residentName(row)} · {row.indicacion?.dosis} · vía {row.indicacion?.via}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+            {dueWindow && row.estado === "pendiente" && (
+              <span>Ventana hasta {dueWindow}</span>
+            )}
+            {row.residentes?.habitacion && (
+              <span>Hab. {row.residentes.habitacion}{row.residentes?.cama ? ` · cama ${row.residentes.cama}` : ""}</span>
+            )}
+            {row.lote && (
+              <span>
+                Lote {row.lote.lote || "s/l"} · stock actual {row.lote.cantidad_actual} {row.lote.unidad}
+              </span>
+            )}
+          </div>
+          {row.indicacion?.instrucciones && (
+            <p className="mt-2 line-clamp-2 text-sm text-slate-500">{row.indicacion.instrucciones}</p>
+          )}
+          {row.estado === "pendiente_validacion" && (
+            <p className="mt-2 text-xs text-sky-700">
+              Espera validación de un usuario distinto al que registró la administración.
+            </p>
+          )}
+          {row.motivo_omision && (
+            <p className="mt-2 text-xs text-rose-700">Motivo de omisión: {row.motivo_omision}</p>
+          )}
+          {row.notas && <p className="mt-1 text-xs text-slate-400">Notas: {row.notas}</p>}
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-start gap-2 lg:justify-end">
+          {row.estado === "pendiente" && canAdminister && (
+            <>
+              <button
+                type="button"
+                onClick={() => onAction("administrado")}
+                className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+              >
+                Administrar
+              </button>
+              <button
+                type="button"
+                onClick={() => onAction("omitido")}
+                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+              >
+                Omitir
+              </button>
+            </>
+          )}
+          {row.estado === "pendiente" && !canAdminister && (
+            <span className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-medium text-slate-500">
+              Sin permiso para administrar
+            </span>
+          )}
+          {row.estado === "pendiente_validacion" && canValidateThis && (
+            <button
+              type="button"
+              onClick={() => onAction("validar")}
+              className="rounded-xl bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+            >
+              Validar
+            </button>
+          )}
+          {row.estado === "pendiente_validacion" && canValidate && !canValidateThis && (
+            <span className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
+              Requiere otro validador
+            </span>
+          )}
+          {row.estado === "pendiente_validacion" && !canValidate && (
+            <span className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-medium text-slate-500">
+              Sin permiso para validar
+            </span>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -343,12 +470,22 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
   const isOmission = modal.action === "omitido";
   const isValidation = modal.action === "validar";
   const needsLot = modal.action === "administrado" && (modal.row.indicacion?.es_controlado || modal.row.indicacion?.requiere_stock);
+  const unitLabel = modal.row.indicacion?.unidad_dosis || "unidad";
+  const actionCopy = isValidation
+    ? "Confirma la administración controlada como segundo usuario. Esta acción firma la validación y cierra el pendiente."
+    : isOmission
+      ? "Registra que la dosis no se administró. No descuenta stock y exige un motivo para la continuidad clínica."
+      : modal.row.indicacion?.es_controlado || modal.row.indicacion?.requiere_doble_validacion
+        ? "Descuenta stock del lote seleccionado y deja la administración pendiente de validación por otro usuario."
+        : needsLot
+          ? "Descuenta stock del lote seleccionado y marca la administración como realizada."
+          : "Marca la administración como realizada. No hay descuento de stock configurado para esta indicación.";
 
   return (
     <Modal
       isOpen={!!modal}
       onClose={onClose}
-      title={isValidation ? "Validar controlado" : isOmission ? "Registrar omisión" : "Administrar medicamento"}
+      title={isValidation ? "Validar controlado" : isOmission ? "Registrar omisión eMAR" : "Administrar medicamento"}
     >
       <form
         className="space-y-4"
@@ -368,8 +505,16 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
         <div className="rounded-xl bg-slate-50 p-3">
           <div className="text-sm font-semibold text-slate-950">{modal.row.indicacion?.medicamento_nombre}</div>
           <div className="text-xs text-slate-500">
-            {residentName(modal.row)} · {modal.row.indicacion?.dosis} · {modal.row.hora?.slice(0, 5)}
+            {residentName(modal.row)} · {modal.row.indicacion?.dosis} · {formatTime(modal.row.hora)}
           </div>
+          {modal.row.indicacion?.instrucciones && (
+            <p className="mt-2 text-xs text-slate-600">{modal.row.indicacion.instrucciones}</p>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-sky-100 bg-sky-50 p-3 text-sm text-sky-900">
+          <div className="font-semibold">Qué pasará al guardar</div>
+          <p className="mt-1 text-xs leading-relaxed">{actionCopy}</p>
         </div>
 
         {needsLot && (
@@ -387,9 +532,13 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
               {lots.map((lot) => (
                 <option key={lot.id} value={lot.id}>
                   {lot.medicamento_nombre} · lote {lot.lote || "s/l"} · {lot.cantidad_actual} {lot.unidad}
+                  {lot.fecha_vencimiento ? ` · vence ${lot.fecha_vencimiento}` : ""}
                 </option>
               ))}
             </select>
+            <span className="mt-1 block text-xs text-slate-500">
+              eMAR descuenta esta cantidad del lote al guardar. Para controlados, el movimiento queda pendiente de validación.
+            </span>
           </label>
         )}
         {needsLot && !loadingLots && lots.length === 0 && (
@@ -402,7 +551,7 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
 
         {modal.action === "administrado" && (
           <label className="block text-sm font-medium text-slate-700">
-            Cantidad administrada para descontar stock
+            Cantidad administrada ({unitLabel})
             <input
               type="number"
               min="0.01"
@@ -411,6 +560,9 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
               onChange={(e) => setDosis(e.target.value)}
               className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             />
+            <span className="mt-1 block text-xs text-slate-500">
+              Usa la cantidad real entregada; debe coincidir con la unidad del lote para mantener stock confiable.
+            </span>
           </label>
         )}
 
@@ -439,14 +591,19 @@ function EmarActionModal({ modal, saving, onClose, onSubmit }) {
         </label>
 
         {!isValidation && (
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className="flex items-start gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={seguimiento}
               onChange={(e) => setSeguimiento(e.target.checked)}
-              className="h-4 w-4 accent-teal-700"
+              className="mt-0.5 h-4 w-4 accent-teal-700"
             />
-            Crear observación con seguimiento
+            <span>
+              Crear observación con seguimiento
+              <span className="block text-xs text-slate-500">
+                Úsalo si la administración u omisión requiere control posterior del equipo.
+              </span>
+            </span>
           </label>
         )}
 

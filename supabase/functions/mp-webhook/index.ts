@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
   const xSignature = req.headers.get("x-signature");
   const xRequestId = req.headers.get("x-request-id");
 
-  // Body (puede ser vacío en algunos modos legacy)
+  // Body (puede venir vacío según el tipo de notificación de MercadoPago)
   let bodyText = "";
   try {
     bodyText = await req.text();
@@ -101,6 +101,10 @@ Deno.serve(async (req) => {
   // Si el insert duplicó por unique(mp_request_id) significa retry → ya procesado.
   if (eventInsert.error && /duplicate|unique/i.test(eventInsert.error.message)) {
     return jsonOk({ ok: true, deduped: true });
+  }
+  if (eventInsert.error) {
+    console.error("mp-webhook event insert failed", eventInsert.error);
+    return jsonOk({ error: "event-log-failed" }, 500);
   }
 
   // Si no hay data.id útil, simplemente acusamos recibo.
@@ -181,9 +185,12 @@ async function handlePreapproval(sb: Sb, dataId: string) {
   };
   if (proximo) update.proximo_cobro_en = proximo;
   if (status === "activo") {
+    update.plan = "mensual";
+    update.crm_estado = "cliente_activo";
     update.fecha_pago = new Date().toISOString();
     if (proximo) update.fecha_vencimiento_suscripcion = proximo;
   }
+  if (status === "pendiente") update.crm_estado = "pendiente_pago";
   if (status === "cancelado") update.cancelado_en = new Date().toISOString();
 
   const { error: updErr } = await sb
@@ -191,6 +198,10 @@ async function handlePreapproval(sb: Sb, dataId: string) {
     .update(update)
     .eq("id", eleam.id);
   if (updErr) throw updErr;
+
+  if (status === "activo") {
+    await markDemoLeadConverted(sb, eleam.id);
+  }
 }
 
 async function handleAuthorizedPayment(sb: Sb, dataId: string) {
@@ -200,7 +211,7 @@ async function handleAuthorizedPayment(sb: Sb, dataId: string) {
 
   const { data: eleam, error: eleamErr } = await sb
     .from("eleams")
-    .select("id, plan_id")
+    .select("id, plan, plan_id")
     .eq("mp_preapproval_id", preapprovalId)
     .maybeSingle();
   if (eleamErr) throw eleamErr;
@@ -244,14 +255,16 @@ async function handleAuthorizedPayment(sb: Sb, dataId: string) {
   // Refrescar el ELEAM en función del estado del pago
   const update: Record<string, unknown> = {};
   if (estadoPago === "completado") {
+    update.plan = "mensual";
     update.subscription_status = "activo";
+    update.crm_estado = "cliente_activo";
     update.fecha_pago = fechaPago;
     if (proximo) {
       update.proximo_cobro_en = proximo;
       update.fecha_vencimiento_suscripcion = proximo;
     }
   } else if (estadoPago === "fallido") {
-    update.subscription_status = "en_gracia"; // se mantiene activo durante reintentos
+    update.subscription_status = eleam.plan === "demo" ? "pendiente" : "en_gracia";
   }
   if (Object.keys(update).length > 0) {
     const { error: updErr } = await sb.from("eleams")
@@ -259,6 +272,28 @@ async function handleAuthorizedPayment(sb: Sb, dataId: string) {
       .eq("id", eleam.id);
     if (updErr) throw updErr;
   }
+
+  if (estadoPago === "completado") {
+    await markDemoLeadConverted(sb, eleam.id);
+  }
+}
+
+async function markDemoLeadConverted(sb: Sb, eleamId: string) {
+  const { data: admins, error: adminsErr } = await sb
+    .from("profiles")
+    .select("id")
+    .eq("eleam_id", eleamId)
+    .eq("rol", "admin_eleam");
+  if (adminsErr) throw adminsErr;
+
+  const adminIds = (admins ?? []).map((row) => row.id).filter(Boolean);
+  if (adminIds.length === 0) return;
+
+  const { error } = await sb
+    .from("demo_leads")
+    .update({ estado: "convertido" })
+    .in("demo_user_id", adminIds);
+  if (error) throw error;
 }
 
 function mapPreapprovalStatus(s?: string): string {

@@ -97,7 +97,12 @@ export default function AccreditationCarpeta() {
         {/* Resumen */}
         <section>
           <h2 className="text-lg font-bold border-b border-slate-200 pb-1 mb-3">Resumen general</h2>
-          {(resumen.evidenciasVigentes === 0 || resumen.pendientes > 0) && (
+          {resumen.total === 0 && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 print:border-slate-300 print:bg-white">
+              Esta carpeta aún no tiene requisitos SEREMI provisionados. Vuelve al panel de acreditación e inicializa los requisitos antes de exportar.
+            </div>
+          )}
+          {resumen.total > 0 && (resumen.evidenciasVigentes === 0 || resumen.pendientes > 0) && (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 print:border-slate-300 print:bg-white">
               Carpeta en preparación: {resumen.evidenciasVigentes} evidencia{resumen.evidenciasVigentes === 1 ? "" : "s"} vigente{resumen.evidenciasVigentes === 1 ? "" : "s"} y {resumen.pendientes} requisito{resumen.pendientes === 1 ? "" : "s"} pendiente{resumen.pendientes === 1 ? "" : "s"} de revisión.
             </div>
@@ -125,6 +130,9 @@ export default function AccreditationCarpeta() {
         {/* Cumplimiento por ámbito */}
         <section>
           <h2 className="text-lg font-bold border-b border-slate-200 pb-1 mb-3">Cumplimiento por ámbito</h2>
+          {resumen.ambitos.length === 0 ? (
+            <p className="text-sm text-slate-500">Sin ámbitos provisionados para este ELEAM.</p>
+          ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500 border-b">
@@ -149,6 +157,7 @@ export default function AccreditationCarpeta() {
               ))}
             </tbody>
           </table>
+          )}
         </section>
 
         {/* Observaciones abiertas */}
@@ -180,6 +189,9 @@ export default function AccreditationCarpeta() {
         {/* Detalle por ámbito */}
         <section className="space-y-4">
           <h2 className="text-lg font-bold border-b border-slate-200 pb-1">Detalle de requisitos</h2>
+          {requisitosPorAmbito.length === 0 && (
+            <p className="text-sm text-slate-500">No hay requisitos para listar.</p>
+          )}
           {requisitosPorAmbito.map((g) => (
             <div key={g.ambito.codigo} className="break-inside-avoid">
               <h3 className="text-base font-bold text-teal-700 mt-4 mb-2">

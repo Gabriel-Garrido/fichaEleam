@@ -13,6 +13,7 @@ import { getCallerProfile, adminClient } from "../_shared/supabase.ts";
 import {
   createPreapproval,
   PreapprovalCreateInput,
+  updatePreapprovalStatus,
 } from "../_shared/mercadopago.ts";
 
 Deno.serve(async (req) => {
@@ -83,15 +84,19 @@ Deno.serve(async (req) => {
     // Cargar ELEAM y validar estado
     const { data: eleam, error: eleamErr } = await admin
       .from("eleams")
-      .select("id, nombre, subscription_status, mp_preapproval_id")
+      .select("id, nombre, plan, subscription_status, mp_preapproval_id, fecha_vencimiento_suscripcion")
       .eq("id", profile.eleam_id)
       .maybeSingle();
     if (eleamErr || !eleam) {
       return jsonResponse(req, { error: "ELEAM no encontrado" }, 404);
     }
 
-    if (eleam.subscription_status === "activo" ||
-        eleam.subscription_status === "en_gracia") {
+    const isDemo = eleam.plan === "demo";
+    const hasActivePaidSubscription =
+      !isDemo &&
+      (eleam.subscription_status === "activo" || eleam.subscription_status === "en_gracia");
+
+    if (hasActivePaidSubscription) {
       return jsonResponse(
         req,
         { error: "El ELEAM ya tiene una suscripción activa" },
@@ -142,10 +147,21 @@ Deno.serve(async (req) => {
         mp_preapproval_id: preapproval.id,
         mp_payer_email: input.payer_email,
         subscription_status: "pendiente",
+        crm_estado: "pendiente_pago",
       })
       .eq("id", eleam.id);
     if (updErr) {
       console.error("eleams update", updErr);
+      try {
+        await updatePreapprovalStatus(preapproval.id, "cancelled");
+      } catch (cancelErr) {
+        console.error("preapproval rollback failed", cancelErr);
+      }
+      return jsonResponse(
+        req,
+        { error: "No se pudo registrar el proceso de pago. Intenta nuevamente." },
+        500,
+      );
     }
 
     return jsonResponse(req, {

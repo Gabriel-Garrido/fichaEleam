@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
@@ -40,6 +40,7 @@ const IconCheck = () => (
 const VISIT_STATUS = {
   pendiente:  { label: "Esperando validación", pill: "bg-amber-100 text-amber-800",   dot: "bg-amber-400" },
   activa:     { label: "En visita",            pill: "bg-teal-100 text-teal-800",     dot: "bg-teal-500 animate-pulse" },
+  salida_pendiente: { label: "Salida por validar", pill: "bg-sky-100 text-sky-800",   dot: "bg-sky-500 animate-pulse" },
   completada: { label: "Completada",           pill: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-500" },
   cancelada:  { label: "Cancelada",            pill: "bg-slate-100 text-slate-500",   dot: "bg-slate-300" },
 };
@@ -56,6 +57,7 @@ const MED_STATUS = {
   administrado: { label: "Administrado", color: "text-emerald-700 bg-emerald-50" },
   validado:     { label: "Validado",     color: "text-teal-700 bg-teal-50" },
   pendiente:    { label: "Pendiente",    color: "text-amber-700 bg-amber-50" },
+  pendiente_validacion: { label: "Por validar", color: "text-sky-700 bg-sky-50" },
   omitido:      { label: "Omitido",      color: "text-rose-600 bg-rose-50" },
 };
 
@@ -88,6 +90,13 @@ function EmptySection({ message }) {
   );
 }
 
+function formatDateOnlyLabel(value) {
+  if (!value) return "hoy";
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.valueOf())) return value;
+  return date.toLocaleDateString("es-CL", { weekday: "long", day: "2-digit", month: "long" });
+}
+
 /* ─── Resident selector ──────────────────────────────────────── */
 function ResidentSelector({ residentes, activeId, onSelect }) {
   if (residentes.length <= 1) return null;
@@ -108,6 +117,29 @@ function ResidentSelector({ residentes, activeId, onSelect }) {
         </button>
       ))}
     </div>
+  );
+}
+
+function DateSelector({ value, onChange, loading }) {
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">Registros por día</p>
+        <p className="text-sm text-slate-500">
+          Al abrir ves el día actual. Cambia la fecha para revisar cuidados, medicación, signos, observaciones y visitas anteriores.
+        </p>
+      </div>
+      <label className="text-sm font-semibold text-slate-700">
+        Fecha
+        <input
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={loading}
+          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 sm:w-44"
+        />
+      </label>
+    </section>
   );
 }
 
@@ -163,8 +195,42 @@ function ResidentHero({ resident, eleam, onNavigateVisitas }) {
   );
 }
 
+function ResidentClinicalSummary({ resident }) {
+  const rows = [
+    ["Ingreso", resident?.fecha_ingreso],
+    ["Previsión", resident?.prevision],
+    ["Dependencia", resident?.nivel_dependencia],
+    ["Barthel", resident?.indice_barthel != null ? `${resident.indice_barthel}/100` : null],
+    ["Katz", resident?.escala_katz],
+    ["Diagnóstico principal", resident?.diagnostico_principal],
+    ["Diagnósticos secundarios", Array.isArray(resident?.diagnosticos_secundarios) ? resident.diagnosticos_secundarios.join(", ") : null],
+    ["Alergias", Array.isArray(resident?.alergias) ? resident.alergias.join(", ") : null],
+    ["Grupo sanguíneo", resident?.grupo_sanguineo],
+    ["Contacto", [resident?.nombre_contacto, resident?.parentesco_contacto, resident?.telefono_contacto].filter(Boolean).join(" · ")],
+  ].filter(([, value]) => value);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="mb-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">Ficha resumida</p>
+        <h2 className="text-sm font-bold text-slate-900">Información clínica compartida por el equipo</h2>
+      </div>
+      <dl className="grid gap-3 sm:grid-cols-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="rounded-xl bg-slate-50 p-3">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
+            <dd className="mt-1 text-sm font-medium text-slate-700">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 /* ─── Today's summary strip ──────────────────────────────────── */
-function DaySummary({ care, medications }) {
+function DaySummary({ care, medications, selectedDate }) {
   const s = summarizeFamilySnapshot({ care, medications });
   const stats = [
     { label: "Cuidados cumplidos",    value: s.careDone,           tone: s.careDone > 0 ? "emerald" : "slate" },
@@ -179,13 +245,18 @@ function DaySummary({ care, medications }) {
     slate:   "bg-slate-50 border-slate-100 text-slate-600",
   };
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        Resumen de {formatDateOnlyLabel(selectedDate)}
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {stats.map((s) => (
         <div key={s.label} className={`rounded-xl border p-3 ${tones[s.tone]}`}>
           <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 leading-tight">{s.label}</p>
           <p className="mt-1 text-2xl font-black tabular-nums">{s.value}</p>
         </div>
       ))}
+      </div>
     </div>
   );
 }
@@ -242,14 +313,15 @@ function VitalsSection({ vitals }) {
 function VisitsSummarySection({ visits, onNavigateVisitas }) {
   const recentVisits = (visits ?? []).slice(0, 4);
   const hasActive = recentVisits.some((v) => v.estado === "activa");
+  const hasExitPending = recentVisits.some((v) => v.estado === "salida_pendiente");
   const hasPending = recentVisits.some((v) => v.estado === "pendiente");
 
   return (
     <SectionCard
       icon={<IconUsers />}
       title="Mis visitas recientes"
-      badge={hasActive ? "En visita" : hasPending ? "Pendiente" : null}
-      badgeColor={hasActive ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-800"}
+      badge={hasExitPending ? "Salida pendiente" : hasActive ? "En visita" : hasPending ? "Pendiente" : null}
+      badgeColor={hasExitPending ? "bg-sky-100 text-sky-800" : hasActive ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-800"}
     >
       {recentVisits.length === 0 ? (
         <EmptySection message="Aún no tienes visitas registradas." />
@@ -265,6 +337,9 @@ function VisitsSummarySection({ visits, onNavigateVisitas }) {
                   </p>
                   {v.duracion_min && (
                     <p className="text-xs text-slate-400">{v.duracion_min} min</p>
+                  )}
+                  {v.salida_anunciada_en && !v.salida_validada_en && (
+                    <p className="text-xs text-sky-600">Salida anunciada</p>
                   )}
                 </div>
                 <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.pill}`}>
@@ -289,11 +364,16 @@ function VisitsSummarySection({ visits, onNavigateVisitas }) {
 /* ─── Care section ───────────────────────────────────────────── */
 const TURNO_LABEL = { mañana: "Mañana", tarde: "Tarde", noche: "Noche" };
 
+function formatCareHour(item) {
+  const hour = item?.hora?.slice(0, 5);
+  return hour ? `${TURNO_LABEL[item.turno] ?? item.turno ?? "Turno"} · ${hour}` : (TURNO_LABEL[item.turno] ?? item.turno ?? null);
+}
+
 function CareSection({ care }) {
   if (!care?.length) {
     return (
-      <SectionCard icon={<IconClipboard />} title="Cuidados de hoy">
-        <EmptySection message="Sin cuidados programados para hoy." />
+      <SectionCard icon={<IconClipboard />} title="Cuidados del día">
+        <EmptySection message="Sin cuidados registrados para esta fecha." />
       </SectionCard>
     );
   }
@@ -306,7 +386,7 @@ function CareSection({ care }) {
   return (
     <SectionCard
       icon={<IconClipboard />}
-      title="Cuidados de hoy"
+      title="Cuidados del día"
       badge={`${done}/${care.length}`}
       badgeColor={done === care.length ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}
     >
@@ -323,17 +403,32 @@ function CareSection({ care }) {
                 {items.map((item) => {
                   const st = CARE_STATUS[item.estado] ?? CARE_STATUS.pendiente;
                   const isDone = item.estado === "cumplida";
+                  const safeLabel = item.resumen || item.titulo;
                   return (
                     <li key={item.id} className={`flex items-start gap-3 rounded-xl p-3 ${isDone ? "bg-emerald-50/60" : "bg-slate-50"}`}>
                       <div className={`mt-0.5 shrink-0 grid h-5 w-5 place-items-center rounded-full ${isDone ? "bg-emerald-500" : "border-2 border-slate-200 bg-white"}`}>
                         {isDone && <span className="text-white"><IconCheck /></span>}
                       </div>
                       <div className="flex-1 min-w-0">
+                        <div className="mb-0.5 flex flex-wrap items-center gap-2">
+                          {formatCareHour(item) && (
+                            <span className="text-[10px] font-semibold uppercase text-slate-400">
+                              {formatCareHour(item)}
+                            </span>
+                          )}
+                          {item.requiere_seguimiento && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              Seguimiento
+                            </span>
+                          )}
+                        </div>
                         <p className={`text-sm font-medium ${isDone ? "text-slate-500 line-through" : "text-slate-800"}`}>
-                          {item.titulo}
+                          {safeLabel}
                         </p>
-                        {item.resumen && item.resumen !== item.titulo && (
-                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{item.resumen}</p>
+                        {item.estado === "reprogramada" && item.reprogramada_para && (
+                          <p className="mt-0.5 text-xs text-sky-600">
+                            Nueva hora: {formatDateTime(item.reprogramada_para)}
+                          </p>
                         )}
                       </div>
                       <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>
@@ -355,8 +450,8 @@ function CareSection({ care }) {
 function MedicationSection({ medications }) {
   if (!medications?.length) {
     return (
-      <SectionCard icon={<IconPill />} title="Medicación de hoy">
-        <EmptySection message="Sin medicación programada para hoy." />
+      <SectionCard icon={<IconPill />} title="Medicación del día">
+        <EmptySection message="Sin medicación programada para esta fecha." />
       </SectionCard>
     );
   }
@@ -364,7 +459,7 @@ function MedicationSection({ medications }) {
   return (
     <SectionCard
       icon={<IconPill />}
-      title="Medicación de hoy"
+      title="Medicación del día"
       badge={`${given}/${medications.length}`}
       badgeColor={given === medications.length ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}
     >
@@ -446,11 +541,13 @@ export default function FamiliarPortal() {
     residentes,
     activeId,
     activeResident,
+    selectedDate,
     snapshot,
     loading,
     loadingSnapshot,
     error,
     selectResident,
+    setSelectedDate,
   } = useFamiliarResidentData({ toast });
 
   const resident     = snapshot?.resident ?? activeResident;
@@ -491,6 +588,7 @@ export default function FamiliarPortal() {
       </div>
 
       <ResidentSelector residentes={residentes} activeId={activeId} onSelect={selectResident} />
+      <DateSelector value={selectedDate} onChange={setSelectedDate} loading={loadingSnapshot} />
 
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -503,11 +601,14 @@ export default function FamiliarPortal() {
       ) : (
         <>
           {resident && (
-            <ResidentHero
-              resident={resident}
-              eleam={eleam}
-              onNavigateVisitas={() => navigate("/familiar/visitas")}
-            />
+            <>
+              <ResidentHero
+                resident={resident}
+                eleam={eleam}
+                onNavigateVisitas={() => navigate("/familiar/visitas")}
+              />
+              <ResidentClinicalSummary resident={resident} />
+            </>
           )}
 
           {loadingSnapshot && (
@@ -517,7 +618,7 @@ export default function FamiliarPortal() {
           )}
 
           {/* Today summary */}
-          <DaySummary care={care} medications={medications} />
+          <DaySummary care={care} medications={medications} selectedDate={selectedDate} />
 
           {/* Two-column grid */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

@@ -10,7 +10,6 @@ const Login = lazy(() => import("../features/auth/Login"));
 const RecuperarAcceso = lazy(() => import("../features/auth/RecuperarAcceso"));
 const ResetPassword = lazy(() => import("../features/auth/ResetPassword"));
 const LandingPage = lazy(() => import("../features/landing/LandingPage"));
-const GuidedDemoPage = lazy(() => import("../features/demo/GuidedDemoPage"));
 const PaymentPage = lazy(() => import("../features/payment/PaymentPage"));
 const PaymentReturn = lazy(() => import("../features/payment/PaymentReturn"));
 const TeamManagement = lazy(() => import("../features/team/TeamManagement"));
@@ -73,7 +72,6 @@ function AppRouter() {
         <Route path="/register"          element={<Navigate to="/login" replace />} />
         <Route path="/recuperar-acceso"  element={<RecuperarAcceso />} />
         <Route path="/reset-password"    element={<ResetPassword />} />
-        <Route path="/demo/:token"      element={<GuidedDemoPage />} />
         <Route path="/pago"             element={user ? <AppShell><PaymentPage /></AppShell> : <PaymentPage />} />
         <Route path="/pago/return" element={<PaymentReturn />} />
         <Route path="/blog"        element={<PublicBlogList />} />

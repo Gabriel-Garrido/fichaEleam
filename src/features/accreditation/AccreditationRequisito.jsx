@@ -436,9 +436,9 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
           </div>
 
           {file && (
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-teal-100 bg-teal-50 px-3 py-2">
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-teal-100 bg-teal-50 px-3 py-2">
               <div className="flex min-w-0 items-center gap-2 text-teal-900">
-                <span className="shrink-0 rounded-md bg-white p-1 text-teal-700">
+                <span className="shrink-0 rounded-xl bg-white p-1 text-teal-700">
                   <FileIcon />
                 </span>
                 <div className="min-w-0">
@@ -452,7 +452,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
                   setFile(null);
                   if (inputRef.current) inputRef.current.value = "";
                 }}
-                className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-teal-800 hover:bg-white"
+                className="shrink-0 rounded-xl px-2 py-1 text-xs font-semibold text-teal-800 hover:bg-white"
               >
                 Quitar
               </button>

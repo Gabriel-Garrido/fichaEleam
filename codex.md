@@ -143,7 +143,7 @@ Ver **[CLAUDE.md — Autenticación](./CLAUDE.md#autenticación-y-autorización)
 
 ## Base de Datos (Supabase)
 
-23 tablas. Schema en `supabase_schema.sql`.
+38 tablas. Schema canónico en `supabase_schema.sql`.
 
 ### Principales
 
@@ -299,6 +299,9 @@ Tabla `funcionario_permisos` con columnas bool:
 | `crear_residentes`, `editar_residentes`, `eliminar_residentes` | CRUD residentes |
 | `crear_signos_vitales`, `editar_signos_vitales`, `eliminar_signos_vitales` | Signos vitales |
 | `crear_observaciones`, `editar_observaciones`, `eliminar_observaciones` | Observaciones |
+| `crear_planes_cuidado`, `editar_planes_cuidado`, `completar_tareas_cuidado`, `editar_indicaciones_cuidado` | Plan de cuidado |
+| `crear_indicaciones_medicamentos`, `editar_indicaciones_medicamentos`, `administrar_medicamentos` | eMAR |
+| `validar_medicamentos_controlados`, `ajustar_stock_medicamentos` | eMAR controlados y stock |
 | `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación |
 | `registrar_visitas` | Visitas familiares |
 
@@ -409,7 +412,7 @@ Base consistente. Propagan `className` + rest props.
 
 - **[CLAUDE.md](./CLAUDE.md)** — Documentación técnica completa
 - **[README.md](./README.md)** — Setup, MercadoPago, despliegue
-- **`supabase_schema.sql`** — Schema completo (23 tablas, RLS, triggers)
+- **`supabase_schema.sql`** — Schema canónico completo (38 tablas, RLS, funciones, triggers, seeds y grants)
 - **`src/context/AuthContext.jsx`** — useAuth(), derivados
 - **`src/components/ProtectedRoute.jsx`** — Guards
 - **`src/features/vitalSigns/vitalRanges.js`** — Rangos clínicos

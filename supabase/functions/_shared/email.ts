@@ -247,7 +247,7 @@ export function demoWelcomeEmail({
       <p style="color:#1e293b;font-size:16px;margin:0 0 8px">Hola, <strong>${safeNombre}</strong></p>
       <p style="color:#475569;font-size:14px;margin:0 0 24px">
         Tu acceso a la demo de FichaEleam para <strong>${safeEleamNombre}</strong> ha sido activado.
-        Explora la plataforma con datos reales durante tu período de prueba.
+        Explora tu entorno de prueba durante el período demo; podrás cargar residentes, equipo y documentos cuando lo necesites.
       </p>
 
       <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:20px 24px;margin-bottom:24px">

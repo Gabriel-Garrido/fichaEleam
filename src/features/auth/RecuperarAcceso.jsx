@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../services/supabaseConfig";
 import { validateEmail } from "../../utils/validators";
 import Input from "../../components/Input";
 import Button from "../../components/Button";
-import { authErrorMessage } from "./authService";
+import { authErrorMessage, isAuthConfigured, requestPasswordReset } from "./authService";
 
 export default function RecuperarAcceso() {
   const navigate = useNavigate();
@@ -21,16 +20,13 @@ export default function RecuperarAcceso() {
       setError("Ingresa un correo electrónico válido.");
       return;
     }
-    if (!supabase) {
+    if (!isAuthConfigured()) {
       setError("Supabase no está configurado.");
       return;
     }
     setLoading(true);
     try {
-      const { error: err } = await supabase.auth.resetPasswordForEmail(clean, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (err) throw err;
+      await requestPasswordReset(clean, `${window.location.origin}/reset-password`);
       setSubmitted(true);
     } catch (err) {
       console.warn("reset password error:", err);

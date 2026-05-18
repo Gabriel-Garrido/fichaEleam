@@ -66,7 +66,7 @@ function ProtectedRoute({
   if (requiredFeature && !canFeature(requiredFeature)) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <h1 className="text-2xl font-semibold text-slate-950">Sin acceso a esta feature</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Tu cuenta no tiene habilitado este módulo. Pide al administrador que revise los permisos.

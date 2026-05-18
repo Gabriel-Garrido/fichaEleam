@@ -264,7 +264,7 @@ export default function TeamManagement() {
     }
   };
 
-  // ─── Handlers: invitaciones legacy ───────────────────────────────────────
+  // ─── Handlers: accesos Google pendientes ─────────────────────────────────
 
   const handleRevoke = async (id) => {
     try {
@@ -353,12 +353,12 @@ export default function TeamManagement() {
               <button
                 type="button"
                 onClick={() => copyText(credentialText)}
-                className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950"
+                className="rounded-xl bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950"
               >
                 Copiar credenciales
               </button>
             </div>
-            <div className="mt-3 max-h-40 overflow-auto rounded-lg bg-amber-50 p-2">
+            <div className="mt-3 max-h-40 overflow-auto rounded-xl bg-amber-50 p-2">
               {credentialRows.map((row) => (
                 <p key={row.rowNumber} className="font-mono text-xs text-amber-950">
                   {row.data.email}: {row.data.temp_password}
@@ -539,7 +539,7 @@ export default function TeamManagement() {
             )}
           </section>
 
-          {/* Invitaciones pendientes legacy */}
+          {/* Accesos Google pendientes */}
           {invitesFunc.length > 0 && (
             <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
               <h2 className="font-bold text-slate-800 mb-3">Invitaciones pendientes</h2>
@@ -634,7 +634,7 @@ export default function TeamManagement() {
             )}
           </section>
 
-          {/* Invitaciones familiares legacy */}
+          {/* Accesos familiares Google pendientes */}
           {invitesFam.length > 0 && (
             <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
               <h2 className="font-bold text-slate-800 mb-3">Invitaciones pendientes</h2>

@@ -14,6 +14,8 @@
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
@@ -36,6 +38,9 @@ Deno.serve(async (req) => {
 
     if (!profileId) {
       return jsonResponse(req, { error: "profile_id es obligatorio" }, 400);
+    }
+    if (!UUID_RE.test(profileId)) {
+      return jsonResponse(req, { error: "profile_id tiene formato inválido" }, 400);
     }
 
     const sb = adminClient();

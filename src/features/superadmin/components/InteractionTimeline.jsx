@@ -169,12 +169,12 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
                   {/* Header row */}
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
                     {/* Type icon + label */}
-                    <div className="flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                    <div className="flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-xl">
                       <TipoIcon tipo={i.tipo} />
                       <span className="text-[10px] font-bold uppercase">{i.tipo}</span>
                     </div>
                     {i.canal && (
-                      <span className="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md capitalize">{i.canal}</span>
+                      <span className="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded-xl capitalize">{i.canal}</span>
                     )}
                     {res && (
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${res.cls}`}>
@@ -189,7 +189,7 @@ export default function InteractionTimeline({ eleamId, interactions = [], onCrea
 
                   {/* Next action */}
                   {i.proxima_accion && (
-                    <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 border border-amber-100 px-2.5 py-1.5">
+                    <div className="mt-2 flex items-start gap-1.5 rounded-xl bg-amber-50 border border-amber-100 px-2.5 py-1.5">
                       <svg className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>

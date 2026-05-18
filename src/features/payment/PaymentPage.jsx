@@ -12,6 +12,7 @@ import {
   cancelSubscription,
   getMyPayments,
 } from "./paymentService";
+import { canStartSubscription, subscriptionButtonLabel } from "./paymentStatus";
 import { formatDate } from "../../utils/dateUtils";
 
 function daysUntil(iso) {
@@ -47,7 +48,7 @@ function formatCLP(monto) {
 const SUBSCRIPTION_LABEL = {
   activo: { txt: "Suscripción activa", cls: "bg-emerald-100 text-emerald-700" },
   en_gracia: { txt: "Cobro en reintento", cls: "bg-amber-100 text-amber-800" },
-  pendiente: { txt: "Pago pendiente", cls: "bg-blue-100 text-blue-700" },
+  pendiente: { txt: "Pago pendiente", cls: "bg-sky-100 text-sky-700" },
   pausado: { txt: "Suscripción pausada", cls: "bg-slate-100 text-slate-700" },
   cancelado: { txt: "Suscripción cancelada", cls: "bg-rose-100 text-rose-700" },
   vencido: { txt: "Suscripción vencida", cls: "bg-rose-100 text-rose-700" },
@@ -112,6 +113,10 @@ export default function PaymentPage() {
       );
       return;
     }
+    if (!canStartSubscription(eleam)) {
+      toast("Ya hay un proceso de pago en curso. Espera la confirmación de MercadoPago o contacta soporte.", "info");
+      return;
+    }
     setLoadingAction(true);
     try {
       const res = await startSubscription({ planCodigo: codigo });
@@ -149,6 +154,7 @@ export default function PaymentPage() {
   const statusInfo = SUBSCRIPTION_LABEL[subscriptionStatus] ?? SUBSCRIPTION_LABEL.inactivo;
   const proximo = eleam?.proximo_cobro_en ?? eleam?.fecha_vencimiento_suscripcion ?? null;
   const isDemo = isAdminEleam && eleam?.plan === "demo";
+  const isPaymentPending = subscriptionStatus === "pendiente" && Boolean(eleam?.mp_preapproval_id);
   const demoExpiry = eleam?.fecha_vencimiento_suscripcion ?? null;
   const demoDaysLeft = daysUntil(demoExpiry);
   const demoExpired = demoDaysLeft != null && demoDaysLeft < 0;
@@ -221,25 +227,25 @@ export default function PaymentPage() {
         )}
 
         {user && !isAdminEleam && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
-            <div className="shrink-0 mt-0.5 w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center">
-              <svg className="w-3.5 h-3.5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
+            <div className="shrink-0 mt-0.5 w-6 h-6 bg-sky-200 rounded-full flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-blue-800 text-sm mb-1">
+              <h3 className="font-semibold text-sky-800 text-sm mb-1">
                 {blockedNonAdmin
                   ? "Debes contactar al administrador del ELEAM"
                   : "La suscripción la administra el dueño del ELEAM"}
               </h3>
-              <p className="text-sm text-blue-700">
+              <p className="text-sm text-sky-700">
                 {blockedNonAdmin
                   ? "Funcionarios y familiares no pueden activar pagos. Pide al administrador que regularice la suscripción o solicita que el superadmin revise el demo."
                   : "Tu acceso está incluido sin costo mientras el administrador del ELEAM mantenga la suscripción activa. Si crees que la suscripción debería estar activa, contáctalo."}
               </p>
               {rol && (
-                <p className="text-xs text-blue-600 mt-2">
+                <p className="text-xs text-sky-600 mt-2">
                   Tipo de cuenta: <span className="font-semibold">{rol}</span>
                 </p>
               )}
@@ -270,9 +276,13 @@ export default function PaymentPage() {
                   </div>
                   <p className={`text-sm leading-relaxed ${demoExpired ? "text-rose-700" : "text-amber-800"}`}>
                     {demoDaysLeft == null
-                      ? "Estás en modo demo. Elige un plan para activar tu suscripción completa."
+                      ? isPaymentPending
+                        ? "Tu pago está iniciado. Esperamos la confirmación de MercadoPago para convertir el demo en suscripción activa."
+                        : "Estás en modo demo. Elige un plan para activar tu suscripción completa."
                       : demoExpired
                         ? `El acceso demo venció hace ${Math.abs(demoDaysLeft)} día${Math.abs(demoDaysLeft) !== 1 ? "s" : ""}. Activa un plan para recuperar el acceso completo.`
+                        : isPaymentPending
+                          ? `Pago iniciado con MercadoPago. Tu demo sigue disponible hasta el ${formatDate(demoExpiry)} mientras llega la confirmación.`
                         : demoDaysLeft === 0
                           ? "Tu demo vence hoy. Elige un plan a continuación para continuar sin interrupciones."
                           : `Tienes ${demoDaysLeft} día${demoDaysLeft !== 1 ? "s" : ""} restante${demoDaysLeft !== 1 ? "s" : ""} de prueba${demoExpiry ? ` · vence el ${formatDate(demoExpiry)}` : ""}. Elige un plan para continuar.`}
@@ -453,7 +463,8 @@ export default function PaymentPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
             {plans.map((p) => {
               const popular = p.destacado;
-              const isCurrent = eleam?.plan_id === p.id && pagoActivo;
+              const isPendingPlan = eleam?.plan_id === p.id && subscriptionStatus === "pendiente";
+              const isCurrent = eleam?.plan_id === p.id && pagoActivo && !isPendingPlan;
               return (
                 <div
                   key={p.id}
@@ -492,14 +503,16 @@ export default function PaymentPage() {
                       <button
                         type="button"
                         onClick={() => handleStart(p.codigo)}
-                        disabled={loadingAction || (user && !isAdminEleam)}
+                        disabled={loadingAction || (user && !isAdminEleam) || isPendingPlan}
                         className={`w-full font-semibold py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                           popular
                             ? "bg-white text-teal-700 hover:bg-slate-100"
                             : "bg-teal-700 text-white hover:bg-teal-800"
                         }`}
                       >
-                        {loadingAction ? "Procesando..." : (user && !isAdminEleam ? "Solo admin ELEAM" : isDemo ? "Activar plan" : user ? "Suscribirme" : "Solicitar demo")}
+                        {loadingAction
+                          ? "Procesando..."
+                          : subscriptionButtonLabel({ isDemo, isPendingPlan, user, isAdminEleam })}
                       </button>
                     )}
                   </div>
