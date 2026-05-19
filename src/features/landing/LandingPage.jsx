@@ -209,13 +209,13 @@ export default function LandingPage() {
         description: "Plataforma de gestión para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile. Incluye Carpeta SEREMI DS 14/2017, fichas clínicas digitales, signos vitales con alertas clínicas y portal para familias.",
         offers: { "@type": "Offer", price: "50000", priceCurrency: "CLP" },
         inLanguage: "es-CL",
-        url: "https://app.fichaeleam.cl",
+        url: "https://fichaeleam.cl",
       },
       {
         "@context": "https://schema.org",
         "@type": "Organization",
         name: "FichaEleam",
-        url: "https://app.fichaeleam.cl",
+        url: "https://fichaeleam.cl",
         description: "Software de gestión clínica y documental para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile, cumpliendo el DS 14/2017.",
         areaServed: "CL",
         contactPoint: {

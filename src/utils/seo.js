@@ -5,7 +5,7 @@
 
 import { useEffect } from "react";
 
-const ORIGIN = "https://app.fichaeleam.cl";
+const ORIGIN = "https://fichaeleam.cl";
 
 function setMeta(attr, name, content) {
   if (!content) return;

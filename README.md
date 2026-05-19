@@ -55,12 +55,17 @@ VITE_SUPABASE_ANON_KEY=tu-anon-public-key
 Secrets de Edge Functions (no van en `.env` del frontend):
 
 ```bash
-npx supabase secrets set MP_ACCESS_TOKEN=TEST-...
+# Producción — dominio canónico https://fichaeleam.cl:
+npx supabase secrets set MP_ACCESS_TOKEN=APP_USR-...
 npx supabase secrets set MP_WEBHOOK_SECRET=<secret-webhook-mp>
-npx supabase secrets set PUBLIC_APP_URL=http://localhost:5173
-npx supabase secrets set ALLOWED_ORIGINS="http://localhost:5173"
-npx supabase secrets set RESEND_API_KEY=re_... # opcional
-npx supabase secrets set RESEND_FROM_EMAIL="FichaEleam <no-reply@fichaeleam.cl>" # opcional
+npx supabase secrets set PUBLIC_APP_URL=https://fichaeleam.cl
+npx supabase secrets set ALLOWED_ORIGINS=https://fichaeleam.cl
+npx supabase secrets set RESEND_API_KEY=re_...          # obligatorio: el acceso se entrega por correo
+npx supabase secrets set RESEND_FROM_EMAIL="FichaEleam <no-reply@fichaeleam.cl>"
+
+# APP_ENV: déjalo "production" (o sin definir) en producción. En dev/staging
+# usa otro valor para que CORS permita además localhost.
+npx supabase secrets set APP_ENV=production
 ```
 
 Supabase provee automáticamente `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` dentro de las Edge Functions del proyecto enlazado.
@@ -71,8 +76,8 @@ Supabase provee automáticamente `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE
 
 El sistema no envía correos desde SQL ni desde triggers de base de datos. Los correos automáticos salen desde Edge Functions usando Resend:
 
-- `create-demo-user`: cuando el superadmin activa un demo y se genera una contraseña temporal.
-- `create-staff-user`: cuando un admin ELEAM crea o repara un funcionario/familiar y se genera una contraseña temporal.
+- `create-demo-user`: cuando el superadmin aprueba un demo; envía al nuevo admin un enlace para definir su contraseña.
+- `create-staff-user`: cuando se crea o repara un funcionario/familiar; envía un enlace para definir su contraseña.
 
 Para habilitarlos en producción:
 
@@ -100,7 +105,7 @@ npx supabase functions deploy create-staff-user
 npx supabase secrets list
 ```
 
-Después crea un demo o un usuario de equipo desde la UI. La respuesta de la función debe traer `email_sent: true`. Si viene `email_sent: false`, la UI muestra `email_error`; revisa ese mensaje y los logs de la Edge Function. Si falta `RESEND_API_KEY`, el sistema sigue creando el usuario y muestra la contraseña temporal para compartirla manualmente.
+Después crea un demo o un usuario de equipo desde la UI. La respuesta de la función debe traer `email_sent: true`. Si viene `email_sent: false`, la UI muestra `email_error`; revisa ese mensaje y los logs de la Edge Function. El acceso se entrega siempre por enlace al correo: si el envío falla, el usuario puede pedirlo desde "¿Olvidaste tu contraseña?" en el inicio de sesión.
 
 Los correos de recuperación de contraseña, confirmación de email o magic links pertenecen a Supabase Auth. Si quieres que también salgan con dominio propio, configúralos aparte en Supabase Dashboard > Authentication > SMTP y Templates.
 
