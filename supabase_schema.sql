@@ -5663,11 +5663,12 @@ create policy "superadmin_manage_leads" on public.demo_leads
   for all to authenticated using (public.is_superadmin())
   with check (public.is_superadmin());
 
+-- landing_events ya no acepta inserts directos del cliente: la Edge
+-- Function track-landing-event inserta con service role tras validar tipo,
+-- longitudes y rate limit. Se mantiene el drop de anon_insert_events para
+-- retirar esa politica de bases que la tengan de versiones anteriores.
 drop policy if exists "anon_insert_events" on public.landing_events;
 drop policy if exists "superadmin_read_events" on public.landing_events;
-
-create policy "anon_insert_events" on public.landing_events
-  for insert to anon, authenticated with check (true);
 
 create policy "superadmin_read_events" on public.landing_events
   for select to authenticated using (public.is_superadmin());

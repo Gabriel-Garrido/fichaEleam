@@ -27,14 +27,18 @@ function getUtms() {
 export async function trackEvent(tipo, elemento = null, valor = null) {
   try {
     const utms = getUtms();
-    await supabase.from("landing_events").insert({
-      tipo,
-      pagina:    window.location.pathname,
-      elemento,
-      valor:     valor ? String(valor) : null,
-      session_id: getSessionId(),
-      referrer:  document.referrer || null,
-      ...utms,
+    // El insert directo del cliente fue retirado: la Edge Function
+    // track-landing-event valida e inserta con service role.
+    await supabase.functions.invoke("track-landing-event", {
+      body: {
+        tipo,
+        pagina:     window.location.pathname,
+        elemento,
+        valor:      valor ? String(valor) : null,
+        session_id: getSessionId(),
+        referrer:   document.referrer || null,
+        ...utms,
+      },
     });
   } catch {
     // Analytics never breaks UX
