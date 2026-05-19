@@ -38,6 +38,7 @@ export function AuthProvider({ children }) {
   const [eleam, setEleam]             = useState(null);
   const [permisos, setPermisos]       = useState(null);
   const [featurePermissions, setFeaturePermissions] = useState(null);
+  const [featurePermissionsError, setFeaturePermissionsError] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [supabaseError, setSupabaseError]   = useState(false);
@@ -163,9 +164,13 @@ export function AuthProvider({ children }) {
         } else {
           setFeaturePermissions({});
         }
+        setFeaturePermissionsError(false);
       } catch (featureError) {
         console.warn("No se pudieron cargar permisos por feature:", featureError);
-        setFeaturePermissions({});
+        // Fail-closed: sin permisos por feature confiables, canFeature bloquea
+        // las features protegidas hasta que el usuario reintente.
+        setFeaturePermissions(null);
+        setFeaturePermissionsError(true);
       }
     } catch (error) {
       console.warn("No se pudo cargar el perfil:", error);
@@ -270,9 +275,12 @@ export function AuthProvider({ children }) {
   const canFeature = useCallback((featureId) => {
     if (!featureId) return true;
     if (isSuperadmin) return true;
+    // Fail-closed: si los permisos por feature no cargaron, se bloquea la
+    // feature protegida (la UI muestra un aviso recuperable para reintentar).
+    if (featurePermissionsError) return false;
     if (!featurePermissions) return true;
     return featurePermissions[featureId] !== false;
-  }, [featurePermissions, isSuperadmin]);
+  }, [featurePermissions, featurePermissionsError, isSuperadmin]);
 
   const refetchProfile = useCallback(() => {
     if (!user) return Promise.resolve(null);
@@ -310,6 +318,7 @@ export function AuthProvider({ children }) {
     homePath,
     permisos,
     featurePermissions,
+    featurePermissionsError,
     can,
     canFeature,
     mustResetPassword,
@@ -321,7 +330,7 @@ export function AuthProvider({ children }) {
   }), [
     user, profile, eleam, plan, subscriptionStatus, pagoActivo, rol,
     isAdminEleam, isFuncionario, isFamiliar, isSuperadmin, isStaff,
-    homePath, permisos, featurePermissions, can, canFeature,
+    homePath, permisos, featurePermissions, featurePermissionsError, can, canFeature,
     mustResetPassword, profileLoading, authLoading, authNotice,
     supabaseError, refetchProfile,
   ]);

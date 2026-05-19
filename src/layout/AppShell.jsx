@@ -40,6 +40,20 @@ export default function AppShell({ children }) {
           onLogout={handleLogout}
         />
         <div className={`${collapsed ? "lg:pl-20" : "lg:pl-72"} transition-[padding] duration-200`}>
+          {auth.featurePermissionsError && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5">
+              <p className="text-sm text-amber-800">
+                No pudimos cargar tus permisos de acceso. Algunas secciones pueden no estar disponibles.
+              </p>
+              <button
+                type="button"
+                onClick={() => auth.refetchProfile()}
+                className="text-sm font-semibold text-amber-900 underline hover:no-underline"
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
           <ActivationNudge />
           <main className="min-h-screen pb-28 lg:pb-0">
             {children ?? <Outlet />}

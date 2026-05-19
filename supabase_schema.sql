@@ -5721,7 +5721,7 @@ create policy "storage_acreditacion_insert" on storage.objects
     and (
       public.is_superadmin()
       or (
-        public.my_rol() in ('admin_eleam','funcionario')
+        public.funcionario_can('subir_acreditacion')
         and public.eleam_has_access(public.my_eleam_id())
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
@@ -5734,7 +5734,7 @@ create policy "storage_acreditacion_delete" on storage.objects
     and (
       public.is_superadmin()
       or (
-        public.my_rol() = 'admin_eleam'
+        public.funcionario_can('archivar_acreditacion')
         and public.eleam_has_access(public.my_eleam_id())
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
