@@ -237,9 +237,9 @@ export function FirstRunPanel({ navigate }) {
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 lg:min-w-[460px]">
-          <SetupAction label="Agregar residente" sub="Ficha clínica base"  onClick={() => navigate("/residents/new")} />
-          <SetupAction label="Subir documento"   sub="Carpeta SEREMI"      onClick={() => navigate("/accreditation")} />
-          <SetupAction label="Ver demo"          sub="Ejemplo completo"    onClick={() => navigate("/demo")} />
+          <SetupAction label="Agregar residente" sub="Ficha clínica base"   onClick={() => navigate("/residents/new")} />
+          <SetupAction label="Subir documento"   sub="Carpeta SEREMI"       onClick={() => navigate("/accreditation")} />
+          <SetupAction label="Asignar camas"     sub="Habitaciones y camas" onClick={() => navigate("/camas")} />
         </div>
       </div>
     </section>

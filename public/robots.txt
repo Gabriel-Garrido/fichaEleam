@@ -2,7 +2,6 @@
 User-agent: *
 Allow: /
 Allow: /blog
-Allow: /demo
 Allow: /pago
 
 # Rutas internas (requieren auth, no se indexan)

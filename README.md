@@ -235,28 +235,26 @@ Si un correo ya tiene un lead abierto en `demo_leads` pero todavía no tiene `de
 ### Demo Guiado
 
 1. Prospecto llena formulario de landing.
-2. Se inserta row en `demo_leads`.
-3. El lead puede estar como solicitud pendiente, demo guiado por token, demo guiado vencido o cuenta demo aprobada (`demo_user_id`).
-4. Superadmin aprueba desde `LeadsPanel` con el botón contextual: crear cuenta demo, aprobar cuenta con login o aprobar demo vencido.
-5. `create-demo-user`:
+2. Se inserta row en `demo_leads` (estado `nuevo`).
+3. Superadmin aprueba desde `LeadsPanel` con el botón contextual.
+4. `create-demo-user`:
    - crea el ELEAM demo antes de crear el usuario Auth;
    - envía `eleam_id_direct` y `rol_direct=admin_eleam` por `app_metadata` de Admin API;
-   - crea un usuario `admin_eleam` con contraseña temporal si el email no existe;
+   - crea un nuevo `admin_eleam` si el email no existe en Auth;
    - reutiliza una cuenta `admin_eleam` existente si el email ya tiene perfil compatible;
-   - repara usuarios huérfanos de Auth creados por intentos OAuth/signUp previos, creando el perfil autorizado y asignando una contraseña temporal nueva;
+   - repara usuarios huérfanos de Auth del mismo email;
    - activa el ELEAM por 30 días;
    - marca el lead como `demo_activo`;
-   - envía email vía Resend si `RESEND_API_KEY` existe;
-   - retorna `{ ok, code, message, profile_id?, eleam_id?, email, temp_password?, email_sent, email_error?, email_skipped? }`.
-6. El usuario entra y completa `/cambiar-clave`.
-7. El demo guiado vive en `/demo/:token`, pero ese token no equivale a una cuenta de login.
+   - envía enlace de acceso vía Resend si `RESEND_API_KEY` existe;
+   - retorna `{ ok, code, message, profile_id?, eleam_id?, email, email_sent, email_error?, email_skipped? }`.
+5. El usuario recibe un enlace por correo para definir su contraseña.
+6. Al entrar por primera vez completa `/cambiar-clave`.
 
-Estados derivados usados por UI:
+Estados derivados en UI:
 
-- `pending_request`: sin `demo_token` ni `demo_user_id`.
-- `guided_demo`: con `demo_token`, sin `demo_user_id` y no vencido.
-- `expired_guided_demo`: con `demo_token` vencido y sin `demo_user_id`.
+- `pending_request`: sin `demo_user_id`, estado no terminal.
 - `account_demo`: con `demo_user_id`.
+- `blocked_state`: estado `descartado` o `convertido`.
 
 ### Admin ELEAM
 
@@ -295,7 +293,6 @@ Estados derivados usados por UI:
 | `/login` | Inicio de sesión. |
 | `/recuperar-acceso` | Solicitar recuperación de contraseña. |
 | `/reset-password` | Definir nueva contraseña desde link de Supabase. |
-| `/demo/:token` | Demo guiado por token. |
 | `/pago`, `/pago/return` | Suscripción MercadoPago. |
 | `/dashboard` | Panel operativo staff. |
 | `/turnos*` | Entrega de turno, tareas diarias de cuidado y eMAR por turno. |
@@ -424,11 +421,10 @@ npx supabase functions deploy
 Smoke manual recomendado para demo/login:
 
 1. Solicitar demo desde landing y verificar que el mensaje diga que la aprobación es manual.
-2. Intentar Google login con correo de lead pendiente o demo guiado: debe mostrar aviso `DEMO_PENDING`, no error rojo.
+2. Intentar Google login con correo de lead pendiente: debe mostrar aviso `DEMO_PENDING`, no error rojo.
 3. Aprobar un lead pendiente desde `LeadsPanel`; repetir la aprobación y confirmar que responde "ya aprobado".
-4. Aprobar un lead con `demo_token` vigente y otro vencido; ambos deben crear cuenta real si el estado no está cerrado.
-5. Simular fallo de email y verificar que el modal muestra credenciales para entrega manual.
-6. Iniciar sesión con contraseña temporal y confirmar redirect a `/cambiar-clave`.
-7. Entrar con demo vencido o ELEAM sin acceso y verificar mensaje diferenciado en `/pago?sinAcceso=1`.
+4. Simular fallo de email y verificar que el modal muestra aviso de que el usuario puede recuperar acceso desde el login.
+5. Iniciar sesión desde enlace de acceso recibido y confirmar redirect a `/cambiar-clave`.
+6. Entrar con demo vencido o ELEAM sin acceso y verificar mensaje diferenciado en `/pago?sinAcceso=1`.
 
 Si `npm run build` vuelve a mostrar un chunk grande, revisa primero `src/routes/AppRouter.jsx`: las pantallas pesadas deben seguir cargándose con `React.lazy`.

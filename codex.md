@@ -17,7 +17,6 @@ Esta es una guía rápida de referencias. Para arquitectura, BD, seguridad y flu
 - Acreditación v9 (14 ámbitos, ~70 requisitos, evidencias versionadas)
 - Suscripción MercadoPago
 - Blog público + CRM superadmin
-- Demo guiado para leads aprobados (`/demo/:token`)
 - Permisos granulares funcionario
 
 ---
@@ -53,7 +52,6 @@ src/
 │   ├── payment/    # MercadoPago
 │   ├── team/       # Invitar staff
 │   ├── familiar/   # Portal familiar
-│   ├── demo/       # Demo guiado, mock data y onboarding interactivo
 │   └── superadmin/ # CRM, blog editor
 ├── routes/         # AppRouter
 ├── services/       # Supabase client
@@ -81,7 +79,6 @@ npx supabase functions deploy  # Deploy Edge Functions
 |------|-------|-----------|
 | `/` | — | LandingPage |
 | `/login` | — | Auth (público) |
-| `/demo/:token` | — | Demo guiado por token |
 | `/pago`, `/pago/return` | — | MercadoPago |
 | `/blog`, `/blog/:slug` | — | Blog público |
 | `/dashboard` | STAFF | AdminDashboard |
@@ -143,7 +140,7 @@ Ver **[CLAUDE.md — Autenticación](./CLAUDE.md#autenticación-y-autorización)
 
 ## Base de Datos (Supabase)
 
-38 tablas. Schema canónico en `supabase_schema.sql`.
+42 tablas. Schema canónico en `supabase_schema.sql`.
 
 ### Principales
 
@@ -254,14 +251,12 @@ Ver **[README.md — Panel Superadmin](./README.md#panel-superadmin-superadmin)*
 
 ## Demo
 
-Ruta `/demo/:token` — demo guiado para leads con token vigente.
+No existe ruta `/demo`. El acceso demo ES la cuenta real del ELEAM en modo prueba (30 días).
 
-- Datos mock en frontend (`src/features/demo/demoData.js`).
-- Progreso y pings guardados en `demo_leads`.
-- Solicitudes de contacto visibles para superadmin.
-- El token de demo guiado no equivale a cuenta de login; Google devuelve `DEMO_PENDING` hasta que exista `demo_user_id`.
-- `LeadsPanel` distingue solicitud pendiente, demo guiado, demo vencido y cuenta demo aprobada.
-- `create-demo-user` crea el ELEAM demo y una cuenta `admin_eleam` con `app_metadata` server-side, reutiliza una existente compatible o repara un usuario Auth huérfano del mismo correo asignando contraseña temporal nueva.
+- El lead llena el formulario en landing → row en `demo_leads` (estado `nuevo`).
+- Superadmin aprueba desde `LeadsPanel`: `create-demo-user` crea ELEAM demo + cuenta `admin_eleam` y envía enlace de acceso por correo.
+- `LeadsPanel` distingue `pending_request` (sin `demo_user_id`), `account_demo` (con `demo_user_id`) y `blocked_state` (`descartado`/`convertido`).
+- Google login con correo de lead pendiente retorna `DEMO_PENDING`; la UI muestra aviso, no error rojo.
 
 ---
 
