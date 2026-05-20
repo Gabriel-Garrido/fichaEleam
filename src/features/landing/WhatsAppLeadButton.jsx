@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import WhatsAppLeadModal from "./WhatsAppLeadModal";
 import { trackEvent } from "./landingAnalytics";
 
 function WhatsAppIcon({ className = "w-7 h-7" }) {
@@ -14,8 +13,7 @@ const SHOW_CALLOUT_AFTER_MS = 6000;
 const HIDE_CALLOUT_AFTER_MS = 8000;
 const CALLOUT_DISMISSED_KEY = "fe_wa_callout_dismissed";
 
-export default function WhatsAppLeadButton() {
-  const [open, setOpen] = useState(false);
+export default function WhatsAppLeadButton({ onOpen }) {
   const [showCallout, setShowCallout] = useState(false);
   const calloutTimers = useRef({ show: null, hide: null });
 
@@ -44,10 +42,10 @@ export default function WhatsAppLeadButton() {
     try { sessionStorage.setItem(CALLOUT_DISMISSED_KEY, "1"); } catch { /* ignore */ }
   };
 
-  const handleOpen = () => {
+  const handleClick = () => {
     dismissCallout();
-    setOpen(true);
     trackEvent("cta_click", "whatsapp_floating_button");
+    onOpen?.("floating");
   };
 
   return (
@@ -85,7 +83,7 @@ export default function WhatsAppLeadButton() {
           />
           <button
             type="button"
-            onClick={handleOpen}
+            onClick={handleClick}
             aria-label="Chatear con FichaEleam por WhatsApp"
             className="relative inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#25D366] hover:bg-[#1ebe57] active:bg-[#179a4a] text-white shadow-xl shadow-emerald-900/20 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
           >
@@ -105,8 +103,6 @@ export default function WhatsAppLeadButton() {
           </span>
         </div>
       </div>
-
-      <WhatsAppLeadModal isOpen={open} onClose={() => setOpen(false)} source="floating" />
 
       <style>{`
         @keyframes ping-slow {

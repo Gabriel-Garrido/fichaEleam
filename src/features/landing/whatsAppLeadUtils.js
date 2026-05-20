@@ -36,15 +36,22 @@ export function normalizeWhatsAppLeadForm(form = {}, context = {}) {
   };
 }
 
-export function buildWhatsAppMessage(form = {}) {
+const INTENT_LINE = {
+  institutional: "Tenemos más de 35 residentes y quisiera una cotización personalizada.",
+  pricing: "Quisiera más información sobre los planes de FichaEleam.",
+};
+
+export function buildWhatsAppMessage(form = {}, source = "general") {
   const nombre = String(form.nombre ?? "").trim();
   const eleam = String(form.eleam_nombre ?? "").trim();
   const email = String(form.email ?? "").trim();
   const telefono = String(form.telefono ?? "").trim();
 
+  const intent = INTENT_LINE[source] ?? "Me gustaría conocer más sobre FichaEleam.";
+
   const lines = [
     `Hola, soy ${nombre || "(nombre)"} de ${eleam || "(ELEAM)"}.`,
-    "Me gustaría conocer más sobre FichaEleam.",
+    intent,
     "",
     "Datos de contacto:",
   ];
@@ -53,9 +60,9 @@ export function buildWhatsAppMessage(form = {}) {
   return lines.join("\n");
 }
 
-export function buildWhatsAppUrl(form = {}, phone = WHATSAPP_PHONE) {
+export function buildWhatsAppUrl(form = {}, phone = WHATSAPP_PHONE, source = "general") {
   const cleanPhone = String(phone).replace(/[^0-9]/g, "");
-  const text = encodeURIComponent(buildWhatsAppMessage(form));
+  const text = encodeURIComponent(buildWhatsAppMessage(form, source));
   return `https://wa.me/${cleanPhone}?text=${text}`;
 }
 

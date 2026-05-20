@@ -105,8 +105,27 @@ describe("buildWhatsAppMessage", () => {
       telefono: "+56912345678",
     });
     expect(msg).toContain("Hola, soy Ana de Residencia Los Arrayanes");
+    expect(msg).toContain("Me gustaría conocer más sobre FichaEleam.");
     expect(msg).toContain("- Correo: ana@residencia.cl");
     expect(msg).toContain("- Teléfono: +56912345678");
+  });
+
+  it("usa intent específico para source 'institutional'", () => {
+    const msg = buildWhatsAppMessage(
+      { nombre: "Ana", eleam_nombre: "R" },
+      "institutional",
+    );
+    expect(msg).toContain("más de 35 residentes");
+    expect(msg).toContain("cotización personalizada");
+    expect(msg).not.toContain("Me gustaría conocer más sobre FichaEleam.");
+  });
+
+  it("usa intent específico para source 'pricing'", () => {
+    const msg = buildWhatsAppMessage(
+      { nombre: "Ana", eleam_nombre: "R" },
+      "pricing",
+    );
+    expect(msg).toContain("información sobre los planes");
   });
 
   it("omite líneas vacías de email/teléfono ausentes", () => {
@@ -131,6 +150,15 @@ describe("buildWhatsAppUrl", () => {
   it("limpia caracteres no numéricos del teléfono destino", () => {
     const url = buildWhatsAppUrl({}, "+56 9 5118-7764");
     expect(url.startsWith("https://wa.me/56951187764?")).toBe(true);
+  });
+
+  it("propaga source al mensaje codificado", () => {
+    const url = buildWhatsAppUrl(
+      { nombre: "Ana", eleam_nombre: "R" },
+      WHATSAPP_PHONE,
+      "institutional",
+    );
+    expect(url).toContain(encodeURIComponent("más de 35 residentes"));
   });
 });
 

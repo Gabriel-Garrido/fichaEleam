@@ -88,7 +88,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
       setErrorMsg("Guardamos tu mensaje pero no pudimos registrar el contacto. Continuamos a WhatsApp.");
     }
 
-    const url = buildWhatsAppUrl(form);
+    const url = buildWhatsAppUrl(form, undefined, source);
     setStatus("success");
     if (typeof window !== "undefined") {
       window.open(url, "_blank", "noopener,noreferrer");
@@ -155,7 +155,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <a
-                href={buildWhatsAppUrl(form)}
+                href={buildWhatsAppUrl(form, undefined, source)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe57] text-white font-bold py-2.5 rounded-xl text-sm transition-colors"

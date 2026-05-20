@@ -96,11 +96,68 @@
           "url": "https://fichaeleam.cl/",
           "inLanguage": "es-CL",
           "description": "Plataforma chilena para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM): ficha clínica digital, signos vitales con alertas, 12 tipos de observaciones de turno, Carpeta SEREMI con 14 ámbitos del DS 14/2017 y portal para familias.",
-          "offers": [
-            { "@type": "Offer", "priceCurrency": "CLP", "price": "50000", "name": "Plan hasta 14 residentes", "priceValidUntil": "2026-12-31" },
-            { "@type": "Offer", "priceCurrency": "CLP", "price": "80000", "name": "Plan hasta 24 residentes", "priceValidUntil": "2026-12-31" },
-            { "@type": "Offer", "priceCurrency": "CLP", "price": "120000", "name": "Plan hasta 34 residentes", "priceValidUntil": "2026-12-31" }
-          ],
+          "offers": {
+            "@type": "AggregateOffer",
+            "priceCurrency": "CLP",
+            "lowPrice": "50000",
+            "highPrice": "120000",
+            "offerCount": "4",
+            "offers": [
+              {
+                "@type": "Offer",
+                "name": "Plan hasta 14 residentes",
+                "priceCurrency": "CLP",
+                "priceSpecification": {
+                  "@type": "UnitPriceSpecification",
+                  "price": "50000",
+                  "priceCurrency": "CLP",
+                  "unitCode": "MON",
+                  "billingIncrement": "1",
+                  "valueAddedTaxIncluded": false
+                },
+                "priceValidUntil": "2026-12-31",
+                "eligibleCustomerType": "Business"
+              },
+              {
+                "@type": "Offer",
+                "name": "Plan hasta 24 residentes",
+                "priceCurrency": "CLP",
+                "priceSpecification": {
+                  "@type": "UnitPriceSpecification",
+                  "price": "80000",
+                  "priceCurrency": "CLP",
+                  "unitCode": "MON",
+                  "billingIncrement": "1",
+                  "valueAddedTaxIncluded": false
+                },
+                "priceValidUntil": "2026-12-31",
+                "eligibleCustomerType": "Business"
+              },
+              {
+                "@type": "Offer",
+                "name": "Plan hasta 34 residentes",
+                "priceCurrency": "CLP",
+                "priceSpecification": {
+                  "@type": "UnitPriceSpecification",
+                  "price": "120000",
+                  "priceCurrency": "CLP",
+                  "unitCode": "MON",
+                  "billingIncrement": "1",
+                  "valueAddedTaxIncluded": false
+                },
+                "priceValidUntil": "2026-12-31",
+                "eligibleCustomerType": "Business"
+              },
+              {
+                "@type": "Offer",
+                "name": "Plan institucional (35+ residentes)",
+                "priceCurrency": "CLP",
+                "description": "Cotización personalizada para ELEAM con más de 34 residentes. Contacto vía WhatsApp +56 9 5118 7764.",
+                "availability": "https://schema.org/InStock",
+                "eligibleCustomerType": "Business"
+              }
+            ]
+          },
           "featureList": [
             "Ficha clínica digital de residentes",
             "Registro de signos vitales con rangos clínicos para adultos mayores",

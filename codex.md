@@ -262,6 +262,12 @@ No existe ruta `/demo`. El acceso demo ES la cuenta real del ELEAM en modo prueb
 
 Botón flotante en la landing → modal de 4 campos (nombre, ELEAM, correo, teléfono) → guarda lead en `demo_leads` (`cargo='Contacto WhatsApp'`, `utm_source='whatsapp'`) y abre `wa.me/<WHATSAPP_PHONE>` con mensaje pre-cargado. `LeadsPanel` muestra badge WhatsApp distintivo y CTA "Continuar WhatsApp" con el teléfono del lead. Archivos: `src/features/landing/WhatsApp*.jsx`, `whatsAppLeadUtils.js`.
 
+El mismo modal cubre múltiples puntos de entrada con la prop `source`: `floating` (FAB), `institutional` (tier 35+ residentes en la sección de precios), `pricing`. Cada source genera una línea de intención distinta en el mensaje WhatsApp.
+
+## Precios
+
+Cuatro tiers públicos en la landing: $50.000 / $80.000 / $120.000 + IVA (planes mensuales) + tier Institucional (35+ residentes) con CTA WhatsApp. Schema seed en `public.planes`; UI hard-coded en `LandingPage.jsx` (`PLANS`). JSON-LD usa `AggregateOffer` con `UnitPriceSpecification.valueAddedTaxIncluded: false`.
+
 ---
 
 ## Blog y SEO

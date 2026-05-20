@@ -265,6 +265,33 @@ La landing incluye un botón flotante (FAB) de WhatsApp. Al hacer click abre un 
 
 Estos leads aparecen en `LeadsPanel` con un badge WhatsApp distintivo y un botón "Continuar WhatsApp" que reabre el chat con el teléfono registrado. Para cambiar el número destino, edita `WHATSAPP_PHONE` en `src/features/landing/whatsAppLeadUtils.js`.
 
+El mismo modal sirve para múltiples puntos de entrada vía la prop `source`:
+
+- `floating` (default): "Me gustaría conocer más sobre FichaEleam."
+- `institutional`: "Tenemos más de 35 residentes y quisiera una cotización personalizada." (CTA del tier Institucional en la sección de precios)
+- `pricing`: "Quisiera más información sobre los planes de FichaEleam."
+
+### Estrategia de precios
+
+Precios públicos en la landing (sección `#precios`). Cuatro tiers:
+
+| Plan | Precio mensual | Para |
+|------|----------------|------|
+| Hasta 14 residentes | $50.000 + IVA | ELEAM pequeño |
+| Hasta 24 residentes | $80.000 + IVA | ELEAM mediano (etiqueta "Más elegido") |
+| Hasta 34 residentes | $120.000 + IVA | ELEAM grande |
+| Institucional (35+) | Cotización personalizada | Abre WhatsApp con mensaje pre-cargado |
+
+Precios netos (B2B Chile). JSON-LD del `SoftwareApplication` usa `AggregateOffer` con `UnitPriceSpecification.valueAddedTaxIncluded: false` para que motores y LLMs lean los precios correctamente.
+
+Si cambias los precios:
+
+1. Edita `PLANS` en `src/features/landing/LandingPage.jsx`.
+2. Edita el seed `public.planes` en `supabase_schema.sql` (`precio_clp`).
+3. Actualiza el bloque `offers` del `SoftwareApplication` en `index.html`.
+
+Para cambiar el número de contacto institucional, edita `WHATSAPP_PHONE` en `whatsAppLeadUtils.js`.
+
 ### Admin ELEAM
 
 - Administra residentes, camas, signos vitales, observaciones, acreditación y equipo.
