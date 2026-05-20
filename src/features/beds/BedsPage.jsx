@@ -66,12 +66,12 @@ function Kpi({ label, value, sub, tone = "teal", help }) {
     slate: "border-slate-100 bg-slate-50 text-slate-700",
   };
   return (
-    <article className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
         <span>{label}</span>
         {help && <HelpTooltip label={`Ayuda: ${label}`}>{help}</HelpTooltip>}
       </div>
-      <div className={`mt-2 inline-flex min-w-14 justify-center rounded-lg border px-3 py-1 text-2xl font-bold tabular-nums ${tones[tone]}`}>
+      <div className={`mt-2 inline-flex min-w-14 justify-center rounded-xl border px-3 py-1 text-2xl font-bold tabular-nums ${tones[tone]}`}>
         {value}
       </div>
       {sub && <p className="mt-2 text-xs text-slate-500">{sub}</p>}
@@ -107,7 +107,7 @@ function Field({ label, children }) {
 }
 
 function inputClass() {
-  return "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100";
+  return "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100";
 }
 
 function RoomModal({ initial, onClose, onSubmit, saving }) {
@@ -210,7 +210,7 @@ function BedModal({ habitaciones, initial, onClose, onSubmit, saving }) {
           <textarea className={inputClass()} rows={3} value={form.notas} onChange={(e) => set("notas", e.target.value)} />
         </Field>
         {initial?.assignment && form.estado !== "operativa" && (
-          <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             Libera o transfiere al residente antes de dejar esta cama fuera de servicio.
           </p>
         )}
@@ -244,7 +244,7 @@ function AssignModal({ bed, residentes, onClose, onSubmit, saving }) {
         <Field label="Buscar residente activo">
           <input className={inputClass()} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nombre, apellido o RUT" />
         </Field>
-        <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-100">
+        <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-100">
           {filtered.length === 0 ? (
             <div className="p-4 text-sm text-slate-500">No hay residentes activos disponibles.</div>
           ) : filtered.map((resident) => (
@@ -267,7 +267,7 @@ function AssignModal({ bed, residentes, onClose, onSubmit, saving }) {
           ))}
         </div>
         {selected?.cama_actual_id && (
-          <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             {occupantName(selected)} será transferido desde {selected.ubicacion_label}.
           </p>
         )}
@@ -295,7 +295,7 @@ function TransferModal({ bed, availableBeds, onClose, onSubmit, saving }) {
         event.preventDefault();
         if (resident?.id && targetBedId) onSubmit({ residentId: resident.id, targetBedId, notas });
       }}>
-        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           <span className="font-semibold">{occupantName(resident)}</span> desde {formatBedLocation(bed)}
         </div>
         <Field label="Cama destino">
@@ -330,7 +330,7 @@ function ReleaseModal({ bed, onClose, onSubmit, saving }) {
         event.preventDefault();
         if (resident?.id) onSubmit({ residentId: resident.id, motivo, notas });
       }}>
-        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           <span className="font-semibold">{formatBedLocation(bed)}</span> · {occupantName(resident)}
         </div>
         <Field label="Motivo">
@@ -362,7 +362,7 @@ function BedCard({ bed, canAdmin, canAssign, onAssign, onEdit, onDelete, onTrans
   const unavailable = bed.estado !== "operativa" || (bed.habitacion?.estado ?? "operativa") !== "operativa";
   const reserved = assignment?.estado === "reservada_hospitalizacion";
   return (
-    <article className={`rounded-lg border bg-white p-4 shadow-sm ${unavailable ? "border-slate-200 opacity-80" : reserved ? "border-indigo-100" : assignment ? "border-teal-100" : "border-slate-100"}`}>
+    <article className={`rounded-2xl border bg-white p-4 shadow-sm ${unavailable ? "border-slate-200 opacity-80" : reserved ? "border-indigo-100" : assignment ? "border-teal-100" : "border-slate-100"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-slate-900">
@@ -374,7 +374,7 @@ function BedCard({ bed, canAdmin, canAssign, onAssign, onEdit, onDelete, onTrans
       </div>
 
       {assignment ? (
-        <div className="mt-4 rounded-lg bg-slate-50 p-3">
+        <div className="mt-4 rounded-xl bg-slate-50 p-3">
           <div className="text-sm font-semibold text-slate-900">{occupantName(resident)}</div>
           <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
             {resident?.estado && <span>{resident.estado}</span>}
@@ -388,7 +388,7 @@ function BedCard({ bed, canAdmin, canAssign, onAssign, onEdit, onDelete, onTrans
           )}
         </div>
       ) : (
-        <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+        <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
           {unavailable ? "No disponible para asignación." : "Disponible"}
         </div>
       )}
@@ -552,7 +552,7 @@ export default function BedsPage() {
           <Kpi label="Ocupación" value={`${metrics.porcentajeOcupacion}%`} help="Calculado sobre camas operativas; incluye ocupadas y reservadas por hospitalización." />
         </section>
 
-        <section className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Ocupación operativa</h2>
@@ -565,7 +565,7 @@ export default function BedsPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap gap-2">
               {FILTERS.map(([value, label]) => (
@@ -584,7 +584,7 @@ export default function BedsPage() {
               ))}
             </div>
             <input
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 lg:max-w-xs"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 lg:max-w-xs"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar cama, habitación o residente"
@@ -593,11 +593,11 @@ export default function BedsPage() {
         </section>
 
         {loading ? (
-          <div className="rounded-lg border border-slate-100 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
+          <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
             Cargando camas...
           </div>
         ) : filteredRooms.length === 0 ? (
-          <div className="rounded-lg border border-slate-100 bg-white p-8 text-center shadow-sm">
+          <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Sin camas para mostrar</h2>
             <p className="mt-1 text-sm text-slate-500">
               {overview?.camas?.length ? "Ajusta los filtros para ver otros resultados." : "Crea habitaciones y camas para comenzar a medir ocupación."}
@@ -606,7 +606,7 @@ export default function BedsPage() {
         ) : (
           <div className="space-y-4">
             {filteredRooms.map((room) => (
-              <section key={room.id} className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+              <section key={room.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                 <header className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -636,7 +636,7 @@ export default function BedsPage() {
                 </header>
                 <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
                   {room.camas.length === 0 && (
-                    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
                       Esta habitación aún no tiene camas registradas.
                     </div>
                   )}

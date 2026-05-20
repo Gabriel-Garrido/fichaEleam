@@ -35,7 +35,7 @@ export default function ActivationComplete({ playbook, onDismiss }) {
       </div>
 
       {playbook.afterComplete?.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Después puedes
           </p>

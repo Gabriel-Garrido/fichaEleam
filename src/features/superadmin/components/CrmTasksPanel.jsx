@@ -175,7 +175,7 @@ function TaskRow({ task, onComplete }) {
           <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-xl ${prio.cls}`}>
             {prio.label}
           </span>
-          <span className="text-[10px] font-medium uppercase text-slate-400 capitalize">{task.tipo}</span>
+          <span className="text-[10px] font-medium text-slate-400 capitalize">{task.tipo}</span>
           {task.eleam?.nombre && (
             <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-xl truncate max-w-[120px]" title={task.eleam.nombre}>
               {task.eleam.nombre}

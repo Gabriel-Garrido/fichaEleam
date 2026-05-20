@@ -37,7 +37,7 @@ export default function ActivationNudge() {
     <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur lg:px-6">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
-          <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors.bg} ${colors.text}`}>
+          <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${colors.bg} ${colors.text}`}>
             <NavIcon id={currentRouteStep.icon} className="h-4 w-4" />
           </div>
           <div className="min-w-0">
