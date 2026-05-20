@@ -258,6 +258,10 @@ No existe ruta `/demo`. El acceso demo ES la cuenta real del ELEAM en modo prueb
 - `LeadsPanel` distingue `pending_request` (sin `demo_user_id`), `account_demo` (con `demo_user_id`) y `blocked_state` (`descartado`/`convertido`).
 - Google login con correo de lead pendiente retorna `DEMO_PENDING`; la UI muestra aviso, no error rojo.
 
+### Captura WhatsApp
+
+Botón flotante en la landing → modal de 4 campos (nombre, ELEAM, correo, teléfono) → guarda lead en `demo_leads` (`cargo='Contacto WhatsApp'`, `utm_source='whatsapp'`) y abre `wa.me/<WHATSAPP_PHONE>` con mensaje pre-cargado. `LeadsPanel` muestra badge WhatsApp distintivo y CTA "Continuar WhatsApp" con el teléfono del lead. Archivos: `src/features/landing/WhatsApp*.jsx`, `whatsAppLeadUtils.js`.
+
 ---
 
 ## Blog y SEO

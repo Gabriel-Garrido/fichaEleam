@@ -256,6 +256,15 @@ Estados derivados en UI:
 - `account_demo`: con `demo_user_id`.
 - `blocked_state`: estado `descartado` o `convertido`.
 
+### Captura por WhatsApp
+
+La landing incluye un botón flotante (FAB) de WhatsApp. Al hacer click abre un modal compacto con cuatro campos (nombre, ELEAM, correo, teléfono). Al enviar:
+
+1. Guarda el lead en `demo_leads` usando la misma RPC `request_demo_lead` con `cargo='Contacto WhatsApp'`, `utm_source='whatsapp'`, `utm_medium='floating_button'`.
+2. Abre `https://wa.me/<WHATSAPP_PHONE>` en nueva pestaña con un mensaje pre-cargado que contiene los datos del contacto.
+
+Estos leads aparecen en `LeadsPanel` con un badge WhatsApp distintivo y un botón "Continuar WhatsApp" que reabre el chat con el teléfono registrado. Para cambiar el número destino, edita `WHATSAPP_PHONE` en `src/features/landing/whatsAppLeadUtils.js`.
+
 ### Admin ELEAM
 
 - Administra residentes, camas, signos vitales, observaciones, acreditación y equipo.

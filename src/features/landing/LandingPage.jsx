@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSEO, faqJsonLd } from "../../utils/seo";
 import DemoRequestModal from "./DemoRequestModal";
+import WhatsAppLeadButton from "./WhatsAppLeadButton";
 import { trackEvent, useScrollDepth, useSectionView } from "./landingAnalytics";
 
 function Icon({ d, className = "w-5 h-5" }) {
@@ -132,7 +133,7 @@ const PLANS = [
 
 const HOW_IT_WORKS = [
   { step: "01", title: "Solicita tu demo", text: "Completa el formulario con los datos de tu ELEAM. Revisamos cada solicitud y te respondemos en menos de 24 horas." },
-  { step: "02", title: "Recibe tu acceso", text: "Habilitamos tu cuenta con 30 días de prueba completa y te enviamos las credenciales por correo para que entres con datos reales." },
+  { step: "02", title: "Recibe tu acceso", text: "Habilitamos tu cuenta con 30 días de prueba completa y te enviamos un enlace de acceso por correo para que entres con datos reales." },
   { step: "03", title: "Activa y digitaliza", text: "Cuando termine la prueba eliges tu plan y activas con MercadoPago. El equipo te ayuda a cargar los datos iniciales sin costo adicional." },
 ];
 
@@ -140,7 +141,7 @@ const FAQ_ITEMS = [
   { q: "¿Qué es FichaEleam?", a: "FichaEleam es un software diseñado exclusivamente para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile. Cubre los 14 ámbitos del DS 14/2017 e incluye ficha clínica digital, signos vitales con alertas clínicas, observaciones por turno, Carpeta SEREMI y portal para familias — todo en una sola plataforma web." },
   { q: "¿FichaEleam incluye el DS 14/2017?", a: "Sí. La sección Carpeta SEREMI implementa los 14 ámbitos con más de 70 requisitos del catálogo oficial pre-cargados, evidencias versionadas, estados de cumplimiento y alertas automáticas cuando un documento vence o se acerca su vencimiento." },
   { q: "¿Cuánto cuesta?", a: "La suscripción es mensual por establecimiento, sin cobros por usuario. Los planes parten desde $50.000 CLP/mes para hasta 14 residentes. Todos los funcionarios y familiares del ELEAM acceden incluidos sin costo adicional." },
-  { q: "¿Cómo funciona el demo?", a: "Completas el formulario de solicitud y nuestro equipo revisa tu caso. En menos de 24 horas habilitamos tu cuenta con 30 días de prueba gratuita y te enviamos las credenciales por correo, sin compromiso ni tarjeta de crédito." },
+  { q: "¿Cómo funciona el demo?", a: "Completas el formulario de solicitud o nos escribes por WhatsApp. Nuestro equipo revisa tu caso y en menos de 24 horas habilitamos tu cuenta con 30 días de prueba gratuita y te enviamos un enlace de acceso por correo, sin compromiso ni tarjeta de crédito." },
   { q: "¿Cuánto tarda el equipo en aprender a usarla?", a: "La interfaz está diseñada para equipos sin experiencia técnica previa. Cada rol accede solo a lo que le corresponde, lo que simplifica el aprendizaje. La mayoría del equipo opera con fluidez desde el primer día." },
   { q: "¿Qué pasa con los datos que tengo en papel o Excel?", a: "Te acompañamos en la migración inicial sin costo adicional. Cargamos los datos básicos de tus residentes para que el equipo parta con la plataforma al día desde el primer momento." },
   { q: "¿Puedo exportar mis datos si decido salir?", a: "Sí. Tus datos son tuyos. Puedes exportar fichas, registros clínicos y documentación en cualquier momento desde el panel, sin depender de nuestro equipo." },
@@ -218,12 +219,24 @@ export default function LandingPage() {
         url: "https://fichaeleam.cl",
         description: "Software de gestión clínica y documental para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile, cumpliendo el DS 14/2017.",
         areaServed: "CL",
-        contactPoint: {
-          "@type": "ContactPoint",
-          email: "contacto@fichaeleam.cl",
-          contactType: "customer support",
-          availableLanguage: "Spanish",
-        },
+        contactPoint: [
+          {
+            "@type": "ContactPoint",
+            contactType: "customer support",
+            email: "contacto@fichaeleam.cl",
+            telephone: "+56-9-5118-7764",
+            availableLanguage: ["es-CL"],
+            areaServed: "CL",
+          },
+          {
+            "@type": "ContactPoint",
+            contactType: "sales",
+            telephone: "+56-9-5118-7764",
+            email: "contacto@fichaeleam.cl",
+            availableLanguage: ["es-CL"],
+            areaServed: "CL",
+          },
+        ],
       },
     ],
   });
@@ -678,6 +691,18 @@ export default function LandingPage() {
             <a href="mailto:contacto@fichaeleam.cl" className="text-sm hover:text-white transition-colors block">
               contacto@fichaeleam.cl
             </a>
+            <a
+              href="https://wa.me/56951187764"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm hover:text-white transition-colors inline-flex items-center gap-1.5 mt-1.5"
+              onClick={() => trackEvent("cta_click", "footer_whatsapp")}
+            >
+              <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+              </svg>
+              +56 9 5118 7764
+            </a>
             <p className="text-sm mt-1.5">Santiago, Chile</p>
           </div>
         </div>
@@ -687,6 +712,7 @@ export default function LandingPage() {
       </footer>
 
       <DemoRequestModal isOpen={modal} onClose={() => setModal(false)} defaultCta={modalCta} />
+      <WhatsAppLeadButton />
     </div>
   );
 }

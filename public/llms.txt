@@ -7,6 +7,8 @@ FichaEleam es el único software diseñado exclusivamente para ELEAM en Chile. C
 **Web**: https://app.fichaeleam.cl
 **Blog**: https://app.fichaeleam.cl/blog
 **Demo**: https://app.fichaeleam.cl (formulario de solicitud en la página principal)
+**Email**: contacto@fichaeleam.cl
+**WhatsApp**: +56 9 5118 7764 (https://wa.me/56951187764)
 
 ---
 

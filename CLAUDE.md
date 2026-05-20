@@ -44,7 +44,7 @@ src/
 │   └── AuthContext.jsx         # useAuth() + useLoading()
 ├── features/
 │   ├── auth/                   # Login, RecuperarAcceso, ResetPassword, authService
-│   ├── landing/                # LandingPage (calm-inspired, CTA demo, sin auto-registro público); DemoRequestModal, landingAnalytics
+│   ├── landing/                # LandingPage, DemoRequestModal, WhatsAppLeadButton/Modal (FAB flotante), landingAnalytics. Sin auto-registro público
 │   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService (diseño consistente con landing: nav/footer dark slate-950)
 │   ├── dashboard/              # AdminDashboard (rol-aware: admin_eleam muestra gestión, funcionario muestra clínica)
 │   ├── residents/              # CRUD residentes + detalles; residentUtils.js exporta ESTADO_CONFIG, ESTADO_BADGE, DEPENDENCIA_TONE, TIPO_LABEL, TIPO_BADGE, initials(), calcAge()
@@ -493,6 +493,18 @@ Setear con `npx supabase secrets set NOMBRE=valor`.
 5. Tras el período demo (30 días), debe contratar un plan para continuar.
 
 No existe ruta pública `/demo/:token` ni demo guiado; el demo ES la cuenta real del ELEAM en modo prueba.
+
+### Captura de leads por WhatsApp
+
+Botón flotante (FAB) WhatsApp visible en la landing (`/`). Click abre modal compacto con 4 campos (nombre, ELEAM, correo, teléfono). Al enviar:
+
+1. Inserta lead en `demo_leads` vía RPC `request_demo_lead` con `cargo='Contacto WhatsApp'`, `utm_source='whatsapp'`, `utm_medium='floating_button'`. Reusa la misma RPC y rate limiting que el formulario de demo.
+2. Abre `https://wa.me/56951187764?text=...` en nueva pestaña con mensaje pre-cargado (nombre, ELEAM, correo, teléfono).
+3. Si Supabase no está configurado o falla el guardado, igual abre WhatsApp para no perder el contacto.
+
+`LeadsPanel` (superadmin) muestra un badge WhatsApp distintivo en estos leads y un botón "Continuar WhatsApp" que abre `wa.me` con el teléfono del lead. La identificación usa `utm_source='whatsapp'` o `cargo='Contacto WhatsApp'` (helper `isWhatsAppLead` en `whatsAppLeadUtils.js`).
+
+Archivos: `src/features/landing/WhatsAppLeadButton.jsx` (FAB con callout y pulse animation), `WhatsAppLeadModal.jsx` (formulario validado), `whatsAppLeadUtils.js` (constantes, validators, URL builder, lead identifier). El teléfono destino vive en la constante `WHATSAPP_PHONE`.
 
 ### Detección de plan demo en el frontend
 
