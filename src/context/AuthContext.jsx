@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useCallback, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../services/supabaseConfig";
 import Loading from "../components/Loading";
+import { computeCanFeature } from "./featureAccess";
 
 const AuthContext = createContext();
 const LoadingContext = createContext();
@@ -272,15 +273,17 @@ export function AuthProvider({ children }) {
     return permisos[perm] === true;
   }, [isSuperadmin, isAdminEleam, isFuncionario, permisos]);
 
-  const canFeature = useCallback((featureId) => {
-    if (!featureId) return true;
-    if (isSuperadmin) return true;
-    // Fail-closed: si los permisos por feature no cargaron, se bloquea la
-    // feature protegida (la UI muestra un aviso recuperable para reintentar).
-    if (featurePermissionsError) return false;
-    if (!featurePermissions) return true;
-    return featurePermissions[featureId] !== false;
-  }, [featurePermissions, featurePermissionsError, isSuperadmin]);
+  // Fail-closed ante error de carga de permisos por feature. La lógica vive
+  // en featureAccess.js para poder probarla sin renderizar AuthProvider.
+  const canFeature = useCallback(
+    (featureId) => computeCanFeature({
+      featureId,
+      isSuperadmin,
+      featurePermissions,
+      featurePermissionsError,
+    }),
+    [featurePermissions, featurePermissionsError, isSuperadmin],
+  );
 
   const refetchProfile = useCallback(() => {
     if (!user) return Promise.resolve(null);

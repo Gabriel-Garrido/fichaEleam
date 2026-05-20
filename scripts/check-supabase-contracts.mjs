@@ -341,6 +341,14 @@ for (const entry of sourceEntries) {
   }
 }
 
+// El alta de usuarios ya no devuelve contraseñas: el frontend entrega el
+// acceso por enlace al correo y no debe referenciar temp_password.
+for (const entry of sourceEntries) {
+  if (/\btemp_password\b/.test(entry.text)) {
+    fail(`El frontend referencia temp_password en ${entry.relativePath}; el alta de usuarios entrega el acceso por enlace, no por contraseña.`);
+  }
+}
+
 const legacyPaths = [
   "old_supabase_schema.sql",
   "supabase_schema_partes",
