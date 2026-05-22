@@ -123,6 +123,8 @@ export default function CarePlanTab({ resident }) {
   const [presetSaving, setPresetSaving] = useState(false);
   const [activityModal, setActivityModal] = useState(null);
   const [showPaused, setShowPaused] = useState(false);
+  const [familyPreview, setFamilyPreview] = useState(false);
+  const [guideCollapsed, setGuideCollapsed] = useState(false);
 
   const canEdit = can("editar_planes_cuidado");
   const canCreate = can("crear_planes_cuidado");
@@ -327,7 +329,7 @@ export default function CarePlanTab({ resident }) {
 
   return (
     <div className="space-y-5">
-      <WorkflowGuide />
+      <WorkflowGuide collapsed={guideCollapsed} onToggle={() => setGuideCollapsed((p) => !p)} />
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric label="Actividades" value={metrics.active} tone="teal" />
@@ -402,23 +404,38 @@ export default function CarePlanTab({ resident }) {
               Cada actividad puede tener varios horarios. Al generar el turno, el sistema crea una tarea por horario vigente.
             </p>
           </div>
-          {plan && canCreate && (
+          {plan && (
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={handleAddBaseRoutine}
-                disabled={presetSaving || saving}
-                className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60"
+                onClick={() => setFamilyPreview(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
               >
-                {presetSaving ? "Agregando..." : "Agregar rutina base"}
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" />
+                </svg>
+                Vista familiar
               </button>
-              <button
-                type="button"
-                onClick={() => setActivityModal({ activity: INITIAL_ACTIVITY, schedules: [INITIAL_SCHEDULE] })}
-                className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
-              >
-                Nueva actividad
-              </button>
+              {canCreate && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleAddBaseRoutine}
+                    disabled={presetSaving || saving}
+                    className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60"
+                  >
+                    {presetSaving ? "Agregando..." : "Agregar rutina base"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivityModal({ activity: INITIAL_ACTIVITY, schedules: [INITIAL_SCHEDULE] })}
+                    className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+                  >
+                    Nueva actividad
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -474,11 +491,128 @@ export default function CarePlanTab({ resident }) {
         onClose={() => !saving && setActivityModal(null)}
         onSubmit={handleSaveActivity}
       />
+
+      <FamilyPreviewModal
+        isOpen={familyPreview}
+        onClose={() => setFamilyPreview(false)}
+        plan={plan}
+        activities={activities}
+        resident={resident}
+      />
     </div>
   );
 }
 
-function WorkflowGuide() {
+const RIESGO_FAMILIAR_TONE = {
+  bajo:  { pill: "bg-emerald-100 text-emerald-700", label: "Bajo" },
+  medio: { pill: "bg-amber-100 text-amber-800",    label: "Medio" },
+  alto:  { pill: "bg-rose-100 text-rose-700",      label: "Alto" },
+};
+
+function FamilyPreviewModal({ isOpen, onClose, plan, activities, resident }) {
+  const published = (activities ?? []).filter((a) => a.visible_familiar && a.activo !== false);
+  const hasPlanContent =
+    plan?.objetivos?.trim() || plan?.pauta_alimentacion?.trim() ||
+    plan?.pauta_hidratacion?.trim() || plan?.restricciones?.trim() ||
+    plan?.riesgo_caidas || plan?.riesgo_up;
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Vista familiar — ${resident?.nombre ?? "residente"} ${resident?.apellido ?? ""}`}
+    >
+      <div className="space-y-5">
+        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+          Esto es exactamente lo que verá la familia en el portal. Solo se muestran los datos marcados como visibles.
+        </div>
+
+        {hasPlanContent && (
+          <section className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Plan de cuidado compartido</p>
+            {plan?.objetivos?.trim() && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Objetivos</p>
+                <p className="text-sm text-slate-700 whitespace-pre-line">{plan.objetivos}</p>
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              {plan?.pauta_alimentacion?.trim() && (
+                <div className="rounded-xl bg-teal-50 border border-teal-100 p-3">
+                  <p className="text-[10px] font-semibold uppercase text-teal-500 mb-1">Alimentación</p>
+                  <p className="text-sm text-teal-800">{plan.pauta_alimentacion}</p>
+                </div>
+              )}
+              {plan?.pauta_hidratacion?.trim() && (
+                <div className="rounded-xl bg-sky-50 border border-sky-100 p-3">
+                  <p className="text-[10px] font-semibold uppercase text-sky-500 mb-1">Hidratación</p>
+                  <p className="text-sm text-sky-800">{plan.pauta_hidratacion}</p>
+                </div>
+              )}
+            </div>
+            {plan?.restricciones?.trim() && (
+              <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
+                <p className="text-[10px] font-semibold uppercase text-amber-600 mb-1">Alertas y restricciones</p>
+                <p className="text-sm text-amber-800 whitespace-pre-line">{plan.restricciones}</p>
+              </div>
+            )}
+            {(plan?.riesgo_caidas || plan?.riesgo_up) && (
+              <div className="flex flex-wrap gap-2">
+                {plan.riesgo_caidas && RIESGO_FAMILIAR_TONE[plan.riesgo_caidas] && (
+                  <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${RIESGO_FAMILIAR_TONE[plan.riesgo_caidas].pill}`}>
+                    Riesgo caídas: {RIESGO_FAMILIAR_TONE[plan.riesgo_caidas].label}
+                  </span>
+                )}
+                {plan.riesgo_up && RIESGO_FAMILIAR_TONE[plan.riesgo_up] && (
+                  <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${RIESGO_FAMILIAR_TONE[plan.riesgo_up].pill}`}>
+                    Riesgo UPP: {RIESGO_FAMILIAR_TONE[plan.riesgo_up].label}
+                  </span>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        <section>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">
+            Actividades publicadas ({published.length})
+          </p>
+          {published.length === 0 ? (
+            <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-center">
+              <p className="text-sm font-semibold text-slate-700 mb-1">Ninguna actividad publicada</p>
+              <p className="text-xs text-slate-500">
+                Edita una actividad y activa "Publicar en portal familiar" para que la familia vea las rutinas de cuidado.
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {published.map((activity) => {
+                const schedules = activeSchedules(activity);
+                return (
+                  <li key={activity.id} className="rounded-xl border border-teal-100 bg-teal-50/50 p-3">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <Badge tone="teal">{CARE_CATEGORY_LABEL[activity.categoria] ?? activity.categoria}</Badge>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">{activity.resumen_familiar}</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {schedules.map((s, i) => (
+                        <span key={s.id ?? i} className="text-[10px] text-slate-400 bg-white border border-slate-100 rounded-full px-2 py-0.5">
+                          {formatSchedule(s)}
+                        </span>
+                      ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+function WorkflowGuide({ collapsed, onToggle }) {
   const steps = [
     ["Definir pauta", "Objetivos, riesgos y restricciones del PAI."],
     ["Programar", "Actividades con frecuencia, turno, hora y tolerancia."],
@@ -487,19 +621,32 @@ function WorkflowGuide() {
   ];
   return (
     <section className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
-      <div className="grid gap-3 md:grid-cols-4">
-        {steps.map(([title, text], index) => (
-          <div key={title} className="flex gap-3">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-sm font-semibold text-teal-800 ring-1 ring-teal-200">
-              {index + 1}
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-teal-950">{title}</p>
-              <p className="mt-0.5 text-xs leading-5 text-teal-800">{text}</p>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="text-sm font-semibold text-teal-900">Flujo del plan de cuidado</span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+          className={`h-4 w-4 shrink-0 text-teal-700 transition-transform ${collapsed ? "" : "rotate-90"}`}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+      </button>
+      {!collapsed && (
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          {steps.map(([title, text], index) => (
+            <div key={title} className="flex gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-sm font-semibold text-teal-800 ring-1 ring-teal-200">
+                {index + 1}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-teal-950">{title}</p>
+                <p className="mt-0.5 text-xs leading-5 text-teal-800">{text}</p>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -604,6 +751,15 @@ function ActivityRow({ activity, canEdit, canCreate, saving, onEdit, onDuplicate
           <h3 className="mt-2 text-sm font-semibold text-slate-950">{activity.titulo}</h3>
           {activity.descripcion && <p className="mt-1 text-sm text-slate-600">{activity.descripcion}</p>}
           {activity.instrucciones && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{activity.instrucciones}</p>}
+          {activity.visible_familiar && activity.resumen_familiar?.trim() && (
+            <div className="mt-2 flex items-start gap-1.5 rounded-xl bg-teal-50 border border-teal-100 px-3 py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3.5 w-3.5 text-teal-500 shrink-0 mt-0.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" />
+              </svg>
+              <p className="text-xs text-teal-700 line-clamp-2">{activity.resumen_familiar}</p>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {schedules.map((schedule, index) => (
               <span key={schedule.id ?? `${schedule.turno}-${schedule.hora}-${index}`} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-500">
@@ -759,21 +915,35 @@ function ActivityModal({ modal, saving, onClose, onSubmit }) {
             <span>
               <span className="block font-semibold text-slate-800">Publicar en portal familiar</span>
               <span className="block text-xs text-slate-500">
-                Desactivado por defecto. El portal mostrará solo el resumen para familia.
+                La familia verá el resumen que escribas, no el título interno de esta actividad.
               </span>
             </span>
           </label>
           {activity.visible_familiar && (
-            <div className="mt-3">
-              <TextArea
-                label="Resumen para familia"
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm font-medium text-slate-700">Resumen para familia</label>
+                <span className={`text-[10px] font-semibold tabular-nums ${(activity.resumen_familiar?.length ?? 0) > 180 ? "text-amber-600" : "text-slate-400"}`}>
+                  {activity.resumen_familiar?.length ?? 0} / 200
+                </span>
+              </div>
+              <textarea
                 value={activity.resumen_familiar ?? ""}
-                onChange={(value) => setActivity((p) => ({ ...p, resumen_familiar: value }))}
+                onChange={(e) => setActivity((p) => ({ ...p, resumen_familiar: e.target.value.slice(0, 200) }))}
                 disabled={saving}
                 rows={2}
+                maxLength={200}
+                placeholder="Ej: Asistencia en el desayuno con supervisión de deglución"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:opacity-60 resize-none"
               />
               {familySummaryMissing && (
-                <p className="mt-1 text-xs text-rose-600">Es obligatorio para publicar la actividad.</p>
+                <p className="text-xs text-rose-600">Es obligatorio para publicar la actividad.</p>
+              )}
+              {activity.resumen_familiar?.trim() && (
+                <div className="rounded-xl bg-teal-50 border border-teal-100 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-500 mb-1">La familia verá:</p>
+                  <p className="text-sm text-teal-800 leading-relaxed">"{activity.resumen_familiar.trim()}"</p>
+                </div>
               )}
             </div>
           )}

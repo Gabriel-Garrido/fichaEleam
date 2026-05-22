@@ -1488,6 +1488,7 @@ declare
   v_visitas jsonb;
   v_cuidados jsonb;
   v_medicacion jsonb;
+  v_plan_cuidado jsonb;
 begin
   if p_residente_id is null or not public.familiar_can_view_residente(p_residente_id) then
     raise exception 'No autorizado a ver este residente' using errcode = '42501';
@@ -1648,6 +1649,23 @@ begin
     limit 20
   ) vis;
 
+  select jsonb_build_object(
+    'titulo',             titulo,
+    'objetivos',          objetivos,
+    'pauta_alimentacion', pauta_alimentacion,
+    'pauta_hidratacion',  pauta_hidratacion,
+    'restricciones',      restricciones,
+    'riesgo_caidas',      riesgo_caidas,
+    'riesgo_up',          riesgo_up,
+    'version',            version,
+    'actualizado_en',     actualizado_en
+  )
+  into v_plan_cuidado
+  from public.planes_cuidado
+  where residente_id = p_residente_id
+    and estado = 'activo'
+  limit 1;
+
   return jsonb_build_object(
     'date', v_fecha,
     'resident', v_residente,
@@ -1656,6 +1674,7 @@ begin
     'care', v_cuidados,
     'medications', v_medicacion,
     'visits', v_visitas,
+    'care_plan', v_plan_cuidado,
     'generated_at', now()
   );
 end;

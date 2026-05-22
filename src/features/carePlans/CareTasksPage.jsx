@@ -90,6 +90,7 @@ export default function CareTasksPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [lastLoaded, setLastLoaded] = useState(null);
   const [careModal, setCareModal] = useState(null);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [medModal, setMedModal] = useState(null);
@@ -120,6 +121,7 @@ export default function CareTasksPage() {
         ...medRows.map(normalizeMedication),
       ].sort((a, b) => `${a.fecha}T${a.hora ?? "00:00"}`.localeCompare(`${b.fecha}T${b.hora ?? "00:00"}`));
       setAllItems(normalized);
+      setLastLoaded(new Date());
     } catch (err) {
       console.error(err);
       setError("No pudimos cargar las tareas del turno.");
@@ -295,14 +297,24 @@ export default function CareTasksPage() {
       eyebrow="Turno operativo"
       description="Plan de cuidado y medicamentos programados, generados automáticamente por recurrencia."
       actions={
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
-        >
-          Generar / actualizar
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {lastLoaded && (
+            <span className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 tabular-nums">
+              {lastLoaded.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
+          >
+            <svg className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+            Actualizar
+          </button>
+        </div>
       }
       className="space-y-5"
     >
@@ -383,6 +395,8 @@ export default function CareTasksPage() {
         <Metric label="Por validar" value={metrics.porValidar} tone="sky" />
       </section>
 
+      <TurnProgressStrip metrics={metrics} />
+
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {error}
@@ -460,6 +474,27 @@ export default function CareTasksPage() {
         onSubmit={handleSeguimientoSubmit}
       />
     </PageLayout>
+  );
+}
+
+function TurnProgressStrip({ metrics }) {
+  if (metrics.total === 0) return null;
+  const completed = Math.max(0, metrics.total - metrics.pendientes - metrics.reprogramadas);
+  const pct = Math.round(completed / metrics.total * 100);
+  const tone =
+    pct >= 80 ? { bar: "bg-emerald-500", pill: "bg-emerald-100 text-emerald-700" } :
+    pct >= 40 ? { bar: "bg-amber-400",   pill: "bg-amber-100 text-amber-800"    } :
+                { bar: "bg-rose-400",    pill: "bg-rose-100 text-rose-700"      };
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Progreso del turno</span>
+      <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full tabular-nums ${tone.pill}`}>
+        {completed}/{metrics.total} ({pct}%)
+      </span>
+    </div>
   );
 }
 
@@ -591,27 +626,41 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
 }
 
 export function TurnWorkflowGuide() {
+  const [collapsed, setCollapsed] = useState(false);
   const steps = [
-    ["Generar", "La vista crea las tareas recurrentes del turno sin duplicarlas."],
+    ["Cargar", "La vista genera las tareas recurrentes del turno sin duplicarlas."],
     ["Ejecutar", "Cumple cuidado o administra eMAR dentro de la ventana indicada."],
     ["Reprogramar / omitir", "Si no corresponde ejecutar, deja motivo, nueva hora o trazabilidad."],
     ["Seguimiento", "Marca seguimiento cuando el equipo debe revisar después."],
   ];
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-3 md:grid-cols-4">
-        {steps.map(([title, text], index) => (
-          <div key={title} className="flex gap-3">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-teal-50 text-sm font-semibold text-teal-800 ring-1 ring-teal-200">
-              {index + 1}
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-slate-950">{title}</p>
-              <p className="mt-0.5 text-xs leading-5 text-slate-500">{text}</p>
+      <button
+        type="button"
+        onClick={() => setCollapsed((p) => !p)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="text-sm font-semibold text-slate-800">Flujo del turno operativo</span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${collapsed ? "" : "rotate-90"}`}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+      </button>
+      {!collapsed && (
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          {steps.map(([title, text], index) => (
+            <div key={title} className="flex gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-teal-50 text-sm font-semibold text-teal-800 ring-1 ring-teal-200">
+                {index + 1}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-950">{title}</p>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500">{text}</p>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

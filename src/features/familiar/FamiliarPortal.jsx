@@ -61,6 +61,45 @@ const MED_STATUS = {
   omitido:      { label: "Omitido",      color: "text-rose-600 bg-rose-50" },
 };
 
+const CATEGORIA_META = {
+  alimentacion:      { label: "Alimentación",       tone: "teal" },
+  hidratacion:       { label: "Hidratación",         tone: "teal" },
+  higiene:           { label: "Higiene",             tone: "sky" },
+  bano:              { label: "Baño",                tone: "sky" },
+  movilidad:         { label: "Movilidad",           tone: "violet" },
+  cambios_posicion:  { label: "Cambios posición",    tone: "violet" },
+  eliminacion:       { label: "Eliminación",         tone: "slate" },
+  prevencion_caidas: { label: "Prev. caídas",        tone: "amber" },
+  prevencion_up:     { label: "Prev. UPP",           tone: "amber" },
+  actividad:         { label: "Actividad",           tone: "emerald" },
+  controles:         { label: "Controles",           tone: "rose" },
+  otro:              { label: "Otro",                tone: "slate" },
+};
+
+const CATEGORIA_DOT = {
+  teal:    "bg-teal-400",
+  sky:     "bg-sky-400",
+  violet:  "bg-violet-400",
+  slate:   "bg-slate-300",
+  amber:   "bg-amber-400",
+  emerald: "bg-emerald-400",
+  rose:    "bg-rose-400",
+};
+
+const OMISSION_LABEL = {
+  rechazo:           "Rechazado por el residente",
+  no_disponible:     "No disponible en este momento",
+  contraindicado:    "Contraindicado clínicamente",
+  residente_ausente: "Residente ausente o en traslado",
+  otro:              "Omitido por el equipo",
+};
+
+const RIESGO_TONE = {
+  bajo:  { pill: "bg-emerald-100 text-emerald-700", label: "Bajo" },
+  medio: { pill: "bg-amber-100 text-amber-800",    label: "Medio" },
+  alto:  { pill: "bg-rose-100 text-rose-700",      label: "Alto" },
+};
+
 /* ─── Reusable atoms ─────────────────────────────────────────── */
 
 function SectionCard({ icon, title, badge, badgeColor, children }) {
@@ -126,7 +165,7 @@ function DateSelector({ value, onChange, loading }) {
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">Registros por día</p>
         <p className="text-sm text-slate-500">
-          Al abrir ves el día actual. Cambia la fecha para revisar cuidados, medicación, signos, observaciones y visitas anteriores.
+          Hoy por defecto. Cambia la fecha para revisar registros de días anteriores.
         </p>
       </div>
       <label className="text-sm font-semibold text-slate-700">
@@ -227,9 +266,106 @@ function ResidentClinicalSummary({ resident }) {
   );
 }
 
+/* ─── Care plan summary (family-safe) ───────────────────────── */
+const IconClipboardList = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+  </svg>
+);
+
+function CarePlanSummarySection({ carePlan }) {
+  if (!carePlan) return null;
+  const hasContent =
+    carePlan.objetivos?.trim() ||
+    carePlan.pauta_alimentacion?.trim() ||
+    carePlan.pauta_hidratacion?.trim() ||
+    carePlan.restricciones?.trim() ||
+    carePlan.riesgo_caidas ||
+    carePlan.riesgo_up;
+  if (!hasContent) return null;
+
+  const riesgoCaidas = RIESGO_TONE[carePlan.riesgo_caidas];
+  const riesgoUp     = RIESGO_TONE[carePlan.riesgo_up];
+
+  return (
+    <SectionCard
+      icon={<IconClipboardList />}
+      title="Plan de cuidado activo"
+      badge={`v${carePlan.version ?? 1}`}
+      badgeColor="bg-teal-50 text-teal-700"
+    >
+      <p className="mb-4 text-xs text-slate-400">
+        Este resumen fue compartido por el equipo clínico para mantenerte informado del plan de atención de tu familiar.
+      </p>
+      <div className="space-y-4">
+        {carePlan.objetivos?.trim() && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Objetivos del cuidado</p>
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{carePlan.objetivos}</p>
+          </div>
+        )}
+        {(carePlan.pauta_alimentacion?.trim() || carePlan.pauta_hidratacion?.trim()) && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {carePlan.pauta_alimentacion?.trim() && (
+              <div className="rounded-xl bg-teal-50 border border-teal-100 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-500 mb-1">Alimentación</p>
+                <p className="text-sm text-teal-800 leading-relaxed">{carePlan.pauta_alimentacion}</p>
+              </div>
+            )}
+            {carePlan.pauta_hidratacion?.trim() && (
+              <div className="rounded-xl bg-sky-50 border border-sky-100 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-500 mb-1">Hidratación</p>
+                <p className="text-sm text-sky-800 leading-relaxed">{carePlan.pauta_hidratacion}</p>
+              </div>
+            )}
+          </div>
+        )}
+        {carePlan.restricciones?.trim() && (
+          <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 mb-1">Alertas y restricciones</p>
+            <p className="text-sm text-amber-800 leading-relaxed whitespace-pre-line">{carePlan.restricciones}</p>
+          </div>
+        )}
+        {(riesgoCaidas || riesgoUp) && (
+          <div className="flex flex-wrap gap-2">
+            {riesgoCaidas && (
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${riesgoCaidas.pill}`}>
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+                </svg>
+                Riesgo caídas: {riesgoCaidas.label}
+              </span>
+            )}
+            {riesgoUp && (
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${riesgoUp.pill}`}>
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 7.5l16.5-4.125M12 6.75c-2.708 0-5.363.224-7.948.655C2.906 7.24 1.5 8.973 1.5 10.96v11.25m10.5-11.25c2.708 0 5.363.224 7.948.655C21.094 11.74 22.5 13.473 22.5 15.46v2.54M12 6.75v-.75" />
+                </svg>
+                Riesgo UPP: {riesgoUp.label}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
 /* ─── Today's summary strip ──────────────────────────────────── */
 function DaySummary({ care, medications, selectedDate }) {
   const s = summarizeFamilySnapshot({ care, medications });
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isToday  = !selectedDate || selectedDate === todayStr;
+
+  const total   = care.length + medications.length;
+  const done    = s.careDone + s.medicationsDone;
+  const pct     = total > 0 ? Math.round((done / total) * 100) : null;
+  const progTone =
+    pct === null ? null :
+    pct >= 80    ? { bar: "bg-emerald-500", pill: "bg-emerald-100 text-emerald-700" } :
+    pct >= 40    ? { bar: "bg-amber-400",   pill: "bg-amber-100 text-amber-800"    } :
+                   { bar: "bg-rose-400",    pill: "bg-rose-100 text-rose-700"      };
+
   const stats = [
     { label: "Cuidados cumplidos",    value: s.careDone,           tone: s.careDone > 0 ? "emerald" : "slate" },
     { label: "Cuidados pendientes",   value: s.carePending,        tone: s.carePending > 0 ? "amber" : "slate" },
@@ -244,16 +380,28 @@ function DaySummary({ care, medications, selectedDate }) {
   };
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        Resumen de {formatDateOnlyLabel(selectedDate)}
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      {stats.map((s) => (
-        <div key={s.label} className={`rounded-xl border p-3 ${tones[s.tone]}`}>
-          <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 leading-tight">{s.label}</p>
-          <p className="mt-1 text-2xl font-black tabular-nums">{s.value}</p>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          {isToday ? "Hoy" : formatDateOnlyLabel(selectedDate)}
+        </p>
+        {progTone && pct !== null && (
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${progTone.pill}`}>
+            {pct}% completado
+          </span>
+        )}
+      </div>
+      {progTone && total > 0 && (
+        <div className="mb-3 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${progTone.bar}`} style={{ width: `${pct}%` }} />
         </div>
-      ))}
+      )}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {stats.map((s) => (
+          <div key={s.label} className={`rounded-xl border p-3 ${tones[s.tone]}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 leading-tight">{s.label}</p>
+            <p className="mt-1 text-2xl font-black tabular-nums">{s.value}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -364,14 +512,32 @@ const TURNO_LABEL = { mañana: "Mañana", tarde: "Tarde", noche: "Noche" };
 
 function formatCareHour(item) {
   const hour = item?.hora?.slice(0, 5);
-  return hour ? `${TURNO_LABEL[item.turno] ?? item.turno ?? "Turno"} · ${hour}` : (TURNO_LABEL[item.turno] ?? item.turno ?? null);
+  return hour ?? null;
+}
+
+function TurnoProgressBar({ items }) {
+  const total = items.length;
+  const done  = items.filter((i) => i.estado === "cumplida").length;
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+  const bar   = pct === 100 ? "bg-emerald-500" : pct > 0 ? "bg-amber-400" : "bg-slate-200";
+  const text  = pct === 100 ? "text-emerald-700" : pct > 0 ? "text-amber-700" : "text-slate-400";
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${bar}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`text-[10px] font-semibold tabular-nums whitespace-nowrap ${text}`}>
+        {done}/{total}
+      </span>
+    </div>
+  );
 }
 
 function CareSection({ care }) {
   if (!care?.length) {
     return (
       <SectionCard icon={<IconClipboard />} title="Cuidados del día">
-        <EmptySection message="Sin cuidados registrados para esta fecha." />
+        <EmptySection message="El equipo aún no ha compartido cuidados para esta fecha." />
       </SectionCard>
     );
   }
@@ -388,31 +554,42 @@ function CareSection({ care }) {
       badge={`${done}/${care.length}`}
       badgeColor={done === care.length ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}
     >
-      <div className="space-y-4">
+      <div className="space-y-5">
         {(["mañana", "tarde", "noche"]).map((turno) => {
           const items = byTurno[turno];
           if (!items.length) return null;
           return (
             <div key={turno}>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-                {TURNO_LABEL[turno]}
-              </p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  {TURNO_LABEL[turno]}
+                </p>
+              </div>
+              <TurnoProgressBar items={items} />
               <ul className="space-y-2">
                 {items.map((item) => {
                   const st = CARE_STATUS[item.estado] ?? CARE_STATUS.pendiente;
                   const isDone = item.estado === "cumplida";
+                  const isOmitted = item.estado === "omitida";
                   const safeLabel = item.resumen || item.titulo;
+                  const catMeta = CATEGORIA_META[item.categoria];
+                  const dotColor = catMeta ? CATEGORIA_DOT[catMeta.tone] : CATEGORIA_DOT.slate;
+                  const hour = formatCareHour(item);
                   return (
-                    <li key={item.id} className={`flex items-start gap-3 rounded-xl p-3 ${isDone ? "bg-emerald-50/60" : "bg-slate-50"}`}>
-                      <div className={`mt-0.5 shrink-0 grid h-5 w-5 place-items-center rounded-full ${isDone ? "bg-emerald-500" : "border-2 border-slate-200 bg-white"}`}>
+                    <li key={item.id} className={`flex items-start gap-3 rounded-xl p-3 ${isDone ? "bg-emerald-50/60" : isOmitted ? "bg-rose-50/50" : "bg-slate-50"}`}>
+                      <div className={`mt-0.5 shrink-0 grid h-5 w-5 place-items-center rounded-full ${isDone ? "bg-emerald-500" : isOmitted ? "bg-rose-200" : "border-2 border-slate-200 bg-white"}`}>
                         {isDone && <span className="text-white"><IconCheck /></span>}
+                        {!isDone && !isOmitted && catMeta && (
+                          <span className={`inline-block h-2 w-2 rounded-full ${dotColor}`} />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="mb-0.5 flex flex-wrap items-center gap-2">
-                          {formatCareHour(item) && (
-                            <span className="text-[10px] font-semibold uppercase text-slate-400">
-                              {formatCareHour(item)}
-                            </span>
+                        <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+                          {hour && (
+                            <span className="text-[10px] font-semibold uppercase text-slate-400">{hour}</span>
+                          )}
+                          {catMeta && (
+                            <span className="text-[10px] font-semibold text-slate-400">{catMeta.label}</span>
                           )}
                           {item.requiere_seguimiento && (
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
@@ -420,9 +597,14 @@ function CareSection({ care }) {
                             </span>
                           )}
                         </div>
-                        <p className={`text-sm font-medium ${isDone ? "text-slate-500 line-through" : "text-slate-800"}`}>
+                        <p className={`text-sm font-medium ${isDone ? "text-slate-500 line-through" : isOmitted ? "text-slate-400" : "text-slate-800"}`}>
                           {safeLabel}
                         </p>
+                        {isOmitted && item.motivo_omision && (
+                          <p className="mt-0.5 text-xs text-rose-500">
+                            {OMISSION_LABEL[item.motivo_omision] ?? "Omitido por el equipo"}
+                          </p>
+                        )}
                         {item.estado === "reprogramada" && item.reprogramada_para && (
                           <p className="mt-0.5 text-xs text-sky-600">
                             Nueva hora: {formatDateTime(item.reprogramada_para)}
@@ -449,11 +631,16 @@ function MedicationSection({ medications }) {
   if (!medications?.length) {
     return (
       <SectionCard icon={<IconPill />} title="Medicación del día">
-        <EmptySection message="Sin medicación programada para esta fecha." />
+        <EmptySection message="El equipo aún no ha compartido medicación para esta fecha." />
       </SectionCard>
     );
   }
   const given = medications.filter((m) => ["administrado", "validado"].includes(m.estado)).length;
+  const byTurno = { mañana: [], tarde: [], noche: [] };
+  for (const m of medications) {
+    if (byTurno[m.turno]) byTurno[m.turno].push(m);
+    else byTurno["mañana"].push(m);
+  }
   return (
     <SectionCard
       icon={<IconPill />}
@@ -461,30 +648,52 @@ function MedicationSection({ medications }) {
       badge={`${given}/${medications.length}`}
       badgeColor={given === medications.length ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}
     >
-      <ul className="space-y-2">
-        {medications.map((item) => {
-          const st = MED_STATUS[item.estado] ?? { label: item.estado, color: "text-slate-500 bg-slate-50" };
-          const isGiven = ["administrado", "validado"].includes(item.estado);
+      <div className="space-y-5">
+        {(["mañana", "tarde", "noche"]).map((turno) => {
+          const items = byTurno[turno];
+          if (!items.length) return null;
           return (
-            <li key={item.id} className={`flex items-center gap-3 rounded-xl p-3 ${isGiven ? "bg-emerald-50/60" : "bg-slate-50"}`}>
-              <div className={`shrink-0 grid h-5 w-5 place-items-center rounded-full ${isGiven ? "bg-emerald-500" : "border-2 border-slate-200 bg-white"}`}>
-                {isGiven && <span className="text-white"><IconCheck /></span>}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${isGiven ? "text-slate-500" : "text-slate-800"}`}>
-                  {item.resumen}
-                </p>
-                {item.via && (
-                  <p className="text-xs text-slate-400">Vía {item.via}</p>
-                )}
-              </div>
-              <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>
-                {st.label}
-              </span>
-            </li>
+            <div key={turno}>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">{TURNO_LABEL[turno]}</p>
+              <TurnoProgressBar items={items.map((i) => ({ estado: ["administrado","validado"].includes(i.estado) ? "cumplida" : i.estado }))} />
+              <ul className="space-y-2">
+                {items.map((item) => {
+                  const st = MED_STATUS[item.estado] ?? { label: item.estado, color: "text-slate-500 bg-slate-50" };
+                  const isGiven = ["administrado", "validado"].includes(item.estado);
+                  const isOmitted = item.estado === "omitido";
+                  const hour = item.hora?.slice(0, 5);
+                  return (
+                    <li key={item.id} className={`flex items-center gap-3 rounded-xl p-3 ${isGiven ? "bg-emerald-50/60" : isOmitted ? "bg-rose-50/50" : "bg-slate-50"}`}>
+                      <div className={`shrink-0 grid h-5 w-5 place-items-center rounded-full ${isGiven ? "bg-emerald-500" : isOmitted ? "bg-rose-200" : "border-2 border-slate-200 bg-white"}`}>
+                        {isGiven && <span className="text-white"><IconCheck /></span>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {hour && (
+                          <p className="text-[10px] font-semibold uppercase text-slate-400 mb-0.5">{hour}</p>
+                        )}
+                        <p className={`text-sm font-medium ${isGiven ? "text-slate-500" : isOmitted ? "text-slate-400" : "text-slate-800"}`}>
+                          {item.resumen}
+                        </p>
+                        {item.via && (
+                          <p className="text-xs text-slate-400">Vía {item.via}</p>
+                        )}
+                        {isOmitted && item.motivo_omision && (
+                          <p className="mt-0.5 text-xs text-rose-500">
+                            {OMISSION_LABEL[item.motivo_omision] ?? "Omitido por el equipo"}
+                          </p>
+                        )}
+                      </div>
+                      <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>
+                        {st.label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           );
         })}
-      </ul>
+      </div>
     </SectionCard>
   );
 }
@@ -554,6 +763,7 @@ export default function FamiliarPortal() {
   const care         = snapshot?.care ?? [];
   const medications  = snapshot?.medications ?? [];
   const visits       = snapshot?.visits ?? [];
+  const carePlan     = snapshot?.care_plan ?? null;
 
   if (loading && residentes.length === 0) {
     return <Loading message="Cargando portal familiar..." />;
@@ -606,6 +816,7 @@ export default function FamiliarPortal() {
                 onNavigateVisitas={() => navigate("/familiar/visitas")}
               />
               <ResidentClinicalSummary resident={resident} />
+              <CarePlanSummarySection carePlan={carePlan} />
             </>
           )}
 
