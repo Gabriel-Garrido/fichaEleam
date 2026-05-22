@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../components/Toast";
 import { friendlyError } from "../../utils/errorMessages";
-import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
 import Button from "../../components/Button";
 import HelpTooltip from "../../components/HelpTooltip";
@@ -96,7 +95,13 @@ export default function FamiliarVisitas() {
     }
   };
 
-  if (loading) return <Loading message="Cargando visitas..." />;
+  if (loading) return (
+    <div className="mx-auto max-w-4xl px-4 py-6 space-y-3">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+      ))}
+    </div>
+  );
 
   if (residentes.length === 0) {
     return (

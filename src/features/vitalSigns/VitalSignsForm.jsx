@@ -5,8 +5,8 @@ import { CARE_TURNOS, nextFollowUpSlot } from "../carePlans/carePlansService";
 import { getResidents } from "../residents/residentService";
 import { isValidUUID } from "../../utils/validators";
 import { useToast } from "../../components/Toast";
+import { friendlyError } from "../../utils/errorMessages";
 import Button from "../../components/Button";
-import Loading from "../../components/Loading";
 import {
   STATUS,
   systolicStatus,
@@ -160,14 +160,21 @@ function VitalSignsForm() {
       } else {
         navigate("/vital-signs");
       }
-    } catch {
-      toast("No se pudo guardar el registro.", "error");
+    } catch (err) {
+      console.error("createVitalSigns failed:", err);
+      toast(friendlyError(err, "No se pudo guardar el registro."), "error");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loadingRes) return <Loading message="Cargando residentes..." />;
+  if (loadingRes) return (
+    <div className="max-w-3xl mx-auto px-4 py-8 space-y-4">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+      ))}
+    </div>
+  );
 
   const liveBadge = STATUS[liveOverall.status];
   const noActiveResidents = residents.length === 0;

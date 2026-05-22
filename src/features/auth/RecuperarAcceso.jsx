@@ -96,7 +96,7 @@ export default function RecuperarAcceso() {
               </div>
 
               {error && (
-                <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert">
+                <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert" aria-live="polite">
                   {error}
                 </p>
               )}

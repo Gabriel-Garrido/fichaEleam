@@ -167,15 +167,17 @@ export default function ChangePasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
+            <label htmlFor="cp-new-password" className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
               Nueva contraseña
             </label>
             <div className="relative">
               <Input
+                id="cp-new-password"
                 type={showPw ? "text" : "password"}
                 placeholder="Mínimo 8 caracteres, 1 mayúscula, 1 número"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
                 required
                 disabled={submitting}
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 pr-10"
@@ -209,14 +211,16 @@ export default function ChangePasswordPage() {
           </div>
 
           <div>
-            <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
+            <label htmlFor="cp-confirm-password" className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
               Confirmar contraseña
             </label>
             <Input
+              id="cp-confirm-password"
               type={showPw ? "text" : "password"}
               placeholder="Repite la contraseña"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
               required
               disabled={submitting}
               className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -224,7 +228,7 @@ export default function ChangePasswordPage() {
           </div>
 
           {error && (
-            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert" aria-live="polite">
               {error}
             </p>
           )}
