@@ -1,5 +1,3 @@
-import React from "react";
-
 function Loading({ message = "Cargando..." }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[200px] py-12 gap-3">

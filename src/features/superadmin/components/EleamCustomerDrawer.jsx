@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import {
   CRM_STATE_MAP, RIESGO_MAP, PLAN_LABEL,
   formatCLP, formatDate, daysUntil,

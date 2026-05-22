@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import Modal from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
 import { friendlyError } from "../../../utils/errorMessages";
@@ -23,7 +23,7 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
   const [form, setForm] = useState({ ...empty, eleam_id: defaultEleamId });
   const [saving, setSaving] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) setForm({ ...empty, eleam_id: defaultEleamId });
   }, [isOpen, defaultEleamId]);
 

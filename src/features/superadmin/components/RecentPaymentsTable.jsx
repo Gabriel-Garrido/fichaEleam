@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatCLP, formatDate, PLAN_LABEL, PLAN_BADGE } from "../utils/superadminFormatters";
 
 const ESTADO_STYLE = {

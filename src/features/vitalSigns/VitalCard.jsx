@@ -1,4 +1,3 @@
-import React from "react";
 import { STATUS } from "./vitalRanges";
 
 // Tarjeta visual de un parámetro vital. Consume el "status" calculado

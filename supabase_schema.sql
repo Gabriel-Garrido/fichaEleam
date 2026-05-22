@@ -436,6 +436,9 @@ create index if not exists idx_tareas_cuidado_eleam_fecha_turno
   on public.tareas_cuidado(eleam_id, fecha desc, turno, estado);
 create index if not exists idx_tareas_cuidado_residente_fecha
   on public.tareas_cuidado(residente_id, fecha desc, turno);
+create index if not exists idx_tareas_cuidado_open
+  on public.tareas_cuidado(eleam_id, fecha desc, turno)
+  where estado in ('pendiente','reprogramada');
 create index if not exists idx_tareas_cuidado_horario_fecha_original
   on public.tareas_cuidado(horario_id, (coalesce(fecha_original, fecha)));
 create index if not exists idx_tareas_cuidado_fechas_programadas
@@ -587,6 +590,9 @@ create index if not exists idx_med_admin_eleam_fecha_turno
   on public.medicamentos_administraciones(eleam_id, fecha desc, turno, estado);
 create index if not exists idx_med_admin_residente_fecha
   on public.medicamentos_administraciones(residente_id, fecha desc, turno);
+create index if not exists idx_med_admin_open
+  on public.medicamentos_administraciones(eleam_id, fecha desc, turno)
+  where estado in ('pendiente','pendiente_validacion');
 create index if not exists idx_med_admin_control_validacion
   on public.medicamentos_administraciones(eleam_id, estado)
   where estado = 'pendiente_validacion';

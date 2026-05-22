@@ -1,4 +1,3 @@
-import React from "react";
 import { CRM_STATES, CRM_STATE_MAP, RIESGO_CHURN, RIESGO_MAP, PLAN_LABEL } from "../utils/superadminFormatters";
 
 // Human-readable label for each active filter

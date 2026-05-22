@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import HelpTooltip from "../../components/HelpTooltip";
@@ -21,10 +21,13 @@ export default function AdminDashboard() {
 
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
+    setLoadError(false);
     loadDashboard()
       .then(setData)
+      .catch((err) => { console.error("loadDashboard", err); setLoadError(true); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -134,7 +137,21 @@ export default function AdminDashboard() {
       className="space-y-6"
     >
 
-      {!loading && (stats?.total ?? 0) === 0 && (
+      {loadError && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
+          <p className="text-sm font-semibold text-rose-800">No se pudo cargar el resumen del día</p>
+          <p className="text-xs text-rose-600 mt-1">Revisa tu conexión y recarga la página para reintentar.</p>
+          <button
+            type="button"
+            onClick={() => { setLoadError(false); setLoading(true); loadDashboard().then(setData).catch((err) => { console.error("loadDashboard", err); setLoadError(true); }).finally(() => setLoading(false)); }}
+            className="mt-3 rounded-xl bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-rose-700"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {!loading && !loadError && (stats?.total ?? 0) === 0 && (
         <FirstRunPanel navigate={navigate} />
       )}
 

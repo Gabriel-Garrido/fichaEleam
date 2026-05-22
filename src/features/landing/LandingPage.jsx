@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSEO, faqJsonLd } from "../../utils/seo";
 import DemoRequestModal from "./DemoRequestModal";

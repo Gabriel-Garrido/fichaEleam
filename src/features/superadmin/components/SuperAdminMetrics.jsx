@@ -1,4 +1,3 @@
-import React from "react";
 import { formatCLP } from "../utils/superadminFormatters";
 import MetricHelp from "./MetricHelp";
 

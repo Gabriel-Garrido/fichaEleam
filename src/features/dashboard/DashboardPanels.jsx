@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import HelpTooltip from "../../components/HelpTooltip";
 import {
   STATUS,

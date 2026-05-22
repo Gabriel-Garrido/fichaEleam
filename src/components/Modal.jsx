@@ -1,11 +1,25 @@
-import React, { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 function Modal({ isOpen, onClose, title, children, panelClassName = "" }) {
+  const panelRef = useRef(null);
+  const triggerRef = useRef(null);
+
   useEffect(() => {
     if (!isOpen) return;
+    triggerRef.current = document.activeElement;
+    const panel = panelRef.current;
+    if (panel) {
+      const first = panel.querySelector(FOCUSABLE);
+      first?.focus();
+    }
     const handleKey = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      triggerRef.current?.focus();
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -18,6 +32,7 @@ function Modal({ isOpen, onClose, title, children, panelClassName = "" }) {
       onClick={onClose}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title ?? "Diálogo"}

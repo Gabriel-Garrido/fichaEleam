@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useToast } from "../../../components/Toast";
 import Modal from "../../../components/Modal";
 import { friendlyError } from "../../../utils/errorMessages";

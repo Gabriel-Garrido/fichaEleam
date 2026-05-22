@@ -1,4 +1,3 @@
-import React from "react";
 import {
   CRM_STATE_MAP, RIESGO_MAP, PLAN_LABEL, PLAN_BADGE,
   formatDate, daysUntil,

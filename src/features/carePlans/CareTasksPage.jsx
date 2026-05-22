@@ -23,6 +23,8 @@ import {
 } from "../emar/emarService";
 import {
   FILTER_LABEL,
+  PRIORITY_LABEL,
+  PRIORITY_TONE,
   SEGUIMIENTO_TIPO_LABEL,
   VITALS_TURN_HOUR,
   matchesFilter,
@@ -65,14 +67,6 @@ const STATUS_TONE = {
   pendiente_validacion: "bg-sky-50 text-sky-700 border-sky-200",
   cancelada: "bg-slate-50 text-slate-600 border-slate-200",
   cancelado: "bg-slate-50 text-slate-600 border-slate-200",
-};
-
-const PRIORITY_LABEL = { baja: "Baja", media: "Media", alta: "Alta", urgente: "Urgente" };
-const PRIORITY_TONE = {
-  baja: "bg-slate-100 text-slate-600",
-  media: "bg-sky-50 text-sky-700",
-  alta: "bg-amber-50 text-amber-800",
-  urgente: "bg-rose-50 text-rose-700",
 };
 
 function residentName(residente) {
@@ -630,8 +624,10 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
 }
 
 export function TurnWorkflowGuide() {
+  const { profile } = useAuth();
+  const key = `fichaeleam_tGuide_${profile?.id ?? "anon"}`;
   const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem("fichaeleam_tGuide") === "1"; } catch { return false; }
+    try { return localStorage.getItem(`fichaeleam_tGuide_${profile?.id ?? "anon"}`) === "1"; } catch { return false; }
   });
   const steps = [
     ["Cargar", "La vista genera las tareas recurrentes del turno sin duplicarlas."],
@@ -645,7 +641,7 @@ export function TurnWorkflowGuide() {
         type="button"
         onClick={() => setCollapsed((p) => {
           const next = !p;
-          try { localStorage.setItem("fichaeleam_tGuide", next ? "1" : "0"); } catch { /* storage unavailable */ }
+          try { localStorage.setItem(key, next ? "1" : "0"); } catch { /* storage unavailable */ }
           return next;
         })}
         className="flex w-full items-center justify-between gap-2 text-left"

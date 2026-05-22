@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isSupabaseConfigured } from "../../services/supabaseConfig";
 import { trackEvent } from "./landingAnalytics";
 import { requestDemoLead } from "./landingService";

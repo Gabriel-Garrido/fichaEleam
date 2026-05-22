@@ -1,4 +1,3 @@
-import React from "react";
 import MetricHelp from "./MetricHelp";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getVitalSigns, deleteVitalSigns } from "./vitalSignsService";
 import { getResidents } from "../residents/residentService";

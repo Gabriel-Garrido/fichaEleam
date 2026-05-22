@@ -1,4 +1,3 @@
-import React from "react";
 import { customerHealth, HEALTH_STYLES } from "../utils/customerHealth";
 
 export default function CustomerHealthBadge({ eleam, tasksOverdue = 0, showReasons = false, size = "sm" }) {

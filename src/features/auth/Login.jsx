@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
 import { authErrorMessage, getDemoRequestStatus, isPendingDemoError, login, loginWithGoogle } from "./authService";
 import { useAuth, useLoading } from "../../context/AuthContext";

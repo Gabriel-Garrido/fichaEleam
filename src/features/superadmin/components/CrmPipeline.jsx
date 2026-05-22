@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { CRM_STATES } from "../utils/superadminFormatters";
 import MetricHelp from "./MetricHelp";
 
@@ -105,7 +105,7 @@ export default function CrmPipeline({ eleams, onPickState, activeState }) {
       {/* Desktop: group-based flex — 5 groups with arrows between them */}
       <div className="hidden xl:flex items-stretch gap-0">
         {PIPELINE_GROUPS.map((g, gi) => (
-          <React.Fragment key={g.label}>
+          <Fragment key={g.label}>
             <div className="flex-1 flex flex-col gap-2 min-w-0">
               {/* Group label */}
               <div className="flex items-center justify-center">
@@ -142,7 +142,7 @@ export default function CrmPipeline({ eleams, onPickState, activeState }) {
                 </svg>
               </div>
             )}
-          </React.Fragment>
+          </Fragment>
         ))}
       </div>
 

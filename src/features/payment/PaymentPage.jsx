@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
@@ -84,7 +84,7 @@ export default function PaymentPage() {
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [loadingAction, setLoadingAction] = useState(false);
 
-  const loadPlanData = React.useCallback(() => {
+  const loadPlanData = useCallback(() => {
     if (!user) return;
     let active = true;
     setLoadingPlans(true);

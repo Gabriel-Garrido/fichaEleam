@@ -11,6 +11,21 @@ import {
   medicationDueAt,
 } from "../emar/emarService";
 
+export const PRIORITY_LABEL = { baja: "Baja", media: "Media", alta: "Alta", urgente: "Urgente" };
+export const PRIORITY_TONE = {
+  baja: "bg-slate-100 text-slate-600",
+  media: "bg-sky-50 text-sky-700",
+  alta: "bg-amber-50 text-amber-800",
+  urgente: "bg-rose-50 text-rose-700",
+};
+export const PRIORITY_BORDER = {
+  baja: "border-l-slate-300",
+  media: "border-l-sky-300",
+  alta: "border-l-amber-400",
+  urgente: "border-l-rose-500",
+};
+export const PRIORITY_ORDER = { urgente: 0, alta: 1, media: 2, baja: 3 };
+
 export const FILTER_LABEL = {
   pendientes: "Pendientes",
   vencidas: "Vencidas",

@@ -1,5 +1,3 @@
-import React from "react";
-
 function Button({ children, onClick, className, type = "button", disabled = false, ...rest }) {
   const baseClasses = [
     "inline-flex items-center justify-center gap-2",

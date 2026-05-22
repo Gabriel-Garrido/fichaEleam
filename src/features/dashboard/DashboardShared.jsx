@@ -1,4 +1,3 @@
-import React from "react";
 import HelpTooltip from "../../components/HelpTooltip";
 import NavIcon from "../../components/NavIcon";
 import { KPI_TONE, ALERT_TONE, FILTER_TONE, CARD_TONE } from "./dashboardUtils";

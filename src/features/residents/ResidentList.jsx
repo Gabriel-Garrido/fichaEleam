@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getResidents, deleteResident, createResidentsBatch } from "./residentService";
 import { useAuth } from "../../context/AuthContext";

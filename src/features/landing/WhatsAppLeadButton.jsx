@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trackEvent } from "./landingAnalytics";
 
 function WhatsAppIcon({ className = "w-7 h-7" }) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Modal from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
 import { CRM_STATES, RIESGO_CHURN } from "../utils/superadminFormatters";

@@ -18,6 +18,12 @@ import {
   saveCarePlan,
   todayIso,
 } from "./carePlansService";
+import {
+  PRIORITY_BORDER,
+  PRIORITY_LABEL,
+  PRIORITY_ORDER,
+  PRIORITY_TONE,
+} from "./careTasksBoardUtils";
 
 const INITIAL_PLAN = {
   titulo: "Plan de cuidado",
@@ -62,21 +68,6 @@ const WEEK_DAYS = [
   [7, "D"],
 ];
 
-const PRIORITY_LABEL = { baja: "Baja", media: "Media", alta: "Alta", urgente: "Urgente" };
-const PRIORITY_TONE = {
-  baja: "bg-slate-100 text-slate-600",
-  media: "bg-sky-50 text-sky-700",
-  alta: "bg-amber-50 text-amber-800",
-  urgente: "bg-rose-50 text-rose-700",
-};
-const PRIORITY_BORDER = {
-  baja: "border-l-slate-300",
-  media: "border-l-sky-300",
-  alta: "border-l-amber-400",
-  urgente: "border-l-rose-500",
-};
-const PRIORITY_ORDER = { urgente: 0, alta: 1, media: 2, baja: 3 };
-
 function cloneSchedule(schedule = {}) {
   return {
     ...INITIAL_SCHEDULE,
@@ -114,7 +105,7 @@ function presetKey(item) {
 
 export default function CarePlanTab({ resident }) {
   const toast = useToast();
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const [plan, setPlan] = useState(null);
   const [dayTasks, setDayTasks] = useState([]);
   const [form, setForm] = useState(INITIAL_PLAN);
@@ -124,8 +115,9 @@ export default function CarePlanTab({ resident }) {
   const [activityModal, setActivityModal] = useState(null);
   const [showPaused, setShowPaused] = useState(false);
   const [familyPreview, setFamilyPreview] = useState(false);
+  const cpGuideKey = `fichaeleam_cpGuide_${profile?.id ?? "anon"}`;
   const [guideCollapsed, setGuideCollapsed] = useState(() => {
-    try { return localStorage.getItem("fichaeleam_cpGuide") === "1"; } catch { return false; }
+    try { return localStorage.getItem(`fichaeleam_cpGuide_${profile?.id ?? "anon"}`) === "1"; } catch { return false; }
   });
 
   const canEdit = can("editar_planes_cuidado");
@@ -335,7 +327,7 @@ export default function CarePlanTab({ resident }) {
         collapsed={guideCollapsed}
         onToggle={() => setGuideCollapsed((p) => {
           const next = !p;
-          try { localStorage.setItem("fichaeleam_cpGuide", next ? "1" : "0"); } catch { /* storage unavailable */ }
+          try { localStorage.setItem(cpGuideKey, next ? "1" : "0"); } catch { /* storage unavailable */ }
           return next;
         })}
       />
