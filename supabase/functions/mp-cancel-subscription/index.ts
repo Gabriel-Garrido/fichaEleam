@@ -3,12 +3,12 @@
 // Cancela el preapproval del ELEAM del admin autenticado.
 // Solo el admin del ELEAM puede ejecutar esta acción.
 //
-// El cambio definitivo de subscription_status llega vía webhook,
-// pero anticipamos el estado a 'cancelado' para que la UI lo refleje.
+// Si el usuario solo cancela un checkout pendiente durante el demo, liberamos
+// el proceso de MercadoPago sin marcar el ELEAM como cliente cancelado.
 
 import { preflight, jsonResponse, internalErrorResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
-import { updatePreapprovalStatus } from "../_shared/mercadopago.ts";
+import { updatePreapprovalStatus, MercadoPagoApiError } from "../_shared/mercadopago.ts";
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -33,22 +33,54 @@ Deno.serve(async (req) => {
     const sb = adminClient();
     const { data: eleam, error: eleamErr } = await sb
       .from("eleams")
-      .select("id, mp_preapproval_id")
+      .select("id, plan, subscription_status, fecha_vencimiento_suscripcion, mp_preapproval_id")
       .eq("id", profile.eleam_id)
       .maybeSingle();
     if (eleamErr || !eleam) {
       return jsonResponse(req, { error: "ELEAM no encontrado" }, 404);
     }
     if (!eleam.mp_preapproval_id) {
-      return jsonResponse(req, { error: "No hay suscripción activa" }, 400);
+      return jsonResponse(req, { ok: true, already_clear: true });
     }
 
-    await updatePreapprovalStatus(eleam.mp_preapproval_id, "cancelled");
+    const demoStillValid = eleam.plan === "demo" &&
+      eleam.subscription_status === "pendiente" &&
+      eleam.fecha_vencimiento_suscripcion !== null &&
+      new Date(eleam.fecha_vencimiento_suscripcion).getTime() > Date.now();
 
-    const { error: updateErr } = await sb.from("eleams").update({
-      subscription_status: "cancelado",
-      cancelado_en: new Date().toISOString(),
-    }).eq("id", eleam.id);
+    let mpCancelWarning: string | null = null;
+    try {
+      await updatePreapprovalStatus(eleam.mp_preapproval_id, "cancelled");
+    } catch (mpErr) {
+      // 404 / 409 means the preapproval is already cancelled or doesn't exist in MP.
+      // For pending demo checkouts, local cleanup must still succeed so the user can retry.
+      const mpStatus = mpErr instanceof MercadoPagoApiError ? mpErr.status : null;
+      const canIgnoreMpFailure = demoStillValid || mpStatus === 404 || mpStatus === 409;
+      if (!canIgnoreMpFailure) throw mpErr;
+
+      mpCancelWarning = mpErr instanceof Error ? mpErr.message : "MercadoPago no confirmó la cancelación";
+      console.warn("mp-cancel: continuing with local cleanup after MP cancel failure", mpStatus, mpCancelWarning);
+    }
+
+    const update = demoStillValid
+      ? {
+          mp_preapproval_id: null,
+          mp_payer_email: null,
+          plan_id: null,
+          proximo_cobro_en: null,
+          cancelado_en: null,
+          crm_estado: "prueba",
+        }
+      : {
+          subscription_status: "cancelado",
+          cancelado_en: new Date().toISOString(),
+          crm_estado: "cliente_riesgo",
+          mp_preapproval_id: null,
+          mp_payer_email: null,
+          proximo_cobro_en: null,
+        };
+
+    const { error: updateErr } = await sb.from("eleams").update(update).eq("id", eleam.id);
     if (updateErr) {
       console.error("mp-cancel local update", updateErr);
       return jsonResponse(req, {
@@ -56,7 +88,7 @@ Deno.serve(async (req) => {
       }, 500);
     }
 
-    return jsonResponse(req, { ok: true });
+    return jsonResponse(req, { ok: true, mp_cancel_warning: mpCancelWarning });
   } catch (e) {
     console.error("mp-cancel-subscription", e);
     return internalErrorResponse(req);

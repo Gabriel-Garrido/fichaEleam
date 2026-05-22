@@ -11,9 +11,12 @@ import {
   startSubscription,
   cancelSubscription,
   getMyPayments,
+  getMyPlanUsage,
 } from "./paymentService";
 import { canStartSubscription, subscriptionButtonLabel } from "./paymentStatus";
 import { formatDate } from "../../utils/dateUtils";
+import { getEffectivePlanLimits, planLimitError } from "./planCatalog";
+import { isMercadoPagoCheckoutUrl } from "./mercadoPagoUrls";
 
 function daysUntil(iso) {
   if (!iso) return null;
@@ -30,7 +33,7 @@ const INCLUYE = [
   "Registro diario de signos vitales por turno",
   "Observaciones de turno con 12 categorías",
   "Sistema de documentación SEREMI (DS 14/2017)",
-  "Acceso para todos tus funcionarios sin costo adicional",
+  "Funcionarios incluidos según el cupo del plan",
   "Soporte por correo electrónico",
 ];
 
@@ -60,7 +63,7 @@ export default function PaymentPage() {
   const [params] = useSearchParams();
   const toast = useToast();
   const {
-    user, profile, eleam, pagoActivo, subscriptionStatus, isAdminEleam, rol,
+    user, profile, eleam, pagoActivo, subscriptionStatus, isAdminEleam, rol, refetchProfile,
   } = useAuth();
   const sinAcceso = params.get("sinAcceso") === "1";
   const blockedNonAdmin = Boolean(user && !isAdminEleam && sinAcceso);
@@ -68,33 +71,50 @@ export default function PaymentPage() {
   useSEO({
     title: "Planes y precios · activa tu ELEAM",
     description:
-      "Planes mensuales en CLP para tu ELEAM en Chile. Pago con MercadoPago. Funcionarios y familias incluidos. Cancela cuando quieras.",
+      "Planes mensuales en CLP para tu ELEAM en Chile. Pago con MercadoPago, cupos claros para residentes y funcionarios, y familias incluidas. Cancela cuando quieras.",
     path: "/pago",
     keywords: ["precio software ELEAM", "planes ELEAM Chile", "FichaEleam precio"],
   });
   const accountEmail = profile?.email || user?.email || "";
 
   const [plans, setPlans] = useState([]);
+  const [plansError, setPlansError] = useState(null);
   const [pagos, setPagos] = useState([]);
+  const [planUsage, setPlanUsage] = useState({ residents: 0, staff: 0 });
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [loadingAction, setLoadingAction] = useState(false);
 
-  useEffect(() => {
+  const loadPlanData = React.useCallback(() => {
+    if (!user) return;
     let active = true;
     setLoadingPlans(true);
-    // Solo el admin del ELEAM puede ver el historial de pagos.
+    setPlansError(null);
     Promise.allSettled([
       getActivePlans(),
       isAdminEleam ? getMyPayments() : Promise.resolve([]),
+      isAdminEleam && eleam?.id ? getMyPlanUsage(eleam.id) : Promise.resolve({ residents: 0, staff: 0 }),
     ])
-      .then(([p1, p2]) => {
+      .then(([p1, p2, p3]) => {
         if (!active) return;
-        if (p1.status === "fulfilled") setPlans(p1.value);
+        if (p1.status === "fulfilled") {
+          setPlans(p1.value);
+        } else {
+          console.error("getActivePlans failed:", p1.reason);
+          setPlansError(p1.reason?.message ?? "Error al cargar los planes. Recarga la página o contacta soporte.");
+        }
         if (p2.status === "fulfilled") setPagos(p2.value);
+        else console.error("getMyPayments failed:", p2.reason);
+        if (p3.status === "fulfilled") setPlanUsage(p3.value);
+        else console.error("getMyPlanUsage failed:", p3.reason);
       })
       .finally(() => active && setLoadingPlans(false));
     return () => { active = false; };
-  }, [user, isAdminEleam]);
+  }, [user, isAdminEleam, eleam?.id]);
+
+  useEffect(() => {
+    const cleanup = loadPlanData();
+    return cleanup;
+  }, [loadPlanData]);
 
   const handleLogout = async () => {
     try { await logout(); } finally { navigate("/login", { replace: true }); }
@@ -120,14 +140,38 @@ export default function PaymentPage() {
     setLoadingAction(true);
     try {
       const res = await startSubscription({ planCodigo: codigo });
-      // Validate init_point is from MercadoPago before redirecting.
-      const mpUrl = new URL(res.init_point);
-      if (!mpUrl.hostname.endsWith(".mercadopago.com") && mpUrl.hostname !== "mercadopago.com") {
+      if (!isMercadoPagoCheckoutUrl(res.init_point)) {
         throw new Error("URL de pago inválida. Contacta a soporte.");
       }
       window.location.href = res.init_point;
     } catch (e) {
-      toast(friendlyError(e, "No se pudo iniciar el proceso de pago. Intenta de nuevo o contacta soporte."), "error");
+      console.error("handleStart error", e);
+      // Edge Function errors with an mp_* code already carry a user-facing Spanish message.
+      // For generic/network errors, fall back to friendlyError normalization.
+      const isMpError = String(e?.code ?? "").startsWith("mp_");
+      toast(
+        isMpError
+          ? e.message
+          : friendlyError(e, "No se pudo iniciar el proceso de pago. Intenta de nuevo o contacta soporte."),
+        "error",
+      );
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleCancelPending = async () => {
+    const ok = window.confirm(
+      "¿Cancelar este proceso de pago?\n\nSi ya completaste el pago en MercadoPago, espera unos minutos para que se confirme antes de cancelar.\n\nSi no completaste el pago, puedes cancelar aquí y elegir otro plan."
+    );
+    if (!ok) return;
+    setLoadingAction(true);
+    try {
+      await cancelSubscription();
+      await refetchProfile();
+      toast("Proceso cancelado. Ya puedes elegir un nuevo plan.", "success");
+    } catch (e) {
+      toast(friendlyError(e, "No se pudo cancelar el proceso de pago. Intenta de nuevo o contacta soporte."), "error");
     } finally {
       setLoadingAction(false);
     }
@@ -153,6 +197,7 @@ export default function PaymentPage() {
 
   const statusInfo = SUBSCRIPTION_LABEL[subscriptionStatus] ?? SUBSCRIPTION_LABEL.inactivo;
   const proximo = eleam?.proximo_cobro_en ?? eleam?.fecha_vencimiento_suscripcion ?? null;
+  const effectiveLimits = getEffectivePlanLimits(eleam);
   const isDemo = isAdminEleam && eleam?.plan === "demo";
   const isPaymentPending = subscriptionStatus === "pendiente" && Boolean(eleam?.mp_preapproval_id);
   const demoExpiry = eleam?.fecha_vencimiento_suscripcion ?? null;
@@ -290,6 +335,18 @@ export default function PaymentPage() {
                   <p className={`mt-2 text-xs font-semibold ${demoExpired ? "text-rose-600" : "text-amber-700"}`}>
                     {eleam.nombre}
                   </p>
+                  {isPaymentPending && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={handleCancelPending}
+                        disabled={loadingAction}
+                        className="text-xs font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900 disabled:opacity-50"
+                      >
+                        {loadingAction ? "Cancelando..." : "Cancelar proceso y elegir otro plan"}
+                      </button>
+                    </div>
+                  )}
                   {/* Countdown bar */}
                   {!demoExpired && demoDaysLeft != null && demoDaysLeft >= 0 && (
                     <div className="mt-3">
@@ -367,25 +424,25 @@ export default function PaymentPage() {
                   )}
 
                   {/* Plan limits */}
-                  {(eleam.max_residentes || eleam.max_funcionarios) && (
+                  {(effectiveLimits.maxResidents || effectiveLimits.maxStaff) && (
                     <div className="mt-3 flex flex-wrap gap-4">
-                      {eleam.max_residentes && (
+                      {effectiveLimits.maxResidents && (
                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
                           <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
                           </svg>
                           Hasta{" "}
-                          <span className="font-semibold text-slate-700">{eleam.max_residentes}</span>
+                          <span className="font-semibold text-slate-700">{effectiveLimits.maxResidents}</span>
                           {" "}residentes
                         </div>
                       )}
-                      {eleam.max_funcionarios && (
+                      {effectiveLimits.maxStaff && (
                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
                           <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
                           </svg>
                           Hasta{" "}
-                          <span className="font-semibold text-slate-700">{eleam.max_funcionarios}</span>
+                          <span className="font-semibold text-slate-700">{effectiveLimits.maxStaff}</span>
                           {" "}funcionarios
                         </div>
                       )}
@@ -395,6 +452,16 @@ export default function PaymentPage() {
 
                 {/* Right: actions */}
                 <div className="flex shrink-0 flex-col items-end gap-2">
+                  {isPaymentPending && !isDemo && (
+                    <button
+                      type="button"
+                      onClick={handleCancelPending}
+                      disabled={loadingAction}
+                      className="text-xs font-medium text-amber-600 transition-colors hover:text-amber-800 disabled:opacity-50"
+                    >
+                      {loadingAction ? "Cancelando..." : "Cancelar proceso de pago"}
+                    </button>
+                  )}
                   {pagoActivo && (
                     <button
                       type="button"
@@ -448,16 +515,28 @@ export default function PaymentPage() {
               ? "Tu cuenta fue creada correctamente, pero la habilitación del establecimiento la gestiona el administrador ELEAM."
               : isDemo
                 ? "Un precio mensual por establecimiento. Tu historial clínico y toda la configuración se mantienen al activar."
-                : "Un precio mensual por establecimiento. Sin cobros por usuario. Todos tus funcionarios acceden incluidos."}
+                : "Un precio mensual por establecimiento, con cupos claros para residentes y funcionarios."}
           </p>
         </div>
 
         {/* Planes dinámicos */}
         {loadingPlans ? (
           <div className="text-center text-slate-500 py-8">Cargando planes...</div>
+        ) : plansError ? (
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5">
+            <p className="text-rose-800 font-semibold text-sm mb-1">No se pudieron cargar los planes</p>
+            <p className="text-rose-700 text-sm mb-3">{plansError}</p>
+            <button
+              type="button"
+              onClick={loadPlanData}
+              className="text-sm font-semibold text-rose-700 underline underline-offset-2 hover:text-rose-900"
+            >
+              Reintentar
+            </button>
+          </div>
         ) : plans.length === 0 ? (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-amber-800">
-            Aún no hay planes configurados. Contacta al administrador.
+            No hay planes disponibles en este momento. Contacta al equipo FichaEleam.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
@@ -465,6 +544,8 @@ export default function PaymentPage() {
               const popular = p.destacado;
               const isPendingPlan = eleam?.plan_id === p.id && subscriptionStatus === "pendiente";
               const isCurrent = eleam?.plan_id === p.id && pagoActivo && !isPendingPlan;
+              const limitError = user && isAdminEleam ? planLimitError(p, planUsage) : null;
+              const disabledByUsage = Boolean(limitError);
               return (
                 <div
                   key={p.id}
@@ -489,9 +570,14 @@ export default function PaymentPage() {
                     CLP / mes
                   </p>
                   <ul className={`text-xs mb-6 space-y-1 ${popular ? "text-teal-100" : "text-slate-500"}`}>
-                    <li>Hasta {p.max_residentes ?? "∞"} residentes activos</li>
+                    <li>Hasta {p.max_residentes ?? "∞"} residentes activos u hospitalizados</li>
                     <li>Hasta {p.max_funcionarios ?? "∞"} funcionarios</li>
                   </ul>
+                  {disabledByUsage && (
+                    <p className={`mb-4 rounded-xl px-3 py-2 text-xs ${popular ? "bg-white/15 text-teal-50" : "bg-amber-50 text-amber-700"}`}>
+                      {limitError}
+                    </p>
+                  )}
                   <div className="mt-auto">
                     {isCurrent ? (
                       <span className={`inline-flex w-full justify-center font-semibold py-2 rounded-xl ${
@@ -503,7 +589,7 @@ export default function PaymentPage() {
                       <button
                         type="button"
                         onClick={() => handleStart(p.codigo)}
-                        disabled={loadingAction || (user && !isAdminEleam) || isPendingPlan}
+                        disabled={loadingAction || (user && !isAdminEleam) || isPendingPlan || disabledByUsage}
                         className={`w-full font-semibold py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                           popular
                             ? "bg-white text-teal-700 hover:bg-slate-100"

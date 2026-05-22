@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   createResident, updateResident, getResidentById,
   getFamiliarForResidente, removeFamiliarLink,
+  getResidentQuotaUsage,
 } from "./residentService";
 import { createStaffUser } from "../team/teamService";
 import { validateRut, formatRut, isValidUUID, validateEmail } from "../../utils/validators";
@@ -13,6 +14,7 @@ import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 import Modal from "../../components/Modal";
 import { resolveHospitalizationBed } from "../beds/bedsService";
+import { getEffectivePlanLimits, isResidentInPlanQuota } from "../payment/planCatalog";
 
 const PARENTESCOS = [
   ["", "Seleccionar"],
@@ -50,6 +52,7 @@ export default function ResidentForm() {
   const [errors,  setErrors]  = useState({});
   const [loading, setLoading] = useState(isEditing);
   const [saving,  setSaving]  = useState(false);
+  const { maxResidents } = getEffectivePlanLimits(eleam);
 
   // Familiar — creación inline
   const [familiarEnabled, setFamiliarEnabled] = useState(false);
@@ -170,6 +173,14 @@ export default function ResidentForm() {
         fecha_egreso:   form.fecha_egreso || null,
         motivo_egreso:  form.motivo_egreso.trim() || null,
       };
+
+      if (maxResidents !== null && isResidentInPlanQuota(payload)) {
+        const usedSlots = await getResidentQuotaUsage(isEditing ? id : null);
+        if (usedSlots >= maxResidents) {
+          toast(`El plan permite máximo ${maxResidents} residentes activos u hospitalizados. Egresa o actualiza el plan para guardar este residente.`, "error");
+          return;
+        }
+      }
 
       if (isEditing) {
         const mustResolveHospitalBed =

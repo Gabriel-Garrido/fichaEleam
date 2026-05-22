@@ -21,6 +21,7 @@ export default function TeamOverview({
   residentesActivos,
   pendingFuncionarios,
   pendingFamiliares,
+  funcionarioSlotsUsed,
   maxFunc,
   limiteAlcanzado,
 }) {
@@ -53,7 +54,7 @@ export default function TeamOverview({
         <StatTile
           label="Funcionarios"
           value={funcionarios}
-          sub={maxFunc !== null ? `${funcionarios} de ${maxFunc} cupos` : "Sin límite configurado"}
+          sub={maxFunc !== null ? `${funcionarioSlotsUsed ?? funcionarios} de ${maxFunc} cupos usados` : "Sin límite configurado"}
           tone={limiteAlcanzado ? "amber" : "teal"}
         />
         <StatTile label="Familiares" value={familiares} sub="Cuentas vinculadas a residentes" tone="emerald" />

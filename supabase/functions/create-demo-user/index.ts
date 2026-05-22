@@ -35,6 +35,20 @@ function success(req: Request, code: string, message: string, payload: Record<st
   });
 }
 
+function describeError(err: unknown): string {
+  if (!err) return "Sin detalle";
+  try {
+    // Serializa TODAS las propiedades, incluyendo no-enumerables de Error
+    const allKeys = err instanceof Error
+      ? Object.getOwnPropertyNames(err)
+      : Object.keys(err as object);
+    const serialized = JSON.stringify(err, allKeys);
+    if (serialized && serialized !== "{}") return serialized;
+  } catch { /* fallthrough */ }
+  if (err instanceof Error) return `${err.name}: ${err.message}`;
+  return String(err);
+}
+
 function fail(
   req: Request,
   code: string,
@@ -64,6 +78,41 @@ function generatePassword(): string {
 function getAppUrl(): string {
   const rawAppUrl = Deno.env.get("PUBLIC_APP_URL")?.trim() || "https://fichaeleam.cl";
   return rawAppUrl.replace(/\/+$/, "");
+}
+
+async function createAuthProvisionRequest(
+  sb: ReturnType<typeof adminClient>,
+  {
+    email,
+    eleamId,
+    rol,
+    accountSource,
+  }: {
+    email: string;
+    eleamId: string;
+    rol: "admin_eleam" | "funcionario" | "familiar";
+    accountSource: "demo_approved" | "superadmin_created" | "admin_created" | "funcionario_created";
+  },
+): Promise<{ id: string | null; error: unknown }> {
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const { data, error } = await sb
+    .from("auth_provision_requests")
+    .insert({
+      email,
+      account_source: accountSource,
+      eleam_id: eleamId,
+      rol,
+      expira_en: expiresAt,
+    })
+    .select("id")
+    .single();
+
+  return { id: data?.id ?? null, error };
+}
+
+async function deleteAuthProvisionRequest(sb: ReturnType<typeof adminClient>, id: string | null) {
+  if (!id) return;
+  await sb.from("auth_provision_requests").delete().eq("id", id);
 }
 
 // Genera un enlace de recuperación (un solo uso) para que el usuario defina
@@ -177,7 +226,9 @@ Deno.serve(async (req) => {
 
     if (existingErr) {
       console.error("profiles lookup", existingErr);
-      return fail(req, "internal_error", "No se pudo validar el correo del lead. Intenta nuevamente.", 500);
+      return fail(req, "internal_error", "No se pudo validar el correo del lead. Intenta nuevamente.", 500, {
+        detail: describeError(existingErr),
+      });
     }
 
     const reusableProfile = (existingProfiles ?? [])
@@ -228,7 +279,9 @@ Deno.serve(async (req) => {
 
       if (eleamUpdateErr) {
         console.error("demo eleam reuse update", eleamUpdateErr);
-        return fail(req, "internal_error", "No se pudo activar el ELEAM demo. Intenta nuevamente.", 500);
+        return fail(req, "internal_error", "No se pudo activar el ELEAM demo. Intenta nuevamente.", 500, {
+          detail: describeError(eleamUpdateErr),
+        });
       }
 
       const { error: leadUpdateErr } = await sb.from("demo_leads").update({
@@ -240,7 +293,9 @@ Deno.serve(async (req) => {
 
       if (leadUpdateErr) {
         console.error("demo lead reuse update", leadUpdateErr);
-        return fail(req, "internal_error", "La cuenta se habilitó, pero no se pudo actualizar el lead. Recarga y verifica.", 500);
+        return fail(req, "internal_error", "La cuenta se habilitó, pero no se pudo actualizar el lead. Recarga y verifica.", 500, {
+          detail: describeError(leadUpdateErr),
+        });
       }
 
       return success(req, "reused_demo", "Demo activado usando una cuenta existente compatible.", {
@@ -258,7 +313,9 @@ Deno.serve(async (req) => {
     const { user: existingAuthUser, error: authLookupErr } = await findAuthUserByEmail(sb, cleanEmail);
     if (authLookupErr) {
       console.error("auth user lookup", authLookupErr);
-      return fail(req, "internal_error", "No se pudo validar si el correo ya existe. Intenta nuevamente.", 500);
+      return fail(req, "internal_error", "No se pudo validar si el correo ya existe. Intenta nuevamente.", 500, {
+        detail: describeError(authLookupErr),
+      });
     }
 
     // Contraseña aleatoria interna: el usuario nunca la ve ni la recibe.
@@ -283,7 +340,9 @@ Deno.serve(async (req) => {
 
     if (eleamCreateErr || !demoEleam) {
       console.error("demo eleam create", eleamCreateErr);
-      return fail(req, "internal_error", "No se pudo crear el ELEAM demo. Intenta nuevamente.", 500);
+      return fail(req, "internal_error", "No se pudo crear el ELEAM demo. Intenta nuevamente.", 500, {
+        detail: describeError(eleamCreateErr),
+      });
     }
 
     if (existingAuthUser) {
@@ -299,7 +358,9 @@ Deno.serve(async (req) => {
       if (profileInsert.error) {
         await sb.from("eleams").delete().eq("id", demoEleam.id);
         console.error("demo profile repair insert", profileInsert.error);
-        return fail(req, "conflict", "El correo existe en Auth, pero no se pudo reparar su perfil. Revisa el usuario antes de continuar.", 409);
+        return fail(req, "conflict", "El correo existe en Auth, pero no se pudo reparar su perfil. Revisa el usuario antes de continuar.", 409, {
+          detail: describeError(profileInsert.error),
+        });
       }
 
       const currentAppMetadata =
@@ -331,7 +392,9 @@ Deno.serve(async (req) => {
         await sb.from("profiles").delete().eq("id", existingAuthUser.id);
         await sb.from("eleams").delete().eq("id", demoEleam.id);
         console.error("demo auth repair update", updateAuthErr);
-        return fail(req, "internal_error", "El correo existe en Auth, pero no se pudo habilitar para el demo.", 500);
+        return fail(req, "internal_error", "El correo existe en Auth, pero no se pudo habilitar para el demo.", 500, {
+          detail: describeError(updateAuthErr),
+        });
       }
 
       const { error: leadUpdateErr } = await sb.from("demo_leads").update({
@@ -345,7 +408,9 @@ Deno.serve(async (req) => {
         await sb.from("profiles").delete().eq("id", existingAuthUser.id);
         await sb.from("eleams").delete().eq("id", demoEleam.id);
         console.error("demo repaired lead update", leadUpdateErr);
-        return fail(req, "internal_error", "No se pudo actualizar el lead con la cuenta reparada.", 500);
+        return fail(req, "internal_error", "No se pudo actualizar el lead con la cuenta reparada.", 500, {
+          detail: describeError(leadUpdateErr),
+        });
       }
 
       const linkResult = await generateAccessLink(sb, cleanEmail);
@@ -369,6 +434,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    const { id: provisionId, error: provisionErr } = await createAuthProvisionRequest(sb, {
+      email: cleanEmail,
+      eleamId: demoEleam.id,
+      rol: "admin_eleam",
+      accountSource: "demo_approved",
+    });
+
+    if (provisionErr || !provisionId) {
+      await sb.from("eleams").delete().eq("id", demoEleam.id);
+      console.error("demo auth provision create", provisionErr);
+      return fail(req, "schema_or_profile_error", "No se pudo preparar la provisión Auth. Aplica supabase_schema.sql actualizado y vuelve a intentar.", 500, {
+        detail: describeError(provisionErr),
+      });
+    }
+
     // Crear usuario vía Admin API. La autorización de rol/ELEAM viaja en
     // app_metadata; user_metadata queda solo para datos de presentación.
     const { data: created, error: createError } = await sb.auth.admin.createUser({
@@ -383,10 +463,12 @@ Deno.serve(async (req) => {
       user_metadata: {
         nombre: lead.nombre,
         must_reset_password: true,
+        fichaeleam_provision_id: provisionId,
       },
     });
 
     if (createError) {
+      await deleteAuthProvisionRequest(sb, provisionId);
       await sb.from("eleams").delete().eq("id", demoEleam.id);
       if (isDuplicateAuthUserError(createError)) {
         return fail(
@@ -394,32 +476,38 @@ Deno.serve(async (req) => {
           "conflict",
           "Este correo ya existe en Auth. Actualiza la lista y vuelve a intentarlo para reparar la cuenta.",
           409,
+          { detail: describeError(createError) },
         );
       }
       console.error("demo auth create", createError);
-      return fail(req, "internal_error", "No se pudo crear el usuario demo. Intenta nuevamente.", 500);
+      const detail = describeError(createError);
+      const schemaHint = detail.includes("Database error creating new user");
+      return fail(req, "internal_error", schemaHint
+        ? "Auth rechazó la creación por un trigger de base de datos. Aplica supabase_schema.sql y vuelve a desplegar la función."
+        : "No se pudo crear el usuario demo. Intenta nuevamente.", 500, {
+        detail,
+      });
     }
 
     const profileId = created.user.id;
     const eleamId: string = demoEleam.id;
 
-    // Esperar a que el trigger cree el profile vinculado al ELEAM demo (máx 2s)
-    let profileReady = false;
-    for (let attempt = 0; attempt < 8; attempt++) {
-      await new Promise((r) => setTimeout(r, 250));
-      const { data: profileRow } = await sb
-        .from("profiles")
-        .select("eleam_id")
-        .eq("id", profileId)
-        .maybeSingle();
-      if (profileRow?.eleam_id === eleamId) {
-        profileReady = true;
-        break;
-      }
-    }
+    const { error: profileUpsertErr } = await sb.from("profiles").upsert({
+      id: profileId,
+      nombre: lead.nombre,
+      email: cleanEmail,
+      rol: "admin_eleam",
+      eleam_id: eleamId,
+      must_reset_password: true,
+    }, { onConflict: "id" });
 
-    if (!profileReady) {
-      console.error("profile not linked after create-demo-user", { profileId, eleamId });
+    if (profileUpsertErr) {
+      await sb.auth.admin.deleteUser(profileId);
+      await sb.from("eleams").delete().eq("id", eleamId);
+      console.error("demo profile provision after auth create", profileUpsertErr);
+      return fail(req, "schema_or_profile_error", "Auth creó el usuario, pero no se pudo crear el perfil demo. Aplica supabase_schema.sql y vuelve a intentar.", 500, {
+        detail: describeError(profileUpsertErr),
+      });
     }
 
     // Actualizar lead con el profile_id del usuario creado
@@ -432,7 +520,9 @@ Deno.serve(async (req) => {
 
     if (leadUpdateErr) {
       console.error("demo created lead update", leadUpdateErr);
-      return fail(req, "internal_error", "El usuario se creó, pero no se pudo actualizar el lead. Recarga y verifica.", 500);
+      return fail(req, "internal_error", "El usuario se creó, pero no se pudo actualizar el lead. Recarga y verifica.", 500, {
+        detail: describeError(leadUpdateErr),
+      });
     }
 
     const linkResult = await generateAccessLink(sb, cleanEmail);
@@ -455,6 +545,8 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("create-demo-user", e);
-    return fail(req, "internal_error", "Error interno al aprobar el demo. Intenta nuevamente.", 500);
+    return fail(req, "internal_error", "Error interno al aprobar el demo. Intenta nuevamente.", 500, {
+      detail: describeError(e),
+    });
   }
 });

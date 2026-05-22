@@ -16,9 +16,24 @@
     />
     <meta name="keywords" content="ELEAM, ficha clínica ELEAM, fiscalización SEREMI, DS 14/2017, residencias adulto mayor Chile, software ELEAM, acreditación SEREMI" />
     <meta name="author" content="FichaEleam" />
-    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="googlebot" content="index, follow" />
+    <meta name="bingbot" content="index, follow" />
+    <meta name="application-name" content="FichaEleam" />
+    <meta name="apple-mobile-web-app-title" content="FichaEleam" />
+    <meta name="geo.region" content="CL" />
+    <meta name="geo.placename" content="Chile" />
+    <meta name="language" content="Spanish" />
+    <meta http-equiv="content-language" content="es-CL" />
     <link rel="canonical" href="https://fichaeleam.cl/" />
+    <link rel="alternate" hreflang="es-CL" href="https://fichaeleam.cl/" />
+    <link rel="alternate" hreflang="es" href="https://fichaeleam.cl/" />
+    <link rel="alternate" hreflang="x-default" href="https://fichaeleam.cl/" />
+
+    <!-- Performance hints -->
+    <link rel="preconnect" href="https://gzvjqzilaxlnzmjkcrbw.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://gzvjqzilaxlnzmjkcrbw.supabase.co" />
+    <link rel="dns-prefetch" href="https://api.mercadopago.com" />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
@@ -116,7 +131,8 @@
                   "valueAddedTaxIncluded": false
                 },
                 "priceValidUntil": "2026-12-31",
-                "eligibleCustomerType": "Business"
+                "eligibleCustomerType": "Business",
+                "description": "Hasta 14 residentes activos u hospitalizados y hasta 10 funcionarios."
               },
               {
                 "@type": "Offer",
@@ -131,7 +147,8 @@
                   "valueAddedTaxIncluded": false
                 },
                 "priceValidUntil": "2026-12-31",
-                "eligibleCustomerType": "Business"
+                "eligibleCustomerType": "Business",
+                "description": "Hasta 24 residentes activos u hospitalizados y hasta 20 funcionarios."
               },
               {
                 "@type": "Offer",
@@ -146,7 +163,8 @@
                   "valueAddedTaxIncluded": false
                 },
                 "priceValidUntil": "2026-12-31",
-                "eligibleCustomerType": "Business"
+                "eligibleCustomerType": "Business",
+                "description": "Hasta 34 residentes activos u hospitalizados y hasta 30 funcionarios."
               },
               {
                 "@type": "Offer",
@@ -166,6 +184,7 @@
             "Gestión de habitaciones y camas con historial de ocupación",
             "eMAR (kardex electrónico) y plan de cuidado con tareas por turno",
             "Portal para familiares de residentes",
+            "Gestión de equipo con cupos de funcionarios según plan",
             "Cuenta demo real con 30 días de prueba gratuita",
             "Suscripción mensual con MercadoPago"
           ],
@@ -196,6 +215,91 @@
               "text": "Elige el plan según el número de residentes, paga con MercadoPago y el equipo te ayuda a cargar los datos iniciales sin costo adicional."
             }
           ]
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://fichaeleam.cl/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "¿Qué es FichaEleam?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "FichaEleam es un software chileno diseñado exclusivamente para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM). Incluye ficha clínica digital, signos vitales con alertas, observaciones por turno, Carpeta SEREMI con los 14 ámbitos del DS 14/2017 y portal para familias de residentes."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿FichaEleam cumple con el DS 14/2017 del MINSAL?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. FichaEleam viene con los 14 ámbitos del DS 14/2017 y más de 70 requisitos pre-cargados. Cada documento se sube con su fecha de vencimiento y el sistema avisa 30 días antes de que expire. La carpeta SEREMI completa se puede exportar lista para imprimir antes de una fiscalización."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cuánto cuesta FichaEleam?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Hay 3 planes mensuales: hasta 14 residentes y 10 funcionarios desde $50.000 CLP + IVA, hasta 24 residentes y 20 funcionarios desde $80.000 CLP + IVA, y hasta 34 residentes y 30 funcionarios desde $120.000 CLP + IVA. Para 35 o más residentes ofrecemos cotización personalizada vía WhatsApp al +56 9 5118 7764."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Hay un demo gratuito?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. Solicita el demo completando el formulario en fichaeleam.cl o por WhatsApp al +56 9 5118 7764. Aprobamos solicitudes en menos de 24 horas y recibes acceso a una cuenta real por 30 días sin costo y sin tarjeta de crédito."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Mis datos cumplen la Ley 19.628 de protección de datos personales?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. FichaEleam implementa control de acceso por rol (director, funcionario clínico, familiar autorizado), cifrado en tránsito y reposo, y registro de auditoría de cada acción. Los datos clínicos no salen de los servidores autorizados y solo el personal que necesita información puede verla, conforme a la Ley N°19.628 sobre protección de la vida privada."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Las familias pueden ver la ficha de su familiar?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. Cada residente puede tener uno o más familiares autorizados con acceso a un portal restringido donde ven al residente vinculado, los últimos signos vitales y el registro de visitas. No pueden modificar registros clínicos, solo consultarlos y registrar sus propias visitas."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Puedo importar mis residentes desde Excel?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. FichaEleam incluye importación masiva con plantillas Excel para residentes y funcionarios, con validadores nativos de Excel (listas, fechas, rangos) y validación previa antes de importar. Esto permite cargar tu establecimiento completo en minutos."
+              }
+            }
+          ]
+        },
+        {
+          "@type": "Service",
+          "@id": "https://fichaeleam.cl/#service",
+          "serviceType": "Software de gestión clínica para ELEAM",
+          "name": "FichaEleam · Gestión clínica y SEREMI para ELEAM",
+          "description": "Software SaaS chileno para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM): ficha clínica digital, signos vitales, observaciones por turno, Carpeta SEREMI DS 14/2017 y portal familiar.",
+          "provider": { "@id": "https://fichaeleam.cl/#organization" },
+          "areaServed": { "@type": "Country", "name": "Chile" },
+          "audience": {
+            "@type": "BusinessAudience",
+            "audienceType": "Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile"
+          },
+          "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Planes FichaEleam",
+            "itemListElement": [
+              { "@type": "Offer", "name": "Plan hasta 14 residentes", "price": "50000", "priceCurrency": "CLP" },
+              { "@type": "Offer", "name": "Plan hasta 24 residentes", "price": "80000", "priceCurrency": "CLP" },
+              { "@type": "Offer", "name": "Plan hasta 34 residentes", "price": "120000", "priceCurrency": "CLP" },
+              { "@type": "Offer", "name": "Plan institucional (35+ residentes)", "description": "Cotización personalizada por WhatsApp" }
+            ]
+          }
         }
       ]
     }

@@ -9,7 +9,7 @@ import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient } from "../_shared/supabase.ts";
 import { normalizeLandingEvent } from "./eventValidation.ts";
 
-// Rate limit basico: maximo de eventos por session_id en la ventana.
+// Rate limit basico: máximo de eventos por session_id en la ventana.
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 40;
 

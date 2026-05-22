@@ -3,6 +3,7 @@ import Modal from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
 import { CRM_STATES, RIESGO_CHURN } from "../utils/superadminFormatters";
 import { friendlyError } from "../../../utils/errorMessages";
+import { getActivePlans } from "../../payment/paymentService";
 
 const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100";
 const labelCls = "block text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-1";
@@ -10,11 +11,13 @@ const labelCls = "block text-[11px] uppercase tracking-wider font-bold text-slat
 const initialFromEleam = (e) => ({
   pago_activo:                   e.pago_activo ?? false,
   plan:                          e.plan ?? "demo",
+  plan_id:                       e.plan_id ?? "",
   crm_estado:                    e.crm_estado ?? "lead",
   riesgo_churn:                  e.riesgo_churn ?? "desconocido",
   origen_lead:                   e.origen_lead ?? "",
   proxima_accion_fecha:          e.proxima_accion_fecha ?? "",
   max_residentes:                e.max_residentes ?? "",
+  max_funcionarios:              e.max_funcionarios ?? "",
   fecha_vencimiento_suscripcion: e.fecha_vencimiento_suscripcion?.slice(0, 10) ?? "",
   notas_admin:                   e.notas_admin ?? "",
 });
@@ -34,9 +37,19 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
   const toast = useToast();
   const [form, setForm]     = useState(() => (eleam ? initialFromEleam(eleam) : {}));
   const [saving, setSaving] = useState(false);
+  const [plans, setPlans]   = useState([]);
 
   useEffect(() => {
     if (eleam) setForm(initialFromEleam(eleam));
+  }, [eleam]);
+
+  useEffect(() => {
+    if (!eleam) return;
+    let active = true;
+    getActivePlans()
+      .then((data) => { if (active) setPlans(data); })
+      .catch(() => { if (active) setPlans([]); });
+    return () => { active = false; };
   }, [eleam]);
 
   if (!eleam) return null;
@@ -48,7 +61,9 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
     try {
       const payload = {
         ...form,
+        plan_id:                       form.plan_id || null,
         max_residentes:                form.max_residentes !== "" ? parseInt(form.max_residentes, 10) : null,
+        max_funcionarios:              form.max_funcionarios !== "" ? parseInt(form.max_funcionarios, 10) : null,
         fecha_vencimiento_suscripcion: form.fecha_vencimiento_suscripcion || null,
         proxima_accion_fecha:          form.proxima_accion_fecha || null,
         origen_lead:                   form.origen_lead?.trim() || null,
@@ -71,7 +86,7 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
         {/* Suscripción */}
         <FieldGroup title="Suscripción y plan" cols={2}>
           <label htmlFor="edit-plan" className="flex flex-col gap-1">
-            <span className={labelCls}>Plan</span>
+            <span className={labelCls}>Periodo de pago</span>
             <select
               id="edit-plan"
               value={form.plan ?? "demo"}
@@ -82,6 +97,23 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
               <option value="mensual">Mensual</option>
               <option value="anual">Anual</option>
               <option value="inactivo">Inactivo</option>
+            </select>
+          </label>
+
+          <label htmlFor="edit-plan-id" className="flex flex-col gap-1">
+            <span className={labelCls}>Plan comercial</span>
+            <select
+              id="edit-plan-id"
+              value={form.plan_id ?? ""}
+              onChange={(e) => set({ plan_id: e.target.value })}
+              className={inputCls}
+            >
+              <option value="">Sin plan comercial</option>
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.nombre} · {plan.max_residentes ?? "∞"} residentes · {plan.max_funcionarios ?? "∞"} funcionarios
+                </option>
+              ))}
             </select>
           </label>
 
@@ -112,7 +144,7 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
 
           <label htmlFor="edit-max-res" className="flex flex-col gap-1">
             <span className={labelCls}>
-              Máx. residentes <span className="font-normal normal-case text-slate-300">(vacío = ilimitado)</span>
+              Cupo alternativo residentes <span className="font-normal normal-case text-slate-300">(si no hay plan comercial)</span>
             </span>
             <input
               id="edit-max-res"
@@ -121,6 +153,21 @@ export default function EleamEditModal({ eleam, onClose, onSave }) {
               value={form.max_residentes}
               onChange={(e) => set({ max_residentes: e.target.value })}
               placeholder="Ej: 30"
+              className={inputCls}
+            />
+          </label>
+
+          <label htmlFor="edit-max-func" className="flex flex-col gap-1">
+            <span className={labelCls}>
+              Cupo alternativo funcionarios <span className="font-normal normal-case text-slate-300">(si no hay plan comercial)</span>
+            </span>
+            <input
+              id="edit-max-func"
+              type="number"
+              min="1"
+              value={form.max_funcionarios}
+              onChange={(e) => set({ max_funcionarios: e.target.value })}
+              placeholder="Ej: 20"
               className={inputCls}
             />
           </label>

@@ -64,7 +64,7 @@ src/
 
 ```bash
 npm run dev      # Desarrollo
-npm run build    # Build producción (/dist)
+npm run build    # Build producción (/dist) + SEO/LLM prerender para cPanel
 npm run lint     # ESLint
 npm run test:run # Tests unitarios Vitest
 npm run preview  # Preview build
@@ -206,7 +206,7 @@ Ver **[CLAUDE.md — Acreditación](./CLAUDE.md#acreditación-carpeta-seremi)** 
 
 ## Suscripción MercadoPago
 
-Admin contrata en `/pago` → Edge Function crea preapproval → checkout MP → webhook activa suscripción.
+Admin contrata en `/pago` → Edge Function valida que el plan alcance para residentes/funcionarios actuales → crea preapproval → checkout MP → webhook activa suscripción.
 
 ### Edge Functions (Deno)
 
@@ -266,7 +266,7 @@ El mismo modal cubre múltiples puntos de entrada con la prop `source`: `floatin
 
 ## Precios
 
-Cuatro tiers públicos en la landing: $50.000 / $80.000 / $120.000 + IVA (planes mensuales) + tier Institucional (35+ residentes) con CTA WhatsApp. Schema seed en `public.planes`; UI hard-coded en `LandingPage.jsx` (`PLANS`). JSON-LD usa `AggregateOffer` con `UnitPriceSpecification.valueAddedTaxIncluded: false`.
+Cuatro tiers públicos en la landing: `plan-14` ($50.000 + IVA, 14 residentes, 10 funcionarios), `plan-24` ($80.000 + IVA, 24 residentes, 20 funcionarios), `plan-34` ($120.000 + IVA, 34 residentes, 30 funcionarios) e Institucional (35+ residentes, cupos a medida). Catálogo UI en `src/features/payment/planCatalog.js`, seed en `public.planes` dentro de `supabase_schema.sql`. Residentes `activo` + `hospitalizado` consumen cupo; funcionarios creados e invitaciones pendientes consumen cupo; familiares no.
 
 ---
 
@@ -289,7 +289,8 @@ Cuatro tiers públicos en la landing: $50.000 / $80.000 / $120.000 + IVA (planes
 ### SEO global
 
 - `robots.txt` — Permite GPTBot, ClaudeBot, PerplexityBot
-- `sitemap.xml` — URLs públicas
+- `sitemap.xml` / `llms.txt` — se regeneran en `npm run build` con dominio canónico `https://fichaeleam.cl`
+- `.htaccess` — generado para HostGator/cPanel con fallback SPA y headers de seguridad
 - `useSEO()` hook — Meta tags + JSON-LD por ruta
 - Open Graph + Twitter cards
 

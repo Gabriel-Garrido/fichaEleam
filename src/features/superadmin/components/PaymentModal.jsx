@@ -2,11 +2,21 @@ import React, { useState } from "react";
 import Modal from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
 import { friendlyError } from "../../../utils/errorMessages";
+import { INSTITUTIONAL_PLAN, PUBLIC_PLAN_CATALOG, formatPlanPrice } from "../../payment/planCatalog";
 
 const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100";
 const labelCls = "block text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-1";
 
-const empty = { eleam_id: "", monto: "", plan: "mensual", metodo_pago: "", notas: "" };
+const empty = {
+  eleam_id: "",
+  monto: String(PUBLIC_PLAN_CATALOG[0]?.precio_clp ?? ""),
+  plan_codigo: "plan-14",
+  periodo: "mensual",
+  metodo_pago: "",
+  notas: "",
+};
+
+const COMMERCIAL_PLANS = [...PUBLIC_PLAN_CATALOG, INSTITUTIONAL_PLAN];
 
 export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId = "", onRegister }) {
   const toast = useToast();
@@ -18,6 +28,8 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
   }, [isOpen, defaultEleamId]);
 
   const set = (patch) => setForm((p) => ({ ...p, ...patch }));
+
+  const selectedPlan = COMMERCIAL_PLANS.find((plan) => plan.codigo === form.plan_codigo) ?? PUBLIC_PLAN_CATALOG[0];
 
   const submit = async (e) => {
     e.preventDefault();
@@ -35,7 +47,8 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
       await onRegister({
         eleam_id:    form.eleam_id,
         monto,
-        plan:        form.plan,
+        plan_codigo: form.plan_codigo,
+        plan:        form.periodo,
         metodo_pago: form.metodo_pago || null,
         notas:       form.notas || null,
       });
@@ -58,7 +71,7 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
             <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
           </svg>
           <p className="text-xs text-teal-800">
-            Esto activa la suscripción del ELEAM y registra una interacción CRM automáticamente. La fecha de vencimiento se calcula según el plan (30 días mensual, 365 anual).
+            Esto fija el plan comercial, valida que sus cupos alcancen para el uso actual y registra una interacción CRM automáticamente. La fecha de vencimiento se calcula según el período.
           </p>
         </div>
 
@@ -91,17 +104,44 @@ export default function PaymentModal({ isOpen, onClose, eleams, defaultEleamId =
             />
           </div>
           <div>
-            <label htmlFor="pay-plan" className={labelCls}>Plan *</label>
+            <label htmlFor="pay-periodo" className={labelCls}>Periodo *</label>
             <select
-              id="pay-plan"
-              value={form.plan}
-              onChange={(e) => set({ plan: e.target.value })}
+              id="pay-periodo"
+              value={form.periodo}
+              onChange={(e) => set({ periodo: e.target.value })}
               className={inputCls}
             >
               <option value="mensual">Mensual (30 días)</option>
               <option value="anual">Anual (365 días)</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label htmlFor="pay-plan-comercial" className={labelCls}>Plan comercial *</label>
+          <select
+            id="pay-plan-comercial"
+            value={form.plan_codigo}
+            onChange={(e) => {
+              const nextPlan = COMMERCIAL_PLANS.find((plan) => plan.codigo === e.target.value);
+              set({
+                plan_codigo: e.target.value,
+                monto: nextPlan?.precio_clp ? String(nextPlan.precio_clp) : "",
+              });
+            }}
+            className={inputCls}
+          >
+            {COMMERCIAL_PLANS.map((plan) => (
+              <option key={plan.codigo} value={plan.codigo}>
+                {plan.nombre} · {formatPlanPrice(plan)}{plan.max_funcionarios ? ` · ${plan.max_funcionarios} funcionarios` : " · cupos personalizados"}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-slate-400">
+            {selectedPlan.max_residentes
+              ? `${selectedPlan.nombre}: hasta ${selectedPlan.max_residentes} residentes y ${selectedPlan.max_funcionarios} funcionarios.`
+              : "Institucional: usa los cupos alternativos configurados en el ELEAM; si están vacíos, no aplica límite fijo."}
+          </p>
         </div>
 
         <div>

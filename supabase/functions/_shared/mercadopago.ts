@@ -11,6 +11,152 @@
 
 const MP_API = "https://api.mercadopago.com";
 
+function compactText(value: string, max = 1000): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.length > max ? `${trimmed.slice(0, max)}...` : trimmed;
+}
+
+function tryParseJson(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function stringifyCause(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (!item || typeof item !== "object") return String(item ?? "");
+        const row = item as Record<string, unknown>;
+        return String(row.description ?? row.message ?? row.code ?? "");
+      })
+      .filter(Boolean)
+      .join(" ");
+  }
+  if (value && typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    return String(row.description ?? row.message ?? row.code ?? "");
+  }
+  return String(value ?? "");
+}
+
+export class MercadoPagoApiError extends Error {
+  status: number;
+  responseText: string;
+  responseJson: Record<string, unknown> | null;
+  operation: string;
+
+  constructor(operation: string, status: number, responseText: string) {
+    const compact = compactText(responseText);
+    super(`MP ${operation} ${status}${compact ? `: ${compact}` : ""}`);
+    this.name = "MercadoPagoApiError";
+    this.operation = operation;
+    this.status = status;
+    this.responseText = compact;
+    this.responseJson = tryParseJson(responseText);
+  }
+}
+
+export function publicMercadoPagoError(error: unknown): {
+  status: number;
+  body: { code: string; error: string; mp_status?: number };
+} | null {
+  if (!(error instanceof MercadoPagoApiError)) return null;
+
+  const json = error.responseJson ?? {};
+  const messageParts = [
+    json.message,
+    json.error,
+    stringifyCause(json.cause),
+    error.responseText,
+  ].map((value) => String(value ?? "").toLowerCase()).join(" ");
+
+  if (error.status === 401 || error.status === 403) {
+    return {
+      status: 502,
+      body: {
+        code: "mp_credentials_error",
+        error: "MercadoPago rechazó las credenciales de la integración. Revisa MP_ACCESS_TOKEN en Supabase.",
+        mp_status: error.status,
+      },
+    };
+  }
+
+  if (
+    error.status === 400 &&
+    (
+      (messageParts.includes("payer") && messageParts.includes("collector")) ||
+      messageParts.includes("same user") ||
+      messageParts.includes("same account") ||
+      messageParts.includes("misma cuenta") ||
+      messageParts.includes("mismo usuario")
+    )
+  ) {
+    return {
+      status: 409,
+      body: {
+        code: "mp_payer_equals_collector",
+        error: "La cuenta de MercadoPago asociada a tu correo no puede pagar esta suscripción porque coincide con la cuenta vendedora. Usa otra cuenta de MercadoPago o contacta a soporte.",
+        mp_status: error.status,
+      },
+    };
+  }
+
+  if (
+    error.status === 400 &&
+    (
+      messageParts.includes("country") ||
+      messageParts.includes("different countries") ||
+      messageParts.includes("país") ||
+      messageParts.includes("pais")
+    )
+  ) {
+    return {
+      status: 409,
+      body: {
+        code: "mp_account_country_mismatch",
+        error: "MercadoPago rechazó la suscripción porque la cuenta compradora y la cuenta vendedora no son compatibles. Usa cuentas del mismo país y ambiente.",
+        mp_status: error.status,
+      },
+    };
+  }
+
+  if (error.status === 400) {
+    return {
+      status: 502,
+      body: {
+        code: "mp_bad_request",
+        error: "MercadoPago rechazó los datos de la suscripción. Revisa el plan seleccionado y la cuenta compradora.",
+        mp_status: error.status,
+      },
+    };
+  }
+
+  if (error.status === 429) {
+    return {
+      status: 503,
+      body: {
+        code: "mp_rate_limited",
+        error: "MercadoPago está limitando temporalmente las solicitudes. Intenta nuevamente en unos minutos.",
+        mp_status: error.status,
+      },
+    };
+  }
+
+  return {
+    status: 502,
+    body: {
+      code: "mp_api_error",
+      error: "MercadoPago no pudo crear la suscripción en este momento. Intenta nuevamente o contacta soporte.",
+      mp_status: error.status,
+    },
+  };
+}
+
 export function getAccessToken(): string {
   const token = Deno.env.get("MP_ACCESS_TOKEN");
   if (!token) throw new Error("MP_ACCESS_TOKEN no está configurado");
@@ -92,7 +238,7 @@ export async function createPreapproval(
   const res = await mpFetch("POST", "/preapproval", input, idempotencyKey);
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`MP createPreapproval ${res.status}: ${text}`);
+    throw new MercadoPagoApiError("createPreapproval", res.status, text);
   }
   return JSON.parse(text) as PreapprovalResponse;
 }
@@ -103,7 +249,7 @@ export async function getPreapproval(
   const res = await mpFetch("GET", `/preapproval/${encodeURIComponent(id)}`);
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`MP getPreapproval ${res.status}: ${text}`);
+    throw new MercadoPagoApiError("getPreapproval", res.status, text);
   }
   return JSON.parse(text) as PreapprovalResponse;
 }
@@ -119,9 +265,28 @@ export async function updatePreapprovalStatus(
   );
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`MP updatePreapproval ${res.status}: ${text}`);
+    throw new MercadoPagoApiError("updatePreapproval", res.status, text);
   }
   return JSON.parse(text) as PreapprovalResponse;
+}
+
+export async function getPayment(id: string): Promise<{
+  id: number | string;
+  status: string;
+  transaction_amount?: number;
+  currency_id?: string;
+  external_reference?: string;
+  date_approved?: string;
+  date_created?: string;
+  payer?: { email?: string };
+  [k: string]: unknown;
+}> {
+  const res = await mpFetch("GET", `/v1/payments/${encodeURIComponent(id)}`);
+  const text = await res.text();
+  if (!res.ok) {
+    throw new MercadoPagoApiError("getPayment", res.status, text);
+  }
+  return JSON.parse(text);
 }
 
 export async function getAuthorizedPayment(id: string): Promise<{
@@ -143,7 +308,7 @@ export async function getAuthorizedPayment(id: string): Promise<{
   );
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`MP getAuthorizedPayment ${res.status}: ${text}`);
+    throw new MercadoPagoApiError("getAuthorizedPayment", res.status, text);
   }
   return JSON.parse(text);
 }
@@ -193,6 +358,12 @@ function timingSafeEqualHex(a: string, b: string): boolean {
   return diff === 0;
 }
 
+function signatureTimestampToMs(ts: number): number {
+  if (ts > 1e14) return Math.floor(ts / 1000); // microseconds
+  if (ts < 1e12) return ts * 1000; // seconds
+  return ts; // milliseconds
+}
+
 export interface WebhookHeadersAndQuery {
   signature: string | null;     // header x-signature
   requestId: string | null;     // header x-request-id
@@ -214,14 +385,21 @@ export async function verifyWebhookSignature(
   const tolerance = (hq.toleranceSeconds ?? 600) * 1000;
   const tsNum = Number(ts);
   if (!Number.isFinite(tsNum)) return { ok: false, reason: "invalid ts" };
-  const skew = Math.abs(Date.now() - tsNum);
+  const skew = Math.abs(Date.now() - signatureTimestampToMs(tsNum));
   if (skew > tolerance) return { ok: false, reason: "ts out of tolerance" };
 
   const dataIdLower = hq.dataId.toLowerCase();
   const manifest =
     `id:${dataIdLower};request-id:${hq.requestId};ts:${ts};`;
 
-  const expected = await hmacSha256Hex(getWebhookSecret(), manifest);
+  let secret: string;
+  try {
+    secret = getWebhookSecret();
+  } catch (e) {
+    return { ok: false, reason: String(e instanceof Error ? e.message : e), ts };
+  }
+
+  const expected = await hmacSha256Hex(secret, manifest);
   const ok = timingSafeEqualHex(expected, v1);
   return ok
     ? { ok: true, ts }

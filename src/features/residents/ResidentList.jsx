@@ -9,11 +9,12 @@ import PageLayout from "../../layout/PageLayout";
 import { ESTADO_CONFIG, DEPENDENCIA_TONE, initials, calcAge, getAllergySummary } from "./residentUtils";
 import ExcelImportModal from "../import/ExcelImportModal";
 import { residentImportConfig, normalizeResidentRows } from "../import/bulkImportConfigs";
+import { countPlanResidentSlots, getEffectivePlanLimits } from "../payment/planCatalog";
 
 export default function ResidentList() {
   const navigate = useNavigate();
   const toast    = useToast();
-  const { can, isAdminEleam } = useAuth();
+  const { can, isAdminEleam, eleam } = useAuth();
   const canDelete = can("eliminar_residentes");
   const canCreate = can("crear_residentes");
   const canImport = canCreate && isAdminEleam;
@@ -30,14 +31,14 @@ export default function ResidentList() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getResidents(filtroEstado || null);
+      const data = await getResidents();
       setResidents(data);
     } catch {
       setError("No se pudo cargar la lista de residentes.");
     } finally {
       setLoading(false);
     }
-  }, [filtroEstado]);
+  }, []);
 
   useEffect(() => { fetchResidents(); }, [fetchResidents]);
 
@@ -52,6 +53,10 @@ export default function ResidentList() {
     }
   };
 
+  const { maxResidents } = getEffectivePlanLimits(eleam);
+  const residentSlotsUsed = useMemo(() => countPlanResidentSlots(residents), [residents]);
+  const residentLimitReached = maxResidents !== null && residentSlotsUsed >= maxResidents;
+
   const handleImportResidents = async (rows, onProgress) => createResidentsBatch(rows, onProgress);
 
   const handleImportComplete = async (results) => {
@@ -65,13 +70,14 @@ export default function ResidentList() {
 
   const filtered = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return residents;
-    return residents.filter((r) =>
+    const byStatus = residents.filter((r) => !filtroEstado || r.estado === filtroEstado);
+    if (!q) return byStatus;
+    return byStatus.filter((r) =>
       r.nombre.toLowerCase().includes(q) ||
       r.apellido.toLowerCase().includes(q) ||
       (r.rut ?? "").toLowerCase().includes(q)
     );
-  }, [residents, busqueda]);
+  }, [residents, busqueda, filtroEstado]);
 
   const stats = useMemo(() => {
     const out = { total: residents.length, activo: 0, hospitalizado: 0, egresado: 0, fallecido: 0 };
@@ -91,15 +97,17 @@ export default function ResidentList() {
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             {canImport && (
               <Button
+                disabled={residentLimitReached}
                 onClick={() => setImportModal(true)}
-                className="w-full sm:w-auto bg-white text-teal-700 border border-teal-200 px-5 py-2.5 rounded-xl hover:bg-teal-50 transition-all font-medium shadow-sm"
+                className="w-full sm:w-auto bg-white text-teal-700 border border-teal-200 px-5 py-2.5 rounded-xl hover:bg-teal-50 transition-all font-medium shadow-sm disabled:opacity-50"
               >
                 Cargar residentes desde Excel
               </Button>
             )}
             <Button
+              disabled={residentLimitReached}
               onClick={() => navigate("/residents/new")}
-              className="w-full sm:w-auto bg-teal-700 text-white px-6 py-2.5 rounded-xl hover:bg-teal-800 transition-all font-medium shadow-sm"
+              className="w-full sm:w-auto bg-teal-700 text-white px-6 py-2.5 rounded-xl hover:bg-teal-800 transition-all font-medium shadow-sm disabled:opacity-50"
             >
               + Agregar Residente
             </Button>
@@ -112,10 +120,30 @@ export default function ResidentList() {
         onClose={() => setImportModal(false)}
         config={residentImportConfig}
         normalizeRows={normalizeResidentRows}
-        normalizeContext={{ existingResidents: residents }}
+        normalizeContext={{
+          existingResidents: residents,
+          maxResidentes: maxResidents,
+          currentResidentSlots: residentSlotsUsed,
+        }}
         onImport={handleImportResidents}
         onComplete={handleImportComplete}
       />
+
+      {maxResidents !== null && (
+        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+          residentLimitReached
+            ? "border-amber-200 bg-amber-50 text-amber-800"
+            : "border-slate-200 bg-white text-slate-600"
+        }`}>
+          Cupo del plan: <span className="font-bold">{residentSlotsUsed}</span> / {maxResidents} residentes activos u hospitalizados.
+        </div>
+      )}
+
+      {residentLimitReached && canCreate && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          El plan permite máximo {maxResidents} residentes activos u hospitalizados. Egresa o actualiza el plan para agregar más residentes.
+        </div>
+      )}
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4 flex justify-between">

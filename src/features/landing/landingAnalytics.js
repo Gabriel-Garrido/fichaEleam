@@ -64,6 +64,13 @@ export function useScrollDepth(thresholds = [25, 50, 75, 90]) {
   }, [thresholds]);
 }
 
+export function usePageView(pageName, valor = null) {
+  useEffect(() => {
+    trackEvent("page_view", pageName ?? null, valor ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
 export function useSectionView(ref, sectionName) {
   const fired = useRef(false);
   useEffect(() => {

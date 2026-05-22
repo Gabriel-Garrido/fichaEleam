@@ -116,7 +116,9 @@ export function demoGrantResultMessage(result = {}) {
     return {
       title: "No se pudo aprobar",
       toast: result.message || "No se pudo activar el acceso demo. Intenta nuevamente.",
-      body: "No se compartieron credenciales nuevas. Revisa el lead y vuelve a intentar.",
+      body: result.detail
+        ? `No se compartieron credenciales nuevas. Detalle tecnico: ${result.detail}`
+        : "No se compartieron credenciales nuevas. Revisa el lead y vuelve a intentar.",
     };
   }
 

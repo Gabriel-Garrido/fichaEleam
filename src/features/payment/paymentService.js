@@ -4,7 +4,7 @@ import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
 const PLAN_SELECT = `
   id, codigo, nombre, descripcion, precio_clp,
   max_residentes, max_funcionarios,
-  frequency, frequency_type, activo, orden, destacado, creado_en
+  activo, orden, destacado, creado_en
 `;
 
 const PAYMENT_SELECT = `
@@ -33,10 +33,10 @@ export async function getActivePlans() {
 
 // Inicia el flujo de suscripción: llama a la Edge Function y devuelve init_point.
 // El frontend redirige al usuario a esa URL para completar el pago en MP.
-export async function startSubscription({ planCodigo, backUrl = "/pago/return" }) {
+export async function startSubscription({ planCodigo }) {
   const sb = ensureSupabase();
   const { data, error } = await sb.functions.invoke("mp-create-subscription", {
-    body: { plan_codigo: planCodigo, back_url: backUrl },
+    body: { plan_codigo: planCodigo },
   });
   if (error) await throwEdgeFunctionError(error, "No se pudo iniciar el pago");
   if (data?.error) throw new Error(data.error);
@@ -64,4 +64,37 @@ export async function getMyPayments() {
     .order("fecha_pago", { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function getMyPlanUsage(eleamId) {
+  if (!eleamId) return { residents: 0, staff: 0 };
+  const sb = ensureSupabase();
+  const [residentsRes, staffRes, invitesRes] = await Promise.all([
+    sb
+      .from("residentes")
+      .select("id", { count: "exact", head: true })
+      .eq("eleam_id", eleamId)
+      .in("estado", ["activo", "hospitalizado"]),
+    sb
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("eleam_id", eleamId)
+      .eq("rol", "funcionario"),
+    sb
+      .from("funcionario_invitaciones")
+      .select("id", { count: "exact", head: true })
+      .eq("eleam_id", eleamId)
+      .eq("rol", "funcionario")
+      .eq("usado", false)
+      .gt("expira_en", new Date().toISOString()),
+  ]);
+
+  if (residentsRes.error) throw residentsRes.error;
+  if (staffRes.error) throw staffRes.error;
+  if (invitesRes.error) throw invitesRes.error;
+
+  return {
+    residents: residentsRes.count ?? 0,
+    staff: (staffRes.count ?? 0) + (invitesRes.count ?? 0),
+  };
 }

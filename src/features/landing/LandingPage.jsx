@@ -4,7 +4,8 @@ import { useSEO, faqJsonLd } from "../../utils/seo";
 import DemoRequestModal from "./DemoRequestModal";
 import WhatsAppLeadButton from "./WhatsAppLeadButton";
 import WhatsAppLeadModal from "./WhatsAppLeadModal";
-import { trackEvent, useScrollDepth, useSectionView } from "./landingAnalytics";
+import { trackEvent, usePageView, useScrollDepth, useSectionView } from "./landingAnalytics";
+import { PUBLIC_PLAN_CATALOG, formatPlanPrice } from "../payment/planCatalog";
 
 function Icon({ d, className = "w-5 h-5" }) {
   return (
@@ -118,18 +119,12 @@ const ROLES = [
 
 const PLAN_FEATURES = [
   "Carpeta SEREMI · 14 ámbitos DS 14/2017",
-  "Fichas clínicas ilimitadas",
+  "Fichas clínicas según cupo del plan",
   "Signos vitales con alertas clínicas",
   "Observaciones por turno (12 tipos)",
   "Portal para familias incluido",
-  "Funcionarios ilimitados",
+  "Funcionarios incluidos según cupo del plan",
   "Soporte en español",
-];
-
-const PLANS = [
-  { label: "Hasta 14 residentes", price: "$50.000", sub: "~$1.700 / día", featured: false },
-  { label: "15 a 24 residentes",  price: "$80.000", sub: "~$2.700 / día", featured: true, tag: "Más elegido" },
-  { label: "25 a 34 residentes",  price: "$120.000", sub: "~$4.000 / día", featured: false },
 ];
 
 const HOW_IT_WORKS = [
@@ -141,7 +136,7 @@ const HOW_IT_WORKS = [
 const FAQ_ITEMS = [
   { q: "¿Qué es FichaEleam?", a: "FichaEleam es un software diseñado exclusivamente para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile. Cubre los 14 ámbitos del DS 14/2017 e incluye ficha clínica digital, signos vitales con alertas clínicas, observaciones por turno, Carpeta SEREMI y portal para familias — todo en una sola plataforma web." },
   { q: "¿FichaEleam incluye el DS 14/2017?", a: "Sí. La sección Carpeta SEREMI implementa los 14 ámbitos con más de 70 requisitos del catálogo oficial pre-cargados, evidencias versionadas, estados de cumplimiento y alertas automáticas cuando un documento vence o se acerca su vencimiento." },
-  { q: "¿Cuánto cuesta?", a: "La suscripción es mensual por establecimiento, sin cobros por usuario. Los planes parten desde $50.000 CLP/mes para hasta 14 residentes. Todos los funcionarios y familiares del ELEAM acceden incluidos sin costo adicional." },
+  { q: "¿Cuánto cuesta?", a: "La suscripción es mensual por establecimiento, sin cobros por usuario. Los planes parten desde $50.000 CLP/mes para hasta 14 residentes e incluyen cupos de funcionarios según el tamaño del ELEAM." },
   { q: "¿Cómo funciona el demo?", a: "Completas el formulario de solicitud o nos escribes por WhatsApp. Nuestro equipo revisa tu caso y en menos de 24 horas habilitamos tu cuenta con 30 días de prueba gratuita y te enviamos un enlace de acceso por correo, sin compromiso ni tarjeta de crédito." },
   { q: "¿Cuánto tarda el equipo en aprender a usarla?", a: "La interfaz está diseñada para equipos sin experiencia técnica previa. Cada rol accede solo a lo que le corresponde, lo que simplifica el aprendizaje. La mayoría del equipo opera con fluidez desde el primer día." },
   { q: "¿Qué pasa con los datos que tengo en papel o Excel?", a: "Te acompañamos en la migración inicial sin costo adicional. Cargamos los datos básicos de tus residentes para que el equipo parta con la plataforma al día desde el primer momento." },
@@ -188,6 +183,7 @@ export default function LandingPage() {
   const pricingRef   = useRef(null);
   const faqRef       = useRef(null);
 
+  usePageView("landing");
   useScrollDepth();
   useSectionView(featuresRef,  "features");
   useSectionView(challengeRef, "challenges");
@@ -522,7 +518,7 @@ export default function LandingPage() {
               por establecimiento
             </h2>
             <p className="mt-4 text-slate-500 text-sm max-w-md mx-auto">
-              Sin cobros por usuario. Todos tus funcionarios y familiares incluidos en cualquier plan.
+              Sin cobros por usuario. Cada plan incluye cupos de residentes y funcionarios para operar tu ELEAM.
             </p>
           </div>
 
@@ -539,38 +535,44 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
-            {PLANS.map(({ label, price, sub, featured, tag }, i) => (
-              <div
-                key={i}
-                className={`relative rounded-2xl p-7 flex flex-col text-center ${
-                  featured
-                    ? "bg-teal-600 text-white shadow-2xl shadow-teal-600/25 ring-2 ring-teal-500 ring-offset-2"
-                    : "bg-white border border-slate-200"
-                }`}
-              >
-                {tag && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-teal-800 text-white text-[11px] px-3 py-0.5 rounded-full font-bold whitespace-nowrap">
-                    {tag}
-                  </span>
-                )}
-                <p className={`text-xs font-semibold mb-3 ${featured ? "text-teal-200" : "text-slate-400"}`}>{label}</p>
-                <p className={`text-3xl font-black mb-0.5 ${featured ? "text-white" : "text-slate-900"}`}>{price}</p>
-                <p className={`text-xs mb-1 ${featured ? "text-teal-200" : "text-slate-400"}`}>CLP / mes + IVA</p>
-                <p className={`text-[11px] mb-6 ${featured ? "text-teal-300" : "text-slate-400"}`}>{sub}</p>
-                <div className="mt-auto">
-                  <button type="button"
-                    onClick={() => openModal(`pricing_plan${i + 1}`)}
-                    className={`w-full font-semibold py-2.5 rounded-xl text-sm transition-all ${
-                      featured
-                        ? "bg-white text-teal-700 hover:bg-teal-50"
-                        : "border border-teal-600 text-teal-700 hover:bg-teal-50"
-                    }`}
-                  >
-                    Comenzar demo
-                  </button>
+            {PUBLIC_PLAN_CATALOG.map((plan, i) => {
+              const featured = plan.destacado;
+              return (
+                <div
+                  key={plan.codigo}
+                  className={`relative rounded-2xl p-7 flex flex-col text-center ${
+                    featured
+                      ? "bg-teal-600 text-white shadow-2xl shadow-teal-600/25 ring-2 ring-teal-500 ring-offset-2"
+                      : "bg-white border border-slate-200"
+                  }`}
+                >
+                  {plan.tag && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-teal-800 text-white text-[11px] px-3 py-0.5 rounded-full font-bold whitespace-nowrap">
+                      {plan.tag}
+                    </span>
+                  )}
+                  <p className={`text-xs font-semibold mb-3 ${featured ? "text-teal-200" : "text-slate-400"}`}>{plan.label}</p>
+                  <p className={`text-3xl font-black mb-0.5 ${featured ? "text-white" : "text-slate-900"}`}>{formatPlanPrice(plan)}</p>
+                  <p className={`text-xs mb-1 ${featured ? "text-teal-200" : "text-slate-400"}`}>CLP / mes + IVA</p>
+                  <p className={`text-[11px] mb-2 ${featured ? "text-teal-300" : "text-slate-400"}`}>{plan.dailyLabel}</p>
+                  <p className={`text-[11px] mb-6 ${featured ? "text-teal-100" : "text-slate-500"}`}>
+                    Hasta {plan.max_residentes} residentes · {plan.max_funcionarios} funcionarios
+                  </p>
+                  <div className="mt-auto">
+                    <button type="button"
+                      onClick={() => openModal(`pricing_plan${i + 1}`)}
+                      className={`w-full font-semibold py-2.5 rounded-xl text-sm transition-all ${
+                        featured
+                          ? "bg-white text-teal-700 hover:bg-teal-50"
+                          : "border border-teal-600 text-teal-700 hover:bg-teal-50"
+                      }`}
+                    >
+                      Comenzar demo
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div className="rounded-2xl p-7 border border-slate-200 bg-white flex flex-col text-center">
               <p className="text-xs font-semibold text-slate-400 mb-3">35 o más residentes</p>

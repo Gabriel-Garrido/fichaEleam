@@ -9,6 +9,9 @@
 [functions.mp-webhook]
 verify_jwt = false
 
+[functions.track-landing-event]
+verify_jwt = false
+
 [functions.mp-create-subscription]
 verify_jwt = true
 

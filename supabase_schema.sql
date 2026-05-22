@@ -38,6 +38,10 @@ create table if not exists public.planes (
   creado_en         timestamptz not null default now()
 );
 
+-- Ensure frequency columns exist (safe to run if already present).
+alter table public.planes add column if not exists frequency      integer not null default 1 check (frequency > 0);
+alter table public.planes add column if not exists frequency_type text    not null default 'months' check (frequency_type in ('days','months'));
+
 create table if not exists public.eleams (
   id                              uuid primary key default gen_random_uuid(),
   nombre                          text not null,
@@ -665,6 +669,27 @@ create index if not exists idx_inv_eleam on public.funcionario_invitaciones(elea
 create index if not exists idx_inv_email on public.funcionario_invitaciones(lower(email));
 create index if not exists idx_inv_eleam_email_active
   on public.funcionario_invitaciones(eleam_id, lower(email), usado, expira_en desc);
+
+create table if not exists public.auth_provision_requests (
+  id            uuid primary key default gen_random_uuid(),
+  email         text not null,
+  account_source text not null check (
+    account_source in ('demo_approved','superadmin_created','admin_created','funcionario_created')
+  ),
+  eleam_id      uuid not null references public.eleams(id) on delete cascade,
+  rol           text not null check (rol in ('admin_eleam','funcionario','familiar')),
+  residente_id  uuid references public.residentes(id) on delete cascade,
+  usado         boolean not null default false,
+  usado_en      timestamptz,
+  usado_por_auth_user_id uuid,
+  expira_en     timestamptz not null default (now() + interval '10 minutes'),
+  creado_en     timestamptz not null default now()
+);
+
+create index if not exists idx_auth_provision_active
+  on public.auth_provision_requests(id, lower(email), usado, expira_en);
+create index if not exists idx_auth_provision_email
+  on public.auth_provision_requests(lower(email), creado_en desc);
 
 create table if not exists public.familiar_residentes (
   profile_id    uuid not null references public.profiles(id) on delete cascade,
@@ -1317,7 +1342,7 @@ $$;
 create or replace function public.eleam_has_access(p_eleam_id uuid)
 returns boolean
 language sql
-stable
+volatile
 security definer
 set search_path = public
 as $$
@@ -1372,6 +1397,77 @@ as $$
   join public.residentes r on r.id = fr.residente_id
   where fr.profile_id = (select auth.uid())
     and public.eleam_has_access(r.eleam_id);
+$$;
+
+create or replace function public.familiar_can_view_cama(p_cama_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.familiar_residentes fr
+    join public.residentes r on r.id = fr.residente_id
+    where fr.profile_id = (select auth.uid())
+      and r.cama_actual_id = p_cama_id
+      and public.eleam_has_access(r.eleam_id)
+  );
+$$;
+
+create or replace function public.familiar_can_view_habitacion(p_habitacion_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.familiar_residentes fr
+    join public.residentes r on r.id = fr.residente_id
+    join public.camas c on c.id = r.cama_actual_id
+    where fr.profile_id = (select auth.uid())
+      and c.habitacion_id = p_habitacion_id
+      and public.eleam_has_access(r.eleam_id)
+  );
+$$;
+
+create or replace function public.habitacion_belongs_to_eleam(
+  p_habitacion_id uuid,
+  p_eleam_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.habitaciones h
+    where h.id = p_habitacion_id
+      and h.eleam_id = p_eleam_id
+  );
+$$;
+
+create or replace function public.residente_belongs_to_eleam(
+  p_residente_id uuid,
+  p_eleam_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.residentes r
+    where r.id = p_residente_id
+      and r.eleam_id = p_eleam_id
+  );
 $$;
 
 create or replace function public.get_familiar_resident_snapshot(
@@ -1568,6 +1664,18 @@ $$;
 revoke all on function public.get_familiar_resident_snapshot(uuid, date) from public;
 grant execute on function public.get_familiar_resident_snapshot(uuid, date) to authenticated;
 
+revoke all on function public.familiar_can_view_cama(uuid) from public;
+grant execute on function public.familiar_can_view_cama(uuid) to authenticated;
+
+revoke all on function public.familiar_can_view_habitacion(uuid) from public;
+grant execute on function public.familiar_can_view_habitacion(uuid) to authenticated;
+
+revoke all on function public.habitacion_belongs_to_eleam(uuid, uuid) from public;
+grant execute on function public.habitacion_belongs_to_eleam(uuid, uuid) to authenticated;
+
+revoke all on function public.residente_belongs_to_eleam(uuid, uuid) from public;
+grant execute on function public.residente_belongs_to_eleam(uuid, uuid) to authenticated;
+
 create or replace function public.funcionario_can(perm text)
 returns boolean
 language plpgsql
@@ -1685,11 +1793,14 @@ declare
   v_count integer;
   v_status text;
 begin
-  if new.estado <> 'activo' then
+  if new.estado not in ('activo','hospitalizado') then
     return new;
   end if;
 
-  if tg_op = 'UPDATE' and old.estado = 'activo' and new.estado = 'activo' then
+  if tg_op = 'UPDATE'
+     and old.eleam_id is not distinct from new.eleam_id
+     and old.estado in ('activo','hospitalizado')
+     and new.estado in ('activo','hospitalizado') then
     return new;
   end if;
 
@@ -1708,11 +1819,11 @@ begin
     select count(*) into v_count
     from public.residentes
     where eleam_id = new.eleam_id
-      and estado = 'activo'
-      and id <> new.id;
+      and estado in ('activo','hospitalizado')
+      and id is distinct from new.id;
 
     if v_count >= v_max then
-      raise exception 'El plan permite maximo % residentes activos', v_max
+      raise exception 'El plan permite máximo % residentes activos u hospitalizados', v_max
         using errcode = 'P0001';
     end if;
   end if;
@@ -1730,6 +1841,7 @@ as $$
 declare
   v_max integer;
   v_count integer;
+  v_pending integer;
 begin
   if new.eleam_id is null or new.rol <> 'funcionario' then
     return new;
@@ -1752,10 +1864,75 @@ begin
     from public.profiles
     where eleam_id = new.eleam_id
       and rol = 'funcionario'
-      and id <> new.id;
+      and id is distinct from new.id;
 
-    if v_count >= v_max then
-      raise exception 'El plan permite maximo % funcionarios', v_max
+    select count(*) into v_pending
+    from public.funcionario_invitaciones
+    where eleam_id = new.eleam_id
+      and coalesce(rol, 'funcionario') = 'funcionario'
+      and usado = false
+      and expira_en > now();
+
+    if (v_count + v_pending) >= v_max then
+      raise exception 'El plan permite máximo % funcionarios, incluyendo invitaciones pendientes', v_max
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.check_eleam_plan_capacity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_max_residentes integer;
+  v_max_funcionarios integer;
+  v_residentes integer;
+  v_funcionarios integer;
+  v_invitaciones integer;
+begin
+  if new.id is null then
+    return new;
+  end if;
+
+  select coalesce(p.max_residentes, new.max_residentes),
+         coalesce(p.max_funcionarios, new.max_funcionarios)
+  into v_max_residentes, v_max_funcionarios
+  from (select 1) s
+  left join public.planes p on p.id = new.plan_id;
+
+  if v_max_residentes is not null then
+    select count(*) into v_residentes
+    from public.residentes
+    where eleam_id = new.id
+      and estado in ('activo','hospitalizado');
+
+    if v_residentes > v_max_residentes then
+      raise exception 'El plan elegido permite máximo % residentes activos u hospitalizados; el ELEAM ya usa %', v_max_residentes, v_residentes
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  if v_max_funcionarios is not null then
+    select count(*) into v_funcionarios
+    from public.profiles
+    where eleam_id = new.id
+      and rol = 'funcionario';
+
+    select count(*) into v_invitaciones
+    from public.funcionario_invitaciones
+    where eleam_id = new.id
+      and coalesce(rol, 'funcionario') = 'funcionario'
+      and usado = false
+      and expira_en > now();
+
+    if (v_funcionarios + v_invitaciones) > v_max_funcionarios then
+      raise exception 'El plan elegido permite máximo % funcionarios; el ELEAM ya usa % incluyendo invitaciones pendientes', v_max_funcionarios, (v_funcionarios + v_invitaciones)
         using errcode = 'P0001';
     end if;
   end if;
@@ -1820,6 +1997,8 @@ declare
   v_rol text := null;
   v_eleam_id uuid := null;
   v_invitacion record;
+  v_provision record;
+  v_provision_id uuid := null;
   v_residente_id uuid := null;
   v_invitado_por uuid := null;
   v_account_source text := coalesce(new.raw_app_meta_data->>'fichaeleam_account_source', '');
@@ -1847,9 +2026,9 @@ begin
     return new;
   end if;
 
-  -- Modo exclusivo para supabase_test_seed.sql. No desactiva triggers ni
-  -- requiere ser owner de auth.users. Solo se habilita dentro de la
-  -- transaccion del seed mediante set_config('app.allow_qa_seed_users','on', true).
+  -- Modo exclusivo para seed QA privado. No desactiva triggers ni requiere
+  -- ser owner de auth.users. Solo se habilita dentro de la transaccion del
+  -- seed mediante set_config('app.allow_qa_seed_users','on', true).
   if v_is_qa_seed then
     v_eleam_id := case
       when new.raw_app_meta_data->>'eleam_id_direct' is not null
@@ -1907,10 +2086,88 @@ begin
     return new;
   end if;
 
+  -- Provision one-time iniciado por Edge Functions antes de llamar a
+  -- auth.admin.createUser. Supabase Auth puede no exponer app_metadata en el
+  -- INSERT inicial de auth.users; este token server-side evita depender de ese
+  -- timing y mantiene bloqueada la creacion client-side no autorizada.
+  if nullif(trim(new.raw_user_meta_data->>'fichaeleam_provision_id'), '') is not null then
+    begin
+      v_provision_id := (new.raw_user_meta_data->>'fichaeleam_provision_id')::uuid;
+    exception
+      when invalid_text_representation then
+        raise exception 'Provision de cuenta invalida' using errcode = '42501';
+    end;
+
+    select *
+    into v_provision
+    from public.auth_provision_requests apr
+    where apr.id = v_provision_id
+      and lower(apr.email) = v_email
+      and apr.usado = false
+      and apr.expira_en > now()
+    for update;
+
+    if not found then
+      raise exception 'Provision de cuenta no encontrada o expirada'
+        using errcode = '42501';
+    end if;
+
+    v_eleam_id := v_provision.eleam_id;
+    v_rol := v_provision.rol;
+    v_residente_id := v_provision.residente_id;
+    v_account_source := v_provision.account_source;
+
+    if not exists (select 1 from public.eleams where id = v_eleam_id) then
+      raise exception 'Provision de cuenta invalida: ELEAM no encontrado'
+        using errcode = '42501';
+    end if;
+
+    if v_rol = 'admin_eleam' and v_account_source not in ('demo_approved', 'superadmin_created') then
+      raise exception 'Provision admin_eleam no autorizada para este flujo'
+        using errcode = '42501';
+    end if;
+
+    if v_rol in ('funcionario', 'familiar') and not public.eleam_has_access(v_eleam_id) then
+      raise exception 'El ELEAM no tiene acceso activo para crear esta cuenta'
+        using errcode = '42501';
+    end if;
+
+    if v_rol = 'familiar' then
+      if v_residente_id is null then
+        raise exception 'Provision familiar sin residente asociado'
+          using errcode = '42501';
+      end if;
+
+      if not exists (
+        select 1
+        from public.residentes r
+        where r.id = v_residente_id
+          and r.eleam_id = v_eleam_id
+          and r.estado = 'activo'
+      ) then
+        raise exception 'Provision familiar invalida para este residente'
+          using errcode = '42501';
+      end if;
+    end if;
+
+    update public.auth_provision_requests
+    set usado = true,
+        usado_en = now(),
+        usado_por_auth_user_id = new.id
+    where id = v_provision_id;
+
+    return new;
+  end if;
+
   -- Creacion directa autorizada por Edge Function.
   -- Importante: la autorizacion vive en raw_app_meta_data, no en
   -- raw_user_meta_data. El cliente puede escribir user_metadata al hacer
   -- signUp/OAuth; app_metadata solo debe escribirlo Admin API/service role.
+  --
+  -- Para usuarios creados con Admin API, el profile public.profiles lo
+  -- provisiona la Edge Function que hizo createUser. Mantener este trigger
+  -- como validador evita que Auth oculte errores de negocio/schema dentro de
+  -- "Database error creating new user" y permite rollback explicito.
   if new.raw_app_meta_data->>'eleam_id_direct' is not null then
     v_eleam_id := (new.raw_app_meta_data->>'eleam_id_direct')::uuid;
     v_rol      := coalesce(nullif(trim(new.raw_app_meta_data->>'rol_direct'), ''), 'funcionario');
@@ -1932,13 +2189,6 @@ begin
 
     if v_rol in ('funcionario', 'familiar') and not public.eleam_has_access(v_eleam_id) then
       raise exception 'El ELEAM no tiene acceso activo para crear esta cuenta'
-        using errcode = '42501';
-    end if;
-
-    if v_rol = 'admin_eleam'
-       and v_account_source = 'demo_approved'
-       and not public.eleam_has_access(v_eleam_id) then
-      raise exception 'El demo aprobado no tiene acceso activo'
         using errcode = '42501';
     end if;
 
@@ -1964,24 +2214,6 @@ begin
         raise exception 'residente_id_direct invalido para este ELEAM'
           using errcode = '42501';
       end if;
-    end if;
-
-    insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
-    values (
-      new.id, v_nombre, new.email, v_rol, v_eleam_id,
-      coalesce((new.raw_user_meta_data->>'must_reset_password')::boolean, true)
-    )
-    on conflict (id) do update set
-      nombre              = excluded.nombre,
-      email               = excluded.email,
-      rol                 = excluded.rol,
-      eleam_id            = excluded.eleam_id,
-      must_reset_password = excluded.must_reset_password;
-
-    if v_rol = 'familiar' and v_residente_id is not null then
-      insert into public.familiar_residentes (profile_id, residente_id, creado_por)
-      values (new.id, v_residente_id, null)
-      on conflict do nothing;
     end if;
 
     return new;
@@ -2164,10 +2396,13 @@ begin
 end;
 $$;
 
+drop function if exists public.registrar_pago_y_activar_eleam(uuid, integer, text, date, date, text, text);
+
 create or replace function public.registrar_pago_y_activar_eleam(
   p_eleam_id uuid,
   p_monto integer,
   p_plan text,
+  p_plan_codigo text,
   p_fecha_inicio date,
   p_fecha_fin date,
   p_metodo_pago text default null,
@@ -2181,6 +2416,15 @@ as $$
 declare
   v_user uuid := (select auth.uid());
   v_pago_id uuid;
+  v_plan_id uuid;
+  v_plan_codigo text;
+  v_plan_max_residentes integer;
+  v_plan_max_funcionarios integer;
+  v_eleam_max_residentes integer;
+  v_eleam_max_funcionarios integer;
+  v_residentes integer;
+  v_funcionarios integer;
+  v_invitaciones integer;
 begin
   if not public.is_superadmin() then
     raise exception 'Solo superadmin puede registrar pagos' using errcode = '42501';
@@ -2194,6 +2438,11 @@ begin
     raise exception 'Plan de pago invalido' using errcode = 'P0001';
   end if;
 
+  if p_plan_codigo is null or btrim(p_plan_codigo) = '' then
+    raise exception 'Plan comercial obligatorio' using errcode = 'P0001';
+  end if;
+  p_plan_codigo := lower(btrim(p_plan_codigo));
+
   if p_fecha_inicio is null then
     raise exception 'Fecha de inicio obligatoria' using errcode = 'P0001';
   end if;
@@ -2202,16 +2451,67 @@ begin
     raise exception 'Fecha de fin no puede ser anterior a fecha de inicio' using errcode = 'P0001';
   end if;
 
-  if not exists (select 1 from public.eleams where id = p_eleam_id) then
+  select max_residentes, max_funcionarios
+  into v_eleam_max_residentes, v_eleam_max_funcionarios
+  from public.eleams
+  where id = p_eleam_id;
+
+  if not found then
     raise exception 'ELEAM no encontrado' using errcode = 'P0001';
   end if;
 
+  if p_plan_codigo = 'institucional' then
+    v_plan_id := null;
+    v_plan_codigo := 'institucional';
+    v_plan_max_residentes := v_eleam_max_residentes;
+    v_plan_max_funcionarios := v_eleam_max_funcionarios;
+  else
+    select id, codigo, max_residentes, max_funcionarios
+    into v_plan_id, v_plan_codigo, v_plan_max_residentes, v_plan_max_funcionarios
+    from public.planes
+    where codigo = p_plan_codigo
+      and activo = true
+    limit 1;
+
+    if not found then
+      raise exception 'Plan comercial no encontrado o inactivo: %', p_plan_codigo
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  select count(*) into v_residentes
+  from public.residentes
+  where eleam_id = p_eleam_id
+    and estado in ('activo','hospitalizado');
+
+  if v_plan_max_residentes is not null and v_residentes > v_plan_max_residentes then
+    raise exception 'El plan % permite máximo % residentes activos u hospitalizados; el ELEAM ya usa %', v_plan_codigo, v_plan_max_residentes, v_residentes
+      using errcode = 'P0001';
+  end if;
+
+  select count(*) into v_funcionarios
+  from public.profiles
+  where eleam_id = p_eleam_id
+    and rol = 'funcionario';
+
+  select count(*) into v_invitaciones
+  from public.funcionario_invitaciones
+  where eleam_id = p_eleam_id
+    and coalesce(rol, 'funcionario') = 'funcionario'
+    and usado = false
+    and expira_en > now();
+
+  if v_plan_max_funcionarios is not null and (v_funcionarios + v_invitaciones) > v_plan_max_funcionarios then
+    raise exception 'El plan % permite máximo % funcionarios; el ELEAM ya usa % incluyendo invitaciones pendientes', v_plan_codigo, v_plan_max_funcionarios, (v_funcionarios + v_invitaciones)
+      using errcode = 'P0001';
+  end if;
+
   insert into public.pagos (
-    eleam_id, monto, plan, fecha_inicio, fecha_fin,
+    eleam_id, plan_id, monto, plan, fecha_inicio, fecha_fin,
     metodo_pago, notas, estado, registrado_por
   )
   values (
-    p_eleam_id, p_monto, p_plan, p_fecha_inicio, p_fecha_fin,
+    p_eleam_id, v_plan_id, p_monto, p_plan, p_fecha_inicio, p_fecha_fin,
     p_metodo_pago, p_notas, 'completado', v_user
   )
   returning id into v_pago_id;
@@ -2219,6 +2519,7 @@ begin
   update public.eleams
   set pago_activo = true,
       plan = p_plan,
+      plan_id = v_plan_id,
       subscription_status = 'activo',
       fecha_pago = now(),
       fecha_vencimiento_suscripcion = p_fecha_fin::timestamptz,
@@ -2244,11 +2545,17 @@ begin
   values (
     p_eleam_id, 'sistema', 'sistema',
     'Pago registrado por ' || coalesce(p_metodo_pago, 'metodo no especificado') ||
-      ' - ' || p_monto::text || ' CLP - plan ' || p_plan,
+      ' - ' || p_monto::text || ' CLP - plan ' || v_plan_codigo || ' (' || p_plan || ')',
     'positivo', v_user
   );
 
-  return jsonb_build_object('pago_id', v_pago_id, 'eleam_id', p_eleam_id, 'fecha_fin', p_fecha_fin);
+  return jsonb_build_object(
+    'pago_id', v_pago_id,
+    'eleam_id', p_eleam_id,
+    'plan_id', v_plan_id,
+    'plan_codigo', v_plan_codigo,
+    'fecha_fin', p_fecha_fin
+  );
 end;
 $$;
 
@@ -3856,6 +4163,58 @@ begin
 end;
 $$;
 
+-- Previene que admin_eleam escale sus propios privilegios de suscripcion
+-- actualizando campos sensibles directamente via el cliente Supabase.
+-- Service role (auth.uid() IS NULL) y superadmin pasan sin restriccion.
+create or replace function public.prevent_eleam_subscription_escalation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_rol text;
+begin
+  if (select auth.uid()) is null then
+    return new;
+  end if;
+
+  select rol into v_caller_rol
+  from public.profiles
+  where id = (select auth.uid());
+
+  if v_caller_rol = 'superadmin' then
+    return new;
+  end if;
+
+  if new.subscription_status is distinct from old.subscription_status
+     or new.pago_activo is distinct from old.pago_activo
+     or new.plan is distinct from old.plan
+     or new.plan_id is distinct from old.plan_id
+     or new.fecha_pago is distinct from old.fecha_pago
+     or new.fecha_vencimiento_suscripcion is distinct from old.fecha_vencimiento_suscripcion
+     or new.proximo_cobro_en is distinct from old.proximo_cobro_en
+     or new.cancelado_en is distinct from old.cancelado_en
+     or new.mp_preapproval_id is distinct from old.mp_preapproval_id
+     or new.mp_payer_email is distinct from old.mp_payer_email
+     or new.max_residentes is distinct from old.max_residentes
+     or new.max_funcionarios is distinct from old.max_funcionarios
+     or new.crm_estado is distinct from old.crm_estado
+     or new.origen_lead is distinct from old.origen_lead
+     or new.ultimo_contacto is distinct from old.ultimo_contacto
+     or new.proxima_accion_fecha is distinct from old.proxima_accion_fecha
+     or new.responsable_comercial is distinct from old.responsable_comercial
+     or new.riesgo_churn is distinct from old.riesgo_churn
+     or new.notas_admin is distinct from old.notas_admin
+  then
+    raise exception 'No autorizado a modificar campos de suscripcion o CRM del ELEAM'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
 create or replace function public.sync_medicamento_controlado()
 returns trigger
 language plpgsql
@@ -3902,6 +4261,16 @@ drop trigger if exists trg_sync_pago_activo on public.eleams;
 create trigger trg_sync_pago_activo
   before insert or update of subscription_status, fecha_vencimiento_suscripcion on public.eleams
   for each row execute function public.sync_pago_activo();
+
+drop trigger if exists trg_eleam_plan_capacity on public.eleams;
+create trigger trg_eleam_plan_capacity
+  before insert or update of plan_id, max_residentes, max_funcionarios on public.eleams
+  for each row execute function public.check_eleam_plan_capacity();
+
+drop trigger if exists trg_prevent_eleam_subscription_escalation on public.eleams;
+create trigger trg_prevent_eleam_subscription_escalation
+  before update on public.eleams
+  for each row execute function public.prevent_eleam_subscription_escalation();
 
 drop trigger if exists trg_residentes_limit on public.residentes;
 create trigger trg_residentes_limit
@@ -4101,8 +4470,8 @@ grant execute on function public.acred_provision_requisitos(uuid) to authenticat
 revoke all on function public.acred_marcar_vencidos(uuid) from public;
 grant execute on function public.acred_marcar_vencidos(uuid) to authenticated;
 
-revoke all on function public.registrar_pago_y_activar_eleam(uuid, integer, text, date, date, text, text) from public;
-grant execute on function public.registrar_pago_y_activar_eleam(uuid, integer, text, date, date, text, text) to authenticated;
+revoke all on function public.registrar_pago_y_activar_eleam(uuid, integer, text, text, date, date, text, text) from public;
+grant execute on function public.registrar_pago_y_activar_eleam(uuid, integer, text, text, date, date, text, text) to authenticated;
 
 revoke all on function public.blog_increment_views(text) from public;
 grant execute on function public.blog_increment_views(text) to anon, authenticated;
@@ -4171,6 +4540,7 @@ alter table public.medicamentos_stock_movimientos enable row level security;
 alter table public.medicamentos_conciliaciones enable row level security;
 alter table public.medicamentos_audit enable row level security;
 alter table public.funcionario_invitaciones enable row level security;
+alter table public.auth_provision_requests enable row level security;
 alter table public.familiar_residentes enable row level security;
 alter table public.visitas_familiar enable row level security;
 alter table public.eleam_feature_permissions enable row level security;
@@ -4320,12 +4690,7 @@ create policy "habitaciones_select" on public.habitaciones
     )
     or (
       public.my_rol() = 'familiar'
-      and id in (
-        select c.habitacion_id
-        from public.camas c
-        join public.residentes r on r.cama_actual_id = c.id
-        where r.id in (select public.my_familiar_residente_ids())
-      )
+      and public.familiar_can_view_habitacion(id)
     )
   );
 
@@ -4382,11 +4747,7 @@ create policy "camas_select" on public.camas
     )
     or (
       public.my_rol() = 'familiar'
-      and id in (
-        select r.cama_actual_id
-        from public.residentes r
-        where r.id in (select public.my_familiar_residente_ids())
-      )
+      and public.familiar_can_view_cama(id)
     )
   );
 
@@ -4397,9 +4758,7 @@ create policy "camas_insert_admin" on public.camas
       public.my_rol() = 'admin_eleam'
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
-      and habitacion_id in (
-        select id from public.habitaciones where eleam_id = public.my_eleam_id()
-      )
+      and public.habitacion_belongs_to_eleam(habitacion_id, eleam_id)
     )
   );
 
@@ -4418,9 +4777,7 @@ create policy "camas_update_admin" on public.camas
       public.my_rol() = 'admin_eleam'
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
-      and habitacion_id in (
-        select id from public.habitaciones where eleam_id = public.my_eleam_id()
-      )
+      and public.habitacion_belongs_to_eleam(habitacion_id, eleam_id)
     )
   );
 
@@ -4509,7 +4866,7 @@ create policy "sv_select" on public.signos_vitales
     public.is_superadmin()
     or (
       public.my_rol() in ('admin_eleam','funcionario')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
     or (
       public.my_rol() = 'familiar'
@@ -4520,7 +4877,7 @@ create policy "sv_select" on public.signos_vitales
 create policy "sv_insert" on public.signos_vitales
   for insert with check (
     public.funcionario_can('crear_signos_vitales')
-    and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
   );
 
 create policy "sv_update" on public.signos_vitales
@@ -4528,14 +4885,14 @@ create policy "sv_update" on public.signos_vitales
     public.is_superadmin()
     or (
       public.funcionario_can('editar_signos_vitales')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   )
   with check (
     public.is_superadmin()
     or (
       public.funcionario_can('editar_signos_vitales')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -4544,7 +4901,7 @@ create policy "sv_delete" on public.signos_vitales
     public.is_superadmin()
     or (
       public.funcionario_can('eliminar_signos_vitales')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -4559,7 +4916,7 @@ create policy "obs_select" on public.observaciones_diarias
     public.is_superadmin()
     or (
       public.my_rol() in ('admin_eleam','funcionario')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
     or (
       public.my_rol() = 'familiar'
@@ -4571,7 +4928,7 @@ create policy "obs_select" on public.observaciones_diarias
 create policy "obs_insert" on public.observaciones_diarias
   for insert with check (
     public.funcionario_can('crear_observaciones')
-    and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
   );
 
 create policy "obs_update" on public.observaciones_diarias
@@ -4579,14 +4936,14 @@ create policy "obs_update" on public.observaciones_diarias
     public.is_superadmin()
     or (
       public.funcionario_can('editar_observaciones')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   )
   with check (
     public.is_superadmin()
     or (
       public.funcionario_can('editar_observaciones')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -4595,7 +4952,7 @@ create policy "obs_delete" on public.observaciones_diarias
     public.is_superadmin()
     or (
       public.funcionario_can('eliminar_observaciones')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -4686,7 +5043,7 @@ create policy "pc_insert" on public.planes_cuidado
       public.funcionario_can('crear_planes_cuidado')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -5184,7 +5541,7 @@ create policy "fr_select_self_or_admin" on public.familiar_residentes
     or public.is_superadmin()
     or (
       public.my_rol() in ('admin_eleam','funcionario')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -5194,7 +5551,7 @@ create policy "fr_insert_admin" on public.familiar_residentes
       public.my_rol() = 'admin_eleam'
       or public.funcionario_can('editar_residentes')
     )
-    and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+    and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
   );
 
 create policy "fr_delete_admin" on public.familiar_residentes
@@ -5205,7 +5562,7 @@ create policy "fr_delete_admin" on public.familiar_residentes
         public.my_rol() = 'admin_eleam'
         or public.funcionario_can('editar_residentes')
       )
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -5335,7 +5692,7 @@ create policy "vf_select" on public.visitas_familiar
         public.my_rol() = 'admin_eleam'
         or public.funcionario_can('registrar_visitas')
       )
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -5348,7 +5705,7 @@ create policy "vf_insert" on public.visitas_familiar
     )
     or (
       public.my_rol() in ('admin_eleam','funcionario')
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -5357,7 +5714,7 @@ create policy "vf_update" on public.visitas_familiar
     public.is_superadmin()
     or (
       (public.my_rol() = 'admin_eleam' or public.funcionario_can('registrar_visitas'))
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -5405,7 +5762,7 @@ create policy "vf_delete" on public.visitas_familiar
     or profile_id = (select auth.uid())
     or (
       public.my_rol() = 'admin_eleam'
-      and residente_id in (select id from public.residentes where eleam_id = public.my_eleam_id())
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
 
@@ -5747,17 +6104,19 @@ create policy "storage_acreditacion_delete" on storage.objects
 -- ============================================================
 
 insert into public.planes
-  (codigo, nombre, descripcion, precio_clp, max_residentes, max_funcionarios, orden, destacado)
+  (codigo, nombre, descripcion, precio_clp, max_residentes, max_funcionarios, frequency, frequency_type, orden, destacado)
 values
-  ('plan-14', 'Hasta 14 residentes', 'Ideal para residencias pequeñas', 50000, 14, 10, 1, false),
-  ('plan-24', 'Hasta 24 residentes', 'El plan mas elegido', 80000, 24, 20, 2, true),
-  ('plan-34', 'Hasta 34 residentes', 'Para residencias grandes', 120000, 34, 30, 3, false)
+  ('plan-14', 'Hasta 14 residentes', 'Ideal para residencias pequeñas', 50000, 14, 10, 1, 'months', 1, false),
+  ('plan-24', 'Hasta 24 residentes', 'El plan mas elegido', 80000, 24, 20, 1, 'months', 2, true),
+  ('plan-34', 'Hasta 34 residentes', 'Para residencias grandes', 120000, 34, 30, 1, 'months', 3, false)
 on conflict (codigo) do update set
   nombre = excluded.nombre,
   descripcion = excluded.descripcion,
   precio_clp = excluded.precio_clp,
   max_residentes = excluded.max_residentes,
   max_funcionarios = excluded.max_funcionarios,
+  frequency = excluded.frequency,
+  frequency_type = excluded.frequency_type,
   orden = excluded.orden,
   destacado = excluded.destacado,
   activo = true;

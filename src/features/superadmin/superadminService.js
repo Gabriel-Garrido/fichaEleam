@@ -14,7 +14,11 @@ const ELEAM_SELECT = `
   proximo_cobro_en, cancelado_en, mp_preapproval_id, mp_payer_email,
   max_residentes, max_funcionarios, notas_admin,
   subscription_status, crm_estado, origen_lead, ultimo_contacto,
-  proxima_accion_fecha, responsable_comercial, riesgo_churn, creado_en
+  proxima_accion_fecha, responsable_comercial, riesgo_churn, creado_en,
+  planes (
+    id, codigo, nombre, descripcion, precio_clp,
+    max_residentes, max_funcionarios, frequency, frequency_type, activo, orden, destacado
+  )
 `;
 
 const PAYMENT_SELECT = `
@@ -187,6 +191,7 @@ export async function registerPayment(payload) {
     p_eleam_id:     payload.eleam_id,
     p_monto:        monto,
     p_plan:         payload.plan ?? "mensual",
+    p_plan_codigo:  payload.plan_codigo ?? "plan-14",
     p_fecha_inicio: fechaIni,
     p_fecha_fin:    fechaFin,
     p_metodo_pago:  payload.metodo_pago ?? null,
@@ -352,47 +357,97 @@ export async function getLandingMetrics(days = 30) {
   const since = new Date(Date.now() - days * 86400000).toISOString();
 
   const [eventsRes, leadsRes] = await Promise.allSettled([
-    supabase.from("landing_events").select("tipo, elemento, creado_en, utm_source, utm_medium, session_id").gte("creado_en", since),
-    supabase.from("demo_leads").select("id, creado_en").gte("creado_en", since),
+    supabase
+      .from("landing_events")
+      .select("tipo, elemento, valor, creado_en, utm_source, utm_medium, session_id")
+      .gte("creado_en", since),
+    supabase
+      .from("demo_leads")
+      .select("id, creado_en")
+      .gte("creado_en", since),
   ]);
 
-  const events = eventsRes.status === "fulfilled" ? (eventsRes.value.data ?? []) : [];
-  const leads  = leadsRes.status  === "fulfilled" ? (leadsRes.value.data ?? []) : [];
+  // Propagate error so the UI can show it
+  if (eventsRes.status === "rejected" || eventsRes.value?.error) {
+    const err = eventsRes.status === "rejected" ? eventsRes.reason : eventsRes.value.error;
+    throw new Error(err?.message ?? "No se pudo consultar landing_events");
+  }
+  if (leadsRes.status === "rejected" || leadsRes.value?.error) {
+    const err = leadsRes.status === "rejected" ? leadsRes.reason : leadsRes.value.error;
+    throw new Error(err?.message ?? "No se pudo consultar demo_leads");
+  }
 
-  const sessions = new Set(events.filter((e) => e.tipo === "page_view" && e.session_id).map((e) => e.session_id));
-  const ctaClicks = events.filter((e) => e.tipo === "cta_click");
+  const events = eventsRes.value.data ?? [];
+  const leads  = leadsRes.value.data  ?? [];
+
+  // ── Funnel steps ──────────────────────────────────────────────
+  const pageViews   = events.filter((e) => e.tipo === "page_view");
+  const ctaEvents   = events.filter((e) => e.tipo === "cta_click");
+  const formViews   = events.filter((e) => e.tipo === "form_view");
+  const formSubmits = events.filter((e) => e.tipo === "form_submit");
+
+  // Unique visitors by session_id on page_view
+  const sessions = new Set(pageViews.filter((e) => e.session_id).map((e) => e.session_id));
+
+  // ── Top CTAs ─────────────────────────────────────────────────
   const topCtaMap = {};
-  for (const e of ctaClicks) {
+  for (const e of ctaEvents) {
     if (!e.elemento) continue;
     topCtaMap[e.elemento] = (topCtaMap[e.elemento] ?? 0) + 1;
   }
-  const topCtas = Object.entries(topCtaMap).sort((a,b) => b[1] - a[1]).slice(0, 8).map(([elem, count]) => ({ elem, count }));
+  const topCtas = Object.entries(topCtaMap).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([elem, count]) => ({ elem, count }));
 
+  // ── Top sections ─────────────────────────────────────────────
+  const sectionMap = {};
+  for (const e of events.filter((e) => e.tipo === "section_view" && e.elemento)) {
+    sectionMap[e.elemento] = (sectionMap[e.elemento] ?? 0) + 1;
+  }
+  const topSections = Object.entries(sectionMap).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ name, count }));
+
+  // ── UTM sources ──────────────────────────────────────────────
   const sourceMap = {};
-  for (const e of events.filter((e) => e.utm_source && e.tipo === "page_view")) {
+  for (const e of pageViews.filter((e) => e.utm_source)) {
     const k = `${e.utm_source}/${e.utm_medium ?? "(none)"}`;
     sourceMap[k] = (sourceMap[k] ?? 0) + 1;
   }
-  const sources = Object.entries(sourceMap).sort((a,b) => b[1] - a[1]).slice(0, 8).map(([src, count]) => ({ src, count }));
+  const sources = Object.entries(sourceMap).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([src, count]) => ({ src, count }));
 
-  // Visitas diarias últimos 14 días
+  // ── Page breakdown (landing vs blog) ─────────────────────────
+  const pageBreakdown = { landing: 0, blog_list: 0, blog_post: 0, other: 0 };
+  for (const e of pageViews) {
+    const name = e.elemento ?? "other";
+    if (name === "landing") pageBreakdown.landing++;
+    else if (name === "blog_list") pageBreakdown.blog_list++;
+    else if (name === "blog_post") pageBreakdown.blog_post++;
+    else pageBreakdown.other++;
+  }
+
+  // ── Daily page_view counts (last 14 days) ────────────────────
   const last14 = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(Date.now() - (13 - i) * 86400000);
     return d.toISOString().slice(0, 10);
   });
   const visitsByDay = {};
-  for (const ev of events.filter((e) => e.tipo === "page_view")) {
+  for (const ev of pageViews) {
     const day = ev.creado_en.slice(0, 10);
     visitsByDay[day] = (visitsByDay[day] ?? 0) + 1;
   }
   const dailyVisits = last14.map((d) => ({ date: d, count: visitsByDay[d] ?? 0 }));
 
+  const totalVisits = sessions.size;
+  const totalLeads  = leads.length;
+
   return {
-    totalVisits:    sessions.size,
-    totalLeads:     leads.length,
-    conversionRate: sessions.size > 0 ? Math.round((leads.length / sessions.size) * 100) : 0,
+    totalVisits,
+    totalLeads,
+    conversionRate:   totalVisits > 0 ? Math.round((totalLeads / totalVisits) * 100) : 0,
+    totalCtaClicks:   ctaEvents.length,
+    totalFormViews:   formViews.length,
+    totalFormSubmits: formSubmits.length,
     topCtas,
+    topSections,
     sources,
+    pageBreakdown,
     dailyVisits,
   };
 }

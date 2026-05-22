@@ -7,8 +7,9 @@
 //
 // Para otros correos: crea el usuario con una contraseña aleatoria interna y le
 // envía por correo un enlace para definir su propia contraseña. La contraseña
-// interna nunca se devuelve. El trigger handle_new_user crea el profile usando
-// app_metadata firmado por Admin API. Nunca confiar en user_metadata para eleam_id/rol.
+// interna nunca se devuelve. El trigger handle_new_user valida la app_metadata
+// firmada por Admin API; esta función provisiona el profile y permite rollback.
+// Nunca confiar en user_metadata para eleam_id/rol.
 //
 // Reglas:
 //   • Admin ELEAM con suscripción activa/en_gracia puede crear funcionarios y familiares.
@@ -58,6 +59,44 @@ function generatePassword(): string {
 function getAppUrl(): string {
   const rawAppUrl = Deno.env.get("PUBLIC_APP_URL")?.trim() || "https://fichaeleam.cl";
   return rawAppUrl.replace(/\/+$/, "");
+}
+
+async function createAuthProvisionRequest(
+  sb: ReturnType<typeof adminClient>,
+  {
+    email,
+    eleamId,
+    rol,
+    accountSource,
+    residenteId = null,
+  }: {
+    email: string;
+    eleamId: string;
+    rol: "admin_eleam" | "funcionario" | "familiar";
+    accountSource: "demo_approved" | "superadmin_created" | "admin_created" | "funcionario_created";
+    residenteId?: string | null;
+  },
+): Promise<{ id: string | null; error: unknown }> {
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const { data, error } = await sb
+    .from("auth_provision_requests")
+    .insert({
+      email,
+      account_source: accountSource,
+      eleam_id: eleamId,
+      rol,
+      residente_id: residenteId,
+      expira_en: expiresAt,
+    })
+    .select("id")
+    .single();
+
+  return { id: data?.id ?? null, error };
+}
+
+async function deleteAuthProvisionRequest(sb: ReturnType<typeof adminClient>, id: string | null) {
+  if (!id) return;
+  await sb.from("auth_provision_requests").delete().eq("id", id);
 }
 
 // Genera un enlace de recuperación (un solo uso) para que el usuario defina
@@ -518,7 +557,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Crear usuario vía Admin API — el trigger handle_new_user crea el profile
+    const { id: provisionId, error: provisionErr } = await createAuthProvisionRequest(sb, {
+      email: cleanEmail,
+      eleamId: profile.eleam_id,
+      rol,
+      accountSource: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
+      residenteId,
+    });
+
+    if (provisionErr || !provisionId) {
+      console.error("staff auth provision create", provisionErr);
+      return jsonResponse(req, {
+        error: "No se pudo preparar la provisión Auth. Aplica supabase_schema.sql actualizado y vuelve a intentar.",
+      }, 500);
+    }
+
+    // Crear usuario vía Admin API. El trigger handle_new_user valida la
+    // metadata; el profile se provisiona aquí para poder hacer rollback claro.
     const { data: created, error: createError } = await sb.auth.admin.createUser({
       email: cleanEmail,
       password: tempPassword,
@@ -532,17 +587,62 @@ Deno.serve(async (req) => {
       user_metadata: {
         nombre,
         must_reset_password: true,
+        fichaeleam_provision_id: provisionId,
       },
     });
 
     if (createError) {
+      await deleteAuthProvisionRequest(sb, provisionId);
       console.error("create-staff-user error:", createError);
       if (isDuplicateAuthUserError(createError)) {
         return jsonResponse(req, {
           error: "Este correo ya existe en Auth. Actualiza la lista y vuelve a intentarlo para reparar la cuenta, o revisa Auth > Users si el problema persiste.",
         }, 409);
       }
-      return jsonResponse(req, { error: "No se pudo crear el usuario." }, 500);
+      const detail = String(createError.message ?? createError);
+      return jsonResponse(req, {
+        error: detail.includes("Database error creating new user")
+          ? "Auth rechazó la creación por un trigger de base de datos. Aplica supabase_schema.sql y vuelve a desplegar la función."
+          : "No se pudo crear el usuario.",
+      }, 500);
+    }
+
+    const createdUserId = created.user.id;
+    const { error: profileProvisionErr } = await sb.from("profiles").upsert({
+      id: createdUserId,
+      nombre,
+      email: cleanEmail,
+      rol,
+      eleam_id: profile.eleam_id,
+      must_reset_password: true,
+    }, { onConflict: "id" });
+
+    if (profileProvisionErr) {
+      await sb.auth.admin.deleteUser(createdUserId);
+      console.error("staff profile provision after auth create", profileProvisionErr);
+      const message = String(profileProvisionErr.message ?? "");
+      if (message.includes("El plan permite máximo")) {
+        return jsonResponse(req, { error: message }, 409);
+      }
+      return jsonResponse(req, {
+        error: "Auth creó el usuario, pero no se pudo crear su perfil. Aplica supabase_schema.sql y vuelve a intentar.",
+      }, 500);
+    }
+
+    if (rol === "familiar" && residenteId) {
+      const { error: familiarProvisionErr } = await sb.from("familiar_residentes").upsert({
+        profile_id: createdUserId,
+        residente_id: residenteId,
+        creado_por: user.id,
+      }, { onConflict: "profile_id,residente_id" });
+
+      if (familiarProvisionErr) {
+        await sb.auth.admin.deleteUser(createdUserId);
+        console.error("staff familiar link after auth create", familiarProvisionErr);
+        return jsonResponse(req, {
+          error: "Auth creó el usuario, pero no se pudo vincular el familiar al residente.",
+        }, 500);
+      }
     }
 
     const linkResult = await generateAccessLink(sb, cleanEmail);
@@ -558,7 +658,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse(req, {
       ok: true,
-      profile_id: created.user.id,
+      profile_id: createdUserId,
       email: cleanEmail,
       rol,
       email_sent: emailResult.sent,

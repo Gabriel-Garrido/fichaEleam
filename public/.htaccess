@@ -1,5 +1,6 @@
 # ─── Disable directory listing ─────────────────────────────────────
 Options -Indexes
+DirectoryIndex index.html
 
 # ─── HTTPS redirect + SPA routing ──────────────────────────────────
 <IfModule mod_rewrite.c>
@@ -10,6 +11,7 @@ Options -Indexes
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
   # SPA: leave existing files/dirs alone; everything else → index.html
+  # Blog/payment prerendered directories keep their own index.html.
   RewriteBase /
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
@@ -25,7 +27,7 @@ Options -Indexes
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
   Header always set X-XSS-Protection "1; mode=block"
   Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.mercadopago.com https://api.mercadopago.com; frame-src 'self' https://*.mercadopago.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.mercadopago.com; object-src 'none'; manifest-src 'self'"
 </IfModule>
 
 # ─── Compression ───────────────────────────────────────────────────
@@ -39,8 +41,8 @@ Options -Indexes
   SetEnvIf Request_URI "^/assets/" long_cache
   Header always set Cache-Control "max-age=31536000, immutable" env=long_cache
 
-  # index.html must never be cached — it references the hashed asset filenames
-  <FilesMatch "^index\.html$">
+  # HTML/SEO entrypoints must not be cached aggressively.
+  <FilesMatch "^(index\.html|robots\.txt|sitemap\.xml|llms\.txt)$">
     Header always set Cache-Control "no-cache, no-store, must-revalidate"
     Header always set Pragma "no-cache"
     Header always set Expires "0"

@@ -32,6 +32,8 @@ export function authErrorMessage(error, fallback = "No pudimos completar la oper
       return "No encontramos una cuenta habilitada para ese correo. Si solicitaste una demo, espera la aprobación; si eres funcionario o familiar, pide que creen tu usuario.";
     case "network":
       return "No pudimos conectar con Supabase. Revisa tu conexión e intenta nuevamente.";
+    case "session_missing":
+      return "El enlace no logró iniciar una sesión válida. Solicita un nuevo link de recuperación e inténtalo nuevamente.";
     case "supabase_config":
       return "Supabase no está configurado. Revisa las variables de entorno antes de iniciar sesión.";
     default:
@@ -66,6 +68,12 @@ export function classifyAuthError(error) {
     msg.includes("debe ser aprobada")
   ) return "unauthorized_account";
   if (msg.includes("network") || msg.includes("failed to fetch") || msg.includes("fetch")) return "network";
+  if (
+    msg.includes("auth session missing") ||
+    msg.includes("session missing") ||
+    msg.includes("missing session") ||
+    msg.includes("no current session")
+  ) return "session_missing";
   if (msg.includes("supabase no está configurado") || msg.includes("supabase no esta configurado")) return "supabase_config";
 
   return "unknown";
@@ -95,8 +103,13 @@ export const getDemoRequestStatus = async (email) => {
 
 export function subscribePasswordRecovery(onRecovery) {
   const client = requireSupabase();
-  const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
-    if (event === "PASSWORD_RECOVERY") onRecovery?.();
+  const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+    if (
+      event === "PASSWORD_RECOVERY" ||
+      (session && ["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED", "TOKEN_REFRESHED"].includes(event))
+    ) {
+      onRecovery?.(session, event);
+    }
   });
   return () => subscription.unsubscribe();
 }
@@ -141,23 +154,46 @@ export async function updatePasswordAndClearResetFlag(password, userId = null) {
   if (data?.user?.id) await clearMustResetPassword(data.user.id);
 }
 
-export const loginWithGoogle = async () => {
+function googleOAuthOptions(redirectTo) {
+  return {
+    redirectTo: redirectTo || `${window.location.origin}/login`,
+    queryParams: {
+      access_type: "offline",
+      prompt: "select_account",
+    },
+  };
+}
+
+export const loginWithGoogle = async ({ redirectTo } = {}) => {
   const client = requireSupabase();
   // Volvemos a /login: AuthContext detectará la sesión y el componente
   // Login redirigirá al homePath del rol. Esto evita que un familiar
   // o superadmin caiga en /dashboard, donde no le corresponde.
   const { data, error } = await client.auth.signInWithOAuth({
     provider: "google",
-    options: {
-      redirectTo: `${window.location.origin}/login`,
-      queryParams: {
-        access_type: "offline",
-        prompt: "select_account",
-      },
-    },
+    options: googleOAuthOptions(redirectTo),
   });
   if (error) throw error;
   return data;
+};
+
+export const continueWithGoogleForActivation = async ({ redirectTo } = {}) => {
+  const client = requireSupabase();
+  const session = await getCurrentAuthSession().catch(() => null);
+
+  if (session?.user?.id && typeof client.auth.linkIdentity === "function") {
+    const { data, error } = await client.auth.linkIdentity({
+      provider: "google",
+      options: googleOAuthOptions(redirectTo || `${window.location.origin}/cambiar-clave?linked=google`),
+    });
+    if (!error) return data;
+
+    // Si el proveedor no permite vincular en este contexto, usamos el flujo
+    // normal de Google. AuthContext resolverá el destino según el perfil.
+    console.warn("No se pudo vincular Google directamente; usando login OAuth.", error);
+  }
+
+  return loginWithGoogle({ redirectTo: `${window.location.origin}/login` });
 };
 
 export const logout = async () => {

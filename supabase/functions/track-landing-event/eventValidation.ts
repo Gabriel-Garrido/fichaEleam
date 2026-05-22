@@ -2,6 +2,7 @@
 // La usa track-landing-event/index.ts antes de insertar en landing_events.
 
 export const ALLOWED_EVENT_TYPES = new Set([
+  "page_view",
   "cta_click",
   "nav_click",
   "scroll_depth",

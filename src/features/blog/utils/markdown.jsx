@@ -11,13 +11,34 @@
 //   tablas pipe ( | a | b | )
 //   --- separadores
 //
-// Devuelve un array de elementos React. Sin escape: el contenido lo
-// crea solo el superadmin (RLS), por lo que la superficie de XSS es
-// limitada. Aun así, los enlaces externos llevan rel="noopener noreferrer".
+// Devuelve un array de elementos React. React escapa el texto y los enlaces
+// se normalizan a http(s), anchors o rutas internas para evitar esquemas
+// peligrosos como javascript: y data:.
 
 import React from "react";
 
 const KEY = (() => { let i = 0; return () => `md-${++i}`; })();
+
+function hasControlChars(value) {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+}
+
+export function normalizeMarkdownUrl(url) {
+  const value = String(url || "").trim();
+  if (!value || hasControlChars(value)) return null;
+  if (value.startsWith("#")) return value;
+  if (value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\")) return value;
+  try {
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
 
 function renderInline(text) {
   if (!text) return null;
@@ -29,7 +50,10 @@ function renderInline(text) {
     let m = rest.match(/!\[([^\]]*)\]\(([^)]+)\)/);
     if (m && m.index !== undefined) {
       if (m.index > 0) tokens.push(rest.slice(0, m.index));
-      tokens.push(<img key={KEY()} src={m[2]} alt={m[1]} loading="lazy" className="my-4 rounded-xl border border-slate-100" />);
+      const src = normalizeMarkdownUrl(m[2]);
+      tokens.push(src
+        ? <img key={KEY()} src={src} alt={m[1]} loading="lazy" className="my-4 rounded-xl border border-slate-100" />
+        : m[1]);
       rest = rest.slice(m.index + m[0].length);
       continue;
     }
@@ -37,17 +61,22 @@ function renderInline(text) {
     m = rest.match(/\[([^\]]+)\]\(([^)]+)\)/);
     if (m && m.index !== undefined) {
       if (m.index > 0) tokens.push(rest.slice(0, m.index));
-      const isExternal = /^https?:\/\//i.test(m[2]);
-      tokens.push(
-        <a
-          key={KEY()}
-          href={m[2]}
-          {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-          className="text-teal-700 underline hover:no-underline font-medium"
-        >
-          {m[1]}
-        </a>,
-      );
+      const href = normalizeMarkdownUrl(m[2]);
+      if (href) {
+        const isExternal = /^https?:\/\//i.test(href);
+        tokens.push(
+          <a
+            key={KEY()}
+            href={href}
+            {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+            className="text-teal-700 underline hover:no-underline font-medium"
+          >
+            {m[1]}
+          </a>,
+        );
+      } else {
+        tokens.push(m[1]);
+      }
       rest = rest.slice(m.index + m[0].length);
       continue;
     }

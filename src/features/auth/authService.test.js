@@ -29,4 +29,11 @@ describe("auth error classification", () => {
     expect(classifyAuthError({ message: "Failed to fetch" })).toBe("network");
     expect(authErrorMessage({ message: "NetworkError" })).toContain("Revisa tu conexi");
   });
+
+  it("classifies missing recovery sessions", () => {
+    const message = authErrorMessage({ message: "Auth session missing!" });
+
+    expect(classifyAuthError({ message: "Auth session missing!" })).toBe("session_missing");
+    expect(message).toContain("Solicita un nuevo link");
+  });
 });

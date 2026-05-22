@@ -5,7 +5,7 @@ import { renderMarkdown, extractTOC } from "./utils/markdown";
 import Loading from "../../components/Loading";
 import { useSEO, articleJsonLd, breadcrumbJsonLd } from "../../utils/seo";
 import DemoRequestModal from "../landing/DemoRequestModal";
-import { trackEvent } from "../landing/landingAnalytics";
+import { trackEvent, usePageView } from "../landing/landingAnalytics";
 import { incrementViews } from "./blogService";
 
 function countWords(md) {
@@ -29,6 +29,8 @@ export default function PublicBlogPost() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [modal, setModal]     = useState(false);
+
+  usePageView("blog_post", slug);
 
   const wordCount = post ? countWords(post.contenido_md) : undefined;
 

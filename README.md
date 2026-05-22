@@ -24,7 +24,7 @@ La app queda disponible en `http://localhost:5173`.
 
 ```bash
 npm run dev       # Desarrollo con HMR
-npm run build     # Build de producción en /dist
+npm run build     # Build de producción en /dist + SEO/LLM prerender para cPanel
 npm run lint      # ESLint
 npm run test:run  # Tests unitarios Vitest
 npm run test:contracts # Auditoría frontend-backend Supabase
@@ -130,24 +130,16 @@ Cuando cambie el flujo de autenticación, re-ejecuta el schema antes de desplega
 
 ---
 
-## Seed de Prueba
+## Seeds Públicos
 
-`supabase_test_seed.sql` crea datos QA completos e idempotentes: usuarios Auth para todos los roles, ELEAM activo/demo/vencido, residentes, portal familiar, signos, observaciones, planes de cuidado, eMAR, stock, acreditación, pagos, CRM, blog, leads de demo y analytics.
-
-Ejecutar después de `supabase_schema.sql`:
+`supabase_schema.sql` incluye el catálogo base de planes, requisitos, permisos y estructura operativa. Los 15 posts iniciales del blog están en `supabase_blog_seed.sql`; ejecútalo después del schema si necesitas poblar el blog público. Es idempotente (usa `on conflict (slug) do update`), así que puedes correrlo cuantas veces necesites.
 
 ```bash
 # SQL Editor de Supabase o psql conectado al proyecto
-\i supabase_test_seed.sql
+\i supabase_blog_seed.sql
 ```
 
-Credenciales incluidas:
-
-- `superadmin.qa@fichaeleam.test` / `FichaEleam123!`
-- `admin.qa@fichaeleam.test` / `FichaEleam123!`
-- `funcionario.qa@fichaeleam.test` / `FichaEleam123!`
-- `familiar.qa@fichaeleam.test` / `FichaEleam123!`
-- `demo.admin.qa@fichaeleam.test` / `FichaEleam123!`
+El seed QA completo con credenciales de prueba no está versionado en este repositorio. Si lo usas localmente, mantenlo fuera de git porque contiene usuarios y contraseñas operativas.
 
 El seed usa UUIDs fijos y secciones por dominio para que sea simple actualizarlo cuando cambie el modelo. No borra datos existentes.
 
@@ -194,10 +186,11 @@ https://<PROJECT_REF>.supabase.co/functions/v1/mp-webhook
 
 Eventos recomendados:
 
-- `preapproval`
-- `subscription_authorized_payment`
+- `payment` / Pagos
+- `preapproval` / Planes y suscripciones
+- `subscription_authorized_payment` / Planes y suscripciones
 
-4. Copia el secret del webhook a `MP_WEBHOOK_SECRET`.
+4. Copia el secret del webhook a `MP_WEBHOOK_SECRET`. Debe coincidir exactamente con el secret vigente del webhook en MercadoPago; si se expone en una captura o chat, rota el secret en MercadoPago y vuelve a setearlo en Supabase.
 5. Despliega funciones.
 
 Prueba sandbox:
@@ -275,20 +268,22 @@ El mismo modal sirve para múltiples puntos de entrada vía la prop `source`:
 
 Precios públicos en la landing (sección `#precios`). Cuatro tiers:
 
-| Plan | Precio mensual | Para |
-|------|----------------|------|
-| Hasta 14 residentes | $50.000 + IVA | ELEAM pequeño |
-| Hasta 24 residentes | $80.000 + IVA | ELEAM mediano (etiqueta "Más elegido") |
-| Hasta 34 residentes | $120.000 + IVA | ELEAM grande |
-| Institucional (35+) | Cotización personalizada | Abre WhatsApp con mensaje pre-cargado |
+| Plan | Precio mensual | Residentes | Funcionarios |
+|------|----------------|-----------:|-------------:|
+| `plan-14` | $50.000 + IVA | 14 | 10 |
+| `plan-24` | $80.000 + IVA | 24 | 20 |
+| `plan-34` | $120.000 + IVA | 34 | 30 |
+| Institucional (35+) | Cotización personalizada | A medida | A medida |
 
 Precios netos (B2B Chile). JSON-LD del `SoftwareApplication` usa `AggregateOffer` con `UnitPriceSpecification.valueAddedTaxIncluded: false` para que motores y LLMs lean los precios correctamente.
 
 Si cambias los precios:
 
-1. Edita `PLANS` en `src/features/landing/LandingPage.jsx`.
+1. Edita `PUBLIC_PLAN_CATALOG` en `src/features/payment/planCatalog.js`.
 2. Edita el seed `public.planes` en `supabase_schema.sql` (`precio_clp`).
 3. Actualiza el bloque `offers` del `SoftwareApplication` en `index.html`.
+
+Reglas de cupo: residentes `activo` + `hospitalizado` consumen cupo; `egresado` y `fallecido` no. Funcionarios creados e invitaciones Gmail pendientes consumen cupo; familiares no consumen cupo de funcionarios. La UI bloquea altas/importaciones incompatibles y Supabase vuelve a validar con triggers/RPC.
 
 Para cambiar el número de contacto institucional, edita `WHATSAPP_PHONE` en `whatsAppLeadUtils.js`.
 
@@ -432,6 +427,29 @@ Reglas:
 - [codex.md](./codex.md): guía rápida de desarrollo.
 - [.env.example](./.env.example): variables locales y secrets esperados.
 - [supabase/config.toml](./supabase/config.toml): configuración de JWT para Edge Functions.
+
+---
+
+## Despliegue cPanel / HostGator
+
+Para producción en `https://fichaeleam.cl`:
+
+```bash
+npm run build
+```
+
+Sube el contenido completo de `dist` al `public_html` del dominio en cPanel, incluyendo `.htaccess`, `robots.txt`, `sitemap.xml`, `llms.txt` y `og-image.png`.
+
+El build ejecuta `vite build && node scripts/generate-public-seo.mjs`. El postbuild genera fallback SPA compatible con Apache, HTML prerenderizado para `/`, `/blog`, `/pago` y cada post publicado del blog, además de `robots`, `sitemap`, `llms`, JSON-LD y metadatos OG/Twitter con dominio canónico `https://fichaeleam.cl`.
+
+Secrets productivos de Supabase:
+
+```bash
+npx supabase secrets set PUBLIC_APP_URL=https://fichaeleam.cl
+npx supabase secrets set ALLOWED_ORIGINS="https://fichaeleam.cl"
+```
+
+Después de cambios en SQL o Edge Functions, re-ejecuta `supabase_schema.sql` y despliega `npx supabase functions deploy`.
 
 ---
 

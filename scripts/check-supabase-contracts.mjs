@@ -272,6 +272,36 @@ for (const [fn, files] of frontendInvokes) {
   }
 }
 
+for (const column of ["frequency", "frequency_type"]) {
+  if (!tableColumns.get("planes")?.has(column)) {
+    fail(`public.planes debe incluir la columna ${column}; mp-create-subscription depende de ella.`);
+  }
+}
+
+for (const code of ["plan-14", "plan-24", "plan-34"]) {
+  if (!new RegExp(`'${escapeRegExp(code)}'`, "i").test(schemaNoComments)) {
+    fail(`supabase_schema.sql debe sembrar el plan comercial ${code}.`);
+  }
+}
+
+if (!/create\s+policy\s+"planes_select_public"\s+on\s+public\.planes[\s\S]*?for\s+select/gi.test(schemaNoComments)) {
+  fail("Falta la política RLS planes_select_public para que la UI cargue planes activos.");
+}
+
+const mpWebhookFunctionPath = path.join(functionsDir, "mp-webhook", "index.ts");
+if (exists(mpWebhookFunctionPath)) {
+  const text = read(mpWebhookFunctionPath);
+  if (!/topic\s*===\s*"payment"/.test(text) || !/\bgetPayment\s*\(\s*dataId\s*\)/.test(text)) {
+    fail("mp-webhook debe procesar eventos `payment` consultando /v1/payments/{id}.");
+  }
+  if (!/onConflict:\s*"mp_payment_id"/.test(text)) {
+    fail("mp-webhook debe registrar eventos payment de forma idempotente por mp_payment_id.");
+  }
+  if (!/\bresolveBillingWindow\b/.test(text)) {
+    fail("mp-webhook debe calcular la vigencia del pago desde la frecuencia del plan.");
+  }
+}
+
 const permisosTableMatch = schemaNoComments.match(
   /create\s+table\s+if\s+not\s+exists\s+public\.funcionario_permisos\s*\(([\s\S]*?)\n\);/i,
 );
@@ -347,6 +377,24 @@ for (const entry of sourceEntries) {
   if (/\btemp_password\b/.test(entry.text)) {
     fail(`El frontend referencia temp_password en ${entry.relativePath}; el alta de usuarios entrega el acceso por enlace, no por contraseña.`);
   }
+}
+
+const demoUserFunctionPath = path.join(functionsDir, "create-demo-user", "index.ts");
+const staffUserFunctionPath = path.join(functionsDir, "create-staff-user", "index.ts");
+if (exists(demoUserFunctionPath)) {
+  const text = read(demoUserFunctionPath);
+  if (!/auth\.admin\.createUser[\s\S]*?from\("profiles"\)\.upsert/.test(text)) {
+    fail("create-demo-user debe provisionar public.profiles después de auth.admin.createUser para evitar errores opacos del trigger de Auth.");
+  }
+}
+if (exists(staffUserFunctionPath)) {
+  const text = read(staffUserFunctionPath);
+  if (!/auth\.admin\.createUser[\s\S]*?from\("profiles"\)\.upsert/.test(text)) {
+    fail("create-staff-user debe provisionar public.profiles después de auth.admin.createUser para evitar errores opacos del trigger de Auth.");
+  }
+}
+if (!/Edge Function que hizo createUser/.test(schema)) {
+  fail("handle_new_user debe dejar que las Edge Functions provisionen profiles en creaciones directas con Admin API.");
 }
 
 const legacyPaths = [

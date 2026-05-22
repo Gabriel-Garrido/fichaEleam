@@ -31,6 +31,7 @@ import {
   updateFuncionarioPermisos,
 } from "./teamService";
 import { ROLE_LABEL, PERM_GROUPS, DEFAULT_PERMS, PLANTILLAS_CARGO } from "./teamConstants";
+import { countFuncionarioSlots, getEffectivePlanLimits } from "../payment/planCatalog";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -148,8 +149,9 @@ export default function TeamManagement() {
   const admins          = members.filter((m) => m.rol === "admin_eleam");
   const invitesFunc     = invites.filter((i) => (i.rol ?? "funcionario") === "funcionario");
   const invitesFam      = invites.filter((i) => i.rol === "familiar");
-  const maxFunc         = plan?.max_funcionarios ?? eleam?.max_funcionarios ?? null;
-  const limiteAlcanzado = maxFunc !== null && funcionarios.length >= maxFunc;
+  const { maxStaff: maxFunc } = getEffectivePlanLimits({ ...eleam, planes: plan ?? eleam?.planes });
+  const funcionarioSlotsUsed = countFuncionarioSlots({ members, pendingInvites: invites });
+  const limiteAlcanzado = maxFunc !== null && funcionarioSlotsUsed >= maxFunc;
   const deleteTargetName = deleteConfirm?.nombre || "este usuario";
   const residentesActivos = residentes.filter(r => r.estado === "activo").length;
 
@@ -157,6 +159,10 @@ export default function TeamManagement() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    if (createForm.rol === "funcionario" && limiteAlcanzado) {
+      toast(`El plan permite máximo ${maxFunc} funcionarios. Actualiza el plan para agregar más.`, "error");
+      return;
+    }
     setCreating(true);
     try {
       const result = await createStaffUser({
@@ -400,7 +406,7 @@ export default function TeamManagement() {
             Cargar funcionarios desde Excel
           </Button>
           <div className="text-sm text-slate-600 bg-white border rounded-xl px-4 py-2 shrink-0">
-            Funcionarios: <span className="font-bold">{funcionarios.length}</span>
+            Funcionarios: <span className="font-bold">{funcionarioSlotsUsed}</span>
             {maxFunc !== null && <span className="text-slate-400"> / {maxFunc}</span>}
             {" · "}
             Familiares: <span className="font-bold">{familiares.length}</span>
@@ -418,7 +424,7 @@ export default function TeamManagement() {
           existingMembers: members,
           pendingInvites: invites,
           maxFuncionarios: maxFunc,
-          currentFuncionarios: funcionarios.length + invitesFunc.length,
+          currentFuncionarios: funcionarioSlotsUsed,
         }}
         onImport={handleImportFuncionarios}
         onComplete={handleImportFuncionariosComplete}
@@ -431,6 +437,7 @@ export default function TeamManagement() {
         residentesActivos={residentesActivos}
         pendingFuncionarios={invitesFunc.length}
         pendingFamiliares={invitesFam.length}
+        funcionarioSlotsUsed={funcionarioSlotsUsed}
         maxFunc={maxFunc}
         limiteAlcanzado={limiteAlcanzado}
       />
@@ -478,7 +485,7 @@ export default function TeamManagement() {
 
             {limiteAlcanzado && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
-                Límite del plan alcanzado ({maxFunc} funcionarios). Actualiza el plan para agregar más.
+                Límite del plan alcanzado ({funcionarioSlotsUsed} / {maxFunc} cupos, incluyendo invitaciones pendientes). Actualiza el plan para agregar más.
               </p>
             )}
 
@@ -749,7 +756,7 @@ export default function TeamManagement() {
                     className="w-full rounded-xl border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
                     disabled={creating}
                   >
-                    <option value="funcionario">Funcionario (personal clínico)</option>
+                    <option value="funcionario" disabled={limiteAlcanzado}>Funcionario (personal clínico)</option>
                     <option value="familiar">Familiar (acceso limitado al residente)</option>
                   </select>
                 </div>
@@ -897,7 +904,8 @@ export default function TeamManagement() {
                     type="submit"
                     disabled={
                       creating || !createForm.nombre || !createForm.email ||
-                      (createForm.rol === "familiar" && !createForm.residenteId)
+                      (createForm.rol === "familiar" && !createForm.residenteId) ||
+                      (createForm.rol === "funcionario" && limiteAlcanzado)
                     }
                     className="bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"
                   >

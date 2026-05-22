@@ -1,4 +1,5 @@
 import { formatRut, validateEmail, validateRut } from "../../utils/validators";
+import { isResidentInPlanQuota } from "../payment/planCatalog";
 import { DEFAULT_PERMS, PLANTILLAS_CARGO } from "../team/teamConstants";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -53,6 +54,8 @@ function parseDate(value, label, errors) {
 function normalizeEnum(value, label, allowed, errors, fallback = null) {
   if (isBlank(value)) return fallback;
   const text = keyText(value);
+  const alias = ENUM_ALIASES[label]?.[text];
+  if (alias) return alias;
   const found = allowed.find((item) => keyText(item) === text);
   if (found) return found;
   errors.push(`${label} debe ser: ${allowed.join(", ")}.`);
@@ -63,7 +66,7 @@ function normalizeRut(value, errors) {
   if (isBlank(value)) return null;
   const rut = clean(value);
   if (!validateRut(rut)) {
-    errors.push("RUT inválido.");
+    errors.push(`RUT inválido: revisa el dígito verificador de ${rut}. Si no lo tienes confirmado, deja el RUT vacío.`);
     return null;
   }
   return formatRut(rut);
@@ -104,6 +107,70 @@ function normalizeCargo(value, errors) {
 function rowHasPayload(row) {
   return Object.values(row.raw).some((value) => !isBlank(value));
 }
+
+const ENUM_ALIASES = {
+  Sexo: {
+    f: "femenino",
+    fem: "femenino",
+    mujer: "femenino",
+    femenino: "femenino",
+    m: "masculino",
+    masc: "masculino",
+    hombre: "masculino",
+    masculino: "masculino",
+    o: "otro",
+    otra: "otro",
+    otro: "otro",
+  },
+  Estado: {
+    activo: "activo",
+    activa: "activo",
+    vigente: "activo",
+    ingresado: "activo",
+    ingresada: "activo",
+    hospitalizado: "hospitalizado",
+    hospitalizada: "hospitalizado",
+    hospitalizacion: "hospitalizado",
+    egresado: "egresado",
+    egresada: "egresado",
+    alta: "egresado",
+    fallecido: "fallecido",
+    fallecida: "fallecido",
+    defuncion: "fallecido",
+  },
+  "Nivel dependencia": {
+    leve: "leve",
+    ligera: "leve",
+    ligero: "leve",
+    bajo: "leve",
+    baja: "leve",
+    moderado: "moderado",
+    moderada: "moderado",
+    medio: "moderado",
+    media: "moderado",
+    severo: "severo",
+    severa: "severo",
+    alto: "severo",
+    alta: "severo",
+    total: "total",
+    completa: "total",
+    completo: "total",
+  },
+  "Estado civil": {
+    soltero: "soltero",
+    soltera: "soltero",
+    casado: "casado",
+    casada: "casado",
+    viudo: "viudo",
+    viuda: "viudo",
+    divorciado: "divorciado",
+    divorciada: "divorciado",
+    separado: "divorciado",
+    separada: "divorciado",
+    otro: "otro",
+    otra: "otro",
+  },
+};
 
 export const residentImportConfig = {
   kind: "residents",
@@ -193,7 +260,11 @@ export const staffImportConfig = {
   ],
 };
 
-export function normalizeResidentRows(rows, { existingResidents = [] } = {}) {
+export function normalizeResidentRows(rows, {
+  existingResidents = [],
+  maxResidentes = null,
+  currentResidentSlots = null,
+} = {}) {
   const existingRuts = new Set(
     existingResidents
       .map((r) => r.rut)
@@ -201,6 +272,8 @@ export function normalizeResidentRows(rows, { existingResidents = [] } = {}) {
       .map((rut) => formatRut(rut)),
   );
   const fileRuts = new Set();
+  const currentSlots = currentResidentSlots ?? existingResidents.filter(isResidentInPlanQuota).length;
+  let acceptedForPlan = 0;
 
   return rows.filter(rowHasPayload).map((row) => {
     const r = row.raw;
@@ -220,6 +293,13 @@ export function normalizeResidentRows(rows, { existingResidents = [] } = {}) {
     if (rut) fileRuts.add(rut);
     if (["egresado", "fallecido"].includes(estado) && !fechaEgreso) {
       errors.push("Fecha egreso es obligatoria si el estado es egresado o fallecido.");
+    }
+    if (errors.length === 0 && maxResidentes !== null && ["activo", "hospitalizado"].includes(estado)) {
+      if (currentSlots + acceptedForPlan >= maxResidentes) {
+        errors.push(`El plan permite máximo ${maxResidentes} residentes activos u hospitalizados. Reduce la planilla o actualiza el plan.`);
+      } else {
+        acceptedForPlan += 1;
+      }
     }
 
     const payload = {

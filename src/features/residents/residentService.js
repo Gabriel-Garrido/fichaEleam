@@ -164,3 +164,18 @@ export const getResidentStats = async () => {
   const egresados     = data.filter((r) => r.estado === "egresado").length;
   return { total, activos, hospitalizados, egresados };
 };
+
+export const getResidentQuotaUsage = async (excludeId = null) => {
+  let query = supabase
+    .from("residentes")
+    .select("id, estado")
+    .in("estado", ["activo", "hospitalizado"]);
+
+  if (excludeId && isValidUUID(excludeId)) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).length;
+};

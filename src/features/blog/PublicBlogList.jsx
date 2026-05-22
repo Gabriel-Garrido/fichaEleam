@@ -4,7 +4,7 @@ import { getPublishedPosts } from "./blogService";
 import Loading from "../../components/Loading";
 import { useSEO, breadcrumbJsonLd, blogListJsonLd } from "../../utils/seo";
 import DemoRequestModal from "../landing/DemoRequestModal";
-import { trackEvent } from "../landing/landingAnalytics";
+import { trackEvent, usePageView } from "../landing/landingAnalytics";
 
 // Formatea fechas con mes en texto largo para tarjetas del blog
 function formatDateLong(iso) {
@@ -61,6 +61,8 @@ export default function PublicBlogList() {
   const [posts, setPosts]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal]   = useState(false);
+
+  usePageView("blog_list");
 
   useSEO({
     title: "Blog · gestión de ELEAM, DS 14/2017 y cuidado del adulto mayor en Chile",

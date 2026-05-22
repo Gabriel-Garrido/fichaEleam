@@ -15,7 +15,7 @@ Aplicación web SPA para digitalización de registros clínicos, administrativos
 **Comandos**:
 ```bash
 npm run dev       # localhost:5173
-npm run build     # /dist
+npm run build     # /dist + SEO/LLM prerender para cPanel
 npm run lint      # ESLint
 npm run test:run  # Tests unitarios Vitest
 npm run preview   # preview del build
@@ -452,14 +452,22 @@ Internas (admin levanta) o de fiscalización (SEREMI detecta). Flujo: `abierta` 
 
 Precios **públicos en la landing** (no se ocultan): genera confianza, califica leads y mejora SEO en el segmento Pyme ELEAM chileno. Tres planes visibles + un cuarto tier "Institucional" para 35+ residentes.
 
-| Plan | precio_clp | max_residentes | Notas UI |
-|------|-----------|---------------:|----------|
-| `plan-14` | 50.000 | 14 | "$50.000 / mes + IVA" — `~$1.700/día` |
-| `plan-24` | 80.000 | 24 | "$80.000 / mes + IVA" — `~$2.700/día`, etiqueta "Más elegido" |
-| `plan-34` | 120.000 | 34 | "$120.000 / mes + IVA" — `~$4.000/día` |
-| Institucional | — | 35+ | "Cotización personalizada" — CTA abre WhatsApp (`source="institutional"`) con mensaje pre-cargado "35+ residentes" |
+| Plan | precio_clp | max_residentes | max_funcionarios | Notas UI |
+|------|-----------|---------------:|-----------------:|----------|
+| `plan-14` | 50.000 | 14 | 10 | "$50.000 / mes + IVA" — `~$1.700/día` |
+| `plan-24` | 80.000 | 24 | 20 | "$80.000 / mes + IVA" — `~$2.700/día`, etiqueta "Más elegido" |
+| `plan-34` | 120.000 | 34 | 30 | "$120.000 / mes + IVA" — `~$4.000/día` |
+| Institucional | — | 35+ | A medida | "Cotización personalizada" — CTA abre WhatsApp (`source="institutional"`) con mensaje pre-cargado "35+ residentes" |
 
-Precios netos (sin IVA, B2B chileno) tanto en UI como en JSON-LD (`UnitPriceSpecification.valueAddedTaxIncluded: false`). Cambiar `WHATSAPP_PHONE` o el tier institucional en `src/features/landing/whatsAppLeadUtils.js` y en la tarjeta institucional dentro de `LandingPage.jsx`. El precio del plan productivo vive en `public.planes.precio_clp` (schema seed); la UI los muestra hard-codeados — al cambiarlos sincronizar ambos sitios.
+Precios netos (sin IVA, B2B chileno) tanto en UI como en JSON-LD (`UnitPriceSpecification.valueAddedTaxIncluded: false`). Cambiar `WHATSAPP_PHONE` o el tier institucional en `src/features/landing/whatsAppLeadUtils.js` y en la tarjeta institucional dentro de `LandingPage.jsx`. El catálogo público vive en `src/features/payment/planCatalog.js` y debe mantenerse sincronizado con el seed `public.planes` en `supabase_schema.sql`.
+
+Reglas de cupo productivas:
+
+- Residentes que consumen cupo: `activo` + `hospitalizado`.
+- Residentes que no consumen cupo: `egresado` + `fallecido`.
+- Funcionarios consumen cupo si existen en `profiles` o si tienen invitación Gmail pendiente en `funcionario_invitaciones`.
+- Familiares no consumen cupo de funcionarios.
+- La UI bloquea crear/importar/activar sobre cupo; Supabase vuelve a validar con `check_residentes_limit`, `check_funcionarios_limit`, `check_eleam_plan_capacity`, `mp-create-subscription` y `registrar_pago_y_activar_eleam`.
 
 ### Flujo
 
@@ -470,7 +478,7 @@ Precios netos (sin IVA, B2B chileno) tanto en UI como en JSON-LD (`UnitPriceSpec
 
 ### Edge Functions (Deno en `supabase/functions/`)
 
-- `mp-create-subscription`: Crea preapproval; solo `admin_eleam` con suscripción inactiva.
+- `mp-create-subscription`: Crea preapproval; solo `admin_eleam` con suscripción inactiva y rechaza 409 si el plan elegido no alcanza para el uso actual.
 - `mp-webhook`: Público; valida HMAC SHA-256; deduplica con `mp_request_id`; actualiza estado.
 - `mp-cancel-subscription`: Cancela preapproval; solo `admin_eleam`.
 - `create-staff-user`: Crea funcionario/familiar con `app_metadata` server-side; envía enlace de acceso por correo via Resend. Si el email existe en Auth sin perfil, repara la cuenta y reenvía enlace. Admin crea staff/familiares y funcionario solo familiar vinculado. Retorna `{ ok, profile_id, email, email_sent, email_skipped, email_error? }`.
@@ -539,7 +547,7 @@ Archivos: `src/features/landing/WhatsAppLeadButton.jsx` (FAB con callout y pulse
 
 **Editor superadmin**: `/superadmin/blog` (lista), `/superadmin/blog/new` (crear), `/superadmin/blog/:id/edit` (editar).
 
-**SEO / LLM**: Meta tags (description, OG, Twitter), JSON-LD (Article, Organization, SoftwareApplication, FAQPage, Breadcrumb, Blog schema con publisher), `robots.txt` (GPTBot, ClaudeBot, PerplexityBot, etc.), `sitemap.xml`. La landing incluye JSON-LD SoftwareApplication + Organization además de FAQPage para maximizar visibilidad en LLMs.
+**SEO / LLM**: Meta tags (description, OG, Twitter), JSON-LD (Article, Organization, SoftwareApplication, FAQPage, Breadcrumb, Blog schema con publisher), `robots.txt` (GPTBot, ClaudeBot, PerplexityBot, etc.), `sitemap.xml` y `llms.txt`. `npm run build` ejecuta `scripts/generate-public-seo.mjs` para generar en `dist` HTML prerenderizado de `/`, `/blog`, `/pago` y posts publicados, además de `.htaccess` compatible con cPanel/HostGator y dominio canónico `https://fichaeleam.cl`.
 
 **Hook**: `useSEO({title, description, path, image, type, keywords, jsonLd})` inyecta meta tags + JSON-LD sin librerías externas.
 
