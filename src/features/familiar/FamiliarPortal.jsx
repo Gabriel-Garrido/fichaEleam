@@ -802,7 +802,11 @@ export default function FamiliarPortal() {
       )}
 
       {loadingSnapshot && !snapshot ? (
-        <Loading message="Cargando información..." />
+        <div className="space-y-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+          ))}
+        </div>
       ) : (
         <>
           {resident && (

@@ -415,8 +415,19 @@ export default function CareTasksPage() {
             <p className="mt-1 text-sm text-slate-500">
               {filter === "pendientes" && metrics.total > 0
                 ? "No quedan pendientes ni vencidas para este turno."
-                : "Configura actividades en Plan de cuidado o indicaciones en eMAR desde la ficha del residente."}
+                : metrics.total > 0
+                  ? "El turno tiene tareas cargadas, pero ninguna coincide con el filtro."
+                  : "Configura actividades en Plan de cuidado o indicaciones en eMAR desde la ficha del residente."}
             </p>
+            {metrics.total > 0 && filter !== "pendientes" && (
+              <button
+                type="button"
+                onClick={() => { setFilter("pendientes"); setType("todos"); }}
+                className="mt-4 text-sm font-semibold text-teal-700 hover:underline"
+              >
+                Ver tareas pendientes
+              </button>
+            )}
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">

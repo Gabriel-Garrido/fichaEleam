@@ -236,6 +236,13 @@ export default function EmarTurnPage() {
             <p className="mt-1 text-sm text-slate-500">
               El turno tiene administraciones cargadas, pero ninguna coincide con el filtro seleccionado.
             </p>
+            <button
+              type="button"
+              onClick={() => setEstado("todas")}
+              className="mt-4 text-sm font-semibold text-teal-700 hover:underline"
+            >
+              Ver todas las administraciones
+            </button>
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">

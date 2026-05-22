@@ -4,7 +4,6 @@ import { getResidents, deleteResident, createResidentsBatch } from "./residentSe
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
-import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
 import { ESTADO_CONFIG, DEPENDENCIA_TONE, initials, calcAge, getAllergySummary } from "./residentUtils";
 import ExcelImportModal from "../import/ExcelImportModal";
@@ -85,7 +84,15 @@ export default function ResidentList() {
     return out;
   }, [residents]);
 
-  if (loading) return <Loading message="Cargando residentes..." />;
+  if (loading) return (
+    <PageLayout title="Residentes" eyebrow="Operación clínica">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-40 animate-pulse rounded-2xl bg-slate-100" />
+        ))}
+      </div>
+    </PageLayout>
+  );
 
   return (
     <PageLayout

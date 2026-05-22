@@ -276,7 +276,8 @@ create table if not exists public.observaciones_diarias (
   registrado_por        uuid references auth.users(id) on delete set null,
   creado_en             timestamptz not null default now(),
   actualizado_en        timestamptz not null default now(),
-  check (visible_familiar = false or nullif(trim(coalesce(resumen_familiar, '')), '') is not null)
+  check (visible_familiar = false or nullif(trim(coalesce(resumen_familiar, '')), '') is not null),
+  check (requiere_seguimiento = false or (seguimiento_fecha is not null and seguimiento_turno is not null))
 );
 
 create index if not exists idx_observaciones_residente_fecha on public.observaciones_diarias(residente_id, fecha_hora desc);
