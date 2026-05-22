@@ -5,7 +5,7 @@ import { getResidents } from "../residents/residentService";
 import { isValidUUID } from "../../utils/validators";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
-import Loading from "../../components/Loading";
+import { currentTurno } from "../carePlans/carePlansService";
 
 const TIPOS = [
   ["observacion_general", "Observación general"],
@@ -47,7 +47,7 @@ function ObservationForm() {
   const [form, setForm] = useState({
     residente_id: preselectedId ?? "",
     fecha_hora: new Date().toISOString().slice(0, 16),
-    turno: "mañana",
+    turno: currentTurno(),
     tipo: "observacion_general",
     descripcion: "",
     acciones_tomadas: "",
@@ -140,7 +140,13 @@ function ObservationForm() {
     }
   };
 
-  if (loadingRes) return <Loading message="Cargando..." />;
+  if (loadingRes) return (
+    <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+      ))}
+    </div>
+  );
   const noActiveResidents = residents.length === 0;
 
   return (
@@ -192,7 +198,7 @@ function ObservationForm() {
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Turno</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Turno *</label>
               <select name="turno" value={form.turno} onChange={handleChange}
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="mañana">Mañana</option>

@@ -5,7 +5,6 @@ import { getResidents } from "../residents/residentService";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
-import Loading from "../../components/Loading";
 import VitalCard from "./VitalCard";
 import PageLayout from "../../layout/PageLayout";
 import { turnoLabel } from "../turnos/turnosService";
@@ -102,7 +101,15 @@ export default function VitalSignsList() {
     return out;
   }, [records]);
 
-  if (loading) return <Loading message="Cargando registros..." />;
+  if (loading) return (
+    <PageLayout title="Signos vitales" eyebrow="Cuidado diario">
+      <div className="space-y-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+        ))}
+      </div>
+    </PageLayout>
+  );
 
   return (
     <PageLayout
@@ -273,11 +280,26 @@ export default function VitalSignsList() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-slate-500 bg-white rounded-xl border border-slate-100">
+        <div className="text-center py-16 bg-white rounded-xl border border-slate-100">
           <svg className="mx-auto mb-4 h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
           </svg>
-          <p>No hay registros para el período / filtro seleccionado.</p>
+          <p className="text-sm font-semibold text-slate-700">
+            {filtroEstado
+              ? `Sin registros con estado "${filtroEstado === "normal" ? "dentro de rango" : filtroEstado === "warning" ? "atención" : "crítico"}" en el período.`
+              : records.length === 0
+                ? "No hay registros de signos vitales en este período."
+                : "Ningún registro coincide con los filtros aplicados."}
+          </p>
+          {(filtroEstado || filtroResidente) && (
+            <button
+              type="button"
+              onClick={() => { setFiltroEstado(""); setFiltroResidente(""); }}
+              className="mt-4 text-sm font-semibold text-teal-700 hover:underline"
+            >
+              Limpiar filtros
+            </button>
+          )}
         </div>
       ) : view === "cards" ? (
         <div className="space-y-4">

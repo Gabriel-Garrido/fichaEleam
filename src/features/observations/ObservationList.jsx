@@ -5,7 +5,6 @@ import { getResidents } from "../residents/residentService";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
-import Loading from "../../components/Loading";
 import PageLayout from "../../layout/PageLayout";
 import { TIPO_LABEL, TIPO_BADGE } from "../residents/residentUtils";
 
@@ -107,7 +106,15 @@ function ObservationList() {
 
   const hasActiveFilters = !!(filtroResidente || filtroTipo || soloSeguimiento);
 
-  if (loading) return <Loading message="Cargando observaciones..." />;
+  if (loading) return (
+    <PageLayout title="Observaciones" eyebrow="Cuidado diario">
+      <div className="space-y-3">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+        ))}
+      </div>
+    </PageLayout>
+  );
 
   return (
     <PageLayout

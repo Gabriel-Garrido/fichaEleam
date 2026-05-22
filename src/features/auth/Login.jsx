@@ -159,7 +159,10 @@ export default function Login() {
       console.warn("Error de login:", err);
       // Si el correo tiene una solicitud de demo aún sin habilitar, mostramos
       // el aviso claro en vez de un error genérico de credenciales.
-      const demoStatus = await getDemoRequestStatus(email).catch(() => "none");
+      const demoStatus = await Promise.race([
+        getDemoRequestStatus(email).catch(() => "none"),
+        new Promise((resolve) => setTimeout(() => resolve("none"), 5000)),
+      ]);
       if (demoStatus === "pendiente") {
         setDemoPending(true);
       } else {
@@ -301,7 +304,7 @@ export default function Login() {
           </div>
 
           {error && (
-            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert">
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-200 rounded-xl px-3 py-2" role="alert" aria-live="polite">
               {error}
             </p>
           )}
