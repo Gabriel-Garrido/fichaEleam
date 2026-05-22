@@ -4,6 +4,7 @@ import { getVitalSigns, deleteVitalSigns } from "./vitalSignsService";
 import { getResidents } from "../residents/residentService";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
 import VitalCard from "./VitalCard";
 import PageLayout from "../../layout/PageLayout";
@@ -26,6 +27,7 @@ function today() {
 export default function VitalSignsList() {
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const { can } = useAuth();
   const canDelete = can("eliminar_signos_vitales");
   const canCreate = can("crear_signos_vitales");
@@ -77,7 +79,13 @@ export default function VitalSignsList() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("¿Eliminar este registro?")) return;
+    const ok = await confirm({
+      title: "Eliminar registro",
+      message: "¿Eliminar este registro de signos vitales? Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await deleteVitalSigns(id);
       setRecords((prev) => prev.filter((r) => r.id !== id));

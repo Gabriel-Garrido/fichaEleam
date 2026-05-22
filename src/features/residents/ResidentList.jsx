@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getResidents, deleteResident, createResidentsBatch } from "./residentService";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
 import PageLayout from "../../layout/PageLayout";
 import { ESTADO_CONFIG, DEPENDENCIA_TONE, initials, calcAge, getAllergySummary } from "./residentUtils";
@@ -13,6 +14,7 @@ import { countPlanResidentSlots, getEffectivePlanLimits } from "../payment/planC
 export default function ResidentList() {
   const navigate = useNavigate();
   const toast    = useToast();
+  const confirm  = useConfirm();
   const { can, isAdminEleam, eleam } = useAuth();
   const canDelete = can("eliminar_residentes");
   const canCreate = can("crear_residentes");
@@ -42,7 +44,13 @@ export default function ResidentList() {
   useEffect(() => { fetchResidents(); }, [fetchResidents]);
 
   const handleDelete = async (id, nombre) => {
-    if (!window.confirm(`¿Eliminar a ${nombre}?\nEsta acción eliminará también todos sus registros.`)) return;
+    const ok = await confirm({
+      title: "Eliminar residente",
+      message: `¿Eliminar a ${nombre}?\nEsta acción eliminará también todos sus registros clínicos.`,
+      confirmText: "Eliminar",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await deleteResident(id);
       setResidents((prev) => prev.filter((r) => r.id !== id));

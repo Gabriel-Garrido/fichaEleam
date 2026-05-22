@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
 import HelpTooltip from "../../components/HelpTooltip";
 import { friendlyError } from "../../utils/errorMessages";
 import { logout } from "../auth/authService";
@@ -62,6 +63,7 @@ export default function PaymentPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const toast = useToast();
+  const confirm = useConfirm();
   const {
     user, profile, eleam, pagoActivo, subscriptionStatus, isAdminEleam, rol, refetchProfile,
   } = useAuth();
@@ -161,9 +163,13 @@ export default function PaymentPage() {
   };
 
   const handleCancelPending = async () => {
-    const ok = window.confirm(
-      "¿Cancelar este proceso de pago?\n\nSi ya completaste el pago en MercadoPago, espera unos minutos para que se confirme antes de cancelar.\n\nSi no completaste el pago, puedes cancelar aquí y elegir otro plan."
-    );
+    const ok = await confirm({
+      title: "Cancelar proceso de pago",
+      message: "Si ya completaste el pago en MercadoPago, espera unos minutos para que se confirme antes de cancelar.\n\nSi no completaste el pago, puedes cancelar aquí y elegir otro plan.",
+      confirmText: "Cancelar proceso",
+      cancelText: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setLoadingAction(true);
     try {
@@ -178,9 +184,13 @@ export default function PaymentPage() {
   };
 
   const handleCancel = async () => {
-    const ok = window.confirm(
-      "¿Cancelar la suscripción? Mantendrás el acceso hasta el final del período pagado."
-    );
+    const ok = await confirm({
+      title: "Cancelar suscripción",
+      message: "¿Cancelar la suscripción?\nMantendrás el acceso hasta el final del período pagado.",
+      confirmText: "Cancelar suscripción",
+      cancelText: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setLoadingAction(true);
     try {

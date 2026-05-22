@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../../components/Toast";
+import { useConfirm } from "../../../components/ConfirmDialog";
 import Loading from "../../../components/Loading";
 import { friendlyError } from "../../../utils/errorMessages";
 import { getAllPosts, deletePost, publishPost } from "../../blog/blogService";
@@ -15,6 +16,7 @@ const ESTADO_BADGE = {
 export default function BlogManagement() {
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("todos"); // todos | publicado | borrador | archivado
@@ -34,7 +36,13 @@ export default function BlogManagement() {
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (post) => {
-    if (!window.confirm(`Eliminar "${post.titulo}"? Esta acción no se puede deshacer.`)) return;
+    const ok = await confirm({
+      title: "Eliminar artículo",
+      message: `¿Eliminar "${post.titulo}"?\nEsta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await deletePost(post.id);
       toast("Post eliminado.", "success");

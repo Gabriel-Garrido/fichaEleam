@@ -30,6 +30,7 @@ export default [
           allowConstantExport: true,
           allowExportNames: [
             'useToast',
+            'useConfirm',
             'useAuth',
             'useLoading',
             'AuthContext',

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
@@ -789,6 +790,7 @@ export default function AccreditationRequisito() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const { profile, isAdminEleam, can } = useAuth();
 
   const [re, setRe] = useState(null);
@@ -852,7 +854,13 @@ export default function AccreditationRequisito() {
   };
 
   const handleArchive = async (doc) => {
-    if (!window.confirm(`¿Archivar "${doc.archivo_nombre}"? Quedará en el historial pero no será la versión vigente.`)) return;
+    const ok = await confirm({
+      title: "Archivar documento",
+      message: `¿Archivar "${doc.archivo_nombre}"?\nQuedará en el historial pero no será la versión vigente.`,
+      confirmText: "Archivar",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await archiveDocumento(doc.id);
       toast("Documento archivado", "info");

@@ -4,6 +4,7 @@ import { getObservations, deleteObservation } from "./observationsService";
 import { getResidents } from "../residents/residentService";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
 import PageLayout from "../../layout/PageLayout";
 import { TIPO_LABEL, TIPO_BADGE } from "../residents/residentUtils";
@@ -42,6 +43,7 @@ function formatFollowUpLabel(record) {
 function ObservationList() {
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const { can } = useAuth();
   const canDelete = can("eliminar_observaciones");
   const canCreate = can("crear_observaciones");
@@ -94,7 +96,13 @@ function ObservationList() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("¿Eliminar esta observación?")) return;
+    const ok = await confirm({
+      title: "Eliminar observación",
+      message: "¿Eliminar esta observación? Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await deleteObservation(id);
       setRecords((prev) => prev.filter((r) => r.id !== id));
