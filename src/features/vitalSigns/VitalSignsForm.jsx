@@ -272,7 +272,7 @@ function VitalSignsForm() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Turno</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Turno *</label>
               <select
                 name="turno"
                 value={form.turno}

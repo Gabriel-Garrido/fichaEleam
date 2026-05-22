@@ -409,7 +409,11 @@ function SignosTab({ residenteId, navigate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [residenteId]);
 
-  if (loading) return <Loading message="Cargando signos vitales..." />;
+  if (loading) return (
+    <div className="space-y-3">
+      {[...Array(3)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />)}
+    </div>
+  );
 
   const latest = records[0];
   const overall = latest ? recordOverallLabel(latest) : null;
@@ -631,7 +635,11 @@ function ObservacionesTab({ residenteId, navigate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [residenteId]);
 
-  if (loading) return <Loading message="Cargando observaciones..." />;
+  if (loading) return (
+    <div className="space-y-3">
+      {[...Array(3)].map((_, i) => <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-100" />)}
+    </div>
+  );
 
   return (
     <div>
@@ -795,7 +803,11 @@ function VisitasTab({ residenteId }) {
     }
   };
 
-  if (loading) return <Loading message="Cargando visitas..." />;
+  if (loading) return (
+    <div className="space-y-3">
+      {[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-2xl bg-slate-100" />)}
+    </div>
+  );
 
   const pending  = visitas.filter((v) => v.estado === "pendiente");
   const active   = visitas.filter((v) => v.estado === "activa");

@@ -36,6 +36,8 @@ export function authErrorMessage(error, fallback = "No pudimos completar la oper
       return "El enlace no logró iniciar una sesión válida. Solicita un nuevo link de recuperación e inténtalo nuevamente.";
     case "supabase_config":
       return "Supabase no está configurado. Revisa las variables de entorno antes de iniciar sesión.";
+    case "rate_limit":
+      return "Has intentado demasiadas veces. Espera unos minutos antes de reintentar.";
     default:
       return fallback;
   }
@@ -75,6 +77,12 @@ export function classifyAuthError(error) {
     msg.includes("no current session")
   ) return "session_missing";
   if (msg.includes("supabase no está configurado") || msg.includes("supabase no esta configurado")) return "supabase_config";
+  if (
+    msg.includes("rate limit") ||
+    msg.includes("too many requests") ||
+    msg.includes("over_email_send_rate") ||
+    msg.includes("429")
+  ) return "rate_limit";
 
   return "unknown";
 }

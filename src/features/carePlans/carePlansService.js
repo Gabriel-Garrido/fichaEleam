@@ -468,6 +468,8 @@ export async function saveCareActivity({ plan, activity, schedule }) {
   const { error: deactivateError } = await deactivateQuery;
   if (deactivateError) throw deactivateError;
 
+  const toInsert = [];
+  const toUpdate = [];
   for (const horario of schedules) {
     const { id: horarioId, ...schedulePayload } = horario;
     const row = {
@@ -476,10 +478,19 @@ export async function saveCareActivity({ plan, activity, schedule }) {
       residente_id: plan.residente_id,
       actividad_id: saved.id,
     };
-    const result = horarioId
-      ? await supabase.from("plan_cuidado_horarios").update(row).eq("id", horarioId)
-      : await supabase.from("plan_cuidado_horarios").insert(row);
-    if (result.error) throw result.error;
+    if (horarioId) {
+      toUpdate.push({ id: horarioId, ...row });
+    } else {
+      toInsert.push(row);
+    }
+  }
+  if (toUpdate.length > 0) {
+    const { error } = await supabase.from("plan_cuidado_horarios").upsert(toUpdate);
+    if (error) throw error;
+  }
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from("plan_cuidado_horarios").insert(toInsert);
+    if (error) throw error;
   }
 
   return saved;
