@@ -415,9 +415,13 @@ export default function CareTasksPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h2 className="mt-3 text-sm font-semibold text-slate-950">Sin tareas para este filtro</h2>
+            <h2 className="mt-3 text-sm font-semibold text-slate-950">
+              {filter === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
+            </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Configura actividades en Plan de cuidado o indicaciones en eMAR desde la ficha del residente.
+              {filter === "pendientes" && metrics.total > 0
+                ? "No quedan pendientes ni vencidas para este turno."
+                : "Configura actividades en Plan de cuidado o indicaciones en eMAR desde la ficha del residente."}
             </p>
           </div>
         ) : (
@@ -626,7 +630,9 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
 }
 
 export function TurnWorkflowGuide() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("fichaeleam_tGuide") === "1"; } catch { return false; }
+  });
   const steps = [
     ["Cargar", "La vista genera las tareas recurrentes del turno sin duplicarlas."],
     ["Ejecutar", "Cumple cuidado o administra eMAR dentro de la ventana indicada."],
@@ -637,7 +643,11 @@ export function TurnWorkflowGuide() {
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <button
         type="button"
-        onClick={() => setCollapsed((p) => !p)}
+        onClick={() => setCollapsed((p) => {
+          const next = !p;
+          try { localStorage.setItem("fichaeleam_tGuide", next ? "1" : "0"); } catch { /* storage unavailable */ }
+          return next;
+        })}
         className="flex w-full items-center justify-between gap-2 text-left"
       >
         <span className="text-sm font-semibold text-slate-800">Flujo del turno operativo</span>

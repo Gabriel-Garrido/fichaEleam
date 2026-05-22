@@ -124,7 +124,9 @@ export default function CarePlanTab({ resident }) {
   const [activityModal, setActivityModal] = useState(null);
   const [showPaused, setShowPaused] = useState(false);
   const [familyPreview, setFamilyPreview] = useState(false);
-  const [guideCollapsed, setGuideCollapsed] = useState(false);
+  const [guideCollapsed, setGuideCollapsed] = useState(() => {
+    try { return localStorage.getItem("fichaeleam_cpGuide") === "1"; } catch { return false; }
+  });
 
   const canEdit = can("editar_planes_cuidado");
   const canCreate = can("crear_planes_cuidado");
@@ -329,7 +331,14 @@ export default function CarePlanTab({ resident }) {
 
   return (
     <div className="space-y-5">
-      <WorkflowGuide collapsed={guideCollapsed} onToggle={() => setGuideCollapsed((p) => !p)} />
+      <WorkflowGuide
+        collapsed={guideCollapsed}
+        onToggle={() => setGuideCollapsed((p) => {
+          const next = !p;
+          try { localStorage.setItem("fichaeleam_cpGuide", next ? "1" : "0"); } catch { /* storage unavailable */ }
+          return next;
+        })}
+      />
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric label="Actividades" value={metrics.active} tone="teal" />
@@ -680,10 +689,10 @@ function PresetPicker({ groups, existingPresetIds, saving, canEdit, onOpen }) {
     <div className="mt-5 border-y border-slate-100 py-5">
       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-950">Rutina sugerida ELEAM</h3>
-          <p className="text-sm text-slate-500">Base clínica editable para no empezar desde cero.</p>
+          <h3 className="text-sm font-semibold text-slate-950">Actividades sugeridas</h3>
+          <p className="text-sm text-slate-500">Punto de partida clínico. Clic para agregar o editar.</p>
         </div>
-        <p className="text-xs text-slate-400">Las ya agregadas aparecen en verde.</p>
+        <p className="text-xs text-slate-400">Verde = ya incluida.</p>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         {Object.entries(groups).map(([area, presets]) => (
@@ -896,8 +905,8 @@ function ActivityModal({ modal, saving, onClose, onSubmit }) {
           </label>
         </div>
         <Field label="Título" value={activity.titulo} onChange={(value) => setActivity((p) => ({ ...p, titulo: value }))} disabled={saving} />
-        <TextArea label="Descripción operativa" value={activity.descripcion ?? ""} onChange={(value) => setActivity((p) => ({ ...p, descripcion: value }))} disabled={saving} rows={3} />
-        <TextArea label="Instrucciones internas para el turno" value={activity.instrucciones ?? ""} onChange={(value) => setActivity((p) => ({ ...p, instrucciones: value }))} disabled={saving} rows={3} />
+        <TextArea label="Descripción" value={activity.descripcion ?? ""} onChange={(value) => setActivity((p) => ({ ...p, descripcion: value }))} disabled={saving} rows={2} />
+        <TextArea label="Instrucciones al turno" value={activity.instrucciones ?? ""} onChange={(value) => setActivity((p) => ({ ...p, instrucciones: value }))} disabled={saving} rows={2} />
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <label className="flex items-start gap-2 text-sm text-slate-700">
@@ -986,8 +995,10 @@ function ActivityModal({ modal, saving, onClose, onSubmit }) {
             className="mt-0.5 h-4 w-4 accent-teal-700"
           />
           <span>
-            Crear observación al cerrar esta actividad.
-            <span className="block text-xs text-amber-700">Úsalo en rutinas donde el resultado clínico debe quedar trazado.</span>
+            Requiere nota clínica al cerrar
+            <span className="block text-xs text-amber-700">
+              El turno deberá dejar observación al marcar esta tarea. Útil para rutinas con evolución clínica relevante.
+            </span>
           </span>
         </label>
 
@@ -1025,7 +1036,7 @@ function ScheduleEditor({ index, schedule, canRemove, saving, onChange, onRemove
           </button>
         )}
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-4 items-end">
         <label className="block text-sm font-medium text-slate-700">
           Frecuencia
           <select
@@ -1059,7 +1070,7 @@ function ScheduleEditor({ index, schedule, canRemove, saving, onChange, onRemove
           />
         </label>
         <Field
-          label="Tolerancia (min)"
+          label="Margen (min)"
           type="number"
           min="0"
           max="720"
@@ -1069,6 +1080,10 @@ function ScheduleEditor({ index, schedule, canRemove, saving, onChange, onRemove
           disabled={saving}
         />
       </div>
+
+      <p className="mt-1 text-[10px] text-slate-400">
+        Margen: minutos de gracia después de la hora programada antes de que la tarea quede vencida.
+      </p>
 
       {schedule.frecuencia === "semanal" && (
         <div className="mt-3">

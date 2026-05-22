@@ -291,8 +291,6 @@ function CarePlanSummarySection({ carePlan }) {
     <SectionCard
       icon={<IconClipboardList />}
       title="Plan de cuidado activo"
-      badge={`v${carePlan.version ?? 1}`}
-      badgeColor="bg-teal-50 text-teal-700"
     >
       <p className="mb-4 text-xs text-slate-400">
         Este resumen fue compartido por el equipo clínico para mantenerte informado del plan de atención de tu familiar.
