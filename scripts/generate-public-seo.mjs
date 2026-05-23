@@ -294,6 +294,185 @@ function buildPaymentHtml() {
     </main>`;
 }
 
+function buildAcreditacionHtml() {
+  return `<main class="seo-prerender">
+      <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Acreditaci&oacute;n SEREMI</nav>
+      <h1>Acreditaci&oacute;n SEREMI para tu ELEAM &middot; Gu&iacute;a DS 14/2017</h1>
+      <p class="article-summary">Todo lo que un director o administrador de un Establecimiento de Larga Estad&iacute;a para Adultos Mayores debe saber sobre los 14 &aacute;mbitos, los 70+ requisitos, los plazos de vencimiento y c&oacute;mo llegar a la fiscalizaci&oacute;n con la carpeta al d&iacute;a.</p>
+
+      <h2>&iquest;Qu&eacute; es la acreditaci&oacute;n SEREMI?</h2>
+      <p>La Secretar&iacute;a Regional Ministerial de Salud (SEREMI) es la autoridad sanitaria que autoriza, supervisa y fiscaliza los ELEAM en Chile. Su marco normativo es el Decreto Supremo N&deg; 14 de 2017 del Ministerio de Salud.</p>
+
+      <h2>Los 14 &aacute;mbitos del DS 14/2017</h2>
+      <ol>
+        <li><strong>A01 Antecedentes legales</strong>: constituci&oacute;n, vigencia, RUT, representante legal.</li>
+        <li><strong>A02 Autorizaci&oacute;n sanitaria</strong>: resoluci&oacute;n SEREMI, permisos municipales, recepci&oacute;n final.</li>
+        <li><strong>A03 Infraestructura y condiciones sanitarias</strong>: planos, electricidad SEC, gas, agua potable, ascensores, calderas.</li>
+        <li><strong>A04 Seguridad y evacuaci&oacute;n</strong>: plan de emergencia, extintores, simulacros, se&ntilde;al&eacute;tica y luces.</li>
+        <li><strong>A05 Direcci&oacute;n t&eacute;cnica</strong>: director t&eacute;cnico, contrato y aceptaci&oacute;n SEREMI.</li>
+        <li><strong>A06 Personal y dotaci&oacute;n</strong>: n&oacute;mina, contratos, t&iacute;tulos, salud y capacitaciones.</li>
+        <li><strong>A07 Protocolos obligatorios</strong>: PCI, lavado de manos, medicamentos, residuos, emergencias.</li>
+        <li><strong>A08 Residentes y carpetas personales</strong>: fichas, evaluaciones Barthel/MMSE, planes individualizados.</li>
+        <li><strong>A09 Contratos y derechos</strong>: contrato de residencia, consentimientos, carta de derechos.</li>
+        <li><strong>A10 Medicamentos y registros</strong>: inventario, kardex, recetas, controlados, QF asesor.</li>
+        <li><strong>A11 Alimentaci&oacute;n y manipulaci&oacute;n</strong>: minutas, manipuladores, HACCP, dietas especiales.</li>
+        <li><strong>A12 Aseo, lavander&iacute;a y plagas</strong>: programas y bit&aacute;coras de aseo, lavander&iacute;a, residuos, plagas.</li>
+        <li><strong>A13 Reclamos y comunicaci&oacute;n</strong>: libro de reclamos, sugerencias, reuniones con familias.</li>
+        <li><strong>A14 Fiscalizaciones y subsanaciones</strong>: actas, plan de subsanaci&oacute;n, comunicaciones con SEREMI.</li>
+      </ol>
+
+      <h2>C&oacute;mo preparar la carpeta SEREMI</h2>
+      <ol>
+        <li>Re&uacute;ne los antecedentes legales (A01).</li>
+        <li>Obt&eacute;n la autorizaci&oacute;n sanitaria (A02).</li>
+        <li>Acredita infraestructura, seguridad y servicios (A03&ndash;A04).</li>
+        <li>Designa direcci&oacute;n t&eacute;cnica y dotaci&oacute;n (A05&ndash;A06).</li>
+        <li>Documenta protocolos obligatorios (A07).</li>
+        <li>Arma carpetas individuales por residente (A08&ndash;A09).</li>
+        <li>Controla medicamentos y alimentaci&oacute;n (A10&ndash;A11).</li>
+        <li>Operaci&oacute;n diaria: aseo, comunicaci&oacute;n y fiscalizaciones (A12&ndash;A14).</li>
+      </ol>
+
+      <h2>Documentos que se vencen</h2>
+      <ul>
+        <li>Resoluci&oacute;n sanitaria de funcionamiento: anual.</li>
+        <li>Vigencia de la persona jur&iacute;dica: 180 d&iacute;as.</li>
+        <li>Certificado de instalaci&oacute;n el&eacute;ctrica SEC: 3 a&ntilde;os.</li>
+        <li>Informe de potabilidad del agua: anual.</li>
+        <li>Fumigaci&oacute;n y desratizaci&oacute;n: 180 d&iacute;as.</li>
+        <li>Certificado de extintores: anual.</li>
+        <li>Simulacros de evacuaci&oacute;n: 180 d&iacute;as.</li>
+        <li>Credencial del director t&eacute;cnico: anual.</li>
+        <li>Evaluaci&oacute;n Barthel del residente: 180 d&iacute;as.</li>
+        <li>Plan de cuidado individualizado: 180 d&iacute;as.</li>
+        <li>Minuta alimentaria visada: 30 d&iacute;as.</li>
+        <li>Bit&aacute;cora HACCP de temperaturas: 30 d&iacute;as.</li>
+      </ul>
+
+      <h2>C&oacute;mo FichaEleam digitaliza tu acreditaci&oacute;n</h2>
+      <p>14 &aacute;mbitos y 70+ requisitos pre-cargados, versiones de cada documento, alertas 30 d&iacute;as antes del vencimiento, estados claros por requisito, observaciones de fiscalizaci&oacute;n con plazo y responsable, auditor&iacute;a inmutable, permisos por funcionario y export imprimible.</p>
+
+      <p><a href="/software-eleam">Ver software para ELEAM</a> &middot; <a href="/preguntas-frecuentes">Preguntas frecuentes</a> &middot; <a href="/pago">Planes y precios</a> &middot; <a href="/contacto">Contacto</a></p>
+    </main>`;
+}
+
+function buildSoftwareHtml() {
+  return `<main class="seo-prerender">
+      <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Software para ELEAM</nav>
+      <h1>Software para ELEAM en Chile</h1>
+      <p class="article-summary">Ficha cl&iacute;nica digital, signos vitales con alertas, eMAR, plan de cuidado, observaciones de turno y carpeta SEREMI &mdash; en una sola plataforma construida exclusivamente para Establecimientos de Larga Estad&iacute;a para Adultos Mayores en Chile.</p>
+
+      <h2>Excel y papel vs FichaEleam</h2>
+      <ul>
+        <li><strong>Ficha cl&iacute;nica con historial</strong>: Excel no tiene trazabilidad; FichaEleam audita cada cambio.</li>
+        <li><strong>Signos vitales</strong>: rangos cl&iacute;nicos validados para adulto mayor con alertas cr&iacute;ticas.</li>
+        <li><strong>Observaciones por turno</strong>: 12 categor&iacute;as con seguimiento obligatorio y b&uacute;squeda.</li>
+        <li><strong>Plan de cuidado</strong>: tareas por turno con completaci&oacute;n y notas.</li>
+        <li><strong>Medicamentos (eMAR)</strong>: kardex electr&oacute;nico con doble validaci&oacute;n y control de stock.</li>
+        <li><strong>Carpeta SEREMI</strong>: 14 &aacute;mbitos pre-cargados con alertas de vencimiento.</li>
+        <li><strong>Acceso del equipo</strong>: simult&aacute;neo desde cualquier dispositivo.</li>
+        <li><strong>Acceso de familias</strong>: portal con signos recientes y visitas.</li>
+        <li><strong>Auditor&iacute;a</strong>: cada cambio queda inmutable.</li>
+        <li><strong>Backup</strong>: autom&aacute;tico en la nube.</li>
+      </ul>
+
+      <h2>M&oacute;dulos integrados</h2>
+      <ul>
+        <li>Ficha cl&iacute;nica digital con &iacute;ndice de Barthel y nivel de dependencia.</li>
+        <li>Signos vitales por turno con rangos cl&iacute;nicos para adulto mayor.</li>
+        <li>12 tipos de observaciones diarias.</li>
+        <li>Plan de cuidado con objetivos, pautas y actividades por categor&iacute;a.</li>
+        <li>eMAR (kardex electr&oacute;nico) con stock por lote y doble validaci&oacute;n.</li>
+        <li>Carpeta SEREMI DS 14/2017 con los 14 &aacute;mbitos y +70 requisitos.</li>
+        <li>Habitaciones y camas con historial de ocupaci&oacute;n.</li>
+        <li>Portal familiar restringido por residente vinculado.</li>
+        <li>Entrega de turno con resumen cl&iacute;nico, eMAR y pendientes.</li>
+        <li>Permisos granulares por funcionario.</li>
+        <li>Importaci&oacute;n masiva v&iacute;a Excel con validadores nativos.</li>
+        <li>Trazabilidad e historial inmutable.</li>
+      </ul>
+
+      <h2>Cumplimiento normativo chileno</h2>
+      <ul>
+        <li><strong>DS 14/2017 del MINSAL</strong>: 14 &aacute;mbitos y +70 requisitos pre-cargados.</li>
+        <li><strong>Ley N&deg; 20.584</strong>: derechos y deberes de los pacientes.</li>
+        <li><strong>Ley N&deg; 19.628</strong>: protecci&oacute;n de datos personales.</li>
+        <li><strong>Aislamiento multi-tenant</strong>: cada ELEAM ve solo sus datos (Row Level Security).</li>
+      </ul>
+
+      <p><a href="/acreditacion-seremi">Gu&iacute;a SEREMI completa</a> &middot; <a href="/preguntas-frecuentes">FAQ</a> &middot; <a href="/pago">Planes y precios</a> &middot; <a href="/contacto">Contacto</a></p>
+    </main>`;
+}
+
+function buildFaqHtml() {
+  const sections = [
+    { titulo: "Producto", items: [
+      ["&iquest;Qu&eacute; es FichaEleam?", "Software web especializado para ELEAM en Chile que centraliza ficha cl&iacute;nica, signos vitales, observaciones, plan de cuidado, eMAR, habitaciones, portal familiar y carpeta SEREMI DS 14/2017."],
+      ["&iquest;En qu&eacute; se diferencia de un software gen&eacute;rico?", "Trae los 14 &aacute;mbitos del DS 14/2017 pre-cargados, rangos cl&iacute;nicos para adulto mayor, turnos ma&ntilde;ana/tarde/noche y manejo de controlados con doble validaci&oacute;n."],
+      ["&iquest;Es web o de escritorio?", "Es web. Funciona en cualquier dispositivo con navegador moderno y conexi&oacute;n a internet."],
+    ]},
+    { titulo: "Precios y planes", items: [
+      ["&iquest;Cu&aacute;nto cuesta?", "Tres planes mensuales en CLP + IVA: $50.000 (hasta 14 residentes), $80.000 (hasta 24), $120.000 (hasta 34). Plan institucional para 35+."],
+      ["&iquest;C&oacute;mo se paga?", "MercadoPago con tarjeta chilena. Cobro mensual autom&aacute;tico, cancelable en cualquier momento."],
+      ["&iquest;Hay costo de implementaci&oacute;n?", "No. Activaci&oacute;n inmediata, sin fee de setup."],
+    ]},
+    { titulo: "Demo y prueba gratuita", items: [
+      ["&iquest;C&oacute;mo solicito un demo?", "Completa el formulario en la p&aacute;gina principal. Aprobamos en menos de 24 horas y enviamos el acceso por correo."],
+      ["&iquest;Cu&aacute;nto dura la prueba?", "30 d&iacute;as con acceso completo, sin tarjeta de cr&eacute;dito."],
+    ]},
+    { titulo: "Implementaci&oacute;n", items: [
+      ["&iquest;Cu&aacute;nto demora implementar?", "Menos de 24 horas. Puedes operar turnos completos al final del primer d&iacute;a."],
+      ["&iquest;Puedo importar mis datos desde Excel?", "S&iacute;. Plantillas oficiales para residentes y funcionarios con validadores nativos."],
+    ]},
+    { titulo: "Seguridad", items: [
+      ["&iquest;Otro ELEAM puede ver mis datos?", "Imposible. Row Level Security a nivel de base de datos: cada consulta filtra por el ELEAM del usuario."],
+      ["&iquest;Cumple con la ley chilena?", "S&iacute;. Operamos bajo la Ley N&deg; 19.628 y la Ley N&deg; 20.584."],
+    ]},
+    { titulo: "Soporte", items: [
+      ["&iquest;C&oacute;mo recibo soporte?", "Por correo a contacto@fichaeleam.cl y por WhatsApp al +56 9 5118 7764."],
+      ["&iquest;C&oacute;mo cancelo?", "Desde el panel del administrador. Sin penalidades ni cl&aacute;usulas de permanencia."],
+    ]},
+  ];
+  const html = sections.map((s) => (
+    `<h2>${s.titulo}</h2>${s.items.map(([q, a]) => `<h3>${q}</h3><p>${a}</p>`).join("")}`
+  )).join("");
+  return `<main class="seo-prerender">
+      <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Preguntas frecuentes</nav>
+      <h1>Preguntas frecuentes sobre FichaEleam</h1>
+      <p class="article-summary">Respuestas a las consultas m&aacute;s frecuentes de directores, administradores y equipos cl&iacute;nicos de ELEAM en Chile sobre FichaEleam: producto, precios, demo, implementaci&oacute;n, seguridad, equipo y soporte.</p>
+      ${html}
+      <p><a href="/contacto">&iquest;Otra pregunta? Escr&iacute;benos &rarr;</a></p>
+    </main>`;
+}
+
+function buildContactoHtml() {
+  return `<main class="seo-prerender">
+      <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Contacto</nav>
+      <h1>Contacto FichaEleam</h1>
+      <p class="article-summary">Cont&aacute;ctanos por correo, WhatsApp o solicita una demo gratuita para tu ELEAM en Chile. Respondemos en horario h&aacute;bil con prioridad a casos urgentes.</p>
+
+      <h2>Canales de contacto</h2>
+      <ul>
+        <li><strong>Demo gratuito</strong>: <a href="/">formulario en fichaeleam.cl</a> &mdash; cuenta real con 30 d&iacute;as de prueba, aprobaci&oacute;n en menos de 24 horas.</li>
+        <li><strong>WhatsApp</strong>: <a href="https://wa.me/56951187764">+56 9 5118 7764</a> &mdash; respuesta en minutos en horario h&aacute;bil.</li>
+        <li><strong>Correo</strong>: <a href="mailto:contacto@fichaeleam.cl">contacto@fichaeleam.cl</a> &mdash; respuesta en menos de 24 horas.</li>
+      </ul>
+
+      <h2>Informaci&oacute;n comercial</h2>
+      <ul>
+        <li>Producto: Software de gesti&oacute;n cl&iacute;nica y acreditaci&oacute;n SEREMI para ELEAM en Chile.</li>
+        <li>Marco normativo: DS 14/2017 (MINSAL), Ley N&deg; 20.584, Ley N&deg; 19.628.</li>
+        <li>Ubicaci&oacute;n: Santiago, Chile &middot; 100% web.</li>
+        <li>Idioma de soporte: Espa&ntilde;ol.</li>
+        <li>Horario: Lunes a viernes, 9:00 a 19:00 (hora de Chile).</li>
+        <li>Forma de pago: MercadoPago (tarjeta de cr&eacute;dito o d&eacute;bito).</li>
+        <li>Moneda: Pesos chilenos (CLP), precios netos sin IVA.</li>
+      </ul>
+
+      <p><a href="/preguntas-frecuentes">FAQ completa</a> &middot; <a href="/software-eleam">Software ELEAM</a> &middot; <a href="/acreditacion-seremi">Acreditaci&oacute;n SEREMI</a> &middot; <a href="/pago">Planes y precios</a></p>
+    </main>`;
+}
+
 function buildBlogHtml(posts) {
   const items = posts.map((post) => (
     `<article class="card"><h2><a href="/blog/${escapeHtml(post.slug)}">${escapeHtml(post.titulo)}</a></h2><p>${escapeHtml(post.resumen)}</p><p>${post.tiempo_lectura_min} min · ${escapeHtml(post.autor_nombre)}</p></article>`
@@ -350,6 +529,101 @@ function softwareJsonLd() {
   };
 }
 
+function breadcrumbJsonLd(items) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: it.name,
+      item: `${ORIGIN}${it.url}`,
+    })),
+  };
+}
+
+function faqPageJsonLd(qa) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: qa.map(({ q, a }) => ({
+      "@type": "Question",
+      name: q,
+      acceptedAnswer: { "@type": "Answer", text: a },
+    })),
+  };
+}
+
+function howToJsonLd({ name, description, totalTime, steps }) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    name,
+    description,
+    ...(totalTime && { totalTime }),
+    step: steps.map((s, i) => ({
+      "@type": "HowToStep",
+      position: i + 1,
+      name: s.name,
+      text: s.text,
+    })),
+  };
+}
+
+function contactPageJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    name: "Contacto FichaEleam",
+    url: `${ORIGIN}/contacto`,
+    description: "Contacto FichaEleam por correo, WhatsApp y solicitud de demo gratuito.",
+    mainEntity: {
+      "@type": "Organization",
+      name: "FichaEleam",
+      email: "contacto@fichaeleam.cl",
+      telephone: "+56-9-5118-7764",
+      url: ORIGIN,
+      areaServed: { "@type": "Country", name: "Chile" },
+      availableLanguage: ["es-CL"],
+    },
+  };
+}
+
+const SEREMI_FAQ = [
+  { q: "¿Qué es la acreditación SEREMI de un ELEAM?", a: "Proceso por el cual la SEREMI autoriza y supervisa el funcionamiento de un ELEAM en Chile bajo el DS 14/2017 del MINSAL." },
+  { q: "¿Cuáles son los 14 ámbitos del DS 14/2017?", a: "Antecedentes legales, autorización sanitaria, infraestructura, seguridad, dirección técnica, personal, protocolos, residentes, contratos, medicamentos, alimentación, aseo, reclamos, fiscalizaciones." },
+  { q: "¿Qué documentos se vencen y hay que renovar?", a: "Resolución sanitaria (anual), vigencia jurídica (180 días), informe de potabilidad (anual), extintores (anual), fumigación (180 días), simulacros (180 días), Barthel (180 días)." },
+  { q: "¿Cómo digitalizar la carpeta SEREMI?", a: "Con FichaEleam: 14 ámbitos y 70+ requisitos pre-cargados, evidencias versionadas con alertas de vencimiento y export imprimible." },
+];
+
+const SEREMI_STEPS = [
+  { name: "Reúne antecedentes legales", text: "Escritura de constitución, vigencia, RUT y poder del representante legal (Ámbito A01)." },
+  { name: "Obtén la autorización sanitaria", text: "Resolución SEREMI, CIP municipal, permiso de edificación y recepción final (A02)." },
+  { name: "Acredita infraestructura y seguridad", text: "Certificados SEC eléctricos y de gas, agua, plan de emergencia, extintores, simulacros (A03–A04)." },
+  { name: "Designa dirección técnica y dotación", text: "Credencial del director técnico, nómina, contratos, certificados de salud (A05–A06)." },
+  { name: "Documenta protocolos obligatorios", text: "PCI, lavado de manos, medicamentos, residuos, emergencias clínicas (A07)." },
+  { name: "Arma carpetas individuales por residente", text: "Ficha clínica, Barthel, MMSE, PAI, contrato de residencia, carta de derechos (A08–A09)." },
+  { name: "Controla medicamentos y alimentación", text: "Inventario, kardex, controlados, QF asesor, minutas HACCP, manipuladores (A10–A11)." },
+  { name: "Operación diaria y fiscalizaciones", text: "Aseo, lavandería, residuos, plagas, reclamos, comunicación con familias, actas SEREMI (A12–A14)." },
+];
+
+const SOFTWARE_FAQ = [
+  { q: "¿Por qué un software especializado y no Excel?", a: "Excel no tiene trazabilidad. FichaEleam fue construido exclusivamente para ELEAM en Chile: 14 ámbitos pre-cargados, rangos clínicos para adulto mayor, turnos mañana/tarde/noche, controlados con doble validación." },
+  { q: "¿Cuánto cuesta?", a: "Tres planes mensuales en CLP + IVA: $50.000 (14 residentes), $80.000 (24), $120.000 (34). Institucional 35+ a cotización." },
+  { q: "¿Es seguro guardar datos de residentes en la nube?", a: "Sí. Aislamiento por ELEAM con Row Level Security, encriptación en tránsito y reposo, cumple con la Ley N° 19.628 y la Ley N° 20.584." },
+  { q: "¿Cuánto demora la implementación?", a: "Menos de 24 horas. Puedes operar turnos completos al final del primer día." },
+];
+
+const ALL_FAQ = [
+  ...SOFTWARE_FAQ,
+  { q: "¿Cómo solicito un demo?", a: "Completa el formulario en la página principal. Aprobamos en menos de 24 horas y enviamos el acceso por correo." },
+  { q: "¿Cuánto dura la prueba gratuita?", a: "30 días con acceso completo, sin tarjeta de crédito." },
+  { q: "¿Puedo importar datos desde Excel?", a: "Sí. Plantillas oficiales para residentes y funcionarios con validadores nativos." },
+  { q: "¿Otro ELEAM puede ver mis datos?", a: "Imposible. Row Level Security: cada consulta filtra por el ELEAM del usuario." },
+  { q: "¿Cómo recibo soporte?", a: "Por correo a contacto@fichaeleam.cl y por WhatsApp al +56 9 5118 7764." },
+  { q: "¿Cómo cancelo la suscripción?", a: "Desde el panel del administrador. Sin penalidades ni cláusulas de permanencia." },
+];
+
 function blogListJsonLd(posts) {
   return {
     "@context": "https://schema.org",
@@ -392,6 +666,10 @@ User-agent: *
 Allow: /
 Allow: /blog
 Allow: /pago
+Allow: /acreditacion-seremi
+Allow: /software-eleam
+Allow: /preguntas-frecuentes
+Allow: /contacto
 Allow: /og-image.png
 Allow: /favicon.svg
 
@@ -489,11 +767,15 @@ function buildSitemap(posts) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
     { loc: "/", priority: "1.0", changefreq: "weekly", lastmod: today },
+    { loc: "/acreditacion-seremi", priority: "0.95", changefreq: "monthly", lastmod: today },
+    { loc: "/software-eleam", priority: "0.95", changefreq: "monthly", lastmod: today },
     { loc: "/blog", priority: "0.9", changefreq: "daily", lastmod: today },
-    { loc: "/pago", priority: "0.8", changefreq: "monthly", lastmod: today },
+    { loc: "/preguntas-frecuentes", priority: "0.85", changefreq: "monthly", lastmod: today },
+    { loc: "/pago", priority: "0.85", changefreq: "monthly", lastmod: today },
+    { loc: "/contacto", priority: "0.7", changefreq: "monthly", lastmod: today },
     ...posts.map((post) => ({
       loc: `/blog/${post.slug}`,
-      priority: post.destacado ? "0.85" : "0.75",
+      priority: post.destacado ? "0.8" : "0.7",
       changefreq: "monthly",
       lastmod: post.publicado_en.slice(0, 10),
     })),
@@ -554,8 +836,12 @@ Los residentes activos y hospitalizados consumen cupo. Residentes egresados o fa
 ## Rutas publicas
 
 - [Inicio](${ORIGIN}/): producto, demo gratuito, funcionalidades y precios.
+- [Software para ELEAM](${ORIGIN}/software-eleam): comparativa con Excel/papel, modulos integrados, cumplimiento normativo y FAQ.
+- [Acreditacion SEREMI](${ORIGIN}/acreditacion-seremi): guia DS 14/2017 con los 14 ambitos, vencimientos tipicos y pasos para preparar la carpeta.
+- [Preguntas frecuentes](${ORIGIN}/preguntas-frecuentes): respuestas sobre producto, precios, demo, implementacion, seguridad, equipo y soporte.
 - [Planes y precios](${ORIGIN}/pago): checkout MercadoPago y detalle de cupos.
 - [Blog FichaEleam](${ORIGIN}/blog): recursos para ELEAM en Chile.
+- [Contacto](${ORIGIN}/contacto): canales (correo, WhatsApp, demo) e informacion comercial.
 
 ## Articulos publicados
 
@@ -642,6 +928,57 @@ function main() {
     description: "Planes mensuales para ELEAM en Chile con cupos claros de residentes y funcionarios, pago por MercadoPago y opción institucional.",
     jsonLd: softwareJsonLd(),
     rootHtml: buildPaymentHtml(),
+  }));
+
+  writeRoute("/acreditacion-seremi", renderPage(template, {
+    path: "/acreditacion-seremi",
+    title: "Acreditación SEREMI ELEAM · Guía DS 14/2017 actualizada",
+    description: "Guía completa de acreditación SEREMI para ELEAM en Chile: los 14 ámbitos del DS 14/2017, requisitos, vencimientos y cómo preparar tu carpeta SEREMI sin sorpresas.",
+    jsonLd: [
+      breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Acreditación SEREMI", url: "/acreditacion-seremi" }]),
+      faqPageJsonLd(SEREMI_FAQ),
+      howToJsonLd({
+        name: "Cómo preparar la carpeta SEREMI de un ELEAM en Chile",
+        description: "Pasos para reunir la documentación de los 14 ámbitos del DS 14/2017 y mantener la acreditación SEREMI vigente.",
+        totalTime: "P30D",
+        steps: SEREMI_STEPS,
+      }),
+    ],
+    rootHtml: buildAcreditacionHtml(),
+  }));
+
+  writeRoute("/software-eleam", renderPage(template, {
+    path: "/software-eleam",
+    title: "Software para ELEAM en Chile · Gestión clínica y SEREMI",
+    description: "Software web especializado para ELEAM en Chile: ficha clínica digital, signos vitales con alertas, eMAR, observaciones por turno, plan de cuidado y carpeta SEREMI DS 14/2017.",
+    jsonLd: [
+      breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Software para ELEAM", url: "/software-eleam" }]),
+      faqPageJsonLd(SOFTWARE_FAQ),
+      softwareJsonLd(),
+    ],
+    rootHtml: buildSoftwareHtml(),
+  }));
+
+  writeRoute("/preguntas-frecuentes", renderPage(template, {
+    path: "/preguntas-frecuentes",
+    title: "Preguntas frecuentes · FichaEleam",
+    description: "Preguntas frecuentes sobre FichaEleam: precios, planes, demo gratuito, implementación, seguridad de datos, equipo y permisos, soporte. Software para ELEAM en Chile.",
+    jsonLd: [
+      breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Preguntas frecuentes", url: "/preguntas-frecuentes" }]),
+      faqPageJsonLd(ALL_FAQ),
+    ],
+    rootHtml: buildFaqHtml(),
+  }));
+
+  writeRoute("/contacto", renderPage(template, {
+    path: "/contacto",
+    title: "Contacto · FichaEleam",
+    description: "Contacto FichaEleam: correo contacto@fichaeleam.cl, WhatsApp +56 9 5118 7764 y solicitud de demo gratuito. Software para ELEAM en Chile.",
+    jsonLd: [
+      breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Contacto", url: "/contacto" }]),
+      contactPageJsonLd(),
+    ],
+    rootHtml: buildContactoHtml(),
   }));
 
   writeRoute("/blog", renderPage(template, {

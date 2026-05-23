@@ -262,10 +262,28 @@ export default function LandingPage() {
           </span>
           <div className="flex items-center gap-1">
             <button type="button"
+              onClick={() => { navigate("/software-eleam"); trackEvent("nav_click", "software"); }}
+              className="hidden md:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+            >
+              Producto
+            </button>
+            <button type="button"
+              onClick={() => { navigate("/acreditacion-seremi"); trackEvent("nav_click", "seremi"); }}
+              className="hidden md:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+            >
+              SEREMI
+            </button>
+            <button type="button"
               onClick={() => { navigate("/blog"); trackEvent("nav_click", "blog"); }}
-              className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+              className="hidden md:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
             >
               Blog
+            </button>
+            <button type="button"
+              onClick={() => { navigate("/preguntas-frecuentes"); trackEvent("nav_click", "faq"); }}
+              className="hidden lg:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+            >
+              FAQ
             </button>
             <button type="button"
               onClick={() => { document.getElementById("precios")?.scrollIntoView({ behavior: "smooth" }); trackEvent("nav_click", "precios"); }}
@@ -693,13 +711,16 @@ export default function LandingPage() {
             </p>
           </div>
           <div>
-            <h4 className="font-semibold text-slate-300 mb-4 text-xs uppercase tracking-widest">Accesos</h4>
+            <h4 className="font-semibold text-slate-300 mb-4 text-xs uppercase tracking-widest">Producto</h4>
             <ul className="space-y-2.5">
               {[
+                { label: "Software para ELEAM", action: () => navigate("/software-eleam") },
+                { label: "Acreditación SEREMI", action: () => navigate("/acreditacion-seremi") },
+                { label: "Preguntas frecuentes", action: () => navigate("/preguntas-frecuentes") },
+                { label: "Planes y precios", action: () => navigate("/pago") },
+                { label: "Blog", action: () => navigate("/blog") },
                 { label: "Iniciar sesión", action: () => navigate("/login") },
-                { label: "Solicitar demo",  action: () => openModal("footer_demo") },
-                { label: "Precios",         action: () => document.getElementById("precios")?.scrollIntoView({ behavior: "smooth" }) },
-                { label: "Blog",            action: () => navigate("/blog") },
+                { label: "Solicitar demo", action: () => openModal("footer_demo") },
               ].map(({ label, action }) => (
                 <li key={label}>
                   <button type="button" onClick={action} className="hover:text-white transition-colors">

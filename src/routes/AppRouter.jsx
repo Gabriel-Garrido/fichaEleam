@@ -10,6 +10,10 @@ const Login = lazy(() => import("../features/auth/Login"));
 const RecuperarAcceso = lazy(() => import("../features/auth/RecuperarAcceso"));
 const ResetPassword = lazy(() => import("../features/auth/ResetPassword"));
 const LandingPage = lazy(() => import("../features/landing/LandingPage"));
+const AcreditacionSeremiPage = lazy(() => import("../features/public/AcreditacionSeremiPage"));
+const SoftwareEleamPage = lazy(() => import("../features/public/SoftwareEleamPage"));
+const FaqPage = lazy(() => import("../features/public/FaqPage"));
+const ContactoPage = lazy(() => import("../features/public/ContactoPage"));
 const PaymentPage = lazy(() => import("../features/payment/PaymentPage"));
 const PaymentReturn = lazy(() => import("../features/payment/PaymentReturn"));
 const TeamManagement = lazy(() => import("../features/team/TeamManagement"));
@@ -77,6 +81,10 @@ function AppRouter() {
         <Route path="/pago/return" element={<PaymentReturn />} />
         <Route path="/blog"        element={<PublicBlogList />} />
         <Route path="/blog/:slug"  element={<PublicBlogPost />} />
+        <Route path="/acreditacion-seremi" element={<AcreditacionSeremiPage />} />
+        <Route path="/software-eleam"     element={<SoftwareEleamPage />} />
+        <Route path="/preguntas-frecuentes" element={<FaqPage />} />
+        <Route path="/contacto"           element={<ContactoPage />} />
 
         {/* ── Cambio de contraseña obligatorio (primer acceso) ───── */}
         <Route path="/cambiar-clave" element={

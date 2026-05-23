@@ -225,6 +225,45 @@ export function faqJsonLd(qa) {
   };
 }
 
+export function howToJsonLd({ name, description, totalTime, steps = [] }) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": name,
+    "description": description,
+    ...(totalTime && { "totalTime": totalTime }),
+    "step": steps.map((s, i) => ({
+      "@type": "HowToStep",
+      "position": i + 1,
+      "name": s.name,
+      "text": s.text,
+      ...(s.url && { "url": s.url.startsWith("http") ? s.url : `${ORIGIN}${s.url}` }),
+    })),
+  };
+}
+
+export function organizationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": `${ORIGIN}/#organization`,
+    "name": "FichaEleam",
+    "url": ORIGIN,
+    "logo": `${ORIGIN}/og-image.png`,
+    "description": "Software de gestión clínica y acreditación SEREMI para ELEAM en Chile.",
+    "areaServed": { "@type": "Country", "name": "Chile" },
+    "contactPoint": [{
+      "@type": "ContactPoint",
+      "telephone": "+56-9-5118-7764",
+      "contactType": "sales",
+      "email": "contacto@fichaeleam.cl",
+      "availableLanguage": ["Spanish"],
+      "areaServed": "CL",
+    }],
+    "sameAs": [],
+  };
+}
+
 // Blog schema para la página de listado, con blogPost items para motores y LLMs.
 export function blogListJsonLd(posts = []) {
   const base = {
