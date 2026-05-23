@@ -1,31 +1,46 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import DemoRequestModal from "../landing/DemoRequestModal";
 import WhatsAppLeadButton from "../landing/WhatsAppLeadButton";
 import WhatsAppLeadModal from "../landing/WhatsAppLeadModal";
 import { trackEvent } from "../landing/landingAnalytics";
 
-const RESOURCE_LINKS = [
-  { to: "/acreditacion-seremi", label: "Acreditación SEREMI" },
-  { to: "/software-eleam", label: "Software para ELEAM" },
-  { to: "/preguntas-frecuentes", label: "Preguntas frecuentes" },
-  { to: "/blog", label: "Blog" },
-  { to: "/contacto", label: "Contacto" },
+// Visible nav items, in priority order. Tail items hide at narrower breakpoints
+// so the bar never wraps. Contacto stays in footer + drawer (always reachable).
+const PRIMARY_NAV = [
+  { to: "/software-eleam",      label: "Producto",        show: "md" },
+  { to: "/acreditacion-seremi", label: "SEREMI",          show: "md" },
+  { to: "/pago",                label: "Precios",         show: "sm" },
+  { to: "/blog",                label: "Blog",            show: "md" },
+  { to: "/preguntas-frecuentes", label: "FAQ",            show: "lg" },
 ];
 
-function NavLink({ to, children, current, onClick }) {
-  const active = current === to;
+// Full list (incl. Contacto) for the mobile drawer + footer
+const ALL_NAV = [
+  ...PRIMARY_NAV,
+  { to: "/contacto", label: "Contacto", show: "always" },
+];
+
+const SHOW_CLASS = {
+  always: "inline-flex",
+  sm: "hidden sm:inline-flex",
+  md: "hidden md:inline-flex",
+  lg: "hidden lg:inline-flex",
+};
+
+function NavLink({ to, label, show, active, onClick }) {
   return (
     <Link
       to={to}
       onClick={onClick}
-      className={`text-sm px-3 py-1.5 rounded-xl transition-all ${
+      aria-current={active ? "page" : undefined}
+      className={`${SHOW_CLASS[show] ?? "inline-flex"} text-sm px-3 py-1.5 rounded-xl transition-colors ${
         active
           ? "text-white bg-white/10"
           : "text-slate-400 hover:text-white hover:bg-white/5"
       }`}
     >
-      {children}
+      {label}
     </Link>
   );
 }
@@ -39,6 +54,19 @@ export default function PublicShell({ children, current }) {
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
   const [whatsAppSource, setWhatsAppSource] = useState("floating");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  // Subtle shadow appears once the user scrolls — adds depth without being noisy.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Close mobile drawer on route change to avoid stale state when the user
+  // navigates from the drawer itself.
+  useEffect(() => { setMobileOpen(false); }, [path]);
 
   const openDemo = (cta = "page_demo") => {
     setDemoCta(cta);
@@ -52,85 +80,103 @@ export default function PublicShell({ children, current }) {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Top nav — dark slate, matches landing */}
-      <nav className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur border-b border-white/5">
-        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+      {/* Skip to content for keyboard / screen reader users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:bg-white focus:text-slate-900 focus:rounded-xl focus:px-4 focus:py-2 focus:shadow-lg"
+      >
+        Saltar al contenido
+      </a>
+
+      {/* Top nav — dark slate, identical across every public route */}
+      <nav
+        className={`sticky top-0 z-50 bg-slate-950/95 backdrop-blur border-b border-white/5 transition-shadow ${
+          scrolled ? "shadow-[0_6px_18px_-12px_rgba(0,0,0,0.45)]" : ""
+        }`}
+        aria-label="Navegación principal"
+      >
+        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between gap-3">
           <Link
             to="/"
-            className="text-lg font-bold text-white tracking-tight"
+            className="text-lg font-bold text-white tracking-tight hover:opacity-90 transition-opacity"
             onClick={() => trackEvent("nav_click", "logo")}
+            aria-label="FichaEleam · Inicio"
           >
             Ficha<span className="text-teal-400">Eleam</span>
           </Link>
 
-          {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-1">
-            {RESOURCE_LINKS.map((l) => (
+          <div className="flex items-center gap-1">
+            {PRIMARY_NAV.map((l) => (
               <NavLink
                 key={l.to}
                 to={l.to}
-                current={path}
+                label={l.label}
+                show={l.show}
+                active={path === l.to || (l.to === "/blog" && path.startsWith("/blog"))}
                 onClick={() => trackEvent("nav_click", l.to)}
-              >
-                {l.label}
-              </NavLink>
+              />
             ))}
             <button
               type="button"
               onClick={() => { navigate("/login"); trackEvent("nav_click", "login"); }}
-              className="text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-xl hover:border-white/40 hover:text-white transition-all ml-2"
+              className="hidden sm:inline-flex text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-xl hover:border-white/40 hover:text-white transition-all ml-2"
             >
               Iniciar sesión
             </button>
             <button
               type="button"
               onClick={() => openDemo("nav_demo")}
-              className="text-sm bg-teal-500 text-white px-4 py-2 rounded-xl hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
+              className="hidden sm:inline-flex text-sm bg-teal-500 text-white px-4 py-2 rounded-xl hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
             >
               Solicitar demo
             </button>
-          </div>
 
-          {/* Mobile menu trigger */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-expanded={mobileOpen}
-            aria-label="Abrir menú"
-            className="md:hidden text-slate-300 p-2 rounded-xl hover:bg-white/5"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d={mobileOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
-            </svg>
-          </button>
+            {/* Mobile menu trigger */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-expanded={mobileOpen}
+              aria-controls="public-mobile-nav"
+              aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
+              className="sm:hidden text-slate-200 p-2 rounded-xl hover:bg-white/5"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d={mobileOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {/* Mobile nav drawer */}
+        {/* Mobile drawer */}
         {mobileOpen && (
-          <div className="md:hidden border-t border-white/5 bg-slate-950 px-5 py-3 space-y-1">
-            {RESOURCE_LINKS.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => { setMobileOpen(false); trackEvent("nav_click", l.to); }}
-                className={`block px-3 py-2 rounded-xl text-sm ${
-                  path === l.to ? "text-white bg-white/10" : "text-slate-300 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                {l.label}
-              </Link>
-            ))}
+          <div id="public-mobile-nav" className="sm:hidden border-t border-white/5 bg-slate-950 px-5 py-3 space-y-1">
+            {ALL_NAV.map((l) => {
+              const active = path === l.to || (l.to === "/blog" && path.startsWith("/blog"));
+              return (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  onClick={() => trackEvent("nav_click", l.to)}
+                  aria-current={active ? "page" : undefined}
+                  className={`block px-3 py-2 rounded-xl text-sm ${
+                    active ? "text-white bg-white/10" : "text-slate-300 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
             <div className="pt-2 mt-2 border-t border-white/5 flex gap-2">
               <button
                 type="button"
-                onClick={() => { setMobileOpen(false); navigate("/login"); }}
+                onClick={() => navigate("/login")}
                 className="flex-1 text-sm text-slate-300 border border-white/20 px-4 py-2 rounded-xl"
               >
                 Iniciar sesión
               </button>
               <button
                 type="button"
-                onClick={() => { setMobileOpen(false); openDemo("nav_demo_mobile"); }}
+                onClick={() => openDemo("nav_demo_mobile")}
                 className="flex-1 text-sm bg-teal-500 text-white px-4 py-2 rounded-xl font-semibold"
               >
                 Demo
@@ -141,15 +187,18 @@ export default function PublicShell({ children, current }) {
       </nav>
 
       {/* Page content */}
-      <main>{typeof children === "function" ? children({ openDemo }) : children}</main>
+      <main id="main-content">{typeof children === "function" ? children({ openDemo, openWhatsApp }) : children}</main>
 
-      {/* Footer — mirrors landing footer */}
+      {/* Footer — identical across all public pages */}
       <footer className="bg-slate-950 border-t border-white/5 text-slate-500 py-14 px-5">
         <div className="max-w-6xl mx-auto grid sm:grid-cols-4 gap-10 text-sm">
           <div>
-            <span className="text-lg font-bold text-white tracking-tight block mb-3">
+            <Link
+              to="/"
+              className="text-lg font-bold text-white tracking-tight block mb-3 hover:opacity-90"
+            >
               Ficha<span className="text-teal-400">Eleam</span>
-            </span>
+            </Link>
             <p className="leading-relaxed text-xs text-slate-600">
               Software de gestión clínica y documental para Establecimientos de Larga Estadía para Adultos Mayores en Chile. DS&nbsp;14/2017.
             </p>
@@ -169,11 +218,20 @@ export default function PublicShell({ children, current }) {
               <li><Link to="/acreditacion-seremi" className="hover:text-white transition-colors">Acreditación SEREMI</Link></li>
               <li><Link to="/blog" className="hover:text-white transition-colors">Blog</Link></li>
               <li><Link to="/contacto" className="hover:text-white transition-colors">Contacto</Link></li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => openDemo("footer_demo")}
+                  className="hover:text-white transition-colors text-left"
+                >
+                  Solicitar demo
+                </button>
+              </li>
             </ul>
           </div>
           <div>
             <h4 className="font-semibold text-slate-300 mb-4 text-xs uppercase tracking-widest">Contacto</h4>
-            <a href="mailto:contacto@fichaeleam.cl" className="text-sm hover:text-white transition-colors block">
+            <a href="mailto:contacto@fichaeleam.cl" className="text-sm hover:text-white transition-colors block break-all">
               contacto@fichaeleam.cl
             </a>
             <a

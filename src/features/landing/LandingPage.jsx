@@ -1,11 +1,8 @@
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useSEO, faqJsonLd } from "../../utils/seo";
-import DemoRequestModal from "./DemoRequestModal";
-import WhatsAppLeadButton from "./WhatsAppLeadButton";
-import WhatsAppLeadModal from "./WhatsAppLeadModal";
 import { trackEvent, usePageView, useScrollDepth, useSectionView } from "./landingAnalytics";
 import { PUBLIC_PLAN_CATALOG, formatPlanPrice } from "../payment/planCatalog";
+import PublicShell from "../public/PublicShell";
 
 function Icon({ d, className = "w-5 h-5" }) {
   return (
@@ -171,12 +168,6 @@ function FaqItem({ q, a }) {
 }
 
 export default function LandingPage() {
-  const navigate = useNavigate();
-  const [modal, setModal] = useState(false);
-  const [modalCta, setModalCta] = useState(null);
-  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
-  const [whatsAppSource, setWhatsAppSource] = useState("floating");
-
   const featuresRef  = useRef(null);
   const challengeRef = useRef(null);
   const howRef       = useRef(null);
@@ -190,12 +181,6 @@ export default function LandingPage() {
   useSectionView(howRef,       "how_it_works");
   useSectionView(pricingRef,   "pricing");
   useSectionView(faqRef,       "faq");
-
-  const openModal = (cta) => { setModalCta(cta); setModal(true); trackEvent("cta_click", cta); };
-  const openWhatsApp = (source = "floating") => {
-    setWhatsAppSource(source);
-    setWhatsAppOpen(true);
-  };
 
   useSEO({
     title: "FichaEleam · Software para ELEAM en Chile | DS 14/2017",
@@ -252,62 +237,10 @@ export default function LandingPage() {
   });
 
   return (
-    <div className="bg-white text-slate-800 overflow-x-hidden">
-
-      {/* ══ NAV ══════════════════════════════════════════════════════ */}
-      <nav className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur border-b border-white/5">
-        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-          <span className="text-lg font-bold text-white tracking-tight">
-            Ficha<span className="text-teal-400">Eleam</span>
-          </span>
-          <div className="flex items-center gap-1">
-            <button type="button"
-              onClick={() => { navigate("/software-eleam"); trackEvent("nav_click", "software"); }}
-              className="hidden md:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
-            >
-              Producto
-            </button>
-            <button type="button"
-              onClick={() => { navigate("/acreditacion-seremi"); trackEvent("nav_click", "seremi"); }}
-              className="hidden md:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
-            >
-              SEREMI
-            </button>
-            <button type="button"
-              onClick={() => { navigate("/blog"); trackEvent("nav_click", "blog"); }}
-              className="hidden md:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
-            >
-              Blog
-            </button>
-            <button type="button"
-              onClick={() => { navigate("/preguntas-frecuentes"); trackEvent("nav_click", "faq"); }}
-              className="hidden lg:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
-            >
-              FAQ
-            </button>
-            <button type="button"
-              onClick={() => { document.getElementById("precios")?.scrollIntoView({ behavior: "smooth" }); trackEvent("nav_click", "precios"); }}
-              className="hidden sm:inline-flex text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
-            >
-              Precios
-            </button>
-            <button type="button"
-              onClick={() => { navigate("/login"); trackEvent("nav_click", "login"); }}
-              className="text-sm text-slate-300 border border-white/20 px-4 py-1.5 rounded-xl hover:border-white/40 hover:text-white transition-all ml-1"
-            >
-              Iniciar sesión
-            </button>
-            <button type="button"
-              onClick={() => openModal("nav_demo")}
-              className="hidden sm:inline-flex text-sm bg-teal-500 text-white px-4 py-2 rounded-xl hover:bg-teal-400 transition-all font-semibold shadow-lg shadow-teal-500/20 ml-1"
-            >
-              Solicitar Demo
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* ══ HERO ═════════════════════════════════════════════════════ */}
+    <PublicShell current="/">
+      {({ openDemo, openWhatsApp }) => (
+        <div className="bg-white text-slate-800 overflow-x-hidden">
+          {/* ══ HERO ═════════════════════════════════════════════════════ */}
       <section className="relative bg-slate-950 text-white overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_50%_-5%,rgba(20,184,166,0.13),transparent)]" />
         <div
@@ -338,7 +271,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center mb-10">
             <button type="button"
-              onClick={() => openModal("hero_primary")}
+              onClick={() => openDemo("hero_primary")}
               className="bg-teal-500 text-white font-bold py-4 px-10 rounded-xl hover:bg-teal-400 hover:-translate-y-0.5 transition-all shadow-lg shadow-teal-500/25 text-base"
             >
               Solicitar Demo Gratuito
@@ -396,7 +329,7 @@ export default function LandingPage() {
 
           <div className="text-center mt-12">
             <button type="button"
-              onClick={() => openModal("features_cta")}
+              onClick={() => openDemo("features_cta")}
               className="bg-slate-900 text-white font-bold py-3.5 px-10 rounded-xl hover:bg-slate-800 transition-all"
             >
               Ver demo personalizado
@@ -436,7 +369,7 @@ export default function LandingPage() {
 
           <div className="mt-10 text-center">
             <button type="button"
-              onClick={() => openModal("challenge_cta")}
+              onClick={() => openDemo("challenge_cta")}
               className="inline-flex items-center gap-2 text-teal-600 text-sm font-semibold hover:text-teal-500 transition-colors"
             >
               Conoce cómo FichaEleam aborda cada uno
@@ -578,7 +511,7 @@ export default function LandingPage() {
                   </p>
                   <div className="mt-auto">
                     <button type="button"
-                      onClick={() => openModal(`pricing_plan${i + 1}`)}
+                      onClick={() => openDemo(`pricing_plan${i + 1}`)}
                       className={`w-full font-semibold py-2.5 rounded-xl text-sm transition-all ${
                         featured
                           ? "bg-white text-teal-700 hover:bg-teal-50"
@@ -621,7 +554,7 @@ export default function LandingPage() {
               <p className="text-sm text-slate-400 mb-1">Sin tarjeta de crédito. Sin compromiso.</p>
               <p className="text-xs text-slate-500 mb-5">Si en 30 días no es para tu ELEAM, cancelas sin preguntas.</p>
               <button type="button"
-                onClick={() => openModal("pricing_trial")}
+                onClick={() => openDemo("pricing_trial")}
                 className="bg-teal-500 text-white font-semibold text-sm px-8 py-2.5 rounded-xl hover:bg-teal-400 transition-all shadow-lg shadow-teal-500/25"
               >
                 Empezar prueba gratuita
@@ -646,7 +579,7 @@ export default function LandingPage() {
           <div className="mt-12 text-center">
             <p className="text-sm text-slate-500 mb-4">¿Tienes otra pregunta?</p>
             <button type="button"
-              onClick={() => openModal("faq_cta")}
+              onClick={() => openDemo("faq_cta")}
               className="bg-teal-600 text-white font-semibold px-8 py-3 rounded-xl text-sm hover:bg-teal-500 transition-all"
             >
               Contactar a un especialista
@@ -680,7 +613,7 @@ export default function LandingPage() {
           </p>
 
           <button type="button"
-            onClick={() => openModal("final_cta")}
+            onClick={() => openDemo("final_cta")}
             className="bg-teal-500 text-white font-bold py-4 px-12 rounded-2xl shadow-2xl shadow-teal-500/25 hover:bg-teal-400 hover:-translate-y-0.5 transition-all text-base"
           >
             Solicitar Demo Gratuito
@@ -699,69 +632,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ══ FOOTER ═══════════════════════════════════════════════════ */}
-      <footer className="bg-slate-950 border-t border-white/5 text-slate-500 py-14 px-5">
-        <div className="max-w-6xl mx-auto grid sm:grid-cols-3 gap-10 text-sm">
-          <div>
-            <span className="text-lg font-bold text-white tracking-tight block mb-3">
-              Ficha<span className="text-teal-400">Eleam</span>
-            </span>
-            <p className="leading-relaxed text-xs text-slate-600">
-              Digitalización de fichas clínicas y documentación SEREMI para Establecimientos de Larga Estadía para Adultos Mayores en Chile. DS&nbsp;14/2017.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-semibold text-slate-300 mb-4 text-xs uppercase tracking-widest">Producto</h4>
-            <ul className="space-y-2.5">
-              {[
-                { label: "Software para ELEAM", action: () => navigate("/software-eleam") },
-                { label: "Acreditación SEREMI", action: () => navigate("/acreditacion-seremi") },
-                { label: "Preguntas frecuentes", action: () => navigate("/preguntas-frecuentes") },
-                { label: "Planes y precios", action: () => navigate("/pago") },
-                { label: "Blog", action: () => navigate("/blog") },
-                { label: "Iniciar sesión", action: () => navigate("/login") },
-                { label: "Solicitar demo", action: () => openModal("footer_demo") },
-              ].map(({ label, action }) => (
-                <li key={label}>
-                  <button type="button" onClick={action} className="hover:text-white transition-colors">
-                    {label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold text-slate-300 mb-4 text-xs uppercase tracking-widest">Contacto</h4>
-            <a href="mailto:contacto@fichaeleam.cl" className="text-sm hover:text-white transition-colors block">
-              contacto@fichaeleam.cl
-            </a>
-            <a
-              href="https://wa.me/56951187764"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm hover:text-white transition-colors inline-flex items-center gap-1.5 mt-1.5"
-              onClick={() => trackEvent("cta_click", "footer_whatsapp")}
-            >
-              <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-              </svg>
-              +56 9 5118 7764
-            </a>
-            <p className="text-sm mt-1.5">Santiago, Chile</p>
-          </div>
         </div>
-        <div className="max-w-6xl mx-auto mt-10 pt-6 border-t border-white/5 text-xs text-center text-slate-700">
-          © {new Date().getFullYear()} FichaEleam. Todos los derechos reservados.
-        </div>
-      </footer>
-
-      <DemoRequestModal isOpen={modal} onClose={() => setModal(false)} defaultCta={modalCta} />
-      <WhatsAppLeadButton onOpen={openWhatsApp} />
-      <WhatsAppLeadModal
-        isOpen={whatsAppOpen}
-        onClose={() => setWhatsAppOpen(false)}
-        source={whatsAppSource}
-      />
-    </div>
+      )}
+    </PublicShell>
   );
 }

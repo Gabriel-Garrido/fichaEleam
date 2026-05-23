@@ -4,8 +4,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import HelpTooltip from "../../components/HelpTooltip";
+import PublicShell from "../public/PublicShell";
 import { friendlyError } from "../../utils/errorMessages";
-import { logout } from "../auth/authService";
 import { useSEO } from "../../utils/seo";
 import {
   getActivePlans,
@@ -118,10 +118,6 @@ export default function PaymentPage() {
     return cleanup;
   }, [loadPlanData]);
 
-  const handleLogout = async () => {
-    try { await logout(); } finally { navigate("/login", { replace: true }); }
-  };
-
   const handleStart = async (codigo) => {
     if (!user) {
       toast("Para contratar FichaEleam, solicita una demo y habilitaremos tu cuenta.", "info");
@@ -195,9 +191,9 @@ export default function PaymentPage() {
     setLoadingAction(true);
     try {
       await cancelSubscription();
+      await refetchProfile();
+      loadPlanData();
       toast("Suscripción cancelada", "success");
-      // Refresca al volver
-      window.setTimeout(() => navigate(0), 800);
     } catch (e) {
       toast(friendlyError(e, "No se pudo cancelar la suscripción. Intenta de nuevo o contacta soporte."), "error");
     } finally {
@@ -229,43 +225,8 @@ export default function PaymentPage() {
         ? "El establecimiento todavía no tiene demo aprobado o suscripción vigente para entrar al panel."
         : "Selecciona el plan que corresponde al tamaño de tu residencia o solicita una demo para revisar tu caso.";
 
-  return (
-    <div className={showPublicNav ? "min-h-screen bg-slate-50" : ""}>
-      {/* Nav mínima */}
-      {showPublicNav && (
-      <nav className="bg-white border-b border-slate-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className="text-xl font-black text-teal-700 tracking-tight"
-          >
-            FichaEleam
-          </button>
-          <div className="flex items-center gap-3">
-            {user && pagoActivo && (
-              <button type="button"
- onClick={() => navigate("/dashboard")} className="text-sm text-teal-700 hover:underline">
-                Ir al panel
-              </button>
-            )}
-            {user ? (
-              <button type="button"
- onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700">
-                Cerrar sesión
-              </button>
-            ) : (
-              <button type="button"
- onClick={() => navigate("/login")} className="text-sm text-teal-700 hover:underline">
-                Ya tengo cuenta
-              </button>
-            )}
-          </div>
-        </div>
-      </nav>
-      )}
-
-      <div className={`${showPublicNav ? "max-w-5xl py-12" : "max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8"} mx-auto px-4`}>
+  const body = (
+    <div className={`${showPublicNav ? "max-w-5xl py-12" : "max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8"} mx-auto px-4`}>
         {sinAcceso && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
             <div className="text-amber-500 text-2xl shrink-0">!</div>
@@ -674,7 +635,9 @@ export default function PaymentPage() {
             Procesado por MercadoPago · puedes cancelar cuando quieras
           </p>
         </div>
-      </div>
     </div>
   );
+
+  if (!showPublicNav) return body;
+  return <PublicShell current="/pago">{body}</PublicShell>;
 }
