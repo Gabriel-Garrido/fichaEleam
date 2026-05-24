@@ -1,6 +1,6 @@
 // POST /functions/v1/create-staff-user
 //
-// Body: { nombre: string, email: string, rol?: 'funcionario' | 'familiar', residente_id?: uuid }
+// Body: { nombre: string, email: string, telefono?: string, parentesco?: string, rol?: 'funcionario' | 'familiar', residente_id?: uuid }
 //
 // Para correos Gmail (@gmail.com): crea una invitación en funcionario_invitaciones
 // y el usuario puede ingresar directamente con Google OAuth. No necesita contraseña.
@@ -14,6 +14,7 @@
 // Reglas:
 //   • Admin ELEAM con suscripción activa/en_gracia puede crear funcionarios y familiares.
 //   • Funcionario del ELEAM puede crear familiares vinculados a residentes activos.
+//   • Si rol='familiar' → nombre, email, teléfono, parentesco y residente_id son obligatorios.
 //   • Si rol='familiar' → residente_id obligatorio y debe pertenecer al ELEAM.
 //   • Si rol='funcionario' → respeta max_funcionarios del plan.
 //   • La contraseña nunca se devuelve; el acceso se entrega por enlace al correo.
@@ -50,6 +51,21 @@ function eleamHasAccess(eleam: {
     return !Number.isNaN(until.valueOf()) && until > new Date();
   }
   return false;
+}
+
+function cleanText(value: unknown, max = 500): string {
+  return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+}
+
+function normalizePhone(value: unknown): string {
+  return cleanText(value, 40)
+    .replace(/[^\d+]/g, "")
+    .replace(/(?!^)\+/g, "");
+}
+
+function isValidChilePhone(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 12 && (/^(56)?9\d{8}$/.test(digits) || /^(56)?[2-9]\d{7,8}$/.test(digits));
 }
 
 async function sendStaffAccessLink({
@@ -114,8 +130,10 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const nombre = String(body.nombre ?? "").trim().replace(/\s+/g, " ");
+    const nombre = cleanText(body.nombre, 120);
     const cleanEmail = String(body.email ?? "").trim().toLowerCase();
+    const telefono = normalizePhone(body.telefono);
+    const parentesco = cleanText(body.parentesco, 80).toLowerCase();
     const rol = String(body.rol ?? "funcionario").trim();
     const residenteId: string | null = body.residente_id
       ? String(body.residente_id).trim()
@@ -143,6 +161,15 @@ Deno.serve(async (req) => {
     }
     if (rol === "familiar" && !residenteId) {
       return jsonResponse(req, { error: "Para crear un familiar debes seleccionar un residente" }, 400);
+    }
+    if (rol === "familiar" && !parentesco) {
+      return jsonResponse(req, { error: "Parentesco del familiar es obligatorio" }, 400);
+    }
+    if (rol === "familiar" && !telefono) {
+      return jsonResponse(req, { error: "Teléfono del familiar es obligatorio" }, 400);
+    }
+    if (telefono && !isValidChilePhone(telefono)) {
+      return jsonResponse(req, { error: "Teléfono inválido. Usa un número chileno, por ejemplo +56 9 1234 5678." }, 400);
     }
     if (residenteId && !UUID_RE.test(residenteId)) {
       return jsonResponse(req, { error: "residente_id tiene formato inválido" }, 400);
@@ -174,8 +201,8 @@ Deno.serve(async (req) => {
       if (!res || res.eleam_id !== eleam.id) {
         return jsonResponse(req, { error: "El residente no pertenece a tu ELEAM" }, 400);
       }
-      if (res.estado !== "activo") {
-        return jsonResponse(req, { error: "Solo puedes vincular familiares a residentes activos" }, 400);
+      if (!["activo", "hospitalizado"].includes(String(res.estado ?? ""))) {
+        return jsonResponse(req, { error: "Solo puedes vincular familiares a residentes activos u hospitalizados" }, 400);
       }
     }
 
@@ -204,6 +231,9 @@ Deno.serve(async (req) => {
         const { error: inviteUpdateErr } = await sb
           .from("funcionario_invitaciones")
           .update({
+            nombre,
+            telefono: telefono || null,
+            parentesco: rol === "familiar" ? parentesco : null,
             rol,
             residente_id: residenteId || null,
             expira_en: expiresAt,
@@ -305,6 +335,7 @@ Deno.serve(async (req) => {
           id: existingAuthUser.id,
           nombre,
           email: cleanEmail,
+          telefono: telefono || null,
           rol,
           eleam_id: profile.eleam_id,
           must_reset_password: false,
@@ -321,6 +352,7 @@ Deno.serve(async (req) => {
           const { error: linkErr } = await sb.from("familiar_residentes").insert({
             profile_id: existingAuthUser.id,
             residente_id: residenteId,
+            parentesco,
             creado_por: user.id,
           });
           if (linkErr) {
@@ -370,11 +402,14 @@ Deno.serve(async (req) => {
 
       const { error: invError } = await sb.from("funcionario_invitaciones").insert({
         eleam_id: profile.eleam_id,
+        nombre,
         email: cleanEmail,
+        telefono: telefono || null,
         token: invToken,
         expira_en: expiresAt,
         rol,
         residente_id: residenteId || null,
+        parentesco: rol === "familiar" ? parentesco : null,
         creado_por: user.id,
       });
 
@@ -414,6 +449,7 @@ Deno.serve(async (req) => {
         id: existingAuthUser.id,
         nombre,
         email: cleanEmail,
+        telefono: telefono || null,
         rol,
         eleam_id: profile.eleam_id,
         must_reset_password: true,
@@ -430,6 +466,7 @@ Deno.serve(async (req) => {
         const { error: familiarLinkErr } = await sb.from("familiar_residentes").insert({
           profile_id: existingAuthUser.id,
           residente_id: residenteId,
+          parentesco,
           creado_por: user.id,
         });
 
@@ -464,6 +501,7 @@ Deno.serve(async (req) => {
         user_metadata: {
           ...currentUserMetadata,
           nombre,
+          telefono: telefono || null,
           must_reset_password: true,
         },
       });
@@ -528,6 +566,7 @@ Deno.serve(async (req) => {
       },
       user_metadata: {
         nombre,
+        telefono: telefono || null,
         must_reset_password: true,
         fichaeleam_provision_id: provisionId,
       },
@@ -554,6 +593,7 @@ Deno.serve(async (req) => {
       id: createdUserId,
       nombre,
       email: cleanEmail,
+      telefono: telefono || null,
       rol,
       eleam_id: profile.eleam_id,
       must_reset_password: true,
@@ -575,6 +615,7 @@ Deno.serve(async (req) => {
       const { error: familiarProvisionErr } = await sb.from("familiar_residentes").upsert({
         profile_id: createdUserId,
         residente_id: residenteId,
+        parentesco,
         creado_por: user.id,
       }, { onConflict: "profile_id,residente_id" });
 

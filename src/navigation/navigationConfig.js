@@ -358,6 +358,57 @@ function itemAllowed(item, auth) {
   return true;
 }
 
+export const HOME_SLOT = "__home__";
+
+export const MOBILE_BOTTOM_NAV = {
+  admin_eleam: ["dashboard", "residents", HOME_SLOT, "beds", "care-tasks"],
+  funcionario: ["dashboard", "care-tasks", HOME_SLOT, "emar", "residents"],
+  familiar:    ["familiar", HOME_SLOT, "familiar-visitas"],
+  superadmin:  ["superadmin", "superadmin-clientes", HOME_SLOT, "superadmin-leads", "superadmin-tareas"],
+};
+
+export function getMobileBottomNav(auth) {
+  if (!auth?.user || !auth?.rol) return [];
+
+  if (!hasAccess(auth) && auth.rol === "admin_eleam") {
+    return [
+      { type: "nav", item: { id: "activate", label: "Activar", icon: "$", path: "/pago?sinAcceso=1" } },
+      { type: "home" },
+    ];
+  }
+
+  if (!hasAccess(auth) && auth.rol === "funcionario") {
+    return [
+      { type: "nav", item: { id: "inactive", label: "Inactivo", icon: "!", disabled: true } },
+      { type: "home" },
+    ];
+  }
+
+  const slots = MOBILE_BOTTOM_NAV[auth.rol];
+  if (!slots) return [];
+
+  const itemById = new Map();
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) itemById.set(item.id, item);
+  }
+
+  const resolved = slots
+    .map((slot) => {
+      if (slot === HOME_SLOT) return { type: "home" };
+      const item = itemById.get(slot);
+      if (!item) return null;
+      if (!itemAllowed(item, auth)) return null;
+      return { type: "nav", item };
+    })
+    .filter(Boolean);
+
+  if (!resolved.some((s) => s.type === "home")) {
+    resolved.push({ type: "home" });
+  }
+
+  return resolved;
+}
+
 export function getNavigationSections(auth) {
   if (!auth?.user) return [];
 

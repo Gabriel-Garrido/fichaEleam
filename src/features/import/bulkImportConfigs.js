@@ -1,5 +1,6 @@
 import { formatRut, validateEmail, validateRut } from "../../utils/validators";
 import { isResidentInPlanQuota } from "../payment/planCatalog";
+import { PARENTESCOS, validateFamilyForm } from "../residents/residentFormSchema";
 import { DEFAULT_PERMS, PLANTILLAS_CARGO } from "../team/teamConstants";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -74,16 +75,6 @@ function normalizeRut(value, errors) {
   return formatRut(rut);
 }
 
-function parseInteger(value, label, errors, min, max) {
-  if (isBlank(value)) return null;
-  const number = Number.parseInt(clean(value), 10);
-  if (!Number.isInteger(number) || number < min || number > max) {
-    errors.push(`${label} debe ser un número entre ${min} y ${max}.`);
-    return null;
-  }
-  return number;
-}
-
 function splitList(value) {
   if (isBlank(value)) return [];
   return clean(value)
@@ -133,12 +124,27 @@ const ENUM_ALIASES = {
     hospitalizado: "hospitalizado",
     hospitalizada: "hospitalizado",
     hospitalizacion: "hospitalizado",
-    egresado: "egresado",
-    egresada: "egresado",
-    alta: "egresado",
-    fallecido: "fallecido",
-    fallecida: "fallecido",
-    defuncion: "fallecido",
+  },
+  Parentesco: {
+    hijo: "hijo/a",
+    hija: "hijo/a",
+    "hijo/a": "hijo/a",
+    conyuge: "conyuge",
+    cónyuge: "conyuge",
+    pareja: "conyuge",
+    esposo: "conyuge",
+    esposa: "conyuge",
+    hermano: "hermano/a",
+    hermana: "hermano/a",
+    "hermano/a": "hermano/a",
+    nieto: "nieto/a",
+    nieta: "nieto/a",
+    "nieto/a": "nieto/a",
+    sobrino: "sobrino/a",
+    sobrina: "sobrino/a",
+    "sobrino/a": "sobrino/a",
+    otro: "otro",
+    otra: "otro",
   },
   "Nivel dependencia": {
     leve: "leve",
@@ -183,8 +189,9 @@ export const residentImportConfig = {
   emptyLabel: "residentes",
   instructions: [
     "Descarga la planilla y completa una fila por residente.",
+    "Cada fila debe incluir un familiar responsable con correo y teléfono. Si el familiar no queda vinculado, la fila falla completa.",
     "No cambies los títulos de columnas. Puedes dejar vacías las columnas opcionales.",
-    "El sistema validará RUT, fechas, estado y duplicados antes de importar.",
+    "El sistema validará RUT, fechas, estado, familiar responsable y duplicados antes de importar.",
     "La cama se asigna después desde el módulo Camas.",
   ],
   columns: [
@@ -194,20 +201,18 @@ export const residentImportConfig = {
     { key: "fecha_nacimiento", header: "Fecha nacimiento", aliases: ["fecha de nacimiento"], width: 18 },
     { key: "sexo", header: "Sexo", validationList: ["masculino", "femenino", "otro"], width: 14 },
     { key: "fecha_ingreso", header: "Fecha ingreso *", aliases: ["fecha de ingreso"], required: true, width: 18 },
-    { key: "estado", header: "Estado", validationList: ["activo", "hospitalizado", "egresado", "fallecido"], width: 16 },
+    { key: "estado", header: "Estado", validationList: ["activo", "hospitalizado"], width: 16 },
     { key: "nivel_dependencia", header: "Nivel dependencia", validationList: ["leve", "moderado", "severo", "total"], width: 20 },
-    { key: "indice_barthel", header: "Índice Barthel", aliases: ["indice barthel"], width: 16 },
     { key: "prevision", header: "Previsión", aliases: ["prevision"], width: 16 },
     { key: "diagnostico_principal", header: "Diagnóstico principal", aliases: ["diagnostico principal"], width: 28 },
     { key: "alergias", header: "Alergias", width: 24, note: "Separa múltiples alergias con coma." },
-    { key: "nombre_contacto", header: "Nombre contacto", width: 24 },
-    { key: "telefono_contacto", header: "Teléfono contacto", aliases: ["telefono contacto"], width: 18 },
-    { key: "parentesco_contacto", header: "Parentesco contacto", width: 20 },
+    { key: "familiar_nombre", header: "Familiar nombre *", aliases: ["nombre familiar"], required: true, width: 24 },
+    { key: "familiar_parentesco", header: "Familiar parentesco *", aliases: ["parentesco familiar"], required: true, validationList: PARENTESCOS.map(([value]) => value).filter(Boolean), width: 20 },
+    { key: "familiar_email", header: "Familiar correo *", aliases: ["correo familiar", "email familiar"], required: true, width: 28 },
+    { key: "familiar_telefono", header: "Familiar teléfono *", aliases: ["telefono familiar", "teléfono familiar"], required: true, width: 18, note: "Ejemplo: +56 9 1234 5678" },
     { key: "nacionalidad", header: "Nacionalidad", width: 16 },
     { key: "estado_civil", header: "Estado civil", validationList: ["soltero", "casado", "viudo", "divorciado", "otro"], width: 16 },
     { key: "grupo_sanguineo", header: "Grupo sanguíneo", aliases: ["grupo sanguineo"], width: 16 },
-    { key: "fecha_egreso", header: "Fecha egreso", width: 18 },
-    { key: "motivo_egreso", header: "Motivo egreso", width: 24 },
   ],
   sampleRows: [
     {
@@ -219,13 +224,13 @@ export const residentImportConfig = {
       fecha_ingreso: "2026-05-13",
       estado: "activo",
       nivel_dependencia: "moderado",
-      indice_barthel: "65",
       prevision: "FONASA",
       diagnostico_principal: "Hipertensión arterial",
       alergias: "Penicilina",
-      nombre_contacto: "Paula González",
-      telefono_contacto: "+56 9 1234 5678",
-      parentesco_contacto: "Hija",
+      familiar_nombre: "Paula González",
+      familiar_parentesco: "hijo/a",
+      familiar_email: "paula.gonzalez@gmail.com",
+      familiar_telefono: "+56 9 1234 5678",
       nacionalidad: "Chilena",
     },
   ],
@@ -284,8 +289,8 @@ export function normalizeResidentRows(rows, {
     const apellido = clean(r.apellido);
     const rut = normalizeRut(r.rut, errors);
     const fechaIngreso = parseDate(r.fecha_ingreso, "Fecha ingreso", errors);
-    const estado = normalizeEnum(r.estado, "Estado", ["activo", "hospitalizado", "egresado", "fallecido"], errors, "activo");
-    const fechaEgreso = parseDate(r.fecha_egreso, "Fecha egreso", errors);
+    const estado = normalizeEnum(r.estado, "Estado", ["activo", "hospitalizado"], errors, "activo");
+    const fechaNacimiento = parseDate(r.fecha_nacimiento, "Fecha nacimiento", errors);
 
     if (!nombre) errors.push("Nombres es obligatorio.");
     if (!apellido) errors.push("Apellidos es obligatorio.");
@@ -293,8 +298,8 @@ export function normalizeResidentRows(rows, {
     if (rut && existingRuts.has(rut)) errors.push("Ya existe un residente con este RUT.");
     if (rut && fileRuts.has(rut)) errors.push("RUT duplicado dentro de la planilla.");
     if (rut) fileRuts.add(rut);
-    if (["egresado", "fallecido"].includes(estado) && !fechaEgreso) {
-      errors.push("Fecha egreso es obligatoria si el estado es egresado o fallecido.");
+    if (fechaNacimiento && fechaNacimiento > new Date().toISOString().split("T")[0]) {
+      errors.push("Fecha nacimiento no puede ser futura.");
     }
     if (errors.length === 0 && maxResidentes !== null && ["activo", "hospitalizado"].includes(estado)) {
       if (currentSlots + acceptedForPlan >= maxResidentes) {
@@ -308,29 +313,39 @@ export function normalizeResidentRows(rows, {
       nombre,
       apellido,
       rut,
-      fecha_nacimiento: parseDate(r.fecha_nacimiento, "Fecha nacimiento", errors),
+      fecha_nacimiento: fechaNacimiento,
       sexo: normalizeEnum(r.sexo, "Sexo", ["masculino", "femenino", "otro"], errors),
       nacionalidad: clean(r.nacionalidad) || "Chilena",
       estado_civil: normalizeEnum(r.estado_civil, "Estado civil", ["soltero", "casado", "viudo", "divorciado", "otro"], errors),
-      nombre_contacto: clean(r.nombre_contacto) || null,
-      telefono_contacto: clean(r.telefono_contacto) || null,
-      parentesco_contacto: clean(r.parentesco_contacto) || null,
       prevision: clean(r.prevision) || null,
       diagnostico_principal: clean(r.diagnostico_principal) || null,
       alergias: splitList(r.alergias),
       grupo_sanguineo: clean(r.grupo_sanguineo) || null,
       fecha_ingreso: fechaIngreso,
-      fecha_egreso: fechaEgreso,
-      motivo_egreso: clean(r.motivo_egreso) || null,
+      fecha_egreso: null,
+      motivo_egreso: null,
       estado,
-      indice_barthel: parseInteger(r.indice_barthel, "Índice Barthel", errors, 0, 100),
       nivel_dependencia: normalizeEnum(r.nivel_dependencia, "Nivel dependencia", ["leve", "moderado", "severo", "total"], errors),
     };
+
+    const familyResult = validateFamilyForm({
+      nombre: clean(r.familiar_nombre),
+      parentesco: normalizeEnum(
+        r.familiar_parentesco,
+        "Parentesco",
+        PARENTESCOS.map(([value]) => value).filter(Boolean),
+        errors,
+      ) ?? "",
+      email: clean(r.familiar_email).toLowerCase(),
+      telefono: clean(r.familiar_telefono),
+    });
+    if (!familyResult.ok) errors.push(...Object.values(familyResult.errors));
 
     return {
       rowNumber: row.rowNumber,
       label: `${apellido || "Sin apellido"}, ${nombre || "sin nombre"}`,
       payload,
+      familyPayload: familyResult.ok ? familyResult.data : null,
       errors,
     };
   });

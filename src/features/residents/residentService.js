@@ -1,11 +1,11 @@
 import { supabase } from "../../services/supabaseConfig";
 import { isValidUUID } from "../../utils/validators";
 import { withResidentLocation } from "../beds/bedsUtils";
+import { createStaffUser } from "../team/teamService";
 
 const RESIDENT_SELECT = `
   id, eleam_id, nombre, apellido, rut, fecha_nacimiento, sexo,
   nacionalidad, estado_civil, direccion_anterior,
-  nombre_contacto, telefono_contacto, parentesco_contacto,
   prevision, diagnostico_principal, diagnosticos_secundarios,
   alergias, grupo_sanguineo, fecha_ingreso, fecha_egreso,
   motivo_egreso, estado, cama_actual_id,
@@ -89,6 +89,7 @@ export const createResidentsBatch = async (rows, onProgress = null) => {
   let done = 0;
 
   for (const row of rows) {
+    let createdResident = null;
     try {
       const payload = stripLocationFields(row.payload);
       const { data, error } = await supabase
@@ -97,13 +98,30 @@ export const createResidentsBatch = async (rows, onProgress = null) => {
         .select(RESIDENT_SELECT)
         .single();
       if (error) throw error;
-      results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data: withResidentLocation(data) });
+      createdResident = withResidentLocation(data);
+      if (!row.familyPayload) {
+        throw new Error("Cada residente debe incluir un familiar responsable completo.");
+      }
+      const family = await createStaffUser({
+        nombre: row.familyPayload.nombre,
+        email: row.familyPayload.email,
+        telefono: row.familyPayload.telefono,
+        parentesco: row.familyPayload.parentesco,
+        rol: "familiar",
+        residenteId: createdResident.id,
+      });
+      results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data: createdResident, family });
     } catch (error) {
+      let rollbackWarning = "";
+      if (createdResident?.id) {
+        const { error: deleteError } = await supabase.from("residentes").delete().eq("id", createdResident.id);
+        if (deleteError) rollbackWarning = " El residente quedó creado; elimina o vincula el familiar manualmente.";
+      }
       const message =
         error?.code === "23505"
           ? "Ya existe un residente con ese RUT en este establecimiento."
           : error?.message || "No se pudo crear el residente.";
-      results.push({ ok: false, rowNumber: row.rowNumber, label: row.label, error: message });
+      results.push({ ok: false, rowNumber: row.rowNumber, label: row.label, error: `${message}${rollbackWarning}` });
     } finally {
       done += 1;
       onProgress?.(done, rows.length);
@@ -138,8 +156,10 @@ export const getFamiliarForResidente = async (residenteId) => {
   if (!isValidUUID(residenteId)) return null;
   const { data, error } = await supabase
     .from("familiar_residentes")
-    .select("parentesco, profile_id, profiles!familiar_residentes_profile_id_fkey(id, nombre, email)")
+    .select("parentesco, profile_id, profiles!familiar_residentes_profile_id_fkey(id, nombre, email, telefono)")
     .eq("residente_id", residenteId)
+    .order("creado_en", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data;

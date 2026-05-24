@@ -8,16 +8,17 @@ Esta es una guía rápida de referencias. Para arquitectura, BD, seguridad y flu
 
 ## Resumen ejecutivo
 
-**FichaEleam** es SPA para digitalización de fichas clínicas, registros de atención y acreditación SEREMI de ELEAM en Chile. Stack: **React 19 + Vite 6 + Tailwind CSS 4 + Supabase (PostgreSQL + Auth + Storage + Edge Functions)**.
+**FichaEleam** es SPA para digitalización de fichas clínicas, registros de atención y acreditación SEREMI de ELEAM en Chile. Stack: **React 19 + Vite 6 + Tailwind CSS 4 + Zod + Supabase (PostgreSQL + Auth + Storage + Edge Functions)**.
 
 **Roles**: superadmin (operador), admin_eleam (paga), funcionario (staff), familiar (visitante).
 
 **Features principales**:
 - CRUD residentes + signos vitales + observaciones
+- Gestión de camas, planes de cuidado, eMAR y visitas familiares
 - Acreditación v9 (14 ámbitos, ~70 requisitos, evidencias versionadas)
 - Suscripción MercadoPago
 - Blog público + CRM superadmin
-- Permisos granulares funcionario
+- Permisos granulares funcionario y permisos por feature
 
 ---
 
@@ -39,23 +40,27 @@ Ver **[README.md](./README.md)** para setup completo de Supabase.
 ```
 src/
 ├── components/      # UI: Button, Input, Modal, Toast, Loading, ProtectedRoute, etc.
+│   └── forms/       # FormKit compartido: campos, errores, secciones y submit bar
 ├── context/         # AuthContext → useAuth(), useLoading()
 ├── features/
 │   ├── auth/       # Login, recuperación y cambio de contraseña
 │   ├── landing/    # LandingPage
 │   ├── blog/       # Blog público
 │   ├── dashboard/  # AdminDashboard
-│   ├── residents/  # CRUD residentes
+│   ├── residents/  # CRUD residentes + importación con familiar obligatorio
 │   ├── vitalSigns/ # Signos vitales + rangos
 │   ├── observations/ # Observaciones (12 tipos)
 │   ├── accreditation/ # Carpeta SEREMI
 │   ├── payment/    # MercadoPago
-│   ├── team/       # Invitar staff
+│   ├── beds/       # Habitaciones/camas y ocupación
+│   ├── carePlans/  # Planes y tareas de cuidado
+│   ├── emar/       # Medicamentos, administración y stock
+│   ├── team/       # Funcionarios/familiares y permisos
 │   ├── familiar/   # Portal familiar
 │   └── superadmin/ # CRM, blog editor
 ├── routes/         # AppRouter
 ├── services/       # Supabase client
-└── utils/          # Validators, dateUtils, SEO
+└── utils/          # Validators, formValidation, dateUtils, SEO
 ```
 
 ---
@@ -67,6 +72,7 @@ npm run dev      # Desarrollo
 npm run build    # Build producción (/dist) + SEO/LLM prerender para cPanel
 npm run lint     # ESLint
 npm run test:run # Tests unitarios Vitest
+npm run test:contracts # Auditoría frontend-backend Supabase
 npm run preview  # Preview build
 npx supabase functions deploy  # Deploy Edge Functions
 ```
@@ -88,6 +94,8 @@ npx supabase functions deploy  # Deploy Edge Functions
 | `/accreditation*` | STAFF | Accreditation |
 | `/cambiar-clave` | requireActive=false | Change password (forzado primer acceso) |
 | `/equipo` | admin_eleam | Team management |
+| `/camas` | STAFF | Camas y ocupación |
+| `/turnos*` | STAFF | Entrega de turno, cuidado y eMAR |
 | `/familiar*` | familiar + ELEAM vigente | Familiar portal |
 | `/superadmin*` | superadmin | CRM + Blog editor |
 
@@ -140,7 +148,7 @@ Ver **[CLAUDE.md — Autenticación](./CLAUDE.md#autenticación-y-autorización)
 
 ## Base de Datos (Supabase)
 
-42 tablas. Schema canónico en `supabase_schema.sql`.
+44 tablas. Schema canónico en `supabase_schema.sql`.
 
 ### Principales
 
@@ -214,7 +222,7 @@ Admin contrata en `/pago` → Edge Function valida que el plan alcance para resi
 - `mp-webhook` — Valida HMAC, actualiza BD
 - `mp-cancel-subscription` — Cancela
 - `create-demo-user` — Superadmin aprueba lead y crea/reutiliza/repara admin ELEAM demo con respuesta `{ ok, code, message, ... }`
-- `create-staff-user` — Admin crea o repara funcionario/familiar; funcionario crea familiar vinculado
+- `create-staff-user` — Admin crea o repara funcionario/familiar; funcionario crea familiar vinculado con nombre, parentesco, email y teléfono
 - `delete-staff-user` — Admin elimina staff/familiar
 
 ### Secrets (server-only, no VITE_)
@@ -224,11 +232,11 @@ npx supabase secrets set MP_ACCESS_TOKEN=TEST-...
 npx supabase secrets set MP_WEBHOOK_SECRET=...
 npx supabase secrets set PUBLIC_APP_URL=http://localhost:5173
 npx supabase secrets set ALLOWED_ORIGINS="http://localhost:5173"
-npx supabase secrets set RESEND_API_KEY=re_... # opcional
-npx supabase secrets set RESEND_FROM_EMAIL="FichaEleam <no-reply@fichaeleam.cl>" # opcional
+npx supabase secrets set RESEND_API_KEY=re_... # requerido en producción para entregar accesos
+npx supabase secrets set RESEND_FROM_EMAIL="FichaEleam <no-reply@fichaeleam.cl>"
 ```
 
-Ver **[README.md — MercadoPago](./README.md#integración-mercadopago-suscripciones)** para setup completo.
+Ver **[README.md — MercadoPago](./README.md#mercadopago)** para setup completo.
 
 ---
 
@@ -308,6 +316,8 @@ Tabla `funcionario_permisos` con columnas bool:
 | `crear_planes_cuidado`, `editar_planes_cuidado`, `completar_tareas_cuidado`, `editar_indicaciones_cuidado` | Plan de cuidado |
 | `crear_indicaciones_medicamentos`, `editar_indicaciones_medicamentos`, `administrar_medicamentos` | eMAR |
 | `validar_medicamentos_controlados`, `ajustar_stock_medicamentos` | eMAR controlados y stock |
+| `asignar_camas` | Habitaciones, camas, traslados y liberación |
+| `aplicar_evaluaciones_clinicas` | Evaluaciones funcionales Barthel/Katz |
 | `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación |
 | `registrar_visitas` | Visitas familiares |
 
@@ -350,9 +360,12 @@ El acceso operativo requiere además `eleam_has_access(eleam_id)`: si el ELEAM n
 
 ### Validación cliente
 
+- Formularios: Zod + `src/components/forms/FormKit.jsx` para errores inline, resumen de errores y foco al primer campo inválido
+- Residentes: alta con familiar vinculado obligatorio; no se capturan Barthel/Katz en creación ni importación
 - Email: Regex estricto
+- Teléfono: normalización y validación chilena para familiares
 - UUID: `isValidUUID()` antes de usar en queries
-- RUT: `validateRut()` con módulo-11
+- RUT: opcional, pero `validateRut()` con módulo-11 si se informa
 - Archivos: MIME whitelist + ≤10 MB
 
 ### Storage
@@ -418,7 +431,7 @@ Base consistente. Propagan `className` + rest props.
 
 - **[CLAUDE.md](./CLAUDE.md)** — Documentación técnica completa
 - **[README.md](./README.md)** — Setup, MercadoPago, despliegue
-- **`supabase_schema.sql`** — Schema canónico completo (38 tablas, RLS, funciones, triggers, seeds y grants)
+- **`supabase_schema.sql`** — Schema canónico completo (44 tablas, RLS, funciones, triggers, seeds y grants)
 - **`src/context/AuthContext.jsx`** — useAuth(), derivados
 - **`src/components/ProtectedRoute.jsx`** — Guards
 - **`src/features/vitalSigns/vitalRanges.js`** — Rangos clínicos

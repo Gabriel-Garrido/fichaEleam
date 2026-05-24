@@ -1,6 +1,6 @@
 function Input({ className = "", ...props }) {
   const baseClasses = [
-    "w-full min-h-10 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900",
+    "w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base sm:text-sm text-slate-900",
     "shadow-sm transition-colors",
     "placeholder:text-slate-400",
     "focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20",

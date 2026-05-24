@@ -1,7 +1,7 @@
 function Button({ children, onClick, className, type = "button", disabled = false, ...rest }) {
   const baseClasses = [
     "inline-flex items-center justify-center gap-2",
-    "min-h-10 rounded-xl px-4 py-2 text-center text-sm font-semibold whitespace-normal",
+    "min-h-11 sm:min-h-10 rounded-xl px-4 py-2.5 sm:py-2 text-center text-sm font-semibold whitespace-normal",
     "transition-all duration-150 ease-out",
     "focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2",
     "disabled:cursor-not-allowed disabled:opacity-60",

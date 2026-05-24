@@ -185,11 +185,12 @@ export default function EmarTurnPage() {
                 key={value}
                 type="button"
                 onClick={() => setEstado(value)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                className={`tap-highlight-none rounded-full px-3 py-1.5 sm:py-1 text-xs font-semibold transition-colors ${
                   estado === value
                     ? "bg-slate-900 text-white"
-                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100"
                 }`}
+                aria-pressed={estado === value}
               >
                 {label}
               </button>
@@ -407,14 +408,14 @@ function EmarRow({ row, currentUserId, canAdminister, canValidate, onAction }) {
               <button
                 type="button"
                 onClick={() => onAction("administrado")}
-                className="min-w-[7rem] flex-1 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none"
+                className="tap-highlight-none min-h-11 sm:min-h-10 min-w-[7rem] flex-1 rounded-xl bg-teal-700 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white hover:bg-teal-800 active:bg-teal-900 sm:flex-none"
               >
                 Administrar
               </button>
               <button
                 type="button"
                 onClick={() => onAction("omitido")}
-                className="min-w-[7rem] flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 sm:flex-none"
+                className="tap-highlight-none min-h-11 sm:min-h-10 min-w-[7rem] flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2.5 sm:py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 active:bg-rose-100 sm:flex-none"
               >
                 Omitir
               </button>
@@ -429,7 +430,7 @@ function EmarRow({ row, currentUserId, canAdminister, canValidate, onAction }) {
             <button
               type="button"
               onClick={() => onAction("validar")}
-              className="min-w-[7rem] flex-1 rounded-xl bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800 sm:flex-none"
+              className="tap-highlight-none min-h-11 sm:min-h-10 min-w-[7rem] flex-1 rounded-xl bg-sky-700 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white hover:bg-sky-800 active:bg-sky-900 sm:flex-none"
             >
               Validar
             </button>

@@ -207,7 +207,7 @@ function ResidentHero({ resident, eleam, onNavigateVisitas }) {
           <button
             type="button"
             onClick={onNavigateVisitas}
-            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 transition-colors"
+            className="tap-highlight-none w-full sm:w-auto sm:shrink-0 inline-flex items-center justify-center gap-1.5 rounded-xl bg-teal-700 px-4 min-h-11 sm:min-h-10 py-2 text-sm font-semibold text-white hover:bg-teal-800 active:bg-teal-900 transition-colors"
           >
             <IconUsers />
             Gestionar visitas
@@ -244,7 +244,6 @@ function ResidentClinicalSummary({ resident, evaluaciones = {} }) {
     ["Diagnósticos secundarios", Array.isArray(resident?.diagnosticos_secundarios) ? resident.diagnosticos_secundarios.join(", ") : null, null],
     ["Alergias", Array.isArray(resident?.alergias) ? resident.alergias.join(", ") : null, null],
     ["Grupo sanguíneo", resident?.grupo_sanguineo, null],
-    ["Contacto", [resident?.nombre_contacto, resident?.parentesco_contacto, resident?.telefono_contacto].filter(Boolean).join(" · "), null],
   ].filter(([, value]) => value);
 
   if (rows.length === 0) return null;

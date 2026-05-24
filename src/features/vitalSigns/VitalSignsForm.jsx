@@ -6,6 +6,8 @@ import { getResidents } from "../residents/residentService";
 import { isValidUUID } from "../../utils/validators";
 import { useToast } from "../../components/Toast";
 import { friendlyError } from "../../utils/errorMessages";
+import { scrollToFirstError } from "../../utils/formValidation";
+import { ErrorSummary } from "../../components/forms/FormKit";
 import Button from "../../components/Button";
 import {
   STATUS,
@@ -51,6 +53,21 @@ function followUpFromControl(fechaHora, turno) {
   return nextFollowUpSlot(fecha, turno || "mañana");
 }
 
+const INPUT_CLS = "w-full min-h-11 sm:min-h-10 border rounded-xl px-3 py-2.5 sm:py-2 text-base sm:text-sm text-slate-900 bg-white focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 hover:border-slate-400 border-slate-300 transition-all placeholder:text-slate-400";
+const SELECT_CLS = INPUT_CLS + " appearance-none";
+
+const NUMERIC_RULES = {
+  presion_sistolica: ["P/A sistólica", 50, 300],
+  presion_diastolica: ["P/A diastólica", 30, 200],
+  frecuencia_cardiaca: ["Frecuencia cardiaca", 20, 300],
+  frecuencia_respiratoria: ["Frecuencia respiratoria", 5, 60],
+  temperatura: ["Temperatura", 30, 45],
+  saturacion_oxigeno: ["SatO₂", 0, 100],
+  glucosa: ["Glucosa", 20, 800],
+  peso: ["Peso", 10, 300],
+  dolor_escala: ["Dolor", 0, 10],
+};
+
 function VitalSignsForm() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -63,6 +80,7 @@ function VitalSignsForm() {
   const [saving, setSaving] = useState(false);
   const [loadingRes, setLoadingRes] = useState(true);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     getResidents("activo")
@@ -73,6 +91,12 @@ function VitalSignsForm() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    setFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
     setForm((prev) => {
       if (name === "requiere_seguimiento") {
         if (!checked) {
@@ -122,12 +146,22 @@ function VitalSignsForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    if (!form.residente_id) {
-      setError("Debe seleccionar un residente.");
-      return;
-    }
+    const nextErrors = {};
+    if (!form.residente_id) nextErrors.residente_id = "Debe seleccionar un residente.";
     if (form.requiere_seguimiento && (!form.seguimiento_fecha || !form.seguimiento_turno)) {
-      setError("Indica fecha y turno para dejar el seguimiento como pendiente clínico.");
+      if (!form.seguimiento_fecha) nextErrors.seguimiento_fecha = "Indica la fecha del seguimiento.";
+      if (!form.seguimiento_turno) nextErrors.seguimiento_turno = "Indica el turno del seguimiento.";
+    }
+    Object.entries(NUMERIC_RULES).forEach(([key, [label, min, max]]) => {
+      if (form[key] === "") return;
+      const value = Number(form[key]);
+      if (!Number.isFinite(value) || value < min || value > max) {
+        nextErrors[key] = `${label} debe estar entre ${min} y ${max}.`;
+      }
+    });
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      scrollToFirstError(nextErrors);
       return;
     }
     setSaving(true);
@@ -180,18 +214,19 @@ function VitalSignsForm() {
   const noActiveResidents = residents.length === 0;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="text-teal-700 hover:underline text-sm"
-        >
-          ← Volver
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button type="button" onClick={() => navigate(-1)}
+          className="tap-highlight-none flex items-center gap-1.5 text-sm text-slate-500 hover:text-teal-700 transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          <span className="hidden sm:inline">Volver</span>
         </button>
-        <h1 className="text-3xl font-bold text-teal-700">
-          Registrar Signos Vitales
-        </h1>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-teal-700">Signos vitales</p>
+          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 leading-tight">Registrar control</h1>
+        </div>
       </div>
 
       {/* Reference guide */}
@@ -216,90 +251,89 @@ function VitalSignsForm() {
       </section>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4">
+        <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl mb-4 text-sm">
+          <svg className="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="currentColor">
+            <path fillRule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0-4a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zM7.25 6a.75.75 0 0 1 1.5 0v3a.75.75 0 0 1-1.5 0V6z" clipRule="evenodd" />
+          </svg>
           {error}
         </div>
       )}
 
       {noActiveResidents && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-4 rounded-xl mb-5">
-          <h2 className="font-semibold">No hay residentes activos para registrar signos vitales</h2>
-          <p className="text-sm text-amber-800 mt-1">
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-4 rounded-2xl mb-5">
+          <h2 className="font-semibold text-sm">No hay residentes activos para registrar signos vitales</h2>
+          <p className="text-xs text-amber-800 mt-1">
             Agrega un residente activo o cambia el estado de una ficha existente antes de registrar controles.
           </p>
-          <button
-            type="button"
-            onClick={() => navigate("/residents/new")}
-            className="mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-xl hover:bg-amber-100"
-          >
+          <button type="button" onClick={() => navigate("/residents/new")}
+            className="tap-highlight-none mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-xl hover:bg-amber-100">
             Agregar residente
           </button>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <ErrorSummary errors={fieldErrors} />
         {/* Residente y turno */}
-        <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-          <div className="border-b pb-2 mb-4">
-            <h2 className="text-lg font-semibold text-slate-700">Datos generales</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Selecciona el residente, la hora exacta del control y el turno en curso.</p>
+        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex items-center gap-2 px-5 pt-4 pb-3 border-b border-slate-50">
+            <svg className="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+            <h2 className="text-sm font-semibold text-slate-800">Datos generales</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Residente *
+              <label htmlFor="residente_id" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Residente <span className="text-rose-500 text-xs">*</span>
               </label>
-              <select
-                name="residente_id"
-                value={form.residente_id}
-                onChange={handleChange}
-                required
-                disabled={noActiveResidents}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="">Seleccionar residente...</option>
-                {residents.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.apellido}, {r.nombre}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select id="residente_id" name="residente_id" value={form.residente_id} onChange={handleChange}
+                  required disabled={noActiveResidents} aria-invalid={fieldErrors.residente_id ? "true" : "false"} className={`${SELECT_CLS} ${fieldErrors.residente_id ? "border-rose-400 bg-rose-50" : ""}`}>
+                  <option value="">Seleccionar residente…</option>
+                  {residents.map((r) => (
+                    <option key={r.id} value={r.id}>{r.apellido}, {r.nombre}</option>
+                  ))}
+                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+              {fieldErrors.residente_id && <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.residente_id}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Fecha y hora *
+              <label htmlFor="fecha_hora" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Fecha y hora <span className="text-rose-500 text-xs">*</span>
               </label>
-              <input
-                type="datetime-local"
-                name="fecha_hora"
-                value={form.fecha_hora}
-                onChange={handleChange}
-                required
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
+              <input id="fecha_hora" type="datetime-local" name="fecha_hora" value={form.fecha_hora}
+                onChange={handleChange} required className={INPUT_CLS} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Turno *</label>
-              <select
-                name="turno"
-                value={form.turno}
-                onChange={handleChange}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="mañana">Mañana</option>
-                <option value="tarde">Tarde</option>
-                <option value="noche">Noche</option>
-              </select>
+              <label htmlFor="turno" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Turno <span className="text-rose-500 text-xs">*</span>
+              </label>
+              <div className="relative">
+                <select id="turno" name="turno" value={form.turno} onChange={handleChange} className={SELECT_CLS}>
+                  <option value="mañana">Mañana</option>
+                  <option value="tarde">Tarde</option>
+                  <option value="noche">Noche</option>
+                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
             </div>
           </div>
         </section>
 
         {/* Signos vitales */}
-        <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-          <div className="flex items-start justify-between mb-4 border-b pb-2 gap-3 flex-wrap">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-700">Signos Vitales</h2>
-              <p className="text-xs text-slate-500 mt-0.5">El estado general (pill a la derecha) refleja el peor valor ingresado.</p>
+        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex items-start justify-between px-5 pt-4 pb-3 border-b border-slate-50 gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
+              <h2 className="text-sm font-semibold text-slate-800">Signos vitales</h2>
             </div>
             <span
               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${liveBadge.badge}`}
@@ -309,7 +343,7 @@ function VitalSignsForm() {
               {liveOverall.label}
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <NumField
               label="P/A Sistólica"
               unit="mmHg"
@@ -319,6 +353,7 @@ function VitalSignsForm() {
               onChange={handleChange}
               placeholder="120"
               status={systolicStatus(form.presion_sistolica)}
+              error={fieldErrors.presion_sistolica}
             />
             <NumField
               label="P/A Diastólica"
@@ -329,6 +364,7 @@ function VitalSignsForm() {
               onChange={handleChange}
               placeholder="80"
               status={diastolicStatus(form.presion_diastolica)}
+              error={fieldErrors.presion_diastolica}
             />
             <NumField
               label="Frec. cardiaca"
@@ -339,6 +375,7 @@ function VitalSignsForm() {
               onChange={handleChange}
               placeholder="70"
               status={heartRateStatus(form.frecuencia_cardiaca)}
+              error={fieldErrors.frecuencia_cardiaca}
             />
             <NumField
               label="Frec. respiratoria"
@@ -349,6 +386,7 @@ function VitalSignsForm() {
               onChange={handleChange}
               placeholder="16"
               status={respiratoryRateStatus(form.frecuencia_respiratoria)}
+              error={fieldErrors.frecuencia_respiratoria}
             />
             <NumField
               label="Temperatura"
@@ -360,6 +398,7 @@ function VitalSignsForm() {
               step="0.1"
               placeholder="36.5"
               status={temperatureStatus(form.temperatura)}
+              error={fieldErrors.temperatura}
             />
             <NumField
               label="SatO₂"
@@ -372,6 +411,7 @@ function VitalSignsForm() {
               max="100"
               placeholder="98"
               status={oxygenStatus(form.saturacion_oxigeno)}
+              error={fieldErrors.saturacion_oxigeno}
             />
             <NumField
               label="Glucosa"
@@ -382,6 +422,7 @@ function VitalSignsForm() {
               onChange={handleChange}
               placeholder="100"
               status={glucoseStatus(form.glucosa)}
+              error={fieldErrors.glucosa}
             />
             <NumField
               label="Peso"
@@ -391,6 +432,7 @@ function VitalSignsForm() {
               onChange={handleChange}
               step="0.1"
               placeholder="65.0"
+              error={fieldErrors.peso}
             />
 
             <div className="sm:col-span-2">
@@ -406,7 +448,9 @@ function VitalSignsForm() {
                 min="0"
                 max="10"
                 className="w-full accent-teal-700"
+                aria-invalid={fieldErrors.dolor_escala ? "true" : "false"}
               />
+              {fieldErrors.dolor_escala && <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.dolor_escala}</p>}
               <div className="flex justify-between text-xs mt-1">
                 <span className="text-slate-400">0 — Sin dolor</span>
                 <span className="text-amber-500">4–6 Moderado</span>
@@ -418,46 +462,39 @@ function VitalSignsForm() {
         </section>
 
         {/* Estado y observaciones */}
-        <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-          <div className="border-b pb-2 mb-4">
-            <h2 className="text-lg font-semibold text-slate-700">Estado y Observaciones</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Registra el nivel de conciencia y cualquier nota relevante para la continuidad del cuidado.</p>
+        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex items-center gap-2 px-5 pt-4 pb-3 border-b border-slate-50">
+            <svg className="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+            </svg>
+            <h2 className="text-sm font-semibold text-slate-800">Estado y observaciones</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Estado de conciencia
-              </label>
-              <select
-                name="estado_conciencia"
-                value={form.estado_conciencia}
-                onChange={handleChange}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="alerta">Alerta</option>
-                <option value="somnoliento">Somnoliento/a</option>
-                <option value="estuporoso">Estuporoso/a</option>
-                <option value="coma">Coma</option>
-              </select>
-              <p className="mt-1 text-[11px] text-slate-400">Escala AVPU simplificada: Alerta → Voz → Dolor → No responde.</p>
+              <label htmlFor="estado_conciencia" className="block text-sm font-medium text-slate-700 mb-1.5">Estado de conciencia</label>
+              <div className="relative">
+                <select id="estado_conciencia" name="estado_conciencia" value={form.estado_conciencia} onChange={handleChange} className={SELECT_CLS}>
+                  <option value="alerta">Alerta</option>
+                  <option value="somnoliento">Somnoliento/a</option>
+                  <option value="estuporoso">Estuporoso/a</option>
+                  <option value="coma">Coma</option>
+                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500">Escala AVPU simplificada: Alerta → Voz → Dolor → No responde.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Observaciones
-              </label>
-              <textarea
-                name="observaciones"
-                value={form.observaciones}
-                onChange={handleChange}
-                rows={4}
-                placeholder="Notas clínicas adicionales, contexto del control o alertas relevantes..."
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
+              <label htmlFor="observaciones" className="block text-sm font-medium text-slate-700 mb-1.5">Observaciones</label>
+              <textarea id="observaciones" name="observaciones" value={form.observaciones} onChange={handleChange} rows={4}
+                placeholder="Notas clínicas adicionales, contexto del control o alertas relevantes…"
+                className="w-full rounded-xl px-3 py-2.5 sm:py-2 text-base sm:text-sm text-slate-900 border border-slate-300 bg-white hover:border-slate-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 resize-none transition-all placeholder:text-slate-400" />
             </div>
           </div>
         </section>
 
-        <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <label className="flex items-start gap-3 text-sm text-amber-950">
             <input
               type="checkbox"
@@ -475,29 +512,28 @@ function VitalSignsForm() {
           </label>
           {form.requiere_seguimiento && (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-amber-950">
-                Fecha del seguimiento *
-                <input
-                  type="date"
-                  name="seguimiento_fecha"
-                  value={form.seguimiento_fecha}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
-                />
-              </label>
-              <label className="block text-sm font-medium text-amber-950">
-                Turno del seguimiento *
-                <select
-                  name="seguimiento_turno"
-                  value={form.seguimiento_turno}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
-                >
-                  {CARE_TURNOS.map((turno) => <option key={turno} value={turno}>{turno}</option>)}
-                </select>
-              </label>
+              <div>
+                <label htmlFor="seguimiento_fecha" className="block text-sm font-medium text-amber-950 mb-1.5">Fecha del seguimiento <span className="text-rose-500 text-xs">*</span></label>
+                <input id="seguimiento_fecha" type="date" name="seguimiento_fecha" value={form.seguimiento_fecha}
+                  onChange={handleChange} required
+                  aria-invalid={fieldErrors.seguimiento_fecha ? "true" : "false"}
+                  className={`w-full min-h-11 sm:min-h-10 rounded-xl border bg-white px-3 py-2.5 sm:py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all ${fieldErrors.seguimiento_fecha ? "border-rose-400" : "border-amber-200"}`} />
+                {fieldErrors.seguimiento_fecha && <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.seguimiento_fecha}</p>}
+              </div>
+              <div>
+                <label htmlFor="seguimiento_turno" className="block text-sm font-medium text-amber-950 mb-1.5">Turno del seguimiento <span className="text-rose-500 text-xs">*</span></label>
+                <div className="relative">
+                  <select id="seguimiento_turno" name="seguimiento_turno" value={form.seguimiento_turno} onChange={handleChange} required
+                    aria-invalid={fieldErrors.seguimiento_turno ? "true" : "false"}
+                    className={`w-full min-h-11 sm:min-h-10 rounded-xl border bg-white px-3 py-2.5 sm:py-2 pr-9 text-base sm:text-sm text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 appearance-none transition-all ${fieldErrors.seguimiento_turno ? "border-rose-400" : "border-amber-200"}`}>
+                    {CARE_TURNOS.map((turno) => <option key={turno} value={turno}>{turno}</option>)}
+                  </select>
+                  <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </div>
+                {fieldErrors.seguimiento_turno && <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.seguimiento_turno}</p>}
+              </div>
               <p className="sm:col-span-2 text-xs leading-5 text-amber-800">
                 Al guardar se registrarán los signos vitales y se creará una observación pendiente para la entrega del turno definido. Desde tareas diarias se podrá finalizar o continuar el seguimiento.
               </p>
@@ -505,20 +541,22 @@ function VitalSignsForm() {
           )}
         </section>
 
-        <div className="flex gap-4 justify-end">
-          <Button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="px-6 py-2 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50"
-          >
+        <div className="flex gap-3 justify-end pb-8">
+          <Button type="button" onClick={() => navigate(-1)}
+            className="flex-1 sm:flex-none border border-slate-300 bg-white text-slate-600 hover:bg-slate-50">
             Cancelar
           </Button>
-          <Button
-            type="submit"
-            disabled={saving || noActiveResidents}
-            className="px-6 py-2 bg-teal-700 text-white rounded-xl hover:bg-teal-800 disabled:opacity-50"
-          >
-            {saving ? "Guardando..." : "Guardar Registro"}
+          <Button type="submit" disabled={saving || noActiveResidents}
+            className="flex-1 sm:flex-none bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-50 font-semibold">
+            {saving ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Guardando…
+              </span>
+            ) : "Guardar registro"}
           </Button>
         </div>
       </form>
@@ -538,6 +576,7 @@ function NumField({
   min,
   max,
   status,
+  error,
 }) {
   const s = status ? STATUS[status] : null;
   const showStatus = status && status !== "unknown";
@@ -552,7 +591,7 @@ function NumField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="text-sm font-medium text-slate-600">
+        <label htmlFor={name} className="text-sm font-medium text-slate-600">
           {label} {unit && <span className="text-slate-400 font-normal">({unit})</span>}
         </label>
         {showStatus && (
@@ -565,6 +604,7 @@ function NumField({
         )}
       </div>
       <input
+        id={name}
         type="number"
         name={name}
         value={value}
@@ -573,8 +613,10 @@ function NumField({
         step={step}
         min={min}
         max={max}
-        className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 ${ringClass}`}
+        aria-invalid={error ? "true" : "false"}
+        className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 ${error ? "border-rose-400 bg-rose-50 focus:ring-rose-100" : ringClass}`}
       />
+      {error && <p className="mt-1.5 text-xs text-rose-600">{error}</p>}
       {normal && (
         <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
           Normal: <span className="text-slate-500 normal-case">{normal}</span>

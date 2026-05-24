@@ -134,21 +134,7 @@ function createColumnValidation(column, columnIndex) {
     };
   }
 
-  if (column.key === "indice_barthel") {
-    return {
-      ...base,
-      type: "whole",
-      operator: "between",
-      formula1: "0",
-      formula2: "100",
-      promptTitle: "Índice Barthel",
-      prompt: "Ingresa un número entero entre 0 y 100.",
-      errorTitle: "Valor fuera de rango",
-      error: "El Índice Barthel debe estar entre 0 y 100.",
-    };
-  }
-
-  if (column.key === "email") {
+  if (column.key === "email" || column.key.endsWith("_email")) {
     return {
       ...base,
       type: "custom",
@@ -159,6 +145,20 @@ function createColumnValidation(column, columnIndex) {
       prompt: "Ingresa un correo válido, por ejemplo nombre@dominio.cl.",
       errorTitle: "Correo inválido",
       error: "El correo debe contener @ y no puede quedar vacío si es obligatorio.",
+    };
+  }
+
+  if (column.key.includes("telefono")) {
+    return {
+      ...base,
+      type: "custom",
+      formula1: column.required
+        ? `AND(LEN(TRIM(${cell}))>0,LEN(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${cell}," ",""),"+",""),"-",""),".",""))>=8)`
+        : `OR(${cell}="",LEN(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${cell}," ",""),"+",""),"-",""),".",""))>=8)`,
+      promptTitle: "Teléfono chileno",
+      prompt: "Usa formato +56 9 1234 5678 o un número chileno equivalente.",
+      errorTitle: "Teléfono incompleto",
+      error: "El teléfono debe tener al menos 8 dígitos.",
     };
   }
 

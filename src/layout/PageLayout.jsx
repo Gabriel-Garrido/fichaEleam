@@ -16,7 +16,7 @@ export default function PageLayout({
   };
 
   return (
-    <div className={`mx-auto w-full ${sizes[size] ?? sizes.xl} px-4 py-5 sm:px-6 lg:px-8 lg:py-8 ${className}`}>
+    <div className={`mx-auto w-full ${sizes[size] ?? sizes.xl} px-4 py-4 sm:py-5 sm:px-6 lg:px-8 lg:py-8 ${className}`}>
       {(title || description || actions) && (
         <PageHeader
           title={title}

@@ -222,19 +222,19 @@ export default function SuperAdminDashboard() {
               type="button"
               onClick={() => load(true)}
               disabled={refreshing}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="tap-highlight-none inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50"
             >
               <IconRefresh spinning={refreshing} />
               Refrescar
             </button>
           )}
-          <button type="button" onClick={() => navigate("/superadmin/clientes")} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => navigate("/superadmin/clientes")} className="tap-highlight-none min-h-11 sm:min-h-9 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100">
             Cartera
           </button>
-          <button type="button" onClick={() => navigate("/superadmin/tareas")} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => navigate("/superadmin/tareas")} className="tap-highlight-none min-h-11 sm:min-h-9 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100">
             Tareas
           </button>
-          <button type="button" onClick={() => navigate("/superadmin/permisos")} className="rounded-xl bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800">
+          <button type="button" onClick={() => navigate("/superadmin/permisos")} className="tap-highlight-none min-h-11 sm:min-h-9 rounded-xl bg-teal-700 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-800 active:bg-teal-900">
             Permisos
           </button>
         </div>

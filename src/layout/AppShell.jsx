@@ -13,7 +13,7 @@ import {
 export default function AppShell({ children }) {
   const auth = useAuth();
   const navigate = useNavigate();
-  const { sections, mobileItems, quickActions } = useNavigationItems();
+  const { sections, bottomNavSlots, quickActions } = useNavigationItems();
   const [collapsed, setCollapsed] = useState(false);
 
   const handleLogout = async () => {
@@ -57,7 +57,7 @@ export default function AppShell({ children }) {
           </main>
         </div>
         <MobileBottomNav
-          items={mobileItems}
+          slots={bottomNavSlots}
           sections={sections}
           quickActions={quickActions}
           auth={auth}

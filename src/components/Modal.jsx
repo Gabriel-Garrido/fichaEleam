@@ -134,7 +134,7 @@ function Modal({
   const labelledBy = labelledById ?? (title ? titleId : undefined);
   const accessibleLabel = labelledBy ? undefined : (ariaLabel ?? "Diálogo");
   const backdropClasses = backdropClassName
-    || "fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-2 sm:p-4";
+    || "fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] sm:p-4";
   const closeClasses = closeButtonClassName
     || "absolute top-3 right-3 text-slate-400 hover:text-slate-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors";
 

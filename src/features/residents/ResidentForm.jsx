@@ -1,79 +1,117 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  createResident, updateResident, getResidentById,
-  getFamiliarForResidente, removeFamiliarLink,
+  createResident,
+  getFamiliarForResidente,
+  getResidentById,
   getResidentQuotaUsage,
+  removeFamiliarLink,
+  updateResident,
 } from "./residentService";
 import { createStaffUser } from "../team/teamService";
-import { validateRut, formatRut, isValidUUID, validateEmail } from "../../utils/validators";
+import { formatRut, isValidUUID } from "../../utils/validators";
 import { friendlyError } from "../../utils/errorMessages";
+import { scrollToFirstError } from "../../utils/formValidation";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 import Modal from "../../components/Modal";
+import {
+  ErrorSummary,
+  FormSection,
+  SelectField,
+  SubmitBar,
+  TextareaField,
+  TextField,
+} from "../../components/forms/FormKit";
 import { resolveHospitalizationBed } from "../beds/bedsService";
 import { getEffectivePlanLimits, isResidentInPlanQuota } from "../payment/planCatalog";
+import {
+  FAMILY_EMPTY,
+  GRUPOS_SANGUINEOS,
+  PARENTESCOS,
+  RESIDENT_EMPTY,
+  residentToForm,
+  validateFamilyForm,
+  validateResidentForm,
+} from "./residentFormSchema";
 
-const PARENTESCOS = [
-  ["", "Seleccionar"],
-  ["hijo/a", "Hijo/a"],
-  ["conyuge", "Cónyuge / Pareja"],
-  ["hermano/a", "Hermano/a"],
-  ["nieto/a", "Nieto/a"],
-  ["sobrino/a", "Sobrino/a"],
-  ["otro", "Otro"],
-];
-
-const EMPTY = {
-  nombre: "", apellido: "", rut: "",
-  fecha_nacimiento: "", sexo: "", nacionalidad: "Chilena", estado_civil: "",
-  direccion_anterior: "",
-  nombre_contacto: "", telefono_contacto: "", parentesco_contacto: "",
-  prevision: "", diagnostico_principal: "", alergias: "", grupo_sanguineo: "",
-  fecha_ingreso: new Date().toISOString().split("T")[0],
-  estado: "activo", nivel_dependencia: "",
-  fecha_egreso: "", motivo_egreso: "",
+const OPTIONS = {
+  sexo: [["", "Seleccionar"], ["masculino", "Masculino"], ["femenino", "Femenino"], ["otro", "Otro"]],
+  estadoCivil: [["", "Seleccionar"], ["soltero", "Soltero/a"], ["casado", "Casado/a"], ["viudo", "Viudo/a"], ["divorciado", "Divorciado/a"], ["otro", "Otro"]],
+  dependencia: [
+    ["", "Seleccionar"],
+    ["leve", "Leve - apoyo ocasional"],
+    ["moderado", "Moderado - apoyo parcial"],
+    ["severo", "Severo - apoyo constante"],
+    ["total", "Total - dependencia completa"],
+  ],
+  estadoCreate: [["activo", "Activo"], ["hospitalizado", "Hospitalizado"]],
+  estadoEdit: [["activo", "Activo"], ["hospitalizado", "Hospitalizado"], ["egresado", "Egresado"], ["fallecido", "Fallecido"]],
 };
 
-const FAMILIAR_EMPTY = { nombre: "", email: "", parentesco: "" };
+const IconPerson = () => (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.1a7.5 7.5 0 0 1 15 0A17.9 17.9 0 0 1 12 21.75c-2.68 0-5.22-.58-7.5-1.65Z" />
+  </svg>
+);
+
+const IconHeart = () => (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.49-2.1-4.5-4.69-4.5-1.93 0-3.6 1.13-4.31 2.73-.72-1.6-2.38-2.73-4.31-2.73C5.1 3.75 3 5.76 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
+  </svg>
+);
+
+const IconCalendar = () => (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25m10.5-2.25v2.25M3.75 9h16.5M5.25 5.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25Z" />
+  </svg>
+);
+
+const IconUsers = () => (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.13a9.34 9.34 0 0 0 6.75-.58 4.13 4.13 0 0 0-7.53-2.5M15 19.13v.1A12.32 12.32 0 0 1 8.62 21a12.32 12.32 0 0 1-6.37-1.77v-.1a6.38 6.38 0 0 1 12.75 0ZM12 6.38a3.38 3.38 0 1 1-6.75 0 3.38 3.38 0 0 1 6.75 0Zm8.25 2.25a2.63 2.63 0 1 1-5.25 0 2.63 2.63 0 0 1 5.25 0Z" />
+  </svg>
+);
+
+function firstLetter(value) {
+  return (value || "?").trim().charAt(0).toUpperCase() || "?";
+}
 
 export default function ResidentForm() {
-  const { id }    = useParams();
-  const navigate  = useNavigate();
-  const toast     = useToast();
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
   const { eleam, can } = useAuth();
   const isEditing = Boolean(id);
-
-  const [form,    setForm]    = useState(EMPTY);
-  const [originalResident, setOriginalResident] = useState(null);
-  const [hospitalDecision, setHospitalDecision] = useState(null);
-  const [errors,  setErrors]  = useState({});
-  const [loading, setLoading] = useState(isEditing);
-  const [saving,  setSaving]  = useState(false);
   const { maxResidents } = getEffectivePlanLimits(eleam);
 
-  // Familiar — creación inline
-  const [familiarEnabled, setFamiliarEnabled] = useState(false);
-  const [familiarForm, setFamiliarForm] = useState(FAMILIAR_EMPTY);
-  const [familiarErrors, setFamiliarErrors] = useState({});
-  // Familiar — edición (modo edit)
+  const [form, setForm] = useState(RESIDENT_EMPTY);
+  const [familyForm, setFamilyForm] = useState(FAMILY_EMPTY);
+  const [errors, setErrors] = useState({});
+  const [familyErrors, setFamilyErrors] = useState({});
+  const [loading, setLoading] = useState(isEditing);
+  const [saving, setSaving] = useState(false);
+  const [savingFamily, setSavingFamily] = useState(false);
+  const [originalResident, setOriginalResident] = useState(null);
   const [familiarActual, setFamiliarActual] = useState(null);
   const [familiarLoading, setFamiliarLoading] = useState(false);
-  const [showFamiliarEdit, setShowFamiliarEdit] = useState(false);
-  const [savingFamiliar, setSavingFamiliar] = useState(false);
-  // Contraseña generada tras crear familiar
-  const [familiarCreado, setFamiliarCreado] = useState(null);
+  const [showFamilyEditor, setShowFamilyEditor] = useState(false);
+  const [hospitalDecision, setHospitalDecision] = useState(null);
+  const [createdFamily, setCreatedFamily] = useState(null);
+  const [partialResident, setPartialResident] = useState(null);
+
+  const isGmail = familyForm.email.trim().toLowerCase().endsWith("@gmail.com");
+  const showEgreso = ["egresado", "fallecido"].includes(form.estado);
 
   const loadFamiliar = useCallback(async () => {
     if (!isEditing || !isValidUUID(id)) return;
     setFamiliarLoading(true);
     try {
-      const data = await getFamiliarForResidente(id);
-      setFamiliarActual(data);
+      setFamiliarActual(await getFamiliarForResidente(id));
     } catch {
-      // no bloquear la carga del formulario
+      setFamiliarActual(null);
     } finally {
       setFamiliarLoading(false);
     }
@@ -86,163 +124,155 @@ export default function ResidentForm() {
       navigate("/residents");
       return;
     }
-    Promise.all([
-      getResidentById(id),
-      getFamiliarForResidente(id).catch(() => null),
-    ]).then(([data, familiar]) => {
-      setOriginalResident(data);
-      setForm({
-        ...EMPTY,
-        ...data,
-        alergias:        Array.isArray(data.alergias) ? data.alergias.join(", ") : "",
-        fecha_nacimiento: data.fecha_nacimiento ?? "",
-        fecha_ingreso:   data.fecha_ingreso ?? new Date().toISOString().split("T")[0],
-        fecha_egreso:    data.fecha_egreso ?? "",
-        motivo_egreso:   data.motivo_egreso ?? "",
-      });
-      setFamiliarActual(familiar ?? null);
-    })
-      .catch(() => toast("No se pudo cargar el residente.", "error"))
+    Promise.all([getResidentById(id), getFamiliarForResidente(id).catch(() => null)])
+      .then(([resident, familiar]) => {
+        setOriginalResident(resident);
+        setForm(residentToForm(resident));
+        setFamiliarActual(familiar ?? null);
+      })
+      .catch((err) => toast(friendlyError(err, "No se pudo cargar el residente."), "error"))
       .finally(() => setLoading(false));
-  }, [id, isEditing]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, isEditing, navigate, toast]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const clearError = useCallback((field) => {
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }, []);
+
+  const clearFamilyError = useCallback((field) => {
+    setFamilyErrors((prev) => {
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }, []);
+
+  const handleChange = useCallback((event) => {
+    const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors((prev) => { const n = { ...prev }; delete n[name]; return n; });
-  };
+    clearError(name);
+  }, [clearError]);
 
-  const handleRutBlur = () => {
-    if (form.rut) setForm((prev) => ({ ...prev, rut: formatRut(prev.rut) }));
-  };
+  const handleFamilyChange = useCallback((event) => {
+    const { name, value } = event.target;
+    setFamilyForm((prev) => ({ ...prev, [name]: value }));
+    clearFamilyError(name);
+  }, [clearFamilyError]);
 
-  const handleFamiliarChange = (e) => {
-    const { name, value } = e.target;
-    setFamiliarForm((prev) => ({ ...prev, [name]: value }));
-    if (familiarErrors[name]) setFamiliarErrors((prev) => { const n = { ...prev }; delete n[name]; return n; });
-  };
+  const handleRutBlur = useCallback((event) => {
+    const value = event.target.value;
+    if (!value.trim()) return;
+    setForm((prev) => ({ ...prev, rut: formatRut(value) }));
+  }, []);
 
-  const validate = () => {
-    const e = {};
-    if (!form.nombre.trim())   e.nombre       = "El nombre es obligatorio.";
-    if (!form.apellido.trim()) e.apellido      = "El apellido es obligatorio.";
-    if (form.rut && !validateRut(form.rut)) e.rut = "RUT inválido.";
-    if (!form.fecha_ingreso)   e.fecha_ingreso = "La fecha de ingreso es obligatoria.";
-    const egresoEstados = ["egresado", "fallecido"];
-    if (egresoEstados.includes(form.estado) && !form.fecha_egreso) {
-      e.fecha_egreso = "La fecha de egreso es obligatoria para este estado.";
+  const validateAll = useCallback(() => {
+    const residentResult = validateResidentForm(form, { isEditing });
+    const nextErrors = residentResult.errors;
+    setErrors(nextErrors);
+
+    let familyResult = { ok: true, data: null, errors: {} };
+    if (!isEditing) {
+      familyResult = validateFamilyForm(familyForm);
+      setFamilyErrors(familyResult.errors);
     }
-    // Validar campos del familiar si está habilitado
-    if (!isEditing && familiarEnabled) {
-      if (!familiarForm.nombre.trim()) e.familiar_nombre = "El nombre del familiar es obligatorio.";
-      if (!familiarForm.email.trim())  e.familiar_email  = "El correo es obligatorio.";
-      else if (!validateEmail(familiarForm.email)) e.familiar_email = "Correo inválido.";
+
+    const merged = { ...nextErrors, ...Object.fromEntries(Object.entries(familyResult.errors).map(([key, value]) => [`family.${key}`, value])) };
+    if (!residentResult.ok || !familyResult.ok) {
+      scrollToFirstError(merged);
+      return null;
     }
-    return e;
+
+    return { resident: residentResult.data, family: familyResult.data };
+  }, [familyForm, form, isEditing]);
+
+  const createFamilyAccess = async (residentId, familyData = familyForm) => {
+    const parsed = validateFamilyForm(familyData);
+    if (!parsed.ok) {
+      setFamilyErrors(parsed.errors);
+      scrollToFirstError(Object.fromEntries(Object.entries(parsed.errors).map(([key, value]) => [`family.${key}`, value])));
+      throw new Error("Revisa los datos del familiar.");
+    }
+
+    return createStaffUser({
+      nombre: parsed.data.nombre,
+      email: parsed.data.email,
+      telefono: parsed.data.telefono,
+      parentesco: parsed.data.parentesco,
+      rol: "familiar",
+      residenteId: residentId,
+    });
   };
 
-  const validateFamiliarEdit = () => {
-    const e = {};
-    if (!familiarForm.nombre.trim()) e.familiar_nombre = "El nombre es obligatorio.";
-    if (!familiarForm.email.trim())  e.familiar_email  = "El correo es obligatorio.";
-    else if (!validateEmail(familiarForm.email)) e.familiar_email = "Correo inválido.";
-    return e;
-  };
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const parsed = validateAll();
+    if (!parsed) return;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        alergias: form.alergias
-          ? form.alergias.split(",").map((a) => a.trim()).filter(Boolean)
-          : [],
-        fecha_egreso:   form.fecha_egreso || null,
-        motivo_egreso:  form.motivo_egreso.trim() || null,
-      };
-
-      if (maxResidents !== null && isResidentInPlanQuota(payload)) {
-        const usedSlots = await getResidentQuotaUsage(isEditing ? id : null);
-        if (usedSlots >= maxResidents) {
-          toast(`El plan permite máximo ${maxResidents} residentes activos u hospitalizados. Egresa o actualiza el plan para guardar este residente.`, "error");
+      if (maxResidents !== null && isResidentInPlanQuota(parsed.resident)) {
+        const used = await getResidentQuotaUsage(isEditing ? id : null);
+        if (used >= maxResidents) {
+          toast(`El plan permite máximo ${maxResidents} residentes activos u hospitalizados. Egresa o actualiza el plan para continuar.`, "error");
           return;
         }
       }
 
       if (isEditing) {
-        const mustResolveHospitalBed =
+        const mustResolve =
           originalResident?.estado !== "hospitalizado" &&
-          payload.estado === "hospitalizado" &&
-          !!originalResident?.cama_actual_id;
+          parsed.resident.estado === "hospitalizado" &&
+          Boolean(originalResident?.cama_actual_id);
 
-        if (mustResolveHospitalBed) {
+        if (mustResolve) {
           if (!can("asignar_camas")) {
             toast("No tienes permiso para reservar o liberar camas.", "error");
-            setSaving(false);
             return;
           }
-          setHospitalDecision({ payload });
-          setSaving(false);
+          setHospitalDecision({ payload: parsed.resident });
           return;
         }
 
-        await saveEditedResident(payload);
+        await saveEdited(parsed.resident);
         return;
       }
 
-      // Crear residente nuevo
-      const newResident = await createResident(payload);
-
-      // Si se llenó la sección familiar, crear el usuario
-      if (familiarEnabled && familiarForm.nombre.trim() && familiarForm.email.trim()) {
-        try {
-          const result = await createStaffUser({
-            nombre:      familiarForm.nombre.trim(),
-            email:       familiarForm.email.trim().toLowerCase(),
-            rol:         "familiar",
-            residenteId: newResident.id,
-          });
-          setFamiliarCreado({
-            nombre:        familiarForm.nombre.trim(),
-            email:         result.email ?? familiarForm.email.trim().toLowerCase(),
-            is_gmail:      !!(result.is_gmail || result.google_only),
-            email_sent:    result.email_sent === true,
-          });
-          // La pantalla de contraseña se muestra antes de navegar
-          return;
-        } catch (err) {
-          // El residente ya fue creado; avisamos pero no revertimos
-          toast(
-            `Residente creado. No se pudo crear el familiar: ${err.message || "Error desconocido"}`,
-            "error"
-          );
-        }
+      const newResident = await createResident(parsed.resident);
+      try {
+        const result = await createFamilyAccess(newResident.id, parsed.family);
+        setCreatedFamily({
+          nombre: parsed.family.nombre,
+          email: result.email ?? parsed.family.email,
+          telefono: parsed.family.telefono,
+          is_gmail: Boolean(result.is_gmail || result.google_only),
+          email_sent: result.email_sent === true,
+        });
+      } catch (familyError) {
+        setFamilyForm(parsed.family);
+        setPartialResident({ resident: newResident, family: parsed.family, error: friendlyError(familyError, "No se pudo crear el acceso familiar.") });
+        toast("Residente creado. Falta completar el acceso familiar.", "warning");
       }
-
-      toast("Residente creado correctamente.", "success");
-      navigate("/residents");
     } catch (err) {
-      const msg =
+      toast(
         err?.code === "23505"
           ? "Ya existe un residente con ese RUT en este establecimiento."
-          : "No se pudo guardar el residente.";
-      toast(msg, "error");
+          : friendlyError(err, "No se pudo guardar el residente."),
+        "error",
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  async function saveEditedResident(payload, hospitalAction = null) {
+  async function saveEdited(payload, hospitalAction = null) {
     setSaving(true);
     try {
       await updateResident(id, payload);
-      if (hospitalAction) {
-        await resolveHospitalizationBed(id, hospitalAction, null);
-      }
-      toast("Residente actualizado.", "success");
+      if (hospitalAction) await resolveHospitalizationBed(id, hospitalAction, null);
+      toast("Residente actualizado correctamente.", "success");
       navigate("/residents");
     } catch (err) {
       toast(friendlyError(err, "No se pudo guardar el residente."), "error");
@@ -251,509 +281,349 @@ export default function ResidentForm() {
     }
   }
 
-  async function handleHospitalDecision(accion) {
+  const handleHospitalDecision = async (action) => {
     if (!hospitalDecision?.payload) return;
     const payload = hospitalDecision.payload;
     setHospitalDecision(null);
-    await saveEditedResident(payload, accion);
-  }
+    await saveEdited(payload, action);
+  };
 
-  // Guardar familiar desde el modo edición
-  const handleSaveFamiliarEdit = async () => {
-    const errs = validateFamiliarEdit();
-    if (Object.keys(errs).length) { setFamiliarErrors(errs); return; }
-    if (!eleam?.id) { toast("No se pudo obtener el ELEAM.", "error"); return; }
-    setSavingFamiliar(true);
+  const handleRetryFamily = async () => {
+    if (!partialResident?.resident?.id) return;
+    setSavingFamily(true);
     try {
-      if (familiarActual) {
-        await removeFamiliarLink(id);
+      const parsed = validateFamilyForm(familyForm);
+      if (!parsed.ok) {
+        setFamilyErrors(parsed.errors);
+        scrollToFirstError(Object.fromEntries(Object.entries(parsed.errors).map(([key, value]) => [`family.${key}`, value])));
+        return;
       }
-      const result = await createStaffUser({
-        nombre:      familiarForm.nombre.trim(),
-        email:       familiarForm.email.trim().toLowerCase(),
-        rol:         "familiar",
-        residenteId: id,
+      const result = await createFamilyAccess(partialResident.resident.id, parsed.data);
+      setCreatedFamily({
+        nombre: parsed.data.nombre,
+        email: result.email ?? parsed.data.email,
+        telefono: parsed.data.telefono,
+        is_gmail: Boolean(result.is_gmail || result.google_only),
+        email_sent: result.email_sent === true,
       });
+      setPartialResident(null);
+    } catch (err) {
+      setPartialResident((prev) => ({ ...prev, error: friendlyError(err, "No se pudo crear el acceso familiar.") }));
+    } finally {
+      setSavingFamily(false);
+    }
+  };
+
+  const handleSaveFamilyEdit = async () => {
+    const parsed = validateFamilyForm(familyForm);
+    if (!parsed.ok) {
+      setFamilyErrors(parsed.errors);
+      scrollToFirstError(Object.fromEntries(Object.entries(parsed.errors).map(([key, value]) => [`family.${key}`, value])));
+      return;
+    }
+    setSavingFamily(true);
+    try {
+      if (familiarActual) await removeFamiliarLink(id);
+      const result = await createFamilyAccess(id, parsed.data);
       toast(
         result.is_gmail || result.google_only
           ? "Familiar creado. Accederá con su cuenta de Google."
           : result.email_sent === true
             ? "Familiar creado. Se envió un enlace de acceso a su correo."
-            : "Familiar creado, pero no se pudo enviar el correo de acceso.",
-        "success"
+            : "Familiar creado, pero no se pudo enviar el correo.",
+        "success",
       );
-      setShowFamiliarEdit(false);
-      setFamiliarForm(FAMILIAR_EMPTY);
-      setFamiliarErrors({});
+      setShowFamilyEditor(false);
+      setFamilyForm(FAMILY_EMPTY);
+      setFamilyErrors({});
       await loadFamiliar();
     } catch (err) {
-      toast(friendlyError(err, "No se pudo crear el familiar. Verifica los datos e intenta de nuevo."), "error");
+      toast(friendlyError(err, "No se pudo crear el familiar."), "error");
     } finally {
-      setSavingFamiliar(false);
+      setSavingFamily(false);
     }
   };
 
-  const handleUnlinkFamiliar = async () => {
+  const handleUnlinkFamily = async () => {
     if (!familiarActual) return;
-    setSavingFamiliar(true);
+    setSavingFamily(true);
     try {
       await removeFamiliarLink(id);
       setFamiliarActual(null);
       toast("Familiar desvinculado.", "success");
     } catch (err) {
-      toast(friendlyError(err, "No se pudo desvincular el familiar. Intenta de nuevo."), "error");
+      toast(friendlyError(err, "No se pudo desvincular el familiar."), "error");
     } finally {
-      setSavingFamiliar(false);
+      setSavingFamily(false);
     }
   };
 
-  const showEgreso = ["egresado", "fallecido"].includes(form.estado);
-  const isGmail    = familiarForm.email.toLowerCase().endsWith("@gmail.com");
+  const familyForDisplay = useMemo(() => familiarActual?.profiles ?? null, [familiarActual]);
 
-  // ── Pantalla de contraseña temporal (solo en creación con familiar) ──────
-  if (familiarCreado) {
+  if (loading) return <Loading message="Cargando datos del residente..." />;
+
+  if (createdFamily) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center">
-          <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      <div className="mx-auto max-w-lg px-4 py-8">
+        <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+          <div className="bg-emerald-50 px-6 py-8 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white text-emerald-600 shadow-sm">
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m9 12.75 2.25 2.25L15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-slate-900">Residente y familiar listos</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              {createdFamily.is_gmail ? "El familiar podrá entrar con Google." : "El familiar quedó vinculado como contacto principal."}
+            </p>
           </div>
-          <h2 className="text-xl font-bold text-slate-800 mb-1">Residente y familiar creados</h2>
-          <p className="text-sm text-slate-500 mb-6">
-            {familiarCreado.is_gmail
-              ? <>Familiar vinculado — <strong>{familiarCreado.nombre}</strong> accederá con su cuenta de Google.</>
-              : <>Comparte estas credenciales con <strong>{familiarCreado.nombre}</strong>:</>
-            }
-          </p>
-
-          {familiarCreado.is_gmail ? (
-            <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 text-left mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <svg className="w-4 h-4 text-sky-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-xs text-sky-700 font-semibold">Acceso con Google</p>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-slate-500 w-20 shrink-0">Correo:</span>
-                <code className="font-mono text-slate-800 bg-white border border-sky-200 rounded px-2 py-0.5 flex-1">
-                  {familiarCreado.email}
-                </code>
-              </div>
-              <p className="text-xs text-sky-600 mt-3">
-                El familiar iniciará sesión con el botón "Continuar con Google" usando esta dirección.
-              </p>
+          <div className="space-y-4 px-6 py-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+              <p className="font-semibold text-slate-900">{createdFamily.nombre}</p>
+              <p className="mt-1 break-all text-slate-600">{createdFamily.email}</p>
+              <p className="mt-1 text-slate-600">{createdFamily.telefono}</p>
+              {!createdFamily.is_gmail && (
+                <p className={`mt-3 text-xs font-medium ${createdFamily.email_sent ? "text-emerald-700" : "text-amber-700"}`}>
+                  {createdFamily.email_sent
+                    ? "Se envió un enlace de acceso a este correo."
+                    : "No se pudo enviar el correo. Puede recuperar acceso desde la pantalla de inicio."}
+                </p>
+              )}
             </div>
-          ) : (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left mb-6">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-slate-500 w-20 shrink-0">Correo:</span>
-                <code className="font-mono text-slate-800 bg-white border border-slate-200 rounded px-2 py-0.5 flex-1">
-                  {familiarCreado.email}
-                </code>
-              </div>
-              <p className={`text-xs mt-3 ${familiarCreado.email_sent ? "text-emerald-600" : "text-amber-600"}`}>
-                {familiarCreado.email_sent
-                  ? "Le enviamos un enlace para definir su contraseña y entrar."
-                  : 'No se pudo enviar el correo. El familiar puede pedir el enlace desde "¿Olvidaste tu contraseña?" en el inicio de sesión.'}
-              </p>
-            </div>
-          )}
-          <Button
-            onClick={() => navigate("/residents")}
-            className="bg-teal-700 text-white px-8 py-2.5 rounded-xl font-semibold hover:bg-teal-800"
-          >
-            Continuar al listado →
-          </Button>
+            <Button onClick={() => navigate("/residents")} className="w-full bg-teal-700 text-white hover:bg-teal-800">
+              Ir al listado de residentes
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (loading) return <Loading message="Cargando datos del residente..." />;
+  if (partialResident) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <h1 className="text-lg font-bold text-amber-950">Residente creado, falta el familiar</h1>
+          <p className="mt-2 text-sm leading-relaxed text-amber-900">
+            {partialResident.resident.nombre} {partialResident.resident.apellido} ya está registrado. Para completar el alta, corrige el acceso familiar y vuelve a intentarlo.
+          </p>
+          {partialResident.error && (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-amber-900">{partialResident.error}</p>
+          )}
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <TextField id="family_nombre" name="nombre" label="Nombre del familiar" required value={familyForm.nombre} onChange={handleFamilyChange} error={familyErrors.nombre} />
+            <SelectField id="family_parentesco" name="parentesco" label="Parentesco" required value={familyForm.parentesco} onChange={handleFamilyChange} options={PARENTESCOS} error={familyErrors.parentesco} />
+            <TextField id="family_email" name="email" type="email" label="Correo electrónico" required value={familyForm.email} onChange={handleFamilyChange} error={familyErrors.email} />
+            <TextField id="family_telefono" name="telefono" label="Teléfono" required value={familyForm.telefono} onChange={handleFamilyChange} error={familyErrors.telefono} />
+          </div>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <Button type="button" onClick={() => navigate("/residents")} className="border border-amber-300 bg-white text-amber-900 hover:bg-amber-100">
+              Terminar después
+            </Button>
+            <Button type="button" disabled={savingFamily} onClick={handleRetryFamily} className="bg-teal-700 text-white hover:bg-teal-800">
+              {savingFamily ? "Creando acceso..." : "Crear acceso familiar"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="text-teal-700 hover:underline text-sm"
-        >
-          ← Volver
-        </button>
-        <h1 className="text-2xl font-bold text-teal-700">
-          {isEditing ? "Editar Residente" : "Nuevo Residente"}
-        </h1>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-        {/* Datos personales */}
-        <Card title="Datos Personales">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Nombre *"   name="nombre"   value={form.nombre}   onChange={handleChange} error={errors.nombre} />
-            <Field label="Apellido *" name="apellido" value={form.apellido} onChange={handleChange} error={errors.apellido} />
-            <Field
-              label="RUT" name="rut" value={form.rut} onChange={handleChange}
-              onBlur={handleRutBlur} placeholder="12.345.678-9" error={errors.rut}
-            />
-            <Field label="Fecha de nacimiento" name="fecha_nacimiento" type="date"
-              value={form.fecha_nacimiento} onChange={handleChange} />
-            <SelectField label="Sexo" name="sexo" value={form.sexo} onChange={handleChange}
-              options={[["","Seleccionar"],["masculino","Masculino"],["femenino","Femenino"],["otro","Otro"]]} />
-            <Field label="Nacionalidad" name="nacionalidad" value={form.nacionalidad} onChange={handleChange} />
-            <SelectField label="Estado civil" name="estado_civil" value={form.estado_civil} onChange={handleChange}
-              options={[["","Seleccionar"],["soltero","Soltero/a"],["casado","Casado/a"],["viudo","Viudo/a"],["divorciado","Divorciado/a"],["otro","Otro"]]} />
-            <Field label="Previsión" name="prevision" placeholder="FONASA A / ISAPRE…"
-              value={form.prevision} onChange={handleChange} />
-          </div>
-        </Card>
-
-        {/* Contacto de emergencia */}
-        <Card title="Contacto de Emergencia">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Nombre"        name="nombre_contacto"     value={form.nombre_contacto}     onChange={handleChange} />
-            <Field label="Teléfono"      name="telefono_contacto"   type="tel" value={form.telefono_contacto} onChange={handleChange} />
-            <Field label="Parentesco"    name="parentesco_contacto" value={form.parentesco_contacto} onChange={handleChange} />
-            <Field label="Dirección anterior" name="direccion_anterior" value={form.direccion_anterior} onChange={handleChange} />
-          </div>
-        </Card>
-
-        {/* Información clínica */}
-        <Card title="Información Clínica">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <Field label="Diagnóstico principal" name="diagnostico_principal"
-                value={form.diagnostico_principal} onChange={handleChange} />
-            </div>
-            <Field label="Alergias (separar con coma)" name="alergias"
-              value={form.alergias} onChange={handleChange} placeholder="Penicilina, Ibuprofeno…" />
-            <Field label="Grupo sanguíneo" name="grupo_sanguineo" placeholder="A+, O−, AB+…"
-              value={form.grupo_sanguineo} onChange={handleChange} />
-            <SelectField label="Nivel de dependencia" name="nivel_dependencia"
-              value={form.nivel_dependencia} onChange={handleChange}
-              options={[["","Seleccionar"],["leve","Leve"],["moderado","Moderado"],["severo","Severo"],["total","Total"]]} />
-          </div>
-          <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50/60 p-3 text-xs text-teal-900">
-            Las escalas funcionales (Barthel y Katz) se aplican con un formulario guiado desde la ficha del residente, en la pestaña Información, una vez creado.
-          </div>
-        </Card>
-
-        {/* Datos de ingreso */}
-        <Card title="Datos de Ingreso y Estado">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Fecha de ingreso *" name="fecha_ingreso" type="date"
-              value={form.fecha_ingreso} onChange={handleChange} error={errors.fecha_ingreso} />
-            <SelectField label="Estado *" name="estado" value={form.estado} onChange={handleChange}
-              options={[["activo","Activo"],["hospitalizado","Hospitalizado"],["egresado","Egresado"],["fallecido","Fallecido"]]} />
-          </div>
-
-          {isEditing && (
-            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ubicación actual</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-800">
-                    {form.cama_actual_id ? form.ubicacion_label : "Sin cama asignada"}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => navigate("/camas")}
-                  className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                >
-                  Gestionar cama
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {showEgreso && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
-              <Field label="Fecha de egreso *" name="fecha_egreso" type="date"
-                value={form.fecha_egreso} onChange={handleChange} error={errors.fecha_egreso} />
-              <Field label="Motivo de egreso" name="motivo_egreso"
-                value={form.motivo_egreso} onChange={handleChange}
-                placeholder="Traslado, alta médica, fallecimiento…" />
-            </div>
-          )}
-        </Card>
-
-        {/* ── Sección familiar ─────────────────────────────────────────── */}
-        {!isEditing ? (
-          /* MODO CREACIÓN: checkbox para agregar familiar ahora */
-          <Card title="Acceso para Familiar">
-            <label className="flex items-start gap-3 cursor-pointer mb-1">
-              <input
-                type="checkbox"
-                checked={familiarEnabled}
-                onChange={(e) => {
-                  setFamiliarEnabled(e.target.checked);
-                  if (!e.target.checked) { setFamiliarForm(FAMILIAR_EMPTY); setFamiliarErrors({}); }
-                }}
-                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-200"
-              />
-              <div>
-                <span className="text-sm font-medium text-slate-700">Agregar acceso para un familiar ahora</span>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Opcional. Admins y funcionarios pueden crear familiares vinculados a residentes activos.
-                </p>
-              </div>
-            </label>
-
-            {familiarEnabled && (
-              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Nombre del familiar *" name="nombre"
-                  value={familiarForm.nombre} onChange={handleFamiliarChange}
-                  error={errors.familiar_nombre} />
-                <SelectField label="Parentesco" name="parentesco"
-                  value={familiarForm.parentesco} onChange={handleFamiliarChange}
-                  options={PARENTESCOS} />
-                <div className="sm:col-span-2">
-                  <Field label="Correo electrónico *" name="email" type="email"
-                    value={familiarForm.email} onChange={handleFamiliarChange}
-                    placeholder="familiar@correo.cl" error={errors.familiar_email} />
-                  {isGmail && (
-                    <p className="text-xs text-sky-600 mt-1">
-                      Google funcionará solo después de que esta cuenta quede creada con este mismo correo.
-                    </p>
-                  )}
-                </div>
-                <p className="sm:col-span-2 text-xs text-slate-400">
-                  Se generará una contraseña temporal que podrás compartir con el familiar. Deberá cambiarla en su primer acceso.
-                </p>
-              </div>
-            )}
-          </Card>
-        ) : (
-          /* MODO EDICIÓN: mostrar o gestionar familiar vinculado */
-          <Card title="Familiar Vinculado">
-            {familiarLoading ? (
-              <Loading message="Cargando familiar..." />
-            ) : familiarActual && !showFamiliarEdit ? (
-              <div>
-                <div className="flex items-center gap-3 bg-sky-50 border border-sky-100 rounded-xl px-4 py-3">
-                  <div className="w-9 h-9 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold shrink-0">
-                    {(familiarActual.profiles?.nombre ?? familiarActual.profiles?.email ?? "?")[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800 text-sm truncate">
-                      {familiarActual.profiles?.nombre ?? "—"}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">{familiarActual.profiles?.email ?? "—"}</p>
-                    {familiarActual.parentesco && (
-                      <p className="text-xs text-slate-400">{familiarActual.parentesco}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-3 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFamiliarForm({
-                        nombre: familiarActual.profiles?.nombre ?? "",
-                        email:  "",
-                        parentesco: familiarActual.parentesco ?? "",
-                      });
-                      setShowFamiliarEdit(true);
-                    }}
-                    className="text-sm text-teal-700 hover:underline font-medium"
-                    disabled={savingFamiliar}
-                  >
-                    Cambiar familiar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleUnlinkFamiliar}
-                    className="text-sm text-rose-600 hover:underline"
-                    disabled={savingFamiliar}
-                  >
-                    {savingFamiliar ? "Desvinculando…" : "Desvincular"}
-                  </button>
-                </div>
-              </div>
-            ) : !familiarActual && !showFamiliarEdit ? (
-              <div>
-                <p className="text-sm text-slate-400 mb-3">Sin familiar vinculado.</p>
-                <button
-                  type="button"
-                  onClick={() => { setFamiliarForm(FAMILIAR_EMPTY); setShowFamiliarEdit(true); }}
-                  className="text-sm text-teal-700 hover:underline font-medium"
-                >
-                  + Agregar familiar
-                </button>
-              </div>
-            ) : (
-              /* Formulario de creación/cambio de familiar */
-              <div className="space-y-4">
-                {familiarActual && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                    Se desvinculará al familiar actual y se creará uno nuevo con las credenciales indicadas.
-                  </p>
-                )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Nombre del familiar *" name="nombre"
-                    value={familiarForm.nombre} onChange={handleFamiliarChange}
-                    error={familiarErrors.familiar_nombre} />
-                  <SelectField label="Parentesco" name="parentesco"
-                    value={familiarForm.parentesco} onChange={handleFamiliarChange}
-                    options={PARENTESCOS} />
-                  <div className="sm:col-span-2">
-                    <Field label="Correo electrónico *" name="email" type="email"
-                      value={familiarForm.email} onChange={handleFamiliarChange}
-                      placeholder="familiar@correo.cl" error={familiarErrors.familiar_email} />
-                    {isGmail && (
-                      <p className="text-xs text-sky-600 mt-1">
-                        Google funcionará solo después de que esta cuenta quede creada con este mismo correo.
-                      </p>
-                    )}
-                  </div>
-                  <p className="sm:col-span-2 text-xs text-slate-400">
-                    Se generará una contraseña temporal. El familiar deberá cambiarla en su primer acceso.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    type="button"
-                    onClick={() => { setShowFamiliarEdit(false); setFamiliarForm(FAMILIAR_EMPTY); setFamiliarErrors({}); }}
-                    disabled={savingFamiliar}
-                    className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50 text-sm"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleSaveFamiliarEdit}
-                    disabled={savingFamiliar}
-                    className="px-4 py-2 bg-teal-700 text-white rounded-xl hover:bg-teal-800 text-sm font-medium disabled:opacity-50"
-                  >
-                    {savingFamiliar ? "Guardando…" : "Crear y vincular familiar"}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </Card>
-        )}
-
-        <div className="flex gap-3 justify-end">
-          <Button
+      <div className="mx-auto max-w-4xl px-4 py-6">
+        <div className="mb-6 flex items-center gap-3">
+          <button
             type="button"
             onClick={() => navigate(-1)}
-            className="px-6 py-2.5 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50"
+            className="tap-highlight-none rounded-lg px-1 text-sm text-slate-500 transition-colors hover:text-teal-700"
           >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            disabled={saving}
-            className="px-6 py-2.5 bg-teal-700 text-white rounded-xl hover:bg-teal-800 disabled:opacity-50 font-medium"
-          >
-            {saving ? "Guardando…" : isEditing ? "Actualizar" : "Crear Residente"}
-          </Button>
-        </div>
-      </form>
-    </div>
-    {hospitalDecision && (
-      <Modal
-        isOpen
-        title="Resolver cama por hospitalización"
-        onClose={() => setHospitalDecision(null)}
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            {originalResident?.nombre} {originalResident?.apellido} tiene asignada {originalResident?.ubicacion_label}. Selecciona qué ocurrirá con esa cama al guardar el estado hospitalizado.
-          </p>
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
-            <span className="font-semibold">Reservar</span> mantiene la cama bloqueada para el regreso del residente. <span className="font-semibold">Liberar</span> deja la cama disponible para otra asignación.
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              onClick={() => setHospitalDecision(null)}
-              className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            >
-              Volver al formulario
-            </Button>
-            <Button
-              type="button"
-              disabled={saving}
-              onClick={() => handleHospitalDecision("reservar")}
-              className="border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-            >
-              Reservar cama
-            </Button>
-            <Button
-              type="button"
-              disabled={saving}
-              onClick={() => handleHospitalDecision("liberar")}
-              className="bg-teal-700 text-white hover:bg-teal-800"
-            >
-              Liberar cama
-            </Button>
+            Volver
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-teal-700">Residentes</p>
+            <h1 className="text-xl font-semibold leading-tight text-slate-900 sm:text-2xl">
+              {isEditing ? "Editar residente" : "Nuevo residente"}
+            </h1>
+            {!isEditing && (
+              <p className="mt-1 text-sm text-slate-500">El alta queda completa solo con un familiar vinculado como contacto principal.</p>
+            )}
           </div>
         </div>
-      </Modal>
-    )}
+
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <ErrorSummary errors={{ ...errors, ...familyErrors }} />
+
+          <FormSection icon={<IconPerson />} title="Identificación" description="Datos personales básicos para identificar al residente.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField id="nombre" name="nombre" label="Nombre" required value={form.nombre} onChange={handleChange} error={errors.nombre} maxLength={120} autoComplete="given-name" />
+              <TextField id="apellido" name="apellido" label="Apellido" required value={form.apellido} onChange={handleChange} error={errors.apellido} maxLength={120} autoComplete="family-name" />
+              <TextField id="rut" name="rut" label="RUT" value={form.rut} onChange={handleChange} onBlur={handleRutBlur} error={errors.rut} placeholder="12.345.678-9" hint="Opcional. Se formatea automáticamente al salir del campo." />
+              <TextField id="fecha_nacimiento" name="fecha_nacimiento" type="date" label="Fecha de nacimiento" value={form.fecha_nacimiento} onChange={handleChange} error={errors.fecha_nacimiento} />
+              <SelectField id="sexo" name="sexo" label="Sexo" value={form.sexo} onChange={handleChange} options={OPTIONS.sexo} error={errors.sexo} />
+              <SelectField id="estado_civil" name="estado_civil" label="Estado civil" value={form.estado_civil} onChange={handleChange} options={OPTIONS.estadoCivil} error={errors.estado_civil} />
+              <TextField id="nacionalidad" name="nacionalidad" label="Nacionalidad" value={form.nacionalidad} onChange={handleChange} error={errors.nacionalidad} maxLength={80} />
+              <TextField id="prevision" name="prevision" label="Previsión de salud" value={form.prevision} onChange={handleChange} error={errors.prevision} maxLength={120} placeholder="FONASA, ISAPRE..." />
+              <div className="sm:col-span-2">
+                <TextField id="direccion_anterior" name="direccion_anterior" label="Domicilio previo" value={form.direccion_anterior} onChange={handleChange} error={errors.direccion_anterior} maxLength={300} />
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection icon={<IconHeart />} title="Información clínica base" description="Las escalas Barthel y Katz se registran después desde la ficha del residente.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <TextareaField id="diagnostico_principal" name="diagnostico_principal" label="Diagnóstico principal" value={form.diagnostico_principal} onChange={handleChange} error={errors.diagnostico_principal} maxLength={500} rows={3} placeholder="Hipertensión arterial, diabetes mellitus tipo 2..." />
+              </div>
+              <div className="sm:col-span-2">
+                <TextField id="alergias" name="alergias" label="Alergias conocidas" value={form.alergias} onChange={handleChange} error={errors.alergias} placeholder="Penicilina, ibuprofeno..." hint="Separa múltiples alergias con coma. Deja vacío si no hay alergias conocidas." />
+              </div>
+              <SelectField id="grupo_sanguineo" name="grupo_sanguineo" label="Grupo sanguíneo" value={form.grupo_sanguineo} onChange={handleChange} options={GRUPOS_SANGUINEOS} error={errors.grupo_sanguineo} />
+              <SelectField id="nivel_dependencia" name="nivel_dependencia" label="Nivel de dependencia" value={form.nivel_dependencia} onChange={handleChange} options={OPTIONS.dependencia} error={errors.nivel_dependencia} />
+            </div>
+          </FormSection>
+
+          <FormSection icon={<IconCalendar />} title="Ingreso y estado" description={isEditing ? "Administra cambios de estado y egreso." : "El alta inicial solo admite residentes activos u hospitalizados."}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField id="fecha_ingreso" name="fecha_ingreso" type="date" label="Fecha de ingreso" required value={form.fecha_ingreso} onChange={handleChange} error={errors.fecha_ingreso} />
+              <SelectField id="estado" name="estado" label="Estado" required value={form.estado} onChange={handleChange} options={isEditing ? OPTIONS.estadoEdit : OPTIONS.estadoCreate} error={errors.estado} />
+            </div>
+
+            {isEditing && (
+              <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ubicación actual</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-800">
+                      {form.cama_actual_id ? form.ubicacion_label : "Sin cama asignada"}
+                    </p>
+                  </div>
+                  <Button type="button" onClick={() => navigate("/camas")} className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+                    Gestionar cama
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {showEgreso && (
+              <div className="mt-4 grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+                <TextField id="fecha_egreso" name="fecha_egreso" type="date" label="Fecha de egreso" required value={form.fecha_egreso} onChange={handleChange} error={errors.fecha_egreso} />
+                <TextField id="motivo_egreso" name="motivo_egreso" label="Motivo de egreso" required value={form.motivo_egreso} onChange={handleChange} error={errors.motivo_egreso} maxLength={300} />
+              </div>
+            )}
+          </FormSection>
+
+          {!isEditing ? (
+            <FormSection icon={<IconUsers />} title="Familiar responsable" description="Este familiar será el contacto principal y tendrá acceso al portal familiar.">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField id="family_nombre" name="nombre" label="Nombre completo" required value={familyForm.nombre} onChange={handleFamilyChange} error={familyErrors.nombre} maxLength={120} autoComplete="name" />
+                <SelectField id="family_parentesco" name="parentesco" label="Parentesco" required value={familyForm.parentesco} onChange={handleFamilyChange} options={PARENTESCOS} error={familyErrors.parentesco} />
+                <TextField id="family_email" name="email" type="email" label="Correo electrónico" required value={familyForm.email} onChange={handleFamilyChange} error={familyErrors.email} maxLength={254} inputMode="email" autoComplete="email" hint={isGmail ? "Cuenta Gmail detectada: accederá con Google." : "Recibirá un enlace para configurar su acceso."} />
+                <TextField id="family_telefono" name="telefono" label="Teléfono" required value={familyForm.telefono} onChange={handleFamilyChange} error={familyErrors.telefono} maxLength={40} inputMode="tel" autoComplete="tel" placeholder="+56 9 1234 5678" />
+              </div>
+            </FormSection>
+          ) : (
+            <FormSection icon={<IconUsers />} title="Familiar vinculado" description="El familiar vinculado reemplaza al contacto de emergencia del residente.">
+              {familiarLoading ? (
+                <Loading message="Cargando familiar..." />
+              ) : familiarActual && !showFamilyEditor ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-700 text-sm font-bold text-white">
+                      {firstLetter(familyForDisplay?.nombre || familyForDisplay?.email)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900">{familyForDisplay?.nombre ?? "Familiar"}</p>
+                      <p className="truncate text-xs text-slate-600">{familyForDisplay?.email ?? "Sin correo"}</p>
+                      {familyForDisplay?.telefono && <p className="text-xs text-slate-600">{familyForDisplay.telefono}</p>}
+                      {familiarActual.parentesco && (
+                        <span className="mt-1 inline-block rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-800">{familiarActual.parentesco}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button type="button" disabled={savingFamily} onClick={() => {
+                      setFamilyForm({
+                        nombre: familyForDisplay?.nombre ?? "",
+                        email: "",
+                        telefono: familyForDisplay?.telefono ?? "",
+                        parentesco: familiarActual.parentesco ?? "",
+                      });
+                      setShowFamilyEditor(true);
+                    }} className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+                      Cambiar familiar
+                    </Button>
+                    <Button type="button" disabled={savingFamily} onClick={handleUnlinkFamily} className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50">
+                      {savingFamily ? "Desvinculando..." : "Desvincular"}
+                    </Button>
+                  </div>
+                </div>
+              ) : !showFamilyEditor ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm text-amber-900">Este residente no tiene familiar vinculado.</p>
+                  <Button type="button" onClick={() => { setFamilyForm(FAMILY_EMPTY); setShowFamilyEditor(true); }} className="mt-3 bg-teal-700 text-white hover:bg-teal-800">
+                    Agregar familiar
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {familiarActual && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      Se desvinculará al familiar actual y se creará uno nuevo.
+                    </div>
+                  )}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <TextField id="family_nombre" name="nombre" label="Nombre completo" required value={familyForm.nombre} onChange={handleFamilyChange} error={familyErrors.nombre} />
+                    <SelectField id="family_parentesco" name="parentesco" label="Parentesco" required value={familyForm.parentesco} onChange={handleFamilyChange} options={PARENTESCOS} error={familyErrors.parentesco} />
+                    <TextField id="family_email" name="email" type="email" label="Correo electrónico" required value={familyForm.email} onChange={handleFamilyChange} error={familyErrors.email} />
+                    <TextField id="family_telefono" name="telefono" label="Teléfono" required value={familyForm.telefono} onChange={handleFamilyChange} error={familyErrors.telefono} />
+                  </div>
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button type="button" disabled={savingFamily} onClick={() => { setShowFamilyEditor(false); setFamilyForm(FAMILY_EMPTY); setFamilyErrors({}); }} className="border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">
+                      Cancelar
+                    </Button>
+                    <Button type="button" disabled={savingFamily} onClick={handleSaveFamilyEdit} className="bg-teal-700 text-white hover:bg-teal-800">
+                      {savingFamily ? "Guardando..." : "Crear y vincular"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </FormSection>
+          )}
+
+          <SubmitBar
+            busy={saving}
+            submitLabel={isEditing ? "Guardar cambios" : "Crear residente y familiar"}
+            busyLabel="Guardando..."
+            onCancel={() => navigate(-1)}
+          />
+        </form>
+      </div>
+
+      {hospitalDecision && (
+        <Modal isOpen title="¿Qué pasa con la cama asignada?" onClose={() => setHospitalDecision(null)}>
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed text-slate-600">
+              <strong>{originalResident?.nombre} {originalResident?.apellido}</strong> tiene asignada{" "}
+              <span className="font-semibold text-slate-900">{originalResident?.ubicacion_label ?? "una cama"}</span>.
+              Al pasar a hospitalización, define si se reserva o libera.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" disabled={saving} onClick={() => handleHospitalDecision("reservar")} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left transition-colors hover:bg-indigo-100 disabled:opacity-50">
+                <p className="text-sm font-semibold text-indigo-900">Reservar cama</p>
+                <p className="mt-1 text-xs leading-snug text-indigo-700">La cama queda bloqueada hasta que el residente vuelva.</p>
+              </button>
+              <button type="button" disabled={saving} onClick={() => handleHospitalDecision("liberar")} className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-left transition-colors hover:bg-teal-100 disabled:opacity-50">
+                <p className="text-sm font-semibold text-teal-900">Liberar cama</p>
+                <p className="mt-1 text-xs leading-snug text-teal-700">La cama queda disponible para otro residente.</p>
+              </button>
+            </div>
+            <button type="button" onClick={() => setHospitalDecision(null)} className="w-full py-1 text-sm text-slate-500 hover:text-slate-700">
+              Cancelar y volver al formulario
+            </button>
+          </div>
+        </Modal>
+      )}
     </>
-  );
-}
-
-/* ─── Subcomponentes de formulario ─────────────────────────── */
-
-function Card({ title, children }) {
-  return (
-    <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-      <h2 className="text-base font-semibold text-slate-700 mb-4 pb-2 border-b">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Field({ label, name, type = "text", value, onChange, onBlur, required, placeholder, min, max, error }) {
-  const errorId = error ? `${name}-error` : undefined;
-  return (
-    <div>
-      <label htmlFor={name} className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
-      <input
-        id={name}
-        type={type}
-        name={name}
-        value={value ?? ""}
-        onChange={onChange}
-        onBlur={onBlur}
-        required={required}
-        placeholder={placeholder}
-        min={min}
-        max={max}
-        aria-invalid={error ? "true" : undefined}
-        aria-describedby={errorId}
-        className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-colors ${
-          error ? "border-rose-400 bg-rose-50" : "border-slate-300"
-        }`}
-      />
-      {error && <p id={errorId} className="text-xs text-rose-600 mt-1">{error}</p>}
-    </div>
-  );
-}
-
-function SelectField({ label, name, value, onChange, options }) {
-  return (
-    <div>
-      <label htmlFor={name} className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
-      <select
-        id={name}
-        name={name}
-        value={value ?? ""}
-        onChange={onChange}
-        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 bg-white"
-      >
-        {options.map(([val, lbl]) => (
-          <option key={val} value={val}>{lbl}</option>
-        ))}
-      </select>
-    </div>
   );
 }

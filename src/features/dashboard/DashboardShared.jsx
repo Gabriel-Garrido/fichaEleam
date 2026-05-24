@@ -52,9 +52,9 @@ export function QuickAction({ iconId, label, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2 bg-white rounded-xl border border-slate-100 p-4 hover:shadow-md hover:border-teal-300 hover:-translate-y-0.5 transition-all"
+      className="tap-highlight-none flex flex-col items-center gap-2 bg-white rounded-2xl border border-slate-100 p-4 active:scale-[0.98] active:bg-slate-50 sm:hover:shadow-md sm:hover:border-teal-300 sm:hover:-translate-y-0.5 transition-all"
     >
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-teal-50 text-teal-700">
+      <span className="grid h-10 w-10 place-items-center rounded-2xl bg-teal-50 text-teal-700">
         <NavIcon id={iconId} className="h-5 w-5" />
       </span>
       <span className="text-xs text-slate-700 text-center leading-tight font-medium">{label}</span>
@@ -92,7 +92,8 @@ export function FilterPill({ active, onClick, label, tone }) {
     <button
       type="button"
       onClick={onClick}
-      className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-all ${FILTER_TONE[tone]} ${
+      aria-pressed={active}
+      className={`tap-highlight-none text-xs font-medium px-3 py-1.5 sm:py-1 rounded-full border transition-all ${FILTER_TONE[tone]} ${
         active ? "ring-2 ring-offset-1 ring-teal-300" : ""
       }`}
     >

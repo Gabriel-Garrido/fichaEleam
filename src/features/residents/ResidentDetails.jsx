@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getResidentById } from "./residentService";
+import { getFamiliarForResidente, getResidentById } from "./residentService";
 import { getVitalSigns } from "../vitalSigns/vitalSignsService";
 import { getObservations } from "../observations/observationsService";
 import { useAuth } from "../../context/AuthContext";
@@ -104,6 +104,7 @@ function ResidentDetails() {
   const navigate = useNavigate();
   const { canFeature, can } = useAuth();
   const [resident, setResident] = useState(null);
+  const [familiar, setFamiliar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState("info");
@@ -114,8 +115,11 @@ function ResidentDetails() {
       setLoading(false);
       return;
     }
-    getResidentById(id)
-      .then(setResident)
+    Promise.all([getResidentById(id), getFamiliarForResidente(id).catch(() => null)])
+      .then(([residentData, familiarData]) => {
+        setResident(residentData);
+        setFamiliar(familiarData);
+      })
       .catch((err) => setError("Error al cargar residente: " + err.message))
       .finally(() => setLoading(false));
   }, [id]);
@@ -259,27 +263,31 @@ function ResidentDetails() {
         </div>
       </div>
 
-      {/* Tabs — overflow-x-auto prevents cut-off on mobile */}
-      <div className="mb-6 -mx-1 overflow-x-auto">
-        <div className="flex min-w-max border-b border-slate-200 px-1">
-          {tabs.map((t) => (
-            <button
-              type="button"
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                tab === t.id
-                  ? "border-teal-600 text-teal-700"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      {/* Tabs — scrollable on mobile with snap + fade hint */}
+      <div className="relative mb-6 -mx-4 sm:mx-0">
+        <div className="snap-tabs scrollbar-none overflow-x-auto px-3 sm:px-0">
+          <div className="flex min-w-max items-end border-b border-slate-200">
+            {tabs.map((t) => (
+              <button
+                type="button"
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`tap-highlight-none snap-start whitespace-nowrap px-4 py-3 sm:py-2 text-sm font-medium border-b-2 transition-colors ${
+                  tab === t.id
+                    ? "border-teal-600 text-teal-700"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+                aria-current={tab === t.id ? "page" : undefined}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-50 sm:hidden" aria-hidden="true" />
       </div>
 
-      {tab === "info"          && <InfoTab resident={resident} />}
+      {tab === "info"          && <InfoTab resident={resident} familiar={familiar} />}
       {tab === "signos"        && <SignosTab residenteId={id} navigate={navigate} />}
       {tab === "observaciones" && <ObservacionesTab residenteId={id} navigate={navigate} />}
       {tab === "tareas"        && <ResidentDailyTasksTab residenteId={id} />}
@@ -386,8 +394,9 @@ function QuickStat({ label, value, sub, tone, capitalize, truncate }) {
 
 /* ─── Info Tab ──────────────────────────────────────────────── */
 
-function InfoTab({ resident }) {
+function InfoTab({ resident, familiar }) {
   const allergies = getAllergySummary(resident.alergias);
+  const familiarProfile = familiar?.profiles ?? null;
   const InfoRow = ({ label, value }) =>
     value ? (
       <div>
@@ -444,13 +453,19 @@ function InfoTab({ resident }) {
       <ClinicalScalesSection resident={resident} />
 
       <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-        <h3 className="font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">Contacto de Emergencia</h3>
+        <h3 className="font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">Familiar vinculado</h3>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <InfoRow label="Nombre"           value={resident.nombre_contacto} />
-          <InfoRow label="Parentesco"       value={resident.parentesco_contacto} />
-          <InfoRow label="Teléfono"         value={resident.telefono_contacto} />
+          <InfoRow label="Nombre" value={familiarProfile?.nombre} />
+          <InfoRow label="Parentesco" value={familiar?.parentesco} />
+          <InfoRow label="Correo" value={familiarProfile?.email} />
+          <InfoRow label="Teléfono" value={familiarProfile?.telefono} />
           <InfoRow label="Dirección anterior" value={resident.direccion_anterior} />
         </dl>
+        {!familiarProfile && (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Este residente aún no tiene familiar vinculado.
+          </p>
+        )}
       </section>
 
       {(resident.estado === "egresado" || resident.estado === "fallecido") &&

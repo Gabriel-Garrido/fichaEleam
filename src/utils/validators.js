@@ -49,3 +49,9 @@ export const validatePhone = (phone) => {
   const clean = phone.replace(/[\s\-().+]/g, "");
   return /^(56)?9\d{8}$/.test(clean) || /^\d{9,12}$/.test(clean);
 };
+
+export const normalizeWhitespace = (value) =>
+  String(value ?? "").trim().replace(/\s+/g, " ");
+
+export const normalizePhone = (phone) =>
+  normalizeWhitespace(phone).replace(/[()]/g, "");

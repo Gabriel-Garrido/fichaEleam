@@ -555,7 +555,7 @@ function SegmentedFilter({ label, value, options, onChange, tooltips = {} }) {
   return (
     <div>
       <p className="mb-2 text-xs font-semibold uppercase text-slate-400">{label}</p>
-      <div className="flex flex-wrap gap-2">
+      <div className="snap-tabs scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {Object.entries(options).map(([optionValue, optionLabel]) => {
           const active = value === optionValue;
           return (
@@ -564,10 +564,11 @@ function SegmentedFilter({ label, value, options, onChange, tooltips = {} }) {
               type="button"
               onClick={() => onChange(optionValue)}
               title={tooltips[optionValue]}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              aria-pressed={active}
+              className={`tap-highlight-none snap-start shrink-0 whitespace-nowrap rounded-full border px-3.5 py-2 sm:py-1.5 text-xs font-semibold transition-colors ${
                 active
                   ? "border-teal-600 bg-teal-50 text-teal-800"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 active:bg-slate-100"
               }`}
             >
               {optionLabel}

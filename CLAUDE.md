@@ -112,7 +112,7 @@ supabase/functions/
 **No existe auto-registro público.** La landing solo muestra "Iniciar sesión" y CTA de demo. Los nuevos admins entran vía el flujo de aprobación de demo:
 
 1. **Demo → Admin**: Prospecto llena formulario en landing → row en `demo_leads` (estado `nuevo`) → la UI confirma "solicitud enviada, respuesta en menos de 24 h". No hay acceso hasta que el superadmin apruebe desde `/superadmin` → Edge Function `create-demo-user` crea ELEAM demo + cuenta `admin_eleam` con `app_metadata` server-side, reutiliza cuenta compatible o repara Auth huérfano → activa demo por 30 días → email con enlace de acceso si aplica (vía Resend) + superadmin ve el resultado en modal UI. Si el prospecto intenta iniciar sesión antes de la aprobación, el login muestra un aviso claro (RPC `demo_lead_status`).
-2. **Funcionario/Familiar creado por ELEAM**: Admin crea funcionarios/familiares desde `/equipo`; funcionarios pueden crear familiares vinculados a residentes activos desde flujos operativos. Edge Function `create-staff-user` crea o repara cuenta y envía enlace de acceso por correo.
+2. **Funcionario/Familiar creado por ELEAM**: Admin crea funcionarios/familiares desde `/equipo`; funcionarios pueden crear familiares vinculados a residentes activos u hospitalizados desde flujos operativos. Edge Function `create-staff-user` crea o repara cuenta y envía enlace de acceso por correo.
 3. **Primer acceso (cualquier rol)**: Si `must_reset_password=true`, `ProtectedRoute` fuerza redirect a `/cambiar-clave`. Allí puede establecer nueva contraseña o, si tiene Gmail, vincular Google con `supabase.auth.linkIdentity` (no crea cuenta duplicada). La bandera solo se limpia después del callback exitoso `/cambiar-clave?linked=google`.
 4. **Recuperación de contraseña**: `/recuperar-acceso` → `supabase.auth.resetPasswordForEmail` → email con link → `/reset-password` → nueva contraseña vía `supabase.auth.updateUser`; al guardar se limpia `must_reset_password`.
 5. **Google OAuth**: `supabase.auth.signInWithOAuth` en login normal solo para correos ya habilitados; `supabase.auth.linkIdentity` cuando se quiere vincular desde `/cambiar-clave` (evita cuentas duplicadas). Si el correo tiene lead demo sin `demo_user_id`, el trigger devuelve `DEMO_PENDING` y la UI muestra aviso informativo; si no tiene cuenta autorizada, vuelve a `/login` con mensaje seguro.
@@ -197,7 +197,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 ## Base de Datos
 
-42 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
+44 tablas en Supabase. Ver `supabase_schema.sql` para SQL completo.
 
 ### Tablas principales
 
@@ -205,7 +205,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | Columna | Tipo | Notas |
 |---------|------|-------|
 | id | uuid FK auth.users | PK |
-| nombre, email | text | |
+| nombre, email, telefono | text | Teléfono se usa especialmente para familiares vinculados |
 | rol | text (enum 4) | admin_eleam, funcionario, familiar, superadmin |
 | eleam_id | uuid FK eleams | null para superadmin operador |
 | must_reset_password | bool | Trigger fuerza cambio en primer acceso |
@@ -236,7 +236,8 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 | nombre, apellido, rut | text | |
 | fecha_nacimiento, sexo, estado_civil | date, text | |
 | diagnostico_principal, alergias | text, text[] | |
-| indice_barthel, nivel_dependencia | int, text | 0-100; leve/moderado/severo/total |
+| indice_barthel, escala_katz | int, text | Cache del último Barthel/Katz sincronizado desde `evaluaciones_clinicas`; no se captura en alta |
+| nivel_dependencia | text | leve/moderado/severo/total |
 | fecha_ingreso, fecha_egreso, motivo_egreso | date, date, text | Ciclo de vida |
 | estado | text (enum 4) | activo, hospitalizado, egresado, fallecido |
 | cama_actual_id | uuid FK camas | Ubicación actual calculada desde `camas -> habitaciones` |
@@ -297,11 +298,11 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 #### Tablas de equipo
 
-**`funcionario_invitaciones`** — Accesos Google pendientes: email + rol + residente_id (para familiar) + expiración.
+**`funcionario_invitaciones`** — Accesos Google pendientes: nombre, email, teléfono, rol, residente_id y parentesco cuando es familiar, más expiración.
 
 **`familiar_residentes`** — PK (profile_id, residente_id): parentesco, creado_por, creado_en.
 
-**`funcionario_permisos`** — Permisos granulares por funcionario. 23 columnas bool: residentes, camas, signos vitales, observaciones, plan de cuidado, eMAR, acreditación y visitas. Ver sección "Permisos Granulares" para defaults.
+**`funcionario_permisos`** — Permisos granulares por funcionario. 24 columnas bool: residentes, camas, signos vitales, observaciones, evaluaciones clínicas, plan de cuidado, eMAR, acreditación y visitas. Ver sección "Permisos Granulares" para defaults.
 
 **`visitas_familiar`** — Registro de visitas: residente_id, profile_id, fecha_hora, duracion_min, notas, registrado_por.
 
@@ -358,8 +359,8 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 3. **Sin pago**: Redirige a `/pago?sinAcceso=1`. Solo ve "Activar ELEAM", "Demo", "Cerrar sesión".
 4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/camas` + `/equipo` + `/accreditation`.
 5. **Crear funcionarios**: Email + nombre + permisos → Edge Function `create-staff-user` crea o repara cuenta y envía enlace de acceso por correo.
-6. **Crear familiares**: Selecciona residente activo + email → mismo flujo; `familiar_residentes` vincula al residente asignado. También puede hacerlo un funcionario desde flujos operativos autorizados.
-7. **Carga masiva Excel**: Desde `/residents` puede importar residentes con plantilla `.xlsx`; desde `/equipo` puede importar funcionarios con plantilla `.xlsx`. La plantilla de residentes no incluye habitación/cama: la ubicación se asigna desde `/camas`. Las plantillas incluyen validadores nativos de Excel para listas, fechas, rangos y campos obligatorios. Ambos flujos usan `ExcelImportModal`, validan antes de importar y están ocultos para funcionarios.
+6. **Crear familiares**: Selecciona residente activo u hospitalizado + nombre, parentesco, email y teléfono → mismo flujo; `familiar_residentes` vincula al residente asignado. También puede hacerlo un funcionario desde flujos operativos autorizados.
+7. **Carga masiva Excel**: Desde `/residents` puede importar residentes con plantilla `.xlsx`; desde `/equipo` puede importar funcionarios con plantilla `.xlsx`. La plantilla de residentes exige familiar vinculado y no incluye Barthel/Katz ni habitación/cama: las evaluaciones se aplican en la ficha y la ubicación se asigna desde `/camas`. Las plantillas incluyen validadores nativos de Excel para listas, fechas, rangos y campos obligatorios. Ambos flujos usan `ExcelImportModal`, validan antes de importar y están ocultos para funcionarios.
 
 ### funcionario (Personal clínico)
 
@@ -367,7 +368,7 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 - Creado por admin_eleam desde `/equipo`; recibe enlace de acceso por correo.
 - Primer acceso: forzado a `/cambiar-clave` (mismo flujo que admin).
 - Puede: crear/editar residentes, asignar/transferir/liberar camas, signos, observaciones, acreditación (según `funcionario_permisos`).
-- Puede crear cuentas familiares vinculadas a residentes activos.
+- Puede crear cuentas familiares vinculadas a residentes activos u hospitalizados.
 - No puede: administrar planes ni crear funcionarios.
 
 ### familiar (Acceso de visitante)
@@ -482,7 +483,7 @@ Reglas de cupo productivas:
 - `mp-create-subscription`: Crea preapproval; solo `admin_eleam` con suscripción inactiva y rechaza 409 si el plan elegido no alcanza para el uso actual.
 - `mp-webhook`: Público; valida HMAC SHA-256; deduplica con `mp_request_id`; actualiza estado.
 - `mp-cancel-subscription`: Cancela preapproval; solo `admin_eleam`.
-- `create-staff-user`: Crea funcionario/familiar con `app_metadata` server-side; envía enlace de acceso por correo via Resend. Si el email existe en Auth sin perfil, repara la cuenta y reenvía enlace. Admin crea staff/familiares y funcionario solo familiar vinculado. Retorna `{ ok, profile_id, email, email_sent, email_skipped, email_error? }`.
+- `create-staff-user`: Crea funcionario/familiar con `app_metadata` server-side; familiares requieren nombre, parentesco, email, teléfono y residente activo u hospitalizado. Envía enlace de acceso por correo vía Resend. Si el email existe en Auth sin perfil, repara la cuenta y reenvía enlace. Admin crea staff/familiares y funcionario solo familiar vinculado. Retorna `{ ok, profile_id, email, email_sent, email_skipped, email_error? }`.
 - `delete-staff-user`: Elimina usuario de Auth; cascadas limpian `profiles`, `familiar_residentes` y `funcionario_permisos`.
 - `create-demo-user`: Crea ELEAM demo + admin_eleam para lead aprobado usando `app_metadata` server-side, reutiliza admin compatible o repara un usuario Auth huérfano del mismo email; activa ELEAM 30 días; bloquea leads `descartado/convertido`; envía enlace de acceso por correo. Retorna `{ ok, code, message, profile_id?, eleam_id?, email, email_sent, email_error?, email_skipped? }`.
 

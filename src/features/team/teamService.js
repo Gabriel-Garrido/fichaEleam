@@ -14,7 +14,7 @@ export async function getTeamMembers(eleamId) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("profiles")
-    .select("id, nombre, email, rol, creado_en, must_reset_password")
+    .select("id, nombre, email, telefono, rol, creado_en, must_reset_password")
     .eq("eleam_id", eleamId)
     .order("creado_en", { ascending: true });
   if (error) throw error;
@@ -27,7 +27,7 @@ export async function getPendingInvitations(eleamId) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("funcionario_invitaciones")
-    .select("id, email, token, expira_en, creado_en, usado, rol, residente_id")
+    .select("id, nombre, email, telefono, parentesco, token, expira_en, creado_en, usado, rol, residente_id")
     .eq("eleam_id", eleamId)
     .eq("usado", false)
     .gt("expira_en", new Date().toISOString())
@@ -62,7 +62,7 @@ export async function getEleamFamiliares(eleamId) {
   // Traemos los vínculos cuyas residentes pertenecen al ELEAM.
   const { data, error } = await sb
     .from("familiar_residentes")
-    .select("profile_id, residente_id, parentesco, residentes(eleam_id, nombre, apellido), profiles!familiar_residentes_profile_id_fkey(id, nombre, email, rol)")
+    .select("profile_id, residente_id, parentesco, residentes(eleam_id, nombre, apellido), profiles!familiar_residentes_profile_id_fkey(id, nombre, email, telefono, rol, must_reset_password)")
     .order("creado_en", { ascending: false });
   if (error) throw error;
   return (data ?? []).filter((row) => row.residentes?.eleam_id === eleamId);
@@ -81,10 +81,10 @@ export async function revokeInvitation(id) {
 // Crea un funcionario o familiar. La cuenta se crea con una contraseña
 // aleatoria interna y el usuario recibe por correo un enlace para definir la
 // suya. Retorna { ok, profile_id, email, rol, email_sent, email_error? }.
-export async function createStaffUser({ nombre, email, rol, residenteId = null }) {
+export async function createStaffUser({ nombre, email, telefono = null, parentesco = null, rol, residenteId = null }) {
   const sb = ensureSupabase();
   const { data, error } = await sb.functions.invoke("create-staff-user", {
-    body: { nombre, email, rol, residente_id: residenteId },
+    body: { nombre, email, telefono, parentesco, rol, residente_id: residenteId },
   });
   if (error) await throwEdgeFunctionError(error, "No se pudo crear el usuario");
   if (data?.error) throw new Error(data.error);

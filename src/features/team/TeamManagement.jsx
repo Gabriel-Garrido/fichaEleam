@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { friendlyError } from "../../utils/errorMessages";
+import { validateEmail } from "../../utils/validators";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
@@ -13,6 +14,7 @@ import { featureDefaultMap } from "../permissions/featureCatalog";
 import { formatDate } from "../../utils/dateUtils";
 import ExcelImportModal from "../import/ExcelImportModal";
 import { staffImportConfig, normalizeStaffRows } from "../import/bulkImportConfigs";
+import { PARENTESCOS, validateFamilyForm } from "../residents/residentFormSchema";
 import TeamOverview from "./TeamOverview";
 import {
   getEleamFeaturePermissions,
@@ -65,7 +67,8 @@ export default function TeamManagement() {
   const [importModal,    setImportModal]    = useState(false);
 
   // Formulario creación
-  const [createForm, setCreateForm] = useState({ nombre: "", email: "", rol: "funcionario", residenteId: "" });
+  const [createForm, setCreateForm] = useState({ nombre: "", email: "", telefono: "", parentesco: "", rol: "funcionario", residenteId: "" });
+  const [createErrors, setCreateErrors] = useState({});
   const [createdUser, setCreatedUser] = useState(null);
   const [creating, setCreating] = useState(false);
 
@@ -153,12 +156,32 @@ export default function TeamManagement() {
   const funcionarioSlotsUsed = countFuncionarioSlots({ members, pendingInvites: invites });
   const limiteAlcanzado = maxFunc !== null && funcionarioSlotsUsed >= maxFunc;
   const deleteTargetName = deleteConfirm?.nombre || "este usuario";
-  const residentesActivos = residentes.filter(r => r.estado === "activo").length;
+  const residentesActivos = residentes.filter(r => ["activo", "hospitalizado"].includes(r.estado)).length;
 
   // ─── Handlers: creación ──────────────────────────────────────────────────
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    const nextErrors = {};
+    const nombre = createForm.nombre.trim().replace(/\s+/g, " ");
+    const email = createForm.email.trim().toLowerCase();
+    if (!nombre) nextErrors.nombre = "Nombre completo es obligatorio.";
+    else if (nombre.length > 120) nextErrors.nombre = "Nombre completo no puede superar 120 caracteres.";
+    if (!email) nextErrors.email = "Correo electrónico es obligatorio.";
+    else if (!validateEmail(email)) nextErrors.email = "Correo electrónico inválido.";
+    if (createForm.rol === "familiar") {
+      if (!createForm.residenteId) nextErrors.residenteId = "Selecciona el residente vinculado.";
+      const familyResult = validateFamilyForm({
+        nombre,
+        email,
+        telefono: createForm.telefono,
+        parentesco: createForm.parentesco,
+      });
+      Object.assign(nextErrors, familyResult.errors);
+    }
+    setCreateErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
     if (createForm.rol === "funcionario" && limiteAlcanzado) {
       toast(`El plan permite máximo ${maxFunc} funcionarios. Actualiza el plan para agregar más.`, "error");
       return;
@@ -166,8 +189,10 @@ export default function TeamManagement() {
     setCreating(true);
     try {
       const result = await createStaffUser({
-        nombre:      createForm.nombre.trim(),
-        email:       createForm.email.trim(),
+        nombre,
+        email,
+        telefono: createForm.rol === "familiar" ? createForm.telefono.trim() : null,
+        parentesco: createForm.rol === "familiar" ? createForm.parentesco : null,
         rol:         createForm.rol,
         residenteId: createForm.rol === "familiar" ? createForm.residenteId || null : null,
       });
@@ -198,7 +223,8 @@ export default function TeamManagement() {
   const closeCreateModal = () => {
     setCreateModal(false);
     setCreatedUser(null);
-    setCreateForm({ nombre: "", email: "", rol: "funcionario", residenteId: "" });
+    setCreateForm({ nombre: "", email: "", telefono: "", parentesco: "", rol: "funcionario", residenteId: "" });
+    setCreateErrors({});
     setSelectedCargo(null);
     setCreatePerms({ ...DEFAULT_PERMS });
     setCreateFeaturePerms(featureDefaultMap("funcionario", roleFeatureLimits.funcionario));
@@ -443,7 +469,7 @@ export default function TeamManagement() {
       />
 
       {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto border-b border-slate-200">
+      <div className="snap-tabs scrollbar-none flex gap-2 overflow-x-auto border-b border-slate-200">
         {[
           { key: "funcionarios", label: `Funcionarios (${funcionarios.length})` },
           { key: "familiares",   label: `Familiares (${familiares.length})` },
@@ -452,7 +478,8 @@ export default function TeamManagement() {
             type="button"
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+            aria-current={tab === t.key ? "page" : undefined}
+            className={`tap-highlight-none snap-start shrink-0 whitespace-nowrap px-4 py-3 sm:py-2 text-sm font-semibold border-b-2 transition-colors ${
               tab === t.key
                 ? "border-teal-700 text-teal-700"
                 : "border-transparent text-slate-500 hover:text-slate-800"
@@ -515,18 +542,18 @@ export default function TeamManagement() {
                     </div>
                     {/* Acciones solo para funcionarios */}
                     {m.rol === "funcionario" && (
-                      <div className="flex gap-3 items-center shrink-0">
+                      <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
                         <button
                           type="button"
                           onClick={() => openPermModal(m.id, "funcionario")}
-                          className="text-sm text-teal-700 hover:underline font-medium"
+                          className="tap-highlight-none min-h-11 flex-1 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-100 active:bg-teal-200 sm:min-h-0 sm:flex-none sm:border-transparent sm:bg-transparent sm:px-2 sm:py-1 sm:hover:bg-transparent sm:hover:underline"
                         >
                           Permisos
                         </button>
                         <button
                           type="button"
                           onClick={() => setDeleteConfirm({ id: m.id, nombre: m.nombre || m.email || "este usuario" })}
-                          className="text-sm text-rose-600 hover:underline"
+                          className="tap-highlight-none min-h-11 flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 active:bg-rose-100 sm:min-h-0 sm:flex-none sm:border-transparent sm:px-2 sm:py-1 sm:hover:bg-transparent sm:hover:underline"
                         >
                           Eliminar
                         </button>
@@ -581,7 +608,7 @@ export default function TeamManagement() {
 
             {residentesActivos === 0 && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
-                Necesitas al menos un residente activo para agregar familiares.
+                Necesitas al menos un residente activo u hospitalizado para agregar familiares.
               </p>
             )}
 
@@ -606,6 +633,7 @@ export default function TeamManagement() {
                         )}
                       </div>
                       <p className="text-sm text-slate-400 truncate">{row.profiles?.email ?? "—"}</p>
+                      {row.profiles?.telefono && <p className="text-xs text-slate-400 truncate">{row.profiles.telefono}</p>}
                       <p className="text-xs text-slate-400 mt-0.5">
                         Residente: {row.residentes?.apellido}, {row.residentes?.nombre}
                         {row.parentesco ? <> · {row.parentesco}</> : null}
@@ -643,9 +671,11 @@ export default function TeamManagement() {
                   return (
                     <li key={inv.id} className="py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-slate-800 truncate">{inv.email}</p>
+                        <p className="font-semibold text-slate-800 truncate">{inv.nombre || inv.email}</p>
                         <p className="text-xs text-slate-500">
+                          {inv.nombre ? <>{inv.email} · </> : ""}
                           {res ? <>Residente: {res.apellido}, {res.nombre} · </> : ""}
+                          {inv.parentesco ? <>{inv.parentesco} · </> : ""}
                           Expira {formatDate(inv.expira_en)}
                         </p>
                       </div>
@@ -747,7 +777,8 @@ export default function TeamManagement() {
                   <select
                     value={createForm.rol}
                     onChange={(e) => {
-                      setCreateForm(f => ({ ...f, rol: e.target.value, residenteId: "" }));
+                      setCreateForm(f => ({ ...f, rol: e.target.value, residenteId: "", telefono: "", parentesco: "" }));
+                      setCreateErrors({});
                       setSelectedCargo(null);
                       setCreatePerms({ ...DEFAULT_PERMS });
                       setCreateFeaturePerms(featureDefaultMap(e.target.value, roleFeatureLimits[e.target.value]));
@@ -770,9 +801,13 @@ export default function TeamManagement() {
                     autoComplete="name"
                     placeholder="Juan Pérez"
                     value={createForm.nombre}
-                    onChange={(e) => setCreateForm(f => ({ ...f, nombre: e.target.value }))}
+                    onChange={(e) => {
+                      setCreateForm(f => ({ ...f, nombre: e.target.value }));
+                      setCreateErrors((prev) => ({ ...prev, nombre: undefined }));
+                    }}
                     disabled={creating}
                   />
+                  {createErrors.nombre && <p className="mt-1 text-xs text-rose-600">{createErrors.nombre}</p>}
                 </div>
 
                 {/* Email */}
@@ -786,9 +821,13 @@ export default function TeamManagement() {
                     inputMode="email"
                     placeholder="usuario@correo.cl"
                     value={createForm.email}
-                    onChange={(e) => setCreateForm(f => ({ ...f, email: e.target.value }))}
+                    onChange={(e) => {
+                      setCreateForm(f => ({ ...f, email: e.target.value }));
+                      setCreateErrors((prev) => ({ ...prev, email: undefined }));
+                    }}
                     disabled={creating}
                   />
+                  {createErrors.email && <p className="mt-1 text-xs text-rose-600">{createErrors.email}</p>}
                 </div>
 
                 {/* Cargo y permisos (solo funcionario) */}
@@ -879,24 +918,63 @@ export default function TeamManagement() {
 
                 {/* Residente (solo familiar) */}
                 {createForm.rol === "familiar" && (
-                  <div>
-                    <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
-                      Residente vinculado
-                    </label>
-                    <select
-                      required
-                      value={createForm.residenteId}
-                      onChange={(e) => setCreateForm(f => ({ ...f, residenteId: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm"
-                      disabled={creating}
-                    >
-                      <option value="">Selecciona un residente...</option>
-                      {residentes.filter(r => r.estado === "activo").map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.apellido}, {r.nombre}{r.ubicacion_label ? ` · ${r.ubicacion_label}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">
+                        Residente vinculado
+                      </label>
+                      <select
+                        required
+                        value={createForm.residenteId}
+                        onChange={(e) => {
+                          setCreateForm(f => ({ ...f, residenteId: e.target.value }));
+                          setCreateErrors((prev) => ({ ...prev, residenteId: undefined }));
+                        }}
+                        className={`w-full rounded-xl border bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm ${createErrors.residenteId ? "border-rose-300" : "border-slate-200"}`}
+                        disabled={creating}
+                      >
+                        <option value="">Selecciona un residente...</option>
+                        {residentes.filter(r => ["activo", "hospitalizado"].includes(r.estado)).map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.apellido}, {r.nombre}{r.ubicacion_label ? ` · ${r.ubicacion_label}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {createErrors.residenteId && <p className="mt-1 text-xs text-rose-600">{createErrors.residenteId}</p>}
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">Parentesco</label>
+                      <select
+                        required
+                        value={createForm.parentesco}
+                        onChange={(e) => {
+                          setCreateForm(f => ({ ...f, parentesco: e.target.value }));
+                          setCreateErrors((prev) => ({ ...prev, parentesco: undefined }));
+                        }}
+                        className={`w-full rounded-xl border bg-white shadow-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 px-3 py-2 text-sm ${createErrors.parentesco ? "border-rose-300" : "border-slate-200"}`}
+                        disabled={creating}
+                      >
+                        {PARENTESCOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                      {createErrors.parentesco && <p className="mt-1 text-xs text-rose-600">{createErrors.parentesco}</p>}
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">Teléfono</label>
+                      <Input
+                        required
+                        maxLength={40}
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="+56 9 1234 5678"
+                        value={createForm.telefono}
+                        onChange={(e) => {
+                          setCreateForm(f => ({ ...f, telefono: e.target.value }));
+                          setCreateErrors((prev) => ({ ...prev, telefono: undefined }));
+                        }}
+                        disabled={creating}
+                      />
+                      {createErrors.telefono && <p className="mt-1 text-xs text-rose-600">{createErrors.telefono}</p>}
+                    </div>
                   </div>
                 )}
 
@@ -909,7 +987,7 @@ export default function TeamManagement() {
                     type="submit"
                     disabled={
                       creating || !createForm.nombre || !createForm.email ||
-                      (createForm.rol === "familiar" && !createForm.residenteId) ||
+                      (createForm.rol === "familiar" && (!createForm.residenteId || !createForm.parentesco || !createForm.telefono)) ||
                       (createForm.rol === "funcionario" && limiteAlcanzado)
                     }
                     className="bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-teal-800 disabled:opacity-50"

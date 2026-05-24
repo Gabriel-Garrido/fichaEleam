@@ -2,7 +2,7 @@
 
 Plataforma SaaS para digitalizar fichas clínicas, gestión de camas, registros operativos, carpeta SEREMI y gestión comercial de ELEAM en Chile.
 
-Stack principal: React 19, Vite 6, Tailwind CSS 4, Supabase (Auth, PostgreSQL, Storage, Edge Functions) y MercadoPago.
+Stack principal: React 19, Vite 6, Tailwind CSS 4, Zod, Supabase (Auth, PostgreSQL, Storage, Edge Functions) y MercadoPago.
 
 ---
 
@@ -212,7 +212,7 @@ No existe auto-registro público. Una sesión solo debe quedar operativa si el u
 - Superadmin aprobó un lead y `create-demo-user` creó, reutilizó o reparó su cuenta demo.
 - El ELEAM tiene demo o suscripción vigente (`pago_activo`, `activo`, `en_gracia` o cancelado dentro del período pagado).
 - Es funcionario creado por un admin ELEAM activo.
-- Es familiar creado por admin ELEAM o funcionario, siempre vinculado a un residente activo.
+- Es familiar creado por admin ELEAM o funcionario, siempre vinculado a un residente activo u hospitalizado.
 
 Google OAuth no crea cuentas públicas nuevas en FichaEleam. Solo se acepta si el correo ya tiene perfil habilitado, fue vinculado desde `/cambiar-clave` o tiene un acceso pendiente generado por `create-staff-user` para Gmail. El registro público por token fue retirado; `/register` redirige a `/login`.
 
@@ -292,6 +292,7 @@ Para cambiar el número de contacto institucional, edita `WHATSAPP_PHONE` en `wh
 - Administra residentes, camas, signos vitales, observaciones, acreditación y equipo.
 - Paga la suscripción del ELEAM.
 - Crea funcionarios/familiares desde `/equipo`.
+- Al crear residentes, registra obligatoriamente un familiar vinculado con nombre, parentesco, email y teléfono; ese familiar es el contacto operativo único.
 - Crea habitaciones/camas desde `/camas` y gestiona ocupación, disponibilidad, traslados y liberaciones.
 - Puede cargar residentes y funcionarios desde planillas Excel `.xlsx`; la importación está restringida a `admin_eleam`.
 - Ajusta features visibles para funcionarios y familiares solo dentro de lo habilitado por superadmin.
@@ -302,7 +303,7 @@ Para cambiar el número de contacto institucional, edita `WHATSAPP_PHONE` en `wh
 
 - Acceso operativo a `/dashboard`, turnos, camas, residentes, signos, observaciones y acreditación según permisos por feature y `funcionario_permisos`.
 - No paga ni gestiona equipo.
-- Puede crear cuentas familiares vinculadas a residentes activos desde flujos operativos autorizados.
+- Puede crear cuentas familiares vinculadas a residentes activos u hospitalizados desde flujos operativos autorizados.
 - Si el ELEAM pierde acceso vigente, queda bloqueado y debe contactar al admin ELEAM.
 
 ### Familiar
@@ -356,24 +357,34 @@ Para cambiar el número de contacto institucional, edita `WHATSAPP_PHONE` en `wh
 
 ### Importación desde Excel
 
-- Residentes: en `/residents`, solo `admin_eleam` ve `Cargar residentes desde Excel`. La planilla oficial incluye columnas claras como `Nombres *`, `Apellidos *`, `RUT`, `Fecha ingreso *`, estado clínico, dependencia, contacto y alergias. No incluye habitación/cama: la ubicación se asigna desde `/camas`.
+- Residentes: en `/residents`, solo `admin_eleam` ve `Cargar residentes desde Excel`. La planilla oficial incluye `Nombres *`, `Apellidos *`, `RUT`, `Fecha ingreso *`, estado clínico, dependencia, alergias y familiar obligatorio (`Familiar nombre *`, `Familiar parentesco *`, `Familiar email *`, `Familiar teléfono *`). No incluye contacto separado, Barthel/Katz ni habitación/cama: el familiar se crea como acceso vinculado y la ubicación se asigna desde `/camas`.
 - Funcionarios: en `/equipo`, solo `admin_eleam` puede usar `Cargar funcionarios desde Excel`. La planilla exige `Nombre completo *`, `Correo electrónico *` y `Cargo / plantilla de permisos *`.
 - El modal descarga una plantilla `.xlsx` generada en el navegador con validaciones nativas de Excel para listas, fechas, rangos numéricos, email y campos obligatorios; al subirla igualmente normaliza fechas/RUT/enums y bloquea la importación si hay filas con errores.
-- Residentes se crean fila a fila para reportar errores específicos sin perder los registros válidos ya creados. Funcionarios se crean mediante `create-staff-user`, por lo que se mantienen límites de plan, creación Auth, flujo Gmail/Google y correos de bienvenida.
+- Residentes se crean fila a fila y una fila solo cuenta como exitosa si quedan creados el residente y su familiar vinculado. Funcionarios se crean mediante `create-staff-user`, por lo que se mantienen límites de plan, creación Auth, flujo Gmail/Google y correos de bienvenida.
 - `read-excel-file` y `write-excel-file` se cargan dinámicamente solo al descargar o leer planillas; no forman parte del bundle inicial.
+
+---
+
+## Formularios y Validación
+
+- Los formularios nuevos o migrados usan Zod y el kit compartido en `src/components/forms/FormKit.jsx`.
+- Los schemas reutilizables viven cerca del dominio; por ejemplo `src/features/residents/residentFormSchema.js` valida residente y familiar vinculado.
+- Los errores se muestran inline, con resumen superior y foco/scroll al primer campo inválido. Los mensajes server-side se normalizan con `friendlyError`.
+- Teléfonos familiares son obligatorios y se normalizan para Chile; RUT es opcional pero se valida si se informa.
+- Barthel y Katz no se capturan en alta ni importación de residentes. Solo se guardan como cache en `residentes.indice_barthel` y `residentes.escala_katz`, sincronizado desde `evaluaciones_clinicas`.
 
 ---
 
 ## Base de Datos
 
-`supabase_schema.sql` crea 42 tablas:
+`supabase_schema.sql` crea 44 tablas:
 
 - Multi-tenant: `profiles`, `eleams`, `planes`.
 - Clínica: `residentes`, `signos_vitales`, `observaciones_diarias`, `turno_entregas`.
 - Camas/ocupación: `habitaciones`, `camas`, `cama_asignaciones`, `camas_audit`.
 - Plan de cuidado: `planes_cuidado`, `plan_cuidado_actividades`, `plan_cuidado_horarios`, `tareas_cuidado`, `plan_cuidado_audit`.
 - eMAR: `medicamentos_indicaciones`, `medicamentos_horarios`, `medicamentos_administraciones`, `medicamentos_stock_lotes`, `medicamentos_stock_movimientos`, `medicamentos_conciliaciones`, `medicamentos_audit`.
-- Equipo: `funcionario_invitaciones` (accesos Google pendientes), `funcionario_permisos`, `eleam_feature_permissions`, `profile_feature_permissions`, `familiar_residentes`, `visitas_familiar`.
+- Equipo: `funcionario_invitaciones` (accesos Google pendientes con nombre, teléfono y parentesco cuando aplica), `funcionario_permisos`, `eleam_feature_permissions`, `profile_feature_permissions`, `familiar_residentes`, `visitas_familiar`.
 - Pagos: `pagos`, `mp_webhook_events`.
 - Acreditación: `acred_ambitos`, `acred_requisitos`, `acred_requisitos_eleam`, `acred_documentos`, `acred_observaciones`, `acred_audit`.
 - CRM/blog: `crm_tasks`, `crm_interactions`, `blog_posts`.
@@ -402,6 +413,7 @@ Permisos actuales:
 - `asignar_camas`
 - `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion`
 - `registrar_visitas`
+- `aplicar_evaluaciones_clinicas`
 
 Los permisos se aplican en UI con `useAuth().can()` y en RLS con `public.funcionario_can()`.
 

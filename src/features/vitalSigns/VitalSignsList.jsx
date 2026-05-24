@@ -245,7 +245,7 @@ export default function VitalSignsList() {
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
-            <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch">
+            <div className="hidden lg:inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch">
               <button
                 type="button"
                 onClick={() => setView("cards")}
@@ -274,7 +274,8 @@ export default function VitalSignsList() {
           </div>
           <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <p className="text-xs text-slate-500">
-              Tarjetas es la vista recomendada en móvil; tabla queda para revisión compacta.
+              <span className="lg:hidden">En móvil siempre se muestran tarjetas.</span>
+              <span className="hidden lg:inline">Tarjetas es la vista recomendada; tabla queda para revisión compacta.</span>
             </p>
             <button
               type="button"
@@ -320,7 +321,20 @@ export default function VitalSignsList() {
           ))}
         </div>
       ) : (
-        <VitalRecordsTable records={filtered} onDelete={canDelete ? handleDelete : null} />
+        <>
+          <div className="space-y-4 lg:hidden">
+            {filtered.map((r) => (
+              <VitalRecordCard
+                key={r.id}
+                record={r}
+                onDelete={canDelete ? () => handleDelete(r.id) : null}
+              />
+            ))}
+          </div>
+          <div className="hidden lg:block">
+            <VitalRecordsTable records={filtered} onDelete={canDelete ? handleDelete : null} />
+          </div>
+        </>
       )}
     </PageLayout>
   );

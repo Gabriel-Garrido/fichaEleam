@@ -17,6 +17,7 @@ create table if not exists public.profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
   nombre     text not null,
   email      text not null,
+  telefono   text,
   rol        text not null default 'admin_eleam'
              check (rol in ('admin_eleam','funcionario','familiar','superadmin')),
   creado_en  timestamptz not null default now()
@@ -83,6 +84,9 @@ alter table public.profiles
 alter table public.profiles
   add column if not exists must_reset_password boolean not null default false;
 
+alter table public.profiles
+  add column if not exists telefono text;
+
 create index if not exists idx_profiles_eleam_id on public.profiles(eleam_id);
 create index if not exists idx_profiles_eleam_rol on public.profiles(eleam_id, rol);
 create index if not exists idx_profiles_email_lower on public.profiles(lower(email));
@@ -106,9 +110,6 @@ create table if not exists public.residentes (
   nacionalidad             text default 'Chilena',
   estado_civil             text check (estado_civil in ('soltero','casado','viudo','divorciado','otro')),
   direccion_anterior       text,
-  nombre_contacto          text,
-  telefono_contacto        text,
-  parentesco_contacto      text,
   prevision                text,
   diagnostico_principal    text,
   diagnosticos_secundarios text[],
@@ -126,6 +127,11 @@ create table if not exists public.residentes (
   creado_en                timestamptz not null default now(),
   actualizado_en           timestamptz not null default now()
 );
+
+alter table public.residentes
+  drop column if exists nombre_contacto,
+  drop column if exists telefono_contacto,
+  drop column if exists parentesco_contacto;
 
 create unique index if not exists residentes_rut_eleam_unique
   on public.residentes(rut, eleam_id)
@@ -808,6 +814,9 @@ create table if not exists public.funcionario_invitaciones (
     char_length(email) <= 254
     and email ~* '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'
   ),
+  nombre        text check (nombre is null or char_length(nombre) <= 120),
+  telefono      text check (telefono is null or char_length(telefono) <= 40),
+  parentesco    text check (parentesco is null or char_length(parentesco) <= 80),
   token         text unique not null,
   expira_en     timestamptz not null default (now() + interval '7 days'),
   usado         boolean not null default false,
@@ -821,6 +830,11 @@ create table if not exists public.funcionario_invitaciones (
     or (rol <> 'familiar' and residente_id is null)
   )
 );
+
+alter table public.funcionario_invitaciones
+  add column if not exists nombre text,
+  add column if not exists telefono text,
+  add column if not exists parentesco text;
 
 create index if not exists idx_inv_eleam on public.funcionario_invitaciones(eleam_id);
 create index if not exists idx_inv_email on public.funcionario_invitaciones(lower(email));
@@ -1752,9 +1766,6 @@ begin
     'grupo_sanguineo', r.grupo_sanguineo,
     'indice_barthel', r.indice_barthel,
     'escala_katz', r.escala_katz,
-    'nombre_contacto', r.nombre_contacto,
-    'telefono_contacto', r.telefono_contacto,
-    'parentesco_contacto', r.parentesco_contacto,
     'parentesco', fr.parentesco
   )
   into v_residente
@@ -2489,6 +2500,8 @@ declare
   v_provision_id uuid := null;
   v_residente_id uuid := null;
   v_invitado_por uuid := null;
+  v_telefono text := null;
+  v_parentesco text := null;
   v_account_source text := coalesce(new.raw_app_meta_data->>'fichaeleam_account_source', '');
   v_is_qa_seed boolean := current_setting('app.allow_qa_seed_users', true) = 'on'
                           and v_account_source = 'qa_seed';
@@ -2529,6 +2542,8 @@ begin
       then (new.raw_app_meta_data->>'residente_id_direct')::uuid
       else null
     end;
+    v_telefono := nullif(trim(coalesce(new.raw_user_meta_data->>'telefono', '')), '');
+    v_parentesco := nullif(trim(coalesce(new.raw_user_meta_data->>'parentesco', '')), '');
 
     if v_rol not in ('admin_eleam', 'funcionario', 'familiar', 'superadmin') then
       raise exception 'rol_direct invalido para seed QA: %', coalesce(v_rol, 'null')
@@ -2542,11 +2557,12 @@ begin
       return new;
     end if;
 
-    insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
+    insert into public.profiles (id, nombre, email, telefono, rol, eleam_id, must_reset_password)
     values (
       new.id,
       v_nombre,
       new.email,
+      v_telefono,
       v_rol,
       case when v_rol = 'superadmin' then null else v_eleam_id end,
       coalesce((new.raw_user_meta_data->>'must_reset_password')::boolean, false)
@@ -2554,6 +2570,7 @@ begin
     on conflict (id) do update set
       nombre              = excluded.nombre,
       email               = excluded.email,
+      telefono            = excluded.telefono,
       rol                 = excluded.rol,
       eleam_id            = excluded.eleam_id,
       must_reset_password = excluded.must_reset_password;
@@ -2564,10 +2581,10 @@ begin
          select 1 from public.residentes r
          where r.id = v_residente_id
            and r.eleam_id = v_eleam_id
-           and r.estado = 'activo'
+           and r.estado in ('activo','hospitalizado')
        ) then
-      insert into public.familiar_residentes (profile_id, residente_id, creado_por)
-      values (new.id, v_residente_id, null)
+      insert into public.familiar_residentes (profile_id, residente_id, parentesco, creado_por)
+      values (new.id, v_residente_id, v_parentesco, null)
       on conflict do nothing;
     end if;
 
@@ -2631,7 +2648,7 @@ begin
         from public.residentes r
         where r.id = v_residente_id
           and r.eleam_id = v_eleam_id
-          and r.estado = 'activo'
+          and r.estado in ('activo','hospitalizado')
       ) then
         raise exception 'Provision familiar invalida para este residente'
           using errcode = '42501';
@@ -2697,7 +2714,7 @@ begin
         from public.residentes r
         where r.id = v_residente_id
           and r.eleam_id = v_eleam_id
-          and r.estado = 'activo'
+          and r.estado in ('activo','hospitalizado')
       ) then
         raise exception 'residente_id_direct invalido para este ELEAM'
           using errcode = '42501';
@@ -2712,7 +2729,7 @@ begin
   if new.raw_app_meta_data->>'provider' = 'google'
      or (new.raw_app_meta_data->'providers') @> '["google"]'::jsonb then
 
-    select i.id, lower(i.email) as email, i.rol, i.expira_en, i.usado, i.eleam_id, i.residente_id, i.creado_por
+    select i.id, i.nombre, i.telefono, i.parentesco, lower(i.email) as email, i.rol, i.expira_en, i.usado, i.eleam_id, i.residente_id, i.creado_por
     into v_invitacion
     from public.funcionario_invitaciones i
     where lower(i.email) = v_email
@@ -2726,6 +2743,9 @@ begin
       v_rol          := coalesce(v_invitacion.rol, 'funcionario');
       v_residente_id := v_invitacion.residente_id;
       v_invitado_por := v_invitacion.creado_por;
+      v_nombre       := coalesce(nullif(trim(v_invitacion.nombre), ''), v_nombre);
+      v_telefono     := nullif(trim(coalesce(v_invitacion.telefono, '')), '');
+      v_parentesco   := nullif(trim(coalesce(v_invitacion.parentesco, '')), '');
 
       if not public.eleam_has_access(v_eleam_id) then
         raise exception 'El acceso pendiente pertenece a un ELEAM sin acceso activo'
@@ -2741,7 +2761,7 @@ begin
           select 1 from public.residentes r
           where r.id = v_residente_id
             and r.eleam_id = v_eleam_id
-            and r.estado = 'activo'
+            and r.estado in ('activo','hospitalizado')
         ) then
           raise exception 'El residente asociado al acceso ya no esta activo'
             using errcode = '42501';
@@ -2752,18 +2772,19 @@ begin
       set usado = true, usado_en = now()
       where id = v_invitacion.id;
 
-      insert into public.profiles (id, nombre, email, rol, eleam_id, must_reset_password)
-      values (new.id, v_nombre, new.email, v_rol, v_eleam_id, false)
+      insert into public.profiles (id, nombre, email, telefono, rol, eleam_id, must_reset_password)
+      values (new.id, v_nombre, new.email, v_telefono, v_rol, v_eleam_id, false)
       on conflict (id) do update set
         nombre              = excluded.nombre,
         email               = excluded.email,
+        telefono            = excluded.telefono,
         rol                 = excluded.rol,
         eleam_id            = excluded.eleam_id,
         must_reset_password = false;
 
       if v_rol = 'familiar' and v_residente_id is not null then
-        insert into public.familiar_residentes (profile_id, residente_id, creado_por)
-        values (new.id, v_residente_id, v_invitado_por)
+        insert into public.familiar_residentes (profile_id, residente_id, parentesco, creado_por)
+        values (new.id, v_residente_id, v_parentesco, v_invitado_por)
         on conflict do nothing;
       end if;
 

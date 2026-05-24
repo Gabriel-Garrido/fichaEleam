@@ -27,7 +27,7 @@ export default function TeamOverview({
 }) {
   const pendingTotal = pendingFuncionarios + pendingFamiliares;
   const guidance = residentesActivos === 0
-    ? "Crea primero un residente activo para poder vincular familiares."
+    ? "Crea primero un residente activo u hospitalizado para poder vincular familiares."
     : limiteAlcanzado
       ? `Plan al límite: ${maxFunc} funcionarios. Edita permisos o actualiza el plan.`
       : "Crea la cuenta, define permisos por cargo y entrega el primer acceso.";
