@@ -3,6 +3,8 @@ import { isResidentInPlanQuota } from "../payment/planCatalog";
 import { DEFAULT_PERMS, PLANTILLAS_CARGO } from "../team/teamConstants";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const STAFF_NAME_MAX = 120;
+const EMAIL_MAX = 254;
 
 function clean(value) {
   if (value == null) return "";
@@ -355,7 +357,9 @@ export function normalizeStaffRows(rows, {
     const cargo = normalizeCargo(r.cargo, errors);
 
     if (!nombre) errors.push("Nombre completo es obligatorio.");
+    else if (nombre.length > STAFF_NAME_MAX) errors.push(`Nombre completo no puede superar ${STAFF_NAME_MAX} caracteres.`);
     if (!email) errors.push("Correo electrónico es obligatorio.");
+    else if (email.length > EMAIL_MAX) errors.push(`Correo electrónico no puede superar ${EMAIL_MAX} caracteres.`);
     else if (!validateEmail(email)) errors.push("Correo electrónico inválido.");
     if (email && knownEmails.has(email)) errors.push("Este correo ya existe o tiene invitación pendiente.");
     if (email && fileEmails.has(email)) errors.push("Correo duplicado dentro de la planilla.");

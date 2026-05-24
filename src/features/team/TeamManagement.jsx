@@ -766,6 +766,8 @@ export default function TeamManagement() {
                   <label className="text-xs uppercase font-semibold text-slate-500 mb-1 block">Nombre completo</label>
                   <Input
                     required
+                    maxLength={120}
+                    autoComplete="name"
                     placeholder="Juan Pérez"
                     value={createForm.nombre}
                     onChange={(e) => setCreateForm(f => ({ ...f, nombre: e.target.value }))}
@@ -779,6 +781,9 @@ export default function TeamManagement() {
                   <Input
                     type="email"
                     required
+                    maxLength={254}
+                    autoComplete="email"
+                    inputMode="email"
                     placeholder="usuario@correo.cl"
                     value={createForm.email}
                     onChange={(e) => setCreateForm(f => ({ ...f, email: e.target.value }))}

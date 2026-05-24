@@ -2,6 +2,15 @@ const INSTRUCTIONS_SHEET = "Instrucciones";
 const TEMPLATE_DATA_START_ROW = 2;
 const TEMPLATE_DATA_END_ROW = 501;
 
+export const EXCEL_IMPORT_LIMITS = {
+  maxFileSizeBytes: 2 * 1024 * 1024,
+  defaultMaxRows: TEMPLATE_DATA_END_ROW - TEMPLATE_DATA_START_ROW + 1,
+};
+
+function formatBytes(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function normalizeHeader(value) {
   return String(value ?? "")
     .normalize("NFD")
@@ -297,11 +306,20 @@ export async function downloadExcelTemplate(config) {
   await workbook.toFile(config.templateFilename);
 }
 
-export async function readExcelRows(file, config) {
+export function validateExcelFile(file, config = {}) {
   if (!file) throw new Error("Selecciona una planilla Excel.");
-  if (!file.name.toLowerCase().endsWith(".xlsx")) {
+  if (!String(file.name ?? "").toLowerCase().endsWith(".xlsx")) {
     throw new Error("Sube un archivo .xlsx. Si estás usando Excel, guarda la planilla como Libro de Excel (.xlsx).");
   }
+
+  const maxFileSizeBytes = config.maxFileSizeBytes ?? EXCEL_IMPORT_LIMITS.maxFileSizeBytes;
+  if (typeof file.size === "number" && file.size > maxFileSizeBytes) {
+    throw new Error(`La planilla pesa ${formatBytes(file.size)}. Sube un archivo de máximo ${formatBytes(maxFileSizeBytes)}.`);
+  }
+}
+
+export async function readExcelRows(file, config) {
+  validateExcelFile(file, config);
 
   const { readXlsxFile, readSheet } = await loadReader();
   let sheetRows = [];
@@ -352,6 +370,11 @@ export async function readExcelRows(file, config) {
     }
     if (hasData) rows.push({ rowNumber: index + 2, raw });
   });
+
+  const maxRows = config.maxRows ?? EXCEL_IMPORT_LIMITS.defaultMaxRows;
+  if (rows.length > maxRows) {
+    throw new Error(`La planilla tiene ${rows.length} filas con datos. Importa máximo ${maxRows} filas por carga.`);
+  }
 
   return rows;
 }

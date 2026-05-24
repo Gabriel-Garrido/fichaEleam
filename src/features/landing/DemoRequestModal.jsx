@@ -1,54 +1,40 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Modal from "../../components/Modal";
+import useSessionFormDraft from "../../hooks/useSessionFormDraft";
 import { isSupabaseConfigured } from "../../services/supabaseConfig";
 import { trackEvent } from "./landingAnalytics";
+import { getLandingContext } from "./landingContext";
 import { normalizeDemoLeadForm, validateDemoLeadForm } from "./demoLeadUtils";
 import { requestDemoLead } from "./landingService";
 
 const CARGOS = ["Director/a", "Administrador/a", "Encargado/a", "Prof. de salud", "Otro"];
 const RESIDENTES_OPTS = ["Menos de 15", "15 a 24", "25 a 34", "35 o más"];
-
-function getUtms() {
-  try {
-    const p = new URLSearchParams(window.location.search);
-    return {
-      utm_source:   p.get("utm_source")   ?? null,
-      utm_medium:   p.get("utm_medium")   ?? null,
-      utm_campaign: p.get("utm_campaign") ?? null,
-    };
-  } catch {
-    return { utm_source: null, utm_medium: null, utm_campaign: null };
-  }
-}
+const DEMO_FORM_INITIAL = {
+  nombre: "",
+  cargo: "",
+  eleam_nombre: "",
+  email: "",
+  telefono: "",
+  num_residentes: "",
+};
 
 export default function DemoRequestModal({ isOpen, onClose, defaultCta = null }) {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    nombre: "", cargo: "", eleam_nombre: "",
-    email: "", telefono: "", num_residentes: "",
-  });
+  const [form, setForm, resetFormDraft] = useSessionFormDraft("fe_demo_request_draft", DEMO_FORM_INITIAL);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState("idle"); // idle | submitting | success | error
   const [errorMsg, setErrorMsg] = useState("");
   const [demoResult, setDemoResult] = useState(null);
-  const firstInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
-      setForm({ nombre: "", cargo: "", eleam_nombre: "", email: "", telefono: "", num_residentes: "" });
       setErrors({});
       setStatus("idle");
       setDemoResult(null);
       trackEvent("form_view", "demo_request_modal", defaultCta);
-      setTimeout(() => firstInputRef.current?.focus(), 50);
     }
   }, [isOpen, defaultCta]);
-
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    if (isOpen) document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose]);
 
   const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
 
@@ -67,15 +53,11 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
     }
     setStatus("submitting");
     try {
-      const utms = getUtms();
-      const payload = normalizeDemoLeadForm(form, {
-        ...utms,
-        pagina_origen: window.location.pathname,
-        referrer: document.referrer || null,
-      });
+      const payload = normalizeDemoLeadForm(form, getLandingContext());
       const data = await requestDemoLead(payload);
       trackEvent("form_submit", "demo_request_modal", defaultCta);
       setDemoResult(data ?? null);
+      resetFormDraft();
       setStatus("success");
     } catch (error) {
       const raw = String(error?.message || "").toLowerCase();
@@ -88,17 +70,15 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
     }
   }
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="modal-title"
+      showCloseButton={false}
+      backdropClassName="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70"
+      panelClassName="max-w-lg p-0 rounded-2xl sm:rounded-2xl shadow-2xl max-h-[95vh] sm:max-h-[95vh]"
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[95vh] overflow-y-auto">
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 rounded-t-2xl p-6 text-white">
           <div className="flex justify-between items-start">
             <div>
@@ -165,9 +145,11 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                   Nombre completo *
                 </label>
                 <input
-                  ref={firstInputRef}
                   id="demo-nombre"
                   type="text"
+                  name="name"
+                  autoComplete="name"
+                  maxLength={120}
                   value={form.nombre}
                   onChange={set("nombre")}
                   placeholder="María González"
@@ -184,6 +166,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 <label htmlFor="demo-cargo" className="block text-xs font-semibold text-slate-600 mb-1">Cargo *</label>
                 <select
                   id="demo-cargo"
+                  name="organization-title"
                   value={form.cargo}
                   onChange={set("cargo")}
                   aria-invalid={errors.cargo ? "true" : undefined}
@@ -206,6 +189,9 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
               <input
                 id="demo-eleam_nombre"
                 type="text"
+                name="organization"
+                autoComplete="organization"
+                maxLength={160}
                 value={form.eleam_nombre}
                 onChange={set("eleam_nombre")}
                 placeholder="Residencia Los Arrayanes"
@@ -224,6 +210,10 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 <input
                   id="demo-email"
                   type="email"
+                  name="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  maxLength={254}
                   value={form.email}
                   onChange={set("email")}
                   placeholder="tu@residencia.cl"
@@ -243,6 +233,10 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 <input
                   id="demo-telefono"
                   type="tel"
+                  name="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  maxLength={40}
                   value={form.telefono}
                   onChange={set("telefono")}
                   placeholder="+56 9 XXXX XXXX"
@@ -262,6 +256,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
               </label>
               <select
                 id="demo-num_residentes"
+                name="resident-count"
                 value={form.num_residentes}
                 onChange={set("num_residentes")}
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 bg-white"
@@ -288,7 +283,6 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
             </p>
           </form>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

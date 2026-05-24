@@ -263,7 +263,7 @@ async function loadEmarTurno(fecha, turno) {
         })),
     };
   } catch (error) {
-    console.warn("No se pudo cargar eMAR para entrega de turno:", error);
+    console.warn("No se pudieron cargar medicamentos para entrega de turno:", error);
     return {
       resumen: { total: 0, pendiente: 0, administrado: 0, omitido: 0, pendiente_validacion: 0, validado: 0, cancelado: 0, controlados: 0, vencidas: 0 },
       pendientes: [],

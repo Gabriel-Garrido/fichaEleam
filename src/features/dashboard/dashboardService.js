@@ -232,6 +232,14 @@ export async function getExpiringDocuments(daysAhead = 30) {
   return data ?? [];
 }
 
+export async function getPendingClinicalAssessments(horizonteDias = 30) {
+  const { data, error } = await supabase.rpc("evaluaciones_pendientes_eleam", {
+    p_horizonte_dias: horizonteDias,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function loadDashboard() {
   const [
     residentStatsResult,
@@ -245,6 +253,7 @@ export async function loadDashboard() {
     acreditacionResult,
     operationalResult,
     bedsResult,
+    assessmentsResult,
   ] = await Promise.allSettled([
     getResidentStats(),
     getTodayVitalSignsCount(),
@@ -257,6 +266,7 @@ export async function loadDashboard() {
     getAccreditationSummary(),
     getOperationalTurnSummary(),
     getBedOccupancySummary(),
+    getPendingClinicalAssessments(30),
   ]);
 
   const ok = (r) => r.status === "fulfilled";
@@ -273,6 +283,7 @@ export async function loadDashboard() {
     acreditacionSummary:  ok(acreditacionResult)     ? acreditacionResult.value     : null,
     operationalSummary:   ok(operationalResult)      ? operationalResult.value      : null,
     bedSummary:           ok(bedsResult)             ? bedsResult.value             : null,
+    pendingAssessments:   ok(assessmentsResult)      ? assessmentsResult.value      : [],
     errors: {
       residentStats:    !ok(residentStatsResult),
       actividad:        !ok(signosHoyResult) || !ok(observacionesHoyResult),
@@ -284,6 +295,7 @@ export async function loadDashboard() {
       acreditacion:     !ok(acreditacionResult),
       operational:       !ok(operationalResult),
       beds:              !ok(bedsResult),
+      assessments:       !ok(assessmentsResult),
     },
   };
 }

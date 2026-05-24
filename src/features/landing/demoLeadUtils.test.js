@@ -24,6 +24,23 @@ describe("normalizeDemoLeadForm", () => {
       p_pagina_origen: "/",
     });
   });
+
+  it("bounds public metadata before sending it to the RPC", () => {
+    const payload = normalizeDemoLeadForm({
+      nombre: "A".repeat(200),
+      cargo: "Director/a",
+      eleam_nombre: "Residencia Norte",
+      email: "maria@example.cl",
+      telefono: "+56 9 1234 5678",
+    }, {
+      utm_campaign: "x".repeat(200),
+      referrer: "https://example.cl/".padEnd(700, "r"),
+    });
+
+    expect(payload.p_nombre).toHaveLength(120);
+    expect(payload.p_utm_campaign).toHaveLength(128);
+    expect(payload.p_referrer).toHaveLength(512);
+  });
 });
 
 describe("validateDemoLeadForm", () => {
@@ -51,5 +68,20 @@ describe("validateDemoLeadForm", () => {
       email: "maria@example.cl",
       telefono: "+56 9 1234 5678",
     })).toEqual({});
+  });
+
+  it("rejects oversized visible fields before submit", () => {
+    expect(validateDemoLeadForm({
+      nombre: "A".repeat(121),
+      cargo: "B".repeat(81),
+      eleam_nombre: "C".repeat(161),
+      email: "maria@example.cl",
+      telefono: "+56 9 1234 5678".padEnd(41, "0"),
+    })).toMatchObject({
+      nombre: "Máximo 120 caracteres",
+      cargo: "Máximo 80 caracteres",
+      eleam_nombre: "Máximo 160 caracteres",
+      telefono: "Máximo 40 caracteres",
+    });
   });
 });

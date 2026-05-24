@@ -19,12 +19,13 @@ import {
   todayIso,
   currentTurno,
 } from "../carePlans/carePlansService";
+import CollapsibleGuide from "../../components/CollapsibleGuide";
+import MetricCard from "../../components/MetricCard";
 import {
   CareTaskModal,
   MedicationTaskModal,
-  Metric,
   RescheduleCareTaskModal,
-  TurnWorkflowGuide,
+  SeguimientoModal,
   WorkItemRow,
 } from "../carePlans/CareTasksPage";
 import {
@@ -33,12 +34,18 @@ import {
   matchesType,
   normalizeCareTask,
   normalizeMedication,
+  normalizeSeguimiento,
 } from "../carePlans/careTasksBoardUtils";
 import {
   administerMedication,
   listMedicationAdministrations,
   validateControlledAdministration,
 } from "../emar/emarService";
+import {
+  continuarSeguimiento,
+  getPendingSeguimientos,
+  resolverSeguimiento,
+} from "../observations/observationsService";
 import {
   getVisits,
   validateVisitEntry,
@@ -50,6 +57,10 @@ import {
   STATUS,
   recordOverallLabel,
 } from "../vitalSigns/vitalRanges";
+import ResidentTraceabilityTab from "./ResidentTraceabilityTab";
+import ClinicalAssessmentBadge from "../clinicalAssessments/ClinicalAssessmentBadge";
+import { listAssessments } from "../clinicalAssessments/clinicalAssessmentService";
+import { evaluationStatus, ASSESSMENT_TYPES } from "../clinicalAssessments/clinicalAssessmentRules";
 
 import {
   ESTADO_BADGE,
@@ -121,9 +132,10 @@ function ResidentDetails() {
     { id: "info",          label: "Información" },
     { id: "signos",        label: "Signos Vitales" },
     { id: "observaciones", label: "Observaciones" },
-    canFeature("care-plans") && { id: "tareas",  label: "Tareas diarias" },
+    canFeature("care-plans") && { id: "tareas",  label: "Tareas del turno" },
+    { id: "trazabilidad", label: "Trazabilidad" },
     canFeature("care-plans") && { id: "care",    label: "Plan de cuidado" },
-    canFeature("emar")       && { id: "emar",    label: "eMAR" },
+    canFeature("emar")       && { id: "emar",    label: "Medicamentos" },
     can("registrar_visitas") && { id: "visitas", label: "Visitas" },
   ].filter(Boolean);
 
@@ -271,10 +283,85 @@ function ResidentDetails() {
       {tab === "signos"        && <SignosTab residenteId={id} navigate={navigate} />}
       {tab === "observaciones" && <ObservacionesTab residenteId={id} navigate={navigate} />}
       {tab === "tareas"        && <ResidentDailyTasksTab residenteId={id} />}
+      {tab === "trazabilidad"  && <ResidentTraceabilityTab residenteId={id} />}
       {tab === "care"          && <CarePlanTab resident={resident} />}
       {tab === "emar"          && <EmarResidentTab resident={resident} />}
       {tab === "visitas"       && <VisitasTab residenteId={id} />}
     </div>
+  );
+}
+
+function ClinicalScalesSection({ resident }) {
+  const [byTipo, setByTipo] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    if (!resident?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listAssessments(resident.id, { limit: 30 });
+      const grouped = ASSESSMENT_TYPES.reduce((acc, tipo) => {
+        acc[tipo] = data.filter((row) => row.tipo === tipo);
+        return acc;
+      }, {});
+      setByTipo(grouped);
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo cargar el historial de evaluaciones.");
+    } finally {
+      setLoading(false);
+    }
+  }, [resident?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const hasAnyOverdue = useMemo(() => {
+    return ASSESSMENT_TYPES.some((tipo) => {
+      const latest = byTipo[tipo]?.[0];
+      return evaluationStatus(latest?.proxima_evaluacion).state === "overdue";
+    });
+  }, [byTipo]);
+
+  return (
+    <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-slate-100 pb-2">
+        <div>
+          <h3 className="font-semibold text-slate-700">Escalas funcionales</h3>
+          <p className="text-xs text-slate-500">
+            Reevaluación cada 6 meses según norma MINSAL, o antes ante hospitalización, caída o cambio clínico.
+          </p>
+        </div>
+        {hasAnyOverdue && (
+          <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
+            Tienes reevaluaciones pendientes
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+          <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+        </div>
+      ) : error ? (
+        <p className="text-sm text-rose-600">{error}</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {ASSESSMENT_TYPES.map((tipo) => (
+            <ClinicalAssessmentBadge
+              key={tipo}
+              tipo={tipo}
+              resident={resident}
+              latest={byTipo[tipo]?.[0]}
+              history={byTipo[tipo]?.slice(1) ?? []}
+              onChanged={load}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -335,11 +422,6 @@ function InfoTab({ resident }) {
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <InfoRow label="Diagnóstico principal" value={resident.diagnostico_principal} />
           <InfoRow label="Nivel de dependencia"  value={resident.nivel_dependencia} />
-          <InfoRow
-            label="Índice de Barthel"
-            value={resident.indice_barthel != null ? `${resident.indice_barthel}/100` : null}
-          />
-          <InfoRow label="Escala Katz" value={resident.escala_katz} />
           {(allergies.hasRealAllergies || allergies.hasExplicitNoKnownAllergies) && (
             <div>
               <dt className="text-xs text-slate-400 uppercase tracking-wide">Alergias</dt>
@@ -358,6 +440,8 @@ function InfoTab({ resident }) {
           )}
         </dl>
       </section>
+
+      <ClinicalScalesSection resident={resident} />
 
       <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
         <h3 className="font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">Contacto de Emergencia</h3>
@@ -1049,7 +1133,7 @@ function VisitasTab({ residenteId }) {
   );
 }
 
-/* ─── Tareas diarias del residente ──────────────────────────── */
+/* ─── Tareas del turno del residente ────────────────────────── */
 
 function ResidentDailyTasksTab({ residenteId }) {
   const toast = useToast();
@@ -1057,6 +1141,7 @@ function ResidentDailyTasksTab({ residenteId }) {
   const canComplete = can("completar_tareas_cuidado");
   const canAdminister = can("administrar_medicamentos");
   const canValidate = can("validar_medicamentos_controlados");
+  const canResolveSeguimiento = can("crear_observaciones");
 
   const [fecha, setFecha] = useState(todayIso());
   const [turno, setTurno] = useState(currentTurno());
@@ -1070,16 +1155,19 @@ function ResidentDailyTasksTab({ residenteId }) {
   const [careModal, setCareModal] = useState(null);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [medModal, setMedModal] = useState(null);
+  const [seguimientoModal, setSeguimientoModal] = useState(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const [careRows, medRows] = await Promise.all([
+      const [careRows, medRows, seguimientos] = await Promise.all([
         listCareTasks({ residenteId, fecha, turno, estado: null, generate: true, limit: 500 }),
         listMedicationAdministrations({ residenteId, fecha, turno, estado: null, generate: true, limit: 500 }),
+        getPendingSeguimientos(fecha, turno, { residenteId }).catch(() => []),
       ]);
       setAllItems([
+        ...seguimientos.map(normalizeSeguimiento),
         ...careRows.map(normalizeCareTask),
         ...medRows.map(normalizeMedication),
       ].sort((a, b) => `${a.fecha}T${a.hora ?? "00:00"}`.localeCompare(`${b.fecha}T${b.hora ?? "00:00"}`)));
@@ -1113,12 +1201,13 @@ function ResidentDailyTasksTab({ residenteId }) {
       acc.total += 1;
       if (item.source === "care") acc.cuidado += 1;
       if (item.source === "med") acc.medicamentos += 1;
+      if (item.source === "seguimiento") acc.seguimientos += 1;
       if (item.open) acc.pendientes += 1;
       if (item.estado === "reprogramada") acc.reprogramadas += 1;
       if (item.estado === "pendiente_validacion") acc.porValidar += 1;
       if (item.overdue) acc.vencidas += 1;
       return acc;
-    }, { total: 0, pendientes: 0, vencidas: 0, cuidado: 0, medicamentos: 0, porValidar: 0, reprogramadas: 0 });
+    }, { total: 0, pendientes: 0, vencidas: 0, cuidado: 0, medicamentos: 0, seguimientos: 0, porValidar: 0, reprogramadas: 0 });
   }, [allItems]);
 
   const handleCareClose = async ({ action, notas, motivo, seguimiento, seguimientoFecha, seguimientoTurno }) => {
@@ -1175,7 +1264,7 @@ function ResidentDailyTasksTab({ residenteId }) {
     try {
       if (payload.action === "validar") {
         await validateControlledAdministration({ id: payload.row.id, notas: payload.notas });
-        toast("Administración controlada validada.", "success");
+        toast("Registro de medicamento validado.", "success");
       } else {
         await administerMedication({
           id: payload.row.id,
@@ -1194,7 +1283,27 @@ function ResidentDailyTasksTab({ residenteId }) {
       await load(true);
     } catch (err) {
       console.error(err);
-      toast(err.message || "No se pudo guardar el registro eMAR.", "error");
+      toast(err.message || "No se pudo guardar el registro de medicamento.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSeguimientoSubmit = async ({ id, notas, continuar, nuevaFecha, nuevoTurno }) => {
+    setSaving(true);
+    try {
+      if (continuar) {
+        await continuarSeguimiento(id, { notas, nuevaFecha, nuevoTurno });
+        toast("Seguimiento registrado. Nuevo pendiente creado para el turno indicado.", "success");
+      } else {
+        await resolverSeguimiento(id, { notas });
+        toast("Seguimiento finalizado correctamente.", "success");
+      }
+      setSeguimientoModal(null);
+      await load(true);
+    } catch (err) {
+      console.error(err);
+      toast(err.message || "No se pudo resolver el seguimiento.", "error");
     } finally {
       setSaving(false);
     }
@@ -1214,7 +1323,7 @@ function ResidentDailyTasksTab({ residenteId }) {
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-teal-700">
             Tareas del residente
             <HelpTooltip label="Ayuda: tareas del residente">
-              Esta vista genera y muestra solo las tareas de cuidado y eMAR del residente para la fecha y turno seleccionados. Reintentar no duplica registros.
+              Esta vista genera y muestra tareas de cuidado, medicamentos y seguimientos del residente para la fecha y turno seleccionados. Reintentar no duplica registros.
             </HelpTooltip>
           </div>
           <div className="mt-1 text-sm font-semibold text-teal-950">
@@ -1246,21 +1355,32 @@ function ResidentDailyTasksTab({ residenteId }) {
             className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
             <option value="todos">Todo</option>
             <option value="cuidado">Cuidado</option>
-            <option value="medicamentos">eMAR</option>
+            <option value="medicamentos">Medicamentos</option>
+            <option value="seguimientos">Seguimientos</option>
           </select>
         </label>
       </section>
 
-      <TurnWorkflowGuide />
+      <CollapsibleGuide
+        storageKey="residentTasks"
+        title="¿Cómo funciona la bandeja del residente?"
+        steps={[
+          { title: "Cargar", text: "Muestra tareas recurrentes del turno generadas automáticamente." },
+          { title: "Ejecutar", text: "Cumple cuidados o administra medicamentos dentro de la ventana indicada." },
+          { title: "Reprogramar u omitir", text: "Si no corresponde ejecutar, deja motivo, nueva hora o trazabilidad." },
+          { title: "Seguimiento", text: "Activa seguimiento cuando el equipo deba revisar la evolución después." },
+        ]}
+      />
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-7">
-        <Metric label="Total" value={metrics.total} />
-        <Metric label="Pendientes" value={metrics.pendientes} tone="amber" />
-        <Metric label="Vencidas" value={metrics.vencidas} tone="rose" />
-        <Metric label="Reprogramadas" value={metrics.reprogramadas} tone="sky" />
-        <Metric label="Cuidado" value={metrics.cuidado} tone="teal" />
-        <Metric label="eMAR" value={metrics.medicamentos} tone="sky" />
-        <Metric label="Por validar" value={metrics.porValidar} tone="sky" />
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
+        <MetricCard label="Total" value={metrics.total} />
+        <MetricCard label="Pendientes" value={metrics.pendientes} tone="amber" />
+        <MetricCard label="Vencidas" value={metrics.vencidas} tone="rose" />
+        <MetricCard label="Reprogramadas" value={metrics.reprogramadas} tone="sky" />
+        <MetricCard label="Cuidado" value={metrics.cuidado} tone="teal" />
+        <MetricCard label="Medicamentos" value={metrics.medicamentos} tone="sky" />
+        <MetricCard label="Seguimientos" value={metrics.seguimientos} tone="amber" />
+        <MetricCard label="Por validar" value={metrics.porValidar} tone="sky" />
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1285,7 +1405,7 @@ function ResidentDailyTasksTab({ residenteId }) {
               </svg>
             </div>
             <p className="text-sm font-semibold text-slate-950">Sin tareas para estos filtros</p>
-            <p className="mt-1 text-sm text-slate-500">Cambia fecha, turno o configura el plan/eMAR del residente.</p>
+            <p className="mt-1 text-sm text-slate-500">Cambia fecha, turno o configura el plan, medicamentos y seguimientos del residente.</p>
             <button type="button" onClick={() => load(true)} className="mt-4 rounded-xl border border-teal-200 px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">
               Generar / actualizar
             </button>
@@ -1299,10 +1419,12 @@ function ResidentDailyTasksTab({ residenteId }) {
                 canComplete={canComplete}
                 canAdminister={canAdminister}
                 canValidate={canValidate}
+                canResolveSeguimiento={canResolveSeguimiento}
                 currentUserId={profile?.id ?? null}
                 onCareAction={(action) => setCareModal({ action, row: item.row })}
                 onCareReschedule={() => setRescheduleModal({ row: item.row })}
                 onMedicationAction={(action) => setMedModal({ action, row: item.row })}
+                onSeguimientoAction={() => setSeguimientoModal({ obs: item.row })}
               />
             ))}
           </ul>
@@ -1312,6 +1434,7 @@ function ResidentDailyTasksTab({ residenteId }) {
       <CareTaskModal modal={careModal} saving={saving} onClose={() => !saving && setCareModal(null)} onSubmit={handleCareClose} />
       <RescheduleCareTaskModal modal={rescheduleModal} saving={saving} onClose={() => !saving && setRescheduleModal(null)} onSubmit={handleCareReschedule} />
       <MedicationTaskModal modal={medModal} saving={saving} onClose={() => !saving && setMedModal(null)} onSubmit={handleMedicationSubmit} />
+      <SeguimientoModal modal={seguimientoModal} saving={saving} onClose={() => !saving && setSeguimientoModal(null)} onSubmit={handleSeguimientoSubmit} />
     </div>
   );
 }

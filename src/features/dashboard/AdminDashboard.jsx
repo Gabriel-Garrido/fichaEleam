@@ -17,7 +17,7 @@ import {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { profile, eleam, rol } = useAuth();
+  const { profile, eleam, rol, can, canFeature } = useAuth();
 
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -111,28 +111,63 @@ export default function AdminDashboard() {
     };
   }, [data, clinicalSummary]);
 
+  const canUse = (featureId, permission = null) =>
+    canFeature(featureId) && (!permission || can(permission));
+
+  const headerActions = [
+    canUse("turnos") && {
+      key: "shift",
+      label: "Entrega de turno",
+      className: "rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800",
+      onClick: () => navigate("/turnos/nueva"),
+    },
+    canUse("vital-signs", "crear_signos_vitales") && {
+      key: "vitals",
+      label: "Registrar control",
+      className: "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50",
+      onClick: () => navigate("/vital-signs/new"),
+    },
+  ].filter(Boolean);
+
+  const mainQuickActions = [
+    canUse("turnos") && { iconId: "shift", label: "Entrega de turno", route: "/turnos/nueva" },
+    canUse("care-plans") && { iconId: "tasks", label: "Tareas diarias", route: "/turnos/tareas" },
+    canUse("emar", "administrar_medicamentos") && { iconId: "meds", label: "Medicamentos del turno", route: "/turnos/emar" },
+    canUse("vital-signs", "crear_signos_vitales") && { iconId: "vitals", label: "Registrar signos vitales", route: "/vital-signs/new" },
+    canUse("observations", "crear_observaciones") && { iconId: "observations", label: "Nueva observación", route: "/observations/new" },
+    rol !== "funcionario" && canUse("accreditation") && { iconId: "accreditation", label: "Carpeta SEREMI", route: "/accreditation/carpeta" },
+    rol === "funcionario" && canUse("residents") && { iconId: "residents", label: "Ver residentes", route: "/residents" },
+  ].filter(Boolean);
+
+  const extraQuickActions = [
+    canUse("residents", "crear_residentes") && { iconId: "residents", label: "Agregar residente", route: "/residents/new" },
+    canUse("residents") && { iconId: "residents", label: "Ver residentes", route: "/residents" },
+    canUse("vital-signs") && { iconId: "vitals", label: "Historial signos", route: "/vital-signs" },
+    canUse("observations") && { iconId: "observations", label: "Ver observaciones", route: "/observations" },
+    canUse("accreditation") && { iconId: "accreditation", label: "Panel acreditación", route: "/accreditation" },
+    rol !== "funcionario" && canUse("team") && { iconId: "team", label: "Gestionar equipo", route: "/equipo" },
+  ].filter(Boolean);
+
   return (
     <PageLayout
       title={profile?.nombre ? `Hola, ${profile.nombre}` : "Inicio"}
       eyebrow={`${todayDateLong()} · turno ${turno}`}
       description={`${eleam?.nombre ? `${eleam.nombre}. ` : ""}${loading ? "Cargando actividad del día..." : `${data?.signosHoy ?? 0} signos vitales y ${data?.observacionesHoy ?? 0} observaciones registradas hoy${cobertura ? ` · ${cobertura.pct}% de cobertura` : ""}.`}`}
       actions={
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-          <button
-            type="button"
-            onClick={() => navigate("/turnos/nueva")}
-            className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
-          >
-            Entrega de turno
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/vital-signs/new")}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Registrar control
-          </button>
-        </div>
+        headerActions.length > 0 ? (
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+            {headerActions.map((action) => (
+              <button
+                key={action.key}
+                type="button"
+                onClick={action.onClick}
+                className={action.className}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        ) : null
       }
       className="space-y-6"
     >
@@ -282,6 +317,7 @@ export default function AdminDashboard() {
         followUps={data?.pendingFollowUps ?? []}
         expiring={data?.expiringDocuments ?? []}
         operational={operational}
+        assessments={data?.pendingAssessments ?? []}
         loading={loading}
         navigate={navigate}
       />
@@ -327,45 +363,45 @@ export default function AdminDashboard() {
         </div>
       </details>
 
-      {/* Quick actions — rol-specific */}
-      <section>
-        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-          Acciones principales
-          <HelpTooltip className="ml-2" label="Ayuda sobre acciones rápidas">
-            Tareas más repetidas del turno. Las consultas secundarias quedan agrupadas abajo.
-          </HelpTooltip>
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction iconId="shift"        label="Entrega de turno"         onClick={() => navigate("/turnos/nueva")} />
-          <QuickAction iconId="tasks"        label="Tareas diarias"           onClick={() => navigate("/turnos/tareas")} />
-          <QuickAction iconId="meds"         label="eMAR turno"               onClick={() => navigate("/turnos/emar")} />
-          <QuickAction iconId="vitals"       label="Registrar signos vitales" onClick={() => navigate("/vital-signs/new")} />
-          <QuickAction iconId="observations" label="Nueva observación"        onClick={() => navigate("/observations/new")} />
-          {rol !== "funcionario" && (
-            <QuickAction iconId="accreditation" label="Carpeta SEREMI" onClick={() => navigate("/accreditation/carpeta")} />
-          )}
-          {rol === "funcionario" && (
-            <QuickAction iconId="residents" label="Ver residentes" onClick={() => navigate("/residents")} />
-          )}
-        </div>
-        <details className="group mt-3 rounded-xl border border-slate-100 bg-white">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-700">
-            <span>Más accesos</span>
-            <span className="text-xs text-slate-400 group-open:hidden">Ver</span>
-            <span className="hidden text-xs text-slate-400 group-open:inline">Ocultar</span>
-          </summary>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-slate-100 p-3">
-            <QuickAction iconId="residents"    label="Agregar residente"  onClick={() => navigate("/residents/new")} />
-            <QuickAction iconId="residents"    label="Ver residentes"     onClick={() => navigate("/residents")} />
-            <QuickAction iconId="vitals"       label="Historial signos"   onClick={() => navigate("/vital-signs")} />
-            <QuickAction iconId="observations" label="Ver observaciones"  onClick={() => navigate("/observations")} />
-            <QuickAction iconId="accreditation" label="Panel acreditación" onClick={() => navigate("/accreditation")} />
-            {rol !== "funcionario" && (
-              <QuickAction iconId="team" label="Gestionar equipo" onClick={() => navigate("/equipo")} />
-            )}
+      {mainQuickActions.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Acciones principales
+            <HelpTooltip className="ml-2" label="Ayuda sobre acciones rápidas">
+              Tareas disponibles para tu rol y permisos actuales. Las consultas secundarias quedan agrupadas abajo.
+            </HelpTooltip>
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {mainQuickActions.map((action) => (
+              <QuickAction
+                key={action.route}
+                iconId={action.iconId}
+                label={action.label}
+                onClick={() => navigate(action.route)}
+              />
+            ))}
           </div>
-        </details>
-      </section>
+          {extraQuickActions.length > 0 && (
+            <details className="group mt-3 rounded-xl border border-slate-100 bg-white">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-700">
+                <span>Más accesos</span>
+                <span className="text-xs text-slate-400 group-open:hidden">Ver</span>
+                <span className="hidden text-xs text-slate-400 group-open:inline">Ocultar</span>
+              </summary>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-slate-100 p-3">
+                {extraQuickActions.map((action) => (
+                  <QuickAction
+                    key={action.route}
+                    iconId={action.iconId}
+                    label={action.label}
+                    onClick={() => navigate(action.route)}
+                  />
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
+      )}
     </PageLayout>
   );
 }
@@ -383,11 +419,11 @@ function OperationalTurnPanel({ loading, summary, navigate }) {
   return (
     <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <OperationalCard
-        title="eMAR del turno"
+        title="Medicamentos del turno"
         value={emarPending}
         tone={emarTone}
         sub={`${emar.pendiente ?? 0} pendientes · ${emar.pendiente_validacion ?? 0} por validar · ${emar.vencidas ?? 0} vencidos`}
-        action="Abrir eMAR"
+        action="Abrir medicamentos"
         onClick={() => navigate("/turnos/emar")}
       />
       <OperationalCard

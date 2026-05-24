@@ -6,6 +6,7 @@ import {
   normalizeWhatsAppLeadForm,
   validateWhatsAppLeadForm,
   WHATSAPP_CARGO_TAG,
+  WHATSAPP_FIELD_LIMITS,
   WHATSAPP_PHONE,
   WHATSAPP_UTM_MEDIUM,
   WHATSAPP_UTM_SOURCE,
@@ -53,6 +54,20 @@ describe("validateWhatsAppLeadForm", () => {
       }).telefono,
     ).toBe("Ingresa un teléfono válido");
   });
+
+  it("rechaza campos por sobre los límites permitidos", () => {
+    const errors = validateWhatsAppLeadForm({
+      nombre: "A".repeat(121),
+      eleam_nombre: "E".repeat(161),
+      email: `${"a".repeat(250)}@mail.cl`,
+      telefono: `+56${"9".repeat(41)}`,
+    });
+
+    expect(errors.nombre).toBe("Máximo 120 caracteres");
+    expect(errors.eleam_nombre).toBe("Máximo 160 caracteres");
+    expect(errors.email).toBe("Máximo 254 caracteres");
+    expect(errors.telefono).toBe("Máximo 40 caracteres");
+  });
 });
 
 describe("normalizeWhatsAppLeadForm", () => {
@@ -93,6 +108,23 @@ describe("normalizeWhatsAppLeadForm", () => {
     );
     expect(payload.p_utm_campaign).toBe("lanzamiento_2026");
     expect(payload.p_utm_medium).toBe("qr_flyer");
+  });
+
+  it("trunca metadatos externos antes de enviarlos a Supabase", () => {
+    const payload = normalizeWhatsAppLeadForm(
+      { nombre: "Ana", eleam_nombre: "R", email: "a@b.cl", telefono: "+56912345678" },
+      {
+        utm_campaign: "c".repeat(200),
+        utm_medium: "m".repeat(200),
+        pagina_origen: "/".padEnd(400, "p"),
+        referrer: "https://example.com/".padEnd(700, "r"),
+      },
+    );
+
+    expect(payload.p_utm_campaign).toHaveLength(WHATSAPP_FIELD_LIMITS.utm_campaign);
+    expect(payload.p_utm_medium).toHaveLength(WHATSAPP_FIELD_LIMITS.utm_medium);
+    expect(payload.p_pagina_origen).toHaveLength(WHATSAPP_FIELD_LIMITS.pagina_origen);
+    expect(payload.p_referrer).toHaveLength(WHATSAPP_FIELD_LIMITS.referrer);
   });
 });
 

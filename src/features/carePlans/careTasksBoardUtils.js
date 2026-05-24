@@ -6,10 +6,10 @@ import {
   isCareTaskOverdue,
 } from "./carePlansService";
 import {
-  MED_STATUS_LABEL,
   isMedicationOverdue,
   medicationDueAt,
 } from "../emar/emarService";
+import { MEDICINE_STATUS_LABEL } from "../emar/emarUi";
 
 export const PRIORITY_LABEL = { baja: "Baja", media: "Media", alta: "Alta", urgente: "Urgente" };
 export const PRIORITY_TONE = {
@@ -32,6 +32,9 @@ export const FILTER_LABEL = {
   cerradas: "Cerradas",
   todas: "Todas",
 };
+
+const CLOSED_STATES = ["cumplida", "omitida", "cancelada", "administrado", "validado", "omitido", "cancelado"];
+const SOURCE_ORDER = { seguimiento: 0, med: 1, care: 2, vitals: 3 };
 
 function formatMedicationDueWindow(row) {
   const dueAt = medicationDueAt(row);
@@ -78,8 +81,8 @@ export function normalizeMedication(row) {
     estado: row.estado,
     title: row.indicacion?.medicamento_nombre ?? "Medicamento",
     resident: row.residentes,
-    statusLabel: MED_STATUS_LABEL[row.estado] ?? row.estado,
-    typeLabel: "eMAR",
+    statusLabel: MEDICINE_STATUS_LABEL[row.estado] ?? row.estado,
+    typeLabel: "Medicamento",
     meta: [row.indicacion?.dosis, row.indicacion?.via ? `vía ${row.indicacion.via}` : null].filter(Boolean).join(" · "),
     detail: row.lote
       ? `Lote ${row.lote.lote || "s/l"} · stock ${row.lote.cantidad_actual} ${row.lote.unidad}`
@@ -146,7 +149,7 @@ export function normalizeSeguimiento(obs) {
     fecha: obs.seguimiento_fecha,
     hora,
     estado: "pendiente",
-    title: "Seguimiento clínico",
+    title: "Control de seguimiento",
     resident: obs.residentes,
     statusLabel: "Pendiente",
     typeLabel: "Seguimiento",
@@ -167,7 +170,7 @@ export function matchesFilter(item, filter) {
   if (filter === "vencidas") return item.overdue;
   if (filter === "pendientes") return item.open === true;
   if (filter === "cerradas") {
-    return ["cumplida", "omitida", "cancelada", "administrado", "validado", "omitido", "cancelado"].includes(item.estado);
+    return CLOSED_STATES.includes(item.estado);
   }
   return true;
 }
@@ -179,4 +182,70 @@ export function matchesType(item, type) {
   if (type === "signos") return item.source === "vitals";
   if (type === "seguimientos") return item.source === "seguimiento";
   return true;
+}
+
+export function buildTaskMetrics(items = []) {
+  return items.reduce((acc, item) => {
+    acc.total += 1;
+    if (item.source === "care") acc.cuidado += 1;
+    if (item.source === "med") acc.medicamentos += 1;
+    if (item.source === "vitals") acc.signos += 1;
+    if (item.source === "seguimiento") acc.seguimientos += 1;
+    if (item.open) acc.pendientes += 1;
+    if (item.source === "care" && item.estado === "reprogramada") acc.reprogramadas += 1;
+    if (item.estado === "pendiente_validacion") acc.porValidar += 1;
+    if (item.overdue) acc.vencidas += 1;
+    return acc;
+  }, {
+    total: 0,
+    pendientes: 0,
+    vencidas: 0,
+    cuidado: 0,
+    medicamentos: 0,
+    porValidar: 0,
+    reprogramadas: 0,
+    signos: 0,
+    seguimientos: 0,
+  });
+}
+
+export function sortWorkItemsByUrgency(items = []) {
+  return [...items].sort((a, b) => {
+    if (a.open !== b.open) return a.open ? -1 : 1;
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    const priorityCompare = (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2);
+    if (priorityCompare !== 0) return priorityCompare;
+    const sourceCompare = (SOURCE_ORDER[a.source] ?? 9) - (SOURCE_ORDER[b.source] ?? 9);
+    if (sourceCompare !== 0) return sourceCompare;
+    return `${a.fecha}T${a.hora ?? "00:00"}`.localeCompare(`${b.fecha}T${b.hora ?? "00:00"}`);
+  });
+}
+
+export function getTurnFocus(metrics = {}) {
+  if ((metrics.porValidar ?? 0) > 0) {
+    return {
+      tone: "sky",
+      title: `${metrics.porValidar} medicamento${metrics.porValidar === 1 ? "" : "s"} por validar`,
+      detail: "Prioriza registros que requieren un segundo usuario para cerrar el circuito de medicamentos.",
+    };
+  }
+  if ((metrics.vencidas ?? 0) > 0) {
+    return {
+      tone: "rose",
+      title: `${metrics.vencidas} pendiente${metrics.vencidas === 1 ? "" : "s"} vencido${metrics.vencidas === 1 ? "" : "s"}`,
+      detail: "Resuelve primero las tareas atrasadas o fuera de ventana.",
+    };
+  }
+  if ((metrics.pendientes ?? 0) > 0) {
+    return {
+      tone: "teal",
+      title: `${metrics.pendientes} pendiente${metrics.pendientes === 1 ? "" : "s"}`,
+      detail: "Ejecuta por hora y prioridad. Cada cierre deja trazabilidad.",
+    };
+  }
+  return {
+    tone: "emerald",
+    title: "Turno al día",
+    detail: "No quedan pendientes operativos con los filtros actuales.",
+  };
 }

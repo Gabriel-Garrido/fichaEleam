@@ -7,15 +7,15 @@ export const ACTIVATION_PLAYBOOKS = {
     color: "teal",
     icon: "beds",
     mission: "Primera cama ocupada",
-    introTitle: "Dejemos tu ELEAM listo para operar",
-    introGreeting: "Hola, {nombre}. Vamos a dejar una cama lista para operar.",
+    introTitle: "Activa la operación base",
+    introGreeting: "Hola, {nombre}. Partamos por lo indispensable.",
     introBody:
-      "En pocos pasos tendrás una cama creada, un residente registrado y una asignación visible.",
+      "Crea una cama, registra un residente y deja la primera asignación lista.",
     introSupport:
-      "Luego podrás sumar equipo, signos vitales y carpeta SEREMI.",
-    introCta: "Empezar",
-    introSkip: "Lo haré después",
-    activeLabel: "Misión activa",
+      "La guía queda disponible sin interrumpir tu trabajo.",
+    introCta: "Comenzar guía",
+    introSkip: "Cerrar por ahora",
+    activeLabel: "Guía activa",
     completedBadge: "Operación iniciada",
     completionTitle: "Listo: ya tienes una primera cama operativa.",
     completionBody:
@@ -33,7 +33,7 @@ export const ACTIVATION_PLAYBOOKS = {
       {
         id: "room_bed_ready",
         title: "Crea una habitación y una cama",
-        body: "Define dónde vivirá el residente. Puedes empezar con una sola cama.",
+        body: "Empieza con una ubicación simple. Una habitación y una cama bastan.",
         help:
           "Usa códigos simples como Hab. 101 y Cama A. Después podrás ordenar o editar.",
         cta: "Crear cama",
@@ -47,7 +47,7 @@ export const ACTIVATION_PLAYBOOKS = {
       {
         id: "resident_ready",
         title: "Registra un residente",
-        body: "Completa solo los datos esenciales para crear su ficha.",
+        body: "Crea la ficha con los datos mínimos. Puedes completar detalles después.",
         help: "La cama no se escribe aquí; se asigna desde Camas.",
         cta: "Registrar residente",
         route: "/residents/new",
@@ -60,7 +60,7 @@ export const ACTIVATION_PLAYBOOKS = {
       {
         id: "bed_assigned",
         title: "Asigna el residente a la cama",
-        body: "Selecciona una cama disponible y asígnala al residente.",
+        body: "Une la ficha con una cama disponible y deja la ocupación visible.",
         help:
           "Una cama ocupada queda bloqueada para evitar doble asignación.",
         cta: "Asignar cama",
@@ -80,15 +80,15 @@ export const ACTIVATION_PLAYBOOKS = {
     color: "rose",
     icon: "shift",
     mission: "Primer registro del turno",
-    introTitle: "Entra directo a una acción útil",
-    introGreeting: "Hola, {nombre}. Completa una acción real del turno.",
+    introTitle: "Entra directo al turno",
+    introGreeting: "Hola, {nombre}. Haz una acción útil sin buscar módulos.",
     introBody:
-      "Verás solo las tareas habilitadas para tu rol y permisos.",
+      "Verás solo acciones habilitadas para tu rol.",
     introSupport:
-      "Puedes marcar un paso como hecho si ya lo realizaste dentro del flujo.",
-    introCta: "Empezar",
-    introSkip: "Lo haré después",
-    activeLabel: "Misión activa",
+      "Si ya hiciste algo fuera de la guía, márcalo como hecho.",
+    introCta: "Ver acciones",
+    introSkip: "Cerrar por ahora",
+    activeLabel: "Guía activa",
     completedBadge: "Turno iniciado",
     completionTitle: "Listo: ya completaste tu primera acción.",
     completionBody: "Continúa con el turno actual y registra lo necesario.",
@@ -97,7 +97,7 @@ export const ACTIVATION_PLAYBOOKS = {
     steps: [
       {
         id: "staff_review_beds",
-        title: "Revisa camas y asigna si corresponde",
+        title: "Revisa camas",
         body: "Confirma disponibilidad antes de mover o asignar residentes.",
         help: "Si no hay cambios de cama hoy, puedes marcar este paso como hecho.",
         cta: "Revisar camas",
@@ -111,7 +111,7 @@ export const ACTIVATION_PLAYBOOKS = {
       {
         id: "staff_record_vital",
         title: "Registra un signo vital",
-        body: "Guarda un control con validación clínica en el formulario.",
+        body: "Guarda un control con validación de rangos clínicos.",
         help: "El sistema te avisará si un valor queda fuera del rango esperado.",
         cta: "Registrar signo",
         route: "/vital-signs/new",
@@ -123,8 +123,8 @@ export const ACTIVATION_PLAYBOOKS = {
       },
       {
         id: "staff_record_observation",
-        title: "Deja una observación de turno",
-        body: "Anota una situación relevante con tipo, turno y seguimiento si aplica.",
+        title: "Escribe una observación",
+        body: "Deja una novedad relevante para el siguiente turno.",
         help: "Escribe solo lo clínicamente útil para el siguiente turno.",
         cta: "Escribir observación",
         route: "/observations/new",
@@ -143,14 +143,14 @@ export const ACTIVATION_PLAYBOOKS = {
     color: "sky",
     icon: "familiar",
     mission: "Primer contacto familiar",
-    introTitle: "Tu portal familiar está listo",
-    introGreeting: "Hola, {nombre}. Revisa el estado de tu familiar.",
+    introTitle: "Conoce el portal familiar",
+    introGreeting: "Hola, {nombre}. Revisa lo principal en pocos pasos.",
     introBody:
-      "Parte por el resumen principal y registra una visita cuando corresponda.",
+      "Parte por el resumen visible y registra una visita cuando corresponda.",
     introSupport: "Solo verás información habilitada para familiares.",
-    introCta: "Empezar",
-    introSkip: "Lo haré después",
-    activeLabel: "Misión activa",
+    introCta: "Comenzar",
+    introSkip: "Cerrar por ahora",
+    activeLabel: "Guía activa",
     completedBadge: "Portal iniciado",
     completionTitle: "Listo: ya conoces el portal familiar.",
     completionBody: "Desde aquí puedes revisar novedades y gestionar visitas.",
@@ -190,14 +190,14 @@ export const ACTIVATION_PLAYBOOKS = {
     color: "slate",
     icon: "overview",
     mission: "Gestión inicial de plataforma",
-    introTitle: "Gestiona la plataforma sin pasos innecesarios",
-    introGreeting: "Hola, {nombre}. Revisa una solicitud o abre un cliente.",
+    introTitle: "Gestiona lo urgente primero",
+    introGreeting: "Hola, {nombre}. Revisa solicitudes y clientes sin rodeos.",
     introBody:
-      "Este flujo solo deja accesos rápidos a acciones operativas.",
+      "La guía prioriza acciones operativas, no métricas decorativas.",
     introSupport: "No agrega métricas ni tableros nuevos.",
-    introCta: "Empezar",
-    introSkip: "Lo haré después",
-    activeLabel: "Misión activa",
+    introCta: "Ver guía",
+    introSkip: "Cerrar por ahora",
+    activeLabel: "Guía activa",
     completedBadge: "Plataforma lista",
     completionTitle: "Listo: ya puedes continuar gestionando plataforma.",
     completionBody: "Mantén el flujo comercial y operativo desde superadmin.",
@@ -247,13 +247,13 @@ export const ADMIN_FALLBACK_PLAYBOOK = {
   color: "teal",
   icon: "residents",
   mission: "Primer residente registrado",
-  introTitle: "Dejemos tu ELEAM listo para operar",
-  introGreeting: "Hola, {nombre}. Parte con una ficha de residente.",
-  introBody: "Registra solo los datos esenciales para crear la primera ficha.",
+  introTitle: "Crea la primera ficha",
+  introGreeting: "Hola, {nombre}. Parte con el primer residente.",
+  introBody: "Registra solo los datos esenciales. Lo clínico puede completarse después.",
   introSupport: "Cuando Camas esté habilitado, podrás asignar ubicación.",
-  introCta: "Empezar",
-  introSkip: "Lo haré después",
-  activeLabel: "Misión activa",
+  introCta: "Comenzar",
+  introSkip: "Cerrar por ahora",
+  activeLabel: "Guía activa",
   completedBadge: "Ficha iniciada",
   completionTitle: "Listo: ya tienes el primer residente registrado.",
   completionBody: "Continúa con signos vitales, equipo o carpeta SEREMI.",
@@ -275,10 +275,6 @@ export const ADMIN_FALLBACK_PLAYBOOK = {
     },
   ],
 };
-
-// Backward-compatible aliases for modules that still import the old names.
-export const ONBOARDING_STORAGE_PREFIX = ACTIVATION_STORAGE_PREFIX;
-export const ROLE_CONFIG = ACTIVATION_PLAYBOOKS;
 
 export const COLOR_CLASSES = {
   teal: {

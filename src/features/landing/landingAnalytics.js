@@ -1,43 +1,24 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "../../services/supabaseConfig";
-
-function getSessionId() {
-  const key = "fe_sid";
-  let sid = localStorage.getItem(key);
-  if (!sid) {
-    sid = crypto.randomUUID();
-    localStorage.setItem(key, sid);
-  }
-  return sid;
-}
-
-function getUtms() {
-  try {
-    const p = new URLSearchParams(window.location.search);
-    return {
-      utm_source:   p.get("utm_source")   ?? null,
-      utm_medium:   p.get("utm_medium")   ?? null,
-      utm_campaign: p.get("utm_campaign") ?? null,
-    };
-  } catch {
-    return { utm_source: null, utm_medium: null, utm_campaign: null };
-  }
-}
+import { getLandingContext, getLandingSessionId } from "./landingContext";
 
 export async function trackEvent(tipo, elemento = null, valor = null) {
   try {
-    const utms = getUtms();
+    if (!supabase) return;
+    const context = getLandingContext();
     // El insert directo del cliente fue retirado: la Edge Function
     // track-landing-event valida e inserta con service role.
     await supabase.functions.invoke("track-landing-event", {
       body: {
         tipo,
-        pagina:     window.location.pathname,
+        pagina:     context.pagina_origen,
         elemento,
         valor:      valor ? String(valor) : null,
-        session_id: getSessionId(),
-        referrer:   document.referrer || null,
-        ...utms,
+        session_id: getLandingSessionId(),
+        referrer:   context.referrer,
+        utm_source: context.utm_source,
+        utm_medium: context.utm_medium,
+        utm_campaign: context.utm_campaign,
       },
     });
   } catch {

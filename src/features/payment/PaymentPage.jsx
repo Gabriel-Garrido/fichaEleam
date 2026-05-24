@@ -16,8 +16,9 @@ import {
 } from "./paymentService";
 import { canStartSubscription, subscriptionButtonLabel } from "./paymentStatus";
 import { formatDate } from "../../utils/dateUtils";
-import { getEffectivePlanLimits, planLimitError } from "./planCatalog";
+import { getEffectivePlanLimits, planLimitError, PUBLIC_PLAN_CATALOG } from "./planCatalog";
 import { isMercadoPagoCheckoutUrl } from "./mercadoPagoUrls";
+import { buildWhatsAppUrl } from "../landing/whatsAppLeadUtils";
 
 function daysUntil(iso) {
   if (!iso) return null;
@@ -59,6 +60,92 @@ const SUBSCRIPTION_LABEL = {
   inactivo: { txt: "Activación pendiente", cls: "bg-amber-100 text-amber-800" },
 };
 
+function PlansFallbackCard({
+  title = "Estamos cargando los planes",
+  message,
+  details,
+  whatsappUrl,
+  onRetry,
+  retryLabel = "Reintentar",
+  tone = "teal",
+  busy = false,
+}) {
+  const tones = {
+    teal: {
+      box: "border-teal-200 bg-teal-50",
+      icon: "bg-teal-100 text-teal-700",
+      title: "text-teal-950",
+      text: "text-teal-800",
+      detail: "text-teal-700",
+      button: "bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-600",
+      link: "text-teal-800 hover:text-teal-950",
+    },
+    amber: {
+      box: "border-amber-200 bg-amber-50",
+      icon: "bg-amber-100 text-amber-700",
+      title: "text-amber-950",
+      text: "text-amber-800",
+      detail: "text-amber-700",
+      button: "bg-amber-700 text-white hover:bg-amber-800 focus-visible:ring-amber-600",
+      link: "text-amber-800 hover:text-amber-950",
+    },
+    rose: {
+      box: "border-rose-200 bg-rose-50",
+      icon: "bg-rose-100 text-rose-700",
+      title: "text-rose-950",
+      text: "text-rose-800",
+      detail: "text-rose-700",
+      button: "bg-rose-700 text-white hover:bg-rose-800 focus-visible:ring-rose-600",
+      link: "text-rose-800 hover:text-rose-950",
+    },
+  };
+  const t = tones[tone] ?? tones.teal;
+
+  return (
+    <div className={`mb-12 rounded-2xl border p-5 shadow-sm sm:p-6 ${t.box}`}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-4">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.icon}`}>
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm3.75 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm3.75 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7.5 19.5 3 21l1.5-4.5A9 9 0 1 1 7.5 19.5Z" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className={`text-sm font-bold ${t.title}`}>{title}</p>
+            <p className={`mt-1 text-sm leading-6 ${t.text}`}>
+              {message ?? "Si los planes no aparecen en unos segundos, escríbenos por WhatsApp y te ayudamos a activar tu ELEAM con el plan correcto."}
+            </p>
+            {details && (
+              <p className={`mt-2 text-xs leading-5 ${t.detail}`}>{details}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col gap-2 sm:w-48">
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={`inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${t.button}`}
+          >
+            Contactar por WhatsApp
+          </a>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={busy}
+              className={`text-sm font-semibold underline underline-offset-2 disabled:opacity-50 ${t.link}`}
+            >
+              {busy ? "Cargando..." : retryLabel}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PaymentPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -78,6 +165,11 @@ export default function PaymentPage() {
     keywords: ["precio software ELEAM", "planes ELEAM Chile", "FichaEleam precio"],
   });
   const accountEmail = profile?.email || user?.email || "";
+  const whatsappPlanUrl = buildWhatsAppUrl({
+    nombre: profile?.nombre || profile?.nombre_completo || user?.user_metadata?.full_name || "",
+    eleam_nombre: eleam?.nombre || "",
+    email: accountEmail,
+  }, undefined, "pricing");
 
   const [plans, setPlans] = useState([]);
   const [plansError, setPlansError] = useState(null);
@@ -87,7 +179,11 @@ export default function PaymentPage() {
   const [loadingAction, setLoadingAction] = useState(false);
 
   const loadPlanData = useCallback(() => {
-    if (!user) return;
+    if (!user) {
+      setPlans(PUBLIC_PLAN_CATALOG);
+      setLoadingPlans(false);
+      return;
+    }
     let active = true;
     setLoadingPlans(true);
     setPlansError(null);
@@ -492,23 +588,31 @@ export default function PaymentPage() {
 
         {/* Planes dinámicos */}
         {loadingPlans ? (
-          <div className="text-center text-slate-500 py-8">Cargando planes...</div>
+          <PlansFallbackCard
+            whatsappUrl={whatsappPlanUrl}
+            title="Estamos cargando los planes"
+            message="Si los planes no aparecen en unos segundos, escríbenos por WhatsApp y te ayudamos a activar tu ELEAM con el plan correcto."
+            details="También puedes esperar; la carga se actualiza automáticamente cuando responde el servicio de planes."
+            onRetry={loadPlanData}
+            retryLabel="Volver a cargar"
+            busy
+          />
         ) : plansError ? (
-          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5">
-            <p className="text-rose-800 font-semibold text-sm mb-1">No se pudieron cargar los planes</p>
-            <p className="text-rose-700 text-sm mb-3">{plansError}</p>
-            <button
-              type="button"
-              onClick={loadPlanData}
-              className="text-sm font-semibold text-rose-700 underline underline-offset-2 hover:text-rose-900"
-            >
-              Reintentar
-            </button>
-          </div>
+          <PlansFallbackCard
+            whatsappUrl={whatsappPlanUrl}
+            title="No se pudieron cargar los planes"
+            message="Puedes reintentar o escribirnos por WhatsApp para activar tu ELEAM sin perder tiempo con el error de carga."
+            details={plansError}
+            onRetry={loadPlanData}
+            tone="rose"
+          />
         ) : plans.length === 0 ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-amber-800">
-            No hay planes disponibles en este momento. Contacta al equipo FichaEleam.
-          </div>
+          <PlansFallbackCard
+            whatsappUrl={whatsappPlanUrl}
+            title="Planes no disponibles en este momento"
+            message="Escríbenos por WhatsApp y te indicamos el plan recomendado para activar tu ELEAM."
+            tone="amber"
+          />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
             {plans.map((p) => {

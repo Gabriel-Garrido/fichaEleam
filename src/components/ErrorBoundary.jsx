@@ -16,6 +16,10 @@ class ErrorBoundary extends React.Component {
     }
   }
 
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -28,20 +32,29 @@ class ErrorBoundary extends React.Component {
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-2">Algo salió mal</h1>
             <p className="text-slate-500 text-sm mb-6">
-              Ocurrió un error inesperado. Por favor recarga la página o contacta al administrador.
+              Ocurrió un error inesperado. Intenta recuperar la pantalla sin recargar; si vuelve a fallar, recarga la página.
             </p>
             {import.meta.env.DEV && this.state.error && (
               <pre className="text-left text-xs bg-slate-100 rounded-xl p-3 mb-4 overflow-auto max-h-32 text-rose-600">
                 {this.state.error.message}
               </pre>
             )}
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-xl bg-teal-700 text-white px-6 py-2 hover:bg-teal-800 transition-all text-sm font-semibold"
-            >
-              Recargar página
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={this.handleRetry}
+                className="rounded-xl bg-teal-700 text-white px-5 py-2.5 hover:bg-teal-800 transition-all text-sm font-semibold"
+              >
+                Intentar de nuevo
+              </button>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-xl border border-slate-200 text-slate-600 px-5 py-2.5 hover:bg-slate-50 transition-all text-sm font-semibold"
+              >
+                Recargar
+              </button>
+            </div>
           </div>
         </div>
       );

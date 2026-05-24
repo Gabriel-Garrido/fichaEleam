@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import PageLayout from "../../layout/PageLayout";
 import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
+import CollapsibleGuide from "../../components/CollapsibleGuide";
+import MetricCard from "../../components/MetricCard";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -21,18 +23,22 @@ import {
   listMedicationAdministrations,
   validateControlledAdministration,
 } from "../emar/emarService";
+import { getStockLotStatus } from "../emar/emarUi";
 import {
   FILTER_LABEL,
   PRIORITY_LABEL,
   PRIORITY_TONE,
   SEGUIMIENTO_TIPO_LABEL,
   VITALS_TURN_HOUR,
+  buildTaskMetrics,
+  getTurnFocus,
   matchesFilter,
   matchesType,
   normalizeCareTask,
   normalizeMedication,
   normalizeSeguimiento,
   normalizeVitalTask,
+  sortWorkItemsByUrgency,
 } from "./careTasksBoardUtils";
 import {
   getPendingVitalSignsResidents,
@@ -69,6 +75,36 @@ const STATUS_TONE = {
   cancelado: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
+const FOCUS_TONE = {
+  teal: "border-teal-200 bg-teal-50 text-teal-900",
+  emerald: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  rose: "border-rose-200 bg-rose-50 text-rose-900",
+  sky: "border-sky-200 bg-sky-50 text-sky-900",
+};
+
+const TYPE_FILTER_LABEL = {
+  todos: "Todo",
+  cuidado: "Cuidado",
+  medicamentos: "Medicamentos",
+  signos: "Signos",
+  seguimientos: "Seguimientos",
+};
+
+const TYPE_FILTER_TOOLTIPS = {
+  todos: "Muestra cuidado, medicamentos, signos vitales y controles del turno en una sola lista.",
+  cuidado: "Rutinas y actividades del plan de cuidado (alimentación, higiene, movilidad, etc.).",
+  medicamentos: "Dosis programadas del turno: pendientes, vencidas, por validar y administradas.",
+  signos: "Control de presión, frecuencia, temperatura, saturación y dolor por residente.",
+  seguimientos: "Controles pendientes del equipo (caídas, reacciones, heridas) que requieren cierre en este turno.",
+};
+
+const FILTER_TOOLTIPS = {
+  pendientes: "Tareas sin cerrar todavía (incluye vencidas).",
+  vencidas: "Tareas que pasaron su hora o ventana de ejecución.",
+  cerradas: "Tareas ya completadas, validadas u omitidas.",
+  todas: "Muestra todas las tareas del turno sin filtrar por estado.",
+};
+
 function residentName(residente) {
   return [residente?.apellido, residente?.nombre].filter(Boolean).join(", ") || "Residente";
 }
@@ -85,6 +121,7 @@ export default function CareTasksPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [lastLoaded, setLastLoaded] = useState(null);
+  const [showMetricDetails, setShowMetricDetails] = useState(false);
   const [careModal, setCareModal] = useState(null);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [medModal, setMedModal] = useState(null);
@@ -113,8 +150,9 @@ export default function CareTasksPage() {
         ...pendingVitals.map((r) => normalizeVitalTask(r, fecha, turno)),
         ...careRows.map(normalizeCareTask),
         ...medRows.map(normalizeMedication),
-      ].sort((a, b) => `${a.fecha}T${a.hora ?? "00:00"}`.localeCompare(`${b.fecha}T${b.hora ?? "00:00"}`));
-      setAllItems(normalized);
+      ];
+      const sorted = sortWorkItemsByUrgency(normalized);
+      setAllItems(sorted);
       setLastLoaded(new Date());
     } catch (err) {
       console.error(err);
@@ -130,25 +168,15 @@ export default function CareTasksPage() {
   }, [fecha, turno]);
 
   const items = useMemo(() => {
-    return allItems
-      .filter((item) => matchesType(item, type))
-      .filter((item) => matchesFilter(item, filter));
+    return sortWorkItemsByUrgency(
+      allItems
+        .filter((item) => matchesType(item, type))
+        .filter((item) => matchesFilter(item, filter))
+    );
   }, [allItems, filter, type]);
 
-  const metrics = useMemo(() => {
-    return allItems.reduce((acc, item) => {
-      acc.total += 1;
-      if (item.source === "care") acc.cuidado += 1;
-      if (item.source === "med") acc.medicamentos += 1;
-      if (item.source === "vitals") acc.signos += 1;
-      if (item.source === "seguimiento") acc.seguimientos += 1;
-      if (item.open) acc.pendientes += 1;
-      if (item.source === "care" && item.estado === "reprogramada") acc.reprogramadas += 1;
-      if (item.estado === "pendiente_validacion") acc.porValidar += 1;
-      if (item.overdue) acc.vencidas += 1;
-      return acc;
-    }, { total: 0, pendientes: 0, vencidas: 0, cuidado: 0, medicamentos: 0, porValidar: 0, reprogramadas: 0, signos: 0, seguimientos: 0 });
-  }, [allItems]);
+  const metrics = useMemo(() => buildTaskMetrics(allItems), [allItems]);
+  const focus = useMemo(() => getTurnFocus(metrics), [metrics]);
 
   const handleCareClose = async ({ action, notas, motivo, seguimiento, seguimientoFecha, seguimientoTurno }) => {
     if (!careModal) return;
@@ -204,7 +232,7 @@ export default function CareTasksPage() {
     try {
       if (payload.action === "validar") {
         await validateControlledAdministration({ id: payload.row.id, notas: payload.notas });
-        toast("Administración controlada validada.", "success");
+        toast("Registro de medicamento validado.", "success");
       } else {
         await administerMedication({
           id: payload.row.id,
@@ -223,7 +251,7 @@ export default function CareTasksPage() {
       await load();
     } catch (err) {
       console.error(err);
-      toast(err.message || "No se pudo guardar el registro eMAR.", "error");
+      toast(err.message || "No se pudo guardar el registro de medicamento.", "error");
     } finally {
       setSaving(false);
     }
@@ -287,8 +315,8 @@ export default function CareTasksPage() {
 
   return (
     <PageLayout
-      title="Tareas diarias"
-      eyebrow="Turno operativo"
+      title="Tareas del turno"
+      eyebrow="Bandeja del turno"
       description="Plan de cuidado y medicamentos programados, generados automáticamente por recurrencia."
       actions={
         <div className="flex items-center gap-2 flex-wrap">
@@ -312,95 +340,111 @@ export default function CareTasksPage() {
       }
       className="space-y-5"
     >
-      <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_150px_150px_160px_150px]">
-        <div className="rounded-xl bg-teal-50 p-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-teal-700">
-            Foco del turno
-            <HelpTooltip label="Ayuda: tareas diarias">
-              Al abrir esta vista se generan las tareas de cuidado y administraciones eMAR del turno. Reintentar no duplica registros.
-            </HelpTooltip>
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className={`rounded-2xl border p-4 ${FOCUS_TONE[focus.tone] ?? FOCUS_TONE.teal}`}>
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-current opacity-70">
+              Foco del turno
+              <HelpTooltip label="Ayuda: tareas diarias">
+                Al abrir esta vista se generan tareas de cuidado y medicamentos del turno. Reintentar no duplica registros.
+              </HelpTooltip>
+            </div>
+            <div className="mt-1 text-lg font-semibold">{focus.title}</div>
+            <p className="mt-1 text-sm leading-5 opacity-80">{focus.detail}</p>
           </div>
-          <div className="mt-1 text-sm font-semibold text-teal-950">
-            {metrics.porValidar
-              ? `${metrics.porValidar} eMAR por validar`
-              : metrics.vencidas
-                ? `${metrics.vencidas} pendiente${metrics.vencidas === 1 ? "" : "s"} vencido${metrics.vencidas === 1 ? "" : "s"}`
-                : `${metrics.pendientes} pendiente${metrics.pendientes === 1 ? "" : "s"}`}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">
+              Fecha
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Turno
+              <select
+                value={turno}
+                onChange={(e) => setTurno(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm capitalize outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              >
+                {CARE_TURNOS.map((item) => <option key={item} value={item} className="capitalize">{item}</option>)}
+              </select>
+            </label>
           </div>
         </div>
-        <label className="text-sm font-medium text-slate-700">
-          Fecha
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-          />
-        </label>
-        <label className="text-sm font-medium text-slate-700">
-          Turno
-          <select
-            value={turno}
-            onChange={(e) => setTurno(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-          >
-            {CARE_TURNOS.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
-        <label className="text-sm font-medium text-slate-700">
-          Estado
-          <select
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <SegmentedFilter
+            label="Estado"
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-          >
-            {Object.entries(FILTER_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm font-medium text-slate-700">
-          Tipo
-          <select
+            options={FILTER_LABEL}
+            onChange={setFilter}
+            tooltips={FILTER_TOOLTIPS}
+          />
+          <SegmentedFilter
+            label="Tipo"
             value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-          >
-            <option value="todos">Todo</option>
-            <option value="cuidado">Cuidado</option>
-            <option value="medicamentos">eMAR</option>
-            <option value="signos">Signos vitales</option>
-            <option value="seguimientos">Seguimientos</option>
-          </select>
-        </label>
+            options={TYPE_FILTER_LABEL}
+            onChange={setType}
+            tooltips={TYPE_FILTER_TOOLTIPS}
+          />
+        </div>
       </section>
 
-      <TurnWorkflowGuide />
+      <CollapsibleGuide
+        storageKey="careTasks"
+        title="¿Cómo funciona la bandeja del turno?"
+        steps={[
+          { title: "Cargar", text: "La vista genera las tareas recurrentes del turno sin duplicarlas." },
+          { title: "Ejecutar", text: "Cumple cuidados o administra medicamentos dentro de la ventana indicada." },
+          { title: "Reprogramar u omitir", text: "Si no corresponde ejecutar, deja motivo, nueva hora o trazabilidad." },
+          { title: "Seguimiento", text: "Activa seguimiento cuando el equipo deba revisar la evolución después." },
+        ]}
+      />
 
       <section className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
-        <Metric label="Total" value={metrics.total} />
-        <Metric label="Pendientes" value={metrics.pendientes} tone="amber" />
-        <Metric label="Vencidas" value={metrics.vencidas} tone="rose" />
-        <Metric label="Reprogramadas" value={metrics.reprogramadas} tone="sky" />
-        <Metric label="Cuidado" value={metrics.cuidado} tone="teal" />
-        <Metric label="eMAR" value={metrics.medicamentos} tone="sky" />
-        <Metric label="Signos" value={metrics.signos} tone="teal" />
-        <Metric label="Seguimiento" value={metrics.seguimientos} tone="amber" />
-        <Metric label="Por validar" value={metrics.porValidar} tone="sky" />
+        <MetricCard label="Pendientes" value={metrics.pendientes} tone="amber" tooltip="Tareas del turno aún sin cerrar." />
+        <MetricCard label="Vencidas" value={metrics.vencidas} tone="rose" tooltip="Tareas que pasaron su hora o ventana de ejecución." />
+        <MetricCard label="Por validar" value={metrics.porValidar} tone="sky" tooltip="Medicamentos administrados que esperan confirmación de un segundo usuario." />
+        <MetricCard label="Total" value={metrics.total} tooltip="Total de tareas del turno (cuidado, medicamentos, signos y controles)." className={showMetricDetails ? "" : "hidden sm:block"} />
+        <MetricCard label="Reprogramadas" value={metrics.reprogramadas} tone="sky" tooltip="Tareas movidas a otra hora o turno." className={showMetricDetails ? "" : "hidden sm:block"} />
+        <MetricCard label="Cuidado" value={metrics.cuidado} tone="teal" tooltip="Rutinas y actividades del plan de cuidado (alimentación, higiene, movilidad, etc.)." className={showMetricDetails ? "" : "hidden sm:block"} />
+        <MetricCard label="Medicamentos" value={metrics.medicamentos} tone="sky" tooltip="Dosis programadas del turno." className={showMetricDetails ? "" : "hidden sm:block"} />
+        <MetricCard label="Signos" value={metrics.signos} tone="teal" tooltip="Control de presión, frecuencia, temperatura, saturación y dolor." className={showMetricDetails ? "" : "hidden sm:block"} />
+        <MetricCard label="Seguimiento" value={metrics.seguimientos} tone="amber" tooltip="Controles pendientes del equipo (caídas, reacciones, heridas) que requieren cierre." className={showMetricDetails ? "" : "hidden sm:block"} />
       </section>
+
+      <button
+        type="button"
+        onClick={() => setShowMetricDetails((prev) => !prev)}
+        className="text-xs font-semibold text-teal-700 hover:underline sm:hidden"
+      >
+        {showMetricDetails ? "Ocultar detalle del turno" : "Ver detalle del turno"}
+      </button>
 
       <TurnProgressStrip metrics={metrics} />
 
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          {error}
+        <div className="flex flex-col gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="self-start rounded-xl border border-rose-300 bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60 sm:self-auto"
+          >
+            Reintentar
+          </button>
         </div>
       )}
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="space-y-3 p-4">
-            {[0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />)}
+            {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-100" />)}
           </div>
         ) : items.length === 0 ? (
           <div className="p-8 text-center">
@@ -417,7 +461,7 @@ export default function CareTasksPage() {
                 ? "No quedan pendientes ni vencidas para este turno."
                 : metrics.total > 0
                   ? "El turno tiene tareas cargadas, pero ninguna coincide con el filtro."
-                  : "Configura actividades en Plan de cuidado o indicaciones en eMAR desde la ficha del residente."}
+                  : "Configura actividades en Plan de cuidado o indicaciones de medicamentos desde la ficha del residente."}
             </p>
             {metrics.total > 0 && filter !== "pendientes" && (
               <button
@@ -507,6 +551,34 @@ function TurnProgressStrip({ metrics }) {
   );
 }
 
+function SegmentedFilter({ label, value, options, onChange, tooltips = {} }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase text-slate-400">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {Object.entries(options).map(([optionValue, optionLabel]) => {
+          const active = value === optionValue;
+          return (
+            <button
+              key={optionValue}
+              type="button"
+              onClick={() => onChange(optionValue)}
+              title={tooltips[optionValue]}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                active
+                  ? "border-teal-600 bg-teal-50 text-teal-800"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {optionLabel}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function WorkItemRow({ item, canComplete, canAdminister, canValidate, canCreateVitals, canResolveSeguimiento, currentUserId, onCareAction, onCareReschedule, onMedicationAction, onVitalsAction, onSeguimientoAction }) {
   const isCare = item.source === "care";
   const isMed = item.source === "med";
@@ -534,13 +606,19 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
               {item.statusLabel}
             </span>
             {item.overdue && (
-              <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
-                {item.carry ? "Arrastre" : "Vencida"}
+              <span
+                className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+                title={item.carry ? "Tarea pendiente de un turno anterior que se mantuvo abierta." : "Pasó la hora o la ventana de tolerancia."}
+              >
+                {item.carry ? "Pendiente anterior" : "Vencida"}
               </span>
             )}
             {item.controlled && (
-              <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
-                Controlado
+              <span
+                className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+                title="Medicamento controlado: requiere lote identificado y confirmación de un segundo usuario."
+              >
+                Requiere doble firma
               </span>
             )}
             {isCare && (
@@ -559,7 +637,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
             <p className="mt-1 text-xs text-slate-500">Ventana hasta {item.dueWindow}</p>
           )}
           {isCare && item.requiresFollowUp && (
-            <p className="mt-1 text-xs text-amber-700">Requiere seguimiento clínico al cierre.</p>
+            <p className="mt-1 text-xs text-amber-700">Esta rutina requiere un control adicional al cierre.</p>
           )}
           {isCare && item.estado === "reprogramada" && item.row.reprogramada_para && (
             <p className="mt-1 text-xs text-sky-700">
@@ -574,128 +652,106 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
           )}
           {item.row.notas && <p className="mt-1 text-xs text-slate-400">Notas: {item.row.notas}</p>}
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex w-full shrink-0 flex-wrap gap-2 lg:w-auto lg:justify-end">
           {isVitals && item.open && canCreateVitals && (
-            <button type="button" onClick={onVitalsAction} className="rounded-xl bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800">
+            <button
+              type="button"
+              onClick={onVitalsAction}
+              title="Registrar presión, frecuencia, temperatura, saturación y dolor del residente."
+              className="rounded-xl bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800"
+            >
               Registrar
             </button>
           )}
           {isVitals && item.open && !canCreateVitals && (
             <span className="rounded-xl bg-violet-50 px-3 py-2 text-sm font-medium text-violet-700">
-              Sin permiso
+              Sin permiso para registrar
             </span>
           )}
           {isCare && item.open && canComplete && (
             <>
-              <button type="button" onClick={() => onCareAction("cumplida")} className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800">
+              <button
+                type="button"
+                onClick={() => onCareAction("cumplida")}
+                title="Marca la tarea como realizada y deja registro firmado."
+                className="min-w-[7rem] flex-1 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none"
+              >
                 Cumplir
               </button>
-              <button type="button" onClick={onCareReschedule} className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50">
+              <button
+                type="button"
+                onClick={onCareReschedule}
+                title="Mover esta tarea a otro día, turno u hora sin marcarla como cumplida ni omitida."
+                className="min-w-[7rem] flex-1 rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm font-semibold text-sky-700 hover:bg-sky-50 sm:flex-none"
+              >
                 Reprogramar
               </button>
-              <button type="button" onClick={() => onCareAction("omitida")} className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">
+              <button
+                type="button"
+                onClick={() => onCareAction("omitida")}
+                title="Registrar que la tarea no se ejecutó. Se solicita motivo para mantener trazabilidad."
+                className="min-w-[7rem] flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 sm:flex-none"
+              >
                 Omitir
               </button>
             </>
           )}
           {isMed && item.estado === "pendiente" && canAdminister && (
             <>
-              <button type="button" onClick={() => onMedicationAction("administrado")} className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800">
+              <button
+                type="button"
+                onClick={() => onMedicationAction("administrado")}
+                title="Registrar que se administró la dosis. Si requiere stock, descuenta del lote elegido."
+                className="min-w-[7rem] flex-1 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none"
+              >
                 Administrar
               </button>
-              <button type="button" onClick={() => onMedicationAction("omitido")} className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">
+              <button
+                type="button"
+                onClick={() => onMedicationAction("omitido")}
+                title="Registrar que no se administró la dosis. Se solicita motivo y no descuenta stock."
+                className="min-w-[7rem] flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 sm:flex-none"
+              >
                 Omitir
               </button>
             </>
           )}
           {isMed && item.estado === "pendiente_validacion" && canValidateThis && (
-            <button type="button" onClick={() => onMedicationAction("validar")} className="rounded-xl bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800">
+            <button
+              type="button"
+              onClick={() => onMedicationAction("validar")}
+              title="Confirmar como segundo usuario que la administración está correcta."
+              className="min-w-[7rem] flex-1 rounded-xl bg-sky-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 sm:flex-none"
+            >
               Validar
             </button>
           )}
           {isMed && item.estado === "pendiente_validacion" && canValidate && !canValidateThis && (
-            <span className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
+            <span
+              className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700"
+              title="No puedes validar tu propia administración. Debe firmarla otro usuario autorizado."
+            >
               Requiere otro validador
             </span>
           )}
           {isSeguimiento && item.open && canResolveSeguimiento && (
-            <button type="button" onClick={onSeguimientoAction} className="rounded-xl bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+            <button
+              type="button"
+              onClick={onSeguimientoAction}
+              title="Cerrar el seguimiento con evolución, o continuarlo en otro turno."
+              className="min-w-[7rem] flex-1 rounded-xl bg-amber-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 sm:flex-none"
+            >
               Resolver
             </button>
           )}
           {isSeguimiento && item.open && !canResolveSeguimiento && (
             <span className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
-              Sin permiso
+              Sin permiso para resolver
             </span>
           )}
         </div>
       </div>
     </li>
-  );
-}
-
-export function TurnWorkflowGuide() {
-  const { profile } = useAuth();
-  const key = `fichaeleam_tGuide_${profile?.id ?? "anon"}`;
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem(`fichaeleam_tGuide_${profile?.id ?? "anon"}`) === "1"; } catch { return false; }
-  });
-  const steps = [
-    ["Cargar", "La vista genera las tareas recurrentes del turno sin duplicarlas."],
-    ["Ejecutar", "Cumple cuidado o administra eMAR dentro de la ventana indicada."],
-    ["Reprogramar / omitir", "Si no corresponde ejecutar, deja motivo, nueva hora o trazabilidad."],
-    ["Seguimiento", "Marca seguimiento cuando el equipo debe revisar después."],
-  ];
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <button
-        type="button"
-        onClick={() => setCollapsed((p) => {
-          const next = !p;
-          try { localStorage.setItem(key, next ? "1" : "0"); } catch { /* storage unavailable */ }
-          return next;
-        })}
-        className="flex w-full items-center justify-between gap-2 text-left"
-      >
-        <span className="text-sm font-semibold text-slate-800">Flujo del turno operativo</span>
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${collapsed ? "" : "rotate-90"}`}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-        </svg>
-      </button>
-      {!collapsed && (
-        <div className="mt-3 grid gap-3 md:grid-cols-4">
-          {steps.map(([title, text], index) => (
-            <div key={title} className="flex gap-3">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-teal-50 text-sm font-semibold text-teal-800 ring-1 ring-teal-200">
-                {index + 1}
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-slate-950">{title}</p>
-                <p className="mt-0.5 text-xs leading-5 text-slate-500">{text}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-export function Metric({ label, value, tone = "slate" }) {
-  const cls = {
-    slate: "bg-white text-slate-900 border-slate-200",
-    amber: "bg-amber-50 text-amber-900 border-amber-200",
-    emerald: "bg-emerald-50 text-emerald-900 border-emerald-200",
-    rose: "bg-rose-50 text-rose-900 border-rose-200",
-    sky: "bg-sky-50 text-sky-900 border-sky-200",
-    teal: "bg-teal-50 text-teal-900 border-teal-200",
-  }[tone];
-  return (
-    <div className={`rounded-2xl border p-4 ${cls}`}>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="text-xs font-medium opacity-70">{label}</div>
-    </div>
   );
 }
 
@@ -723,7 +779,7 @@ function FollowUpFields({
           Crear seguimiento pendiente
           <span className="block text-xs text-amber-800">
             {locked
-              ? "Esta actividad exige seguimiento clínico al cierre."
+              ? "Esta actividad exige un control adicional al cierre."
               : "Úsalo si el equipo debe revisar la evolución después de guardar."}
           </span>
         </span>
@@ -746,9 +802,9 @@ function FollowUpFields({
               value={turno}
               onChange={(e) => onTurnoChange(e.target.value)}
               required
-              className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+              className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm capitalize outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
             >
-              {CARE_TURNOS.map((item) => <option key={item} value={item}>{item}</option>)}
+              {CARE_TURNOS.map((item) => <option key={item} value={item} className="capitalize">{item}</option>)}
             </select>
           </label>
           <p className="sm:col-span-2 text-xs text-amber-800">{copy}</p>
@@ -854,11 +910,11 @@ export function CareTaskModal({ modal, saving, onClose, onSubmit }) {
           locked={modal.row.actividad?.requiere_observacion === true}
         />
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving} className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -945,9 +1001,9 @@ export function RescheduleCareTaskModal({ modal, saving, onClose, onSubmit }) {
                   setSeguimientoTurno(next.turno);
                 }
               }}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm capitalize outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             >
-              {CARE_TURNOS.map((item) => <option key={item} value={item}>{item}</option>)}
+              {CARE_TURNOS.map((item) => <option key={item} value={item} className="capitalize">{item}</option>)}
             </select>
           </label>
           <label className="block text-sm font-medium text-slate-700">
@@ -991,11 +1047,11 @@ export function RescheduleCareTaskModal({ modal, saving, onClose, onSubmit }) {
           copy="El seguimiento quedará pendiente para confirmar que la reprogramación se ejecutó o que el residente evolucionó según lo esperado."
         />
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-60">
+          <button type="submit" disabled={saving} className="w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : "Reprogramar"}
           </button>
         </div>
@@ -1050,11 +1106,11 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
   const needsLot = modal.action === "administrado" && (modal.row.indicacion?.es_controlado || modal.row.indicacion?.requiere_stock);
   const unitLabel = modal.row.indicacion?.unidad_dosis || "unidad";
   const actionCopy = isValidation
-    ? "Confirma la administración controlada como segundo usuario. Esta acción firma la validación y cierra el pendiente."
+    ? "Confirma la administración como segundo usuario. Esta acción firma la validación y cierra el pendiente."
     : isOmission
       ? "Registra que la dosis no se administró. No descuenta stock y exige un motivo para la continuidad clínica."
       : modal.row.indicacion?.es_controlado || modal.row.indicacion?.requiere_doble_validacion
-        ? "Descuenta stock del lote seleccionado y deja la administración pendiente de validación por otro usuario."
+        ? "Descuenta stock del lote seleccionado y deja la administración pendiente para un segundo usuario."
         : needsLot
           ? "Descuenta stock del lote seleccionado y marca la administración como realizada."
           : "Marca la administración como realizada. No hay descuento de stock configurado para esta indicación.";
@@ -1063,7 +1119,7 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
     <Modal
       isOpen={!!modal}
       onClose={onClose}
-      title={isValidation ? "Validar controlado" : isOmission ? "Registrar omisión eMAR" : "Administrar medicamento"}
+      title={isValidation ? "Validar registro" : isOmission ? "Registrar omisión" : "Administrar medicamento"}
     >
       <form
         className="space-y-4"
@@ -1113,19 +1169,20 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
                 <option key={lot.id} value={lot.id}>
                   {lot.medicamento_nombre} · lote {lot.lote || "s/l"} · {lot.cantidad_actual} {lot.unidad}
                   {lot.fecha_vencimiento ? ` · vence ${lot.fecha_vencimiento}` : ""}
+                  {getStockLotStatus(lot).key === "por_vencer" ? " · por vencer" : ""}
                 </option>
               ))}
             </select>
             <span className="mt-1 block text-xs text-slate-500">
-              eMAR descuenta esta cantidad del lote al guardar. Para controlados, el movimiento queda pendiente de validación.
+              Medicamentos descuenta esta cantidad del lote al guardar. Si requiere segundo usuario, el movimiento queda pendiente de validación.
             </span>
           </label>
         )}
         {needsLot && !loadingLots && lots.length === 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
             {modal.row.indicacion?.es_controlado
-              ? "Sin lote controlado disponible para esta indicación. Registra o marca un lote controlado desde la ficha del residente, pestaña eMAR."
-              : "Sin stock disponible para este medicamento. Registra un lote con inventario desde la ficha del residente, pestaña eMAR."}
+              ? "No hay un lote disponible para administrar esta indicación. Registra un nuevo lote o usa otro lote activo desde la ficha del residente, pestaña Medicamentos."
+              : "No hay stock disponible para este medicamento. Registra un lote con cantidad disponible desde la ficha del residente, pestaña Medicamentos."}
           </div>
         )}
 
@@ -1185,15 +1242,15 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
             }}
             onFechaChange={setSeguimientoFecha}
             onTurnoChange={setSeguimientoTurno}
-            copy="El seguimiento quedará pendiente para revisar respuesta, efectos adversos, omisión o continuidad farmacológica."
+            copy="El seguimiento quedará pendiente para revisar respuesta, omisión o continuidad del medicamento."
           />
         )}
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving || (needsLot && (!loteId || lots.length === 0))} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving || (needsLot && (!loteId || lots.length === 0))} className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -1404,11 +1461,11 @@ export function VitalSignsTaskModal({ modal, saving, onClose, onSubmit }) {
           copy="El seguimiento quedará pendiente para reevaluar signos, dolor, conciencia o respuesta clínica en el turno definido."
         />
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60">
+          <button type="submit" disabled={saving} className="w-full rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : "Registrar signos"}
           </button>
         </div>
@@ -1441,7 +1498,7 @@ export function SeguimientoModal({ modal, saving, onClose, onSubmit }) {
   const tipoLabel = SEGUIMIENTO_TIPO_LABEL[obs.tipo] ?? obs.tipo ?? "Observación";
 
   return (
-    <Modal isOpen={!!modal} onClose={onClose} title="Resolver seguimiento clínico">
+    <Modal isOpen={!!modal} onClose={onClose} title="Resolver seguimiento">
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -1478,12 +1535,12 @@ export function SeguimientoModal({ modal, saving, onClose, onSubmit }) {
         </div>
 
         <label className="block text-sm font-medium text-slate-700">
-          Evolución / acciones tomadas
-          <span className="ml-1 text-xs font-normal text-slate-500">(opcional)</span>
+          Evolución / acciones tomadas *
           <textarea
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
             rows={4}
+            required
             placeholder="Describe el estado actual, acciones realizadas, respuesta observada..."
             className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
           />
@@ -1505,7 +1562,7 @@ export function SeguimientoModal({ modal, saving, onClose, onSubmit }) {
               className="mt-0.5 h-4 w-4 accent-amber-600"
             />
             <span>
-              Continuar seguimiento
+              Continuar en otro turno
               <span className="block text-xs text-amber-800">
                 Resuelve este seguimiento y crea uno nuevo para el turno que definas.
               </span>
@@ -1529,23 +1586,23 @@ export function SeguimientoModal({ modal, saving, onClose, onSubmit }) {
                   value={nuevoTurno}
                   onChange={(e) => setNuevoTurno(e.target.value)}
                   required
-                  className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                  className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm capitalize outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                 >
-                  {CARE_TURNOS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {CARE_TURNOS.map((t) => <option key={t} value={t} className="capitalize">{t}</option>)}
                 </select>
               </label>
             </div>
           )}
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
           <button
             type="submit"
             disabled={saving}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 ${continuar ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-700 hover:bg-emerald-800"}`}
+            className={`w-full rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto ${continuar ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-700 hover:bg-emerald-800"}`}
           >
             {saving ? "Guardando..." : continuar ? "Guardar y continuar" : "Finalizar seguimiento"}
           </button>

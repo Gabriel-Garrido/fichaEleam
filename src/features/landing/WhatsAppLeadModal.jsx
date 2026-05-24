@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import Modal from "../../components/Modal";
+import useSessionFormDraft from "../../hooks/useSessionFormDraft";
 import { isSupabaseConfigured } from "../../services/supabaseConfig";
 import { trackEvent } from "./landingAnalytics";
+import { getLandingContext } from "./landingContext";
 import { requestDemoLead } from "./landingService";
 import {
   buildWhatsAppUrl,
   normalizeWhatsAppLeadForm,
   validateWhatsAppLeadForm,
+  WHATSAPP_FIELD_LIMITS,
 } from "./whatsAppLeadUtils";
 
 function WhatsAppIcon({ className = "w-5 h-5" }) {
@@ -24,43 +28,28 @@ function CloseIcon() {
   );
 }
 
-function getUtms() {
-  try {
-    const p = new URLSearchParams(window.location.search);
-    return {
-      utm_campaign: p.get("utm_campaign") ?? null,
-      utm_medium: p.get("utm_medium") ?? null,
-    };
-  } catch {
-    return { utm_campaign: null, utm_medium: null };
-  }
-}
+const WHATSAPP_FORM_INITIAL = { nombre: "", eleam_nombre: "", email: "", telefono: "" };
 
 export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating" }) {
-  const [form, setForm] = useState({ nombre: "", eleam_nombre: "", email: "", telefono: "" });
+  const [form, setForm, resetFormDraft] = useSessionFormDraft("fe_whatsapp_lead_draft", WHATSAPP_FORM_INITIAL);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState("idle");
   const [errorMsg, setErrorMsg] = useState("");
-  const firstInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
-      setForm({ nombre: "", eleam_nombre: "", email: "", telefono: "" });
       setErrors({});
       setStatus("idle");
       setErrorMsg("");
       trackEvent("form_view", "whatsapp_lead_modal", source);
-      setTimeout(() => firstInputRef.current?.focus(), 50);
     }
   }, [isOpen, source]);
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    if (isOpen) document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose]);
-
   const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
+  const closeModal = () => {
+    if (status === "success") resetFormDraft();
+    onClose();
+  };
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -70,16 +59,9 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
     setStatus("submitting");
     setErrorMsg("");
 
-    const utms = getUtms();
-    const context = {
-      ...utms,
-      pagina_origen: typeof window !== "undefined" ? window.location.pathname : null,
-      referrer: typeof document !== "undefined" ? (document.referrer || null) : null,
-    };
-
     try {
       if (isSupabaseConfigured) {
-        const payload = normalizeWhatsAppLeadForm(form, context);
+        const payload = normalizeWhatsAppLeadForm(form, getLandingContext());
         await requestDemoLead(payload);
       }
       trackEvent("form_submit", "whatsapp_lead_modal", source);
@@ -95,22 +77,20 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
     }
   }
 
-  if (!isOpen) return null;
-
   const inputClass = (field) =>
     `w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 ${
       errors[field] ? "border-rose-400" : "border-slate-300"
     }`;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-900/70"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="whatsapp-modal-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={closeModal}
+      labelledById="whatsapp-modal-title"
+      showCloseButton={false}
+      backdropClassName="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-900/70"
+      panelClassName="max-w-md p-0 rounded-2xl sm:rounded-2xl shadow-2xl max-h-[95vh] sm:max-h-[95vh]"
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] overflow-y-auto">
         <div className="bg-gradient-to-br from-[#25D366] to-[#128C7E] rounded-t-2xl p-5 text-white">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -128,7 +108,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeModal}
               className="text-white/80 hover:text-white p-1 -mr-1 -mt-1 rounded-xl hover:bg-white/10"
               aria-label="Cerrar"
             >
@@ -166,7 +146,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
               </a>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={closeModal}
                 className="border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50"
               >
                 Cerrar
@@ -184,13 +164,14 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
                 Tu nombre *
               </label>
               <input
-                ref={firstInputRef}
                 id="wa-nombre"
                 type="text"
+                name="name"
                 value={form.nombre}
                 onChange={set("nombre")}
                 placeholder="María González"
                 autoComplete="name"
+                maxLength={WHATSAPP_FIELD_LIMITS.nombre}
                 aria-invalid={errors.nombre ? "true" : undefined}
                 aria-describedby={errors.nombre ? "wa-nombre-error" : undefined}
                 className={inputClass("nombre")}
@@ -205,10 +186,12 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
               <input
                 id="wa-eleam"
                 type="text"
+                name="organization"
                 value={form.eleam_nombre}
                 onChange={set("eleam_nombre")}
                 placeholder="Residencia Los Arrayanes"
                 autoComplete="organization"
+                maxLength={WHATSAPP_FIELD_LIMITS.eleam_nombre}
                 aria-invalid={errors.eleam_nombre ? "true" : undefined}
                 aria-describedby={errors.eleam_nombre ? "wa-eleam-error" : undefined}
                 className={inputClass("eleam_nombre")}
@@ -224,11 +207,13 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
                 <input
                   id="wa-email"
                   type="email"
+                  name="email"
                   value={form.email}
                   onChange={set("email")}
                   placeholder="tu@residencia.cl"
                   autoComplete="email"
                   inputMode="email"
+                  maxLength={WHATSAPP_FIELD_LIMITS.email}
                   aria-invalid={errors.email ? "true" : undefined}
                   aria-describedby={errors.email ? "wa-email-error" : undefined}
                   className={inputClass("email")}
@@ -243,11 +228,13 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
                 <input
                   id="wa-telefono"
                   type="tel"
+                  name="tel"
                   value={form.telefono}
                   onChange={set("telefono")}
                   placeholder="+56 9 XXXX XXXX"
                   autoComplete="tel"
                   inputMode="tel"
+                  maxLength={WHATSAPP_FIELD_LIMITS.telefono}
                   aria-invalid={errors.telefono ? "true" : undefined}
                   aria-describedby={errors.telefono ? "wa-telefono-error" : undefined}
                   className={inputClass("telefono")}
@@ -271,7 +258,6 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
             </p>
           </form>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

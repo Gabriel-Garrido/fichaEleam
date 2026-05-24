@@ -91,4 +91,20 @@ describe("bulkImportConfigs", () => {
 
     expect(rows[0].errors.join(" ")).toContain("máximo 1 funcionarios");
   });
+
+  it("rejects oversized staff import fields before calling Edge Functions", () => {
+    const rows = normalizeStaffRows([
+      {
+        rowNumber: 2,
+        raw: {
+          nombre: "A".repeat(121),
+          email: `${"b".repeat(252)}@cl`,
+          cargo: "Enfermero/a",
+        },
+      },
+    ]);
+
+    expect(rows[0].errors.join(" ")).toContain("Nombre completo no puede superar 120 caracteres");
+    expect(rows[0].errors.join(" ")).toContain("Correo electrónico no puede superar 254 caracteres");
+  });
 });

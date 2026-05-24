@@ -78,7 +78,7 @@ export default function TurnoPrintable() {
                 ?? ((item.resumen_json?.tareas_cuidado?.resumen?.pendiente ?? 0) + (item.resumen_json?.tareas_cuidado?.resumen?.reprogramada ?? 0))
               }
             />
-            <PrintMetric label="eMAR pendiente" value={(item.resumen_json?.emar?.resumen?.pendiente ?? 0) + (item.resumen_json?.emar?.resumen?.pendiente_validacion ?? 0)} />
+            <PrintMetric label="Medicamentos pendientes" value={(item.resumen_json?.emar?.resumen?.pendiente ?? 0) + (item.resumen_json?.emar?.resumen?.pendiente_validacion ?? 0)} />
           </div>
 
           <PrintableSection title="Pendientes para siguiente turno">
@@ -89,7 +89,7 @@ export default function TurnoPrintable() {
             {item.notas || "Sin notas manuales."}
           </PrintableSection>
 
-          <PrintableList title="eMAR por validar" items={item.resumen_json?.emar?.por_validar} render={(row) => (
+          <PrintableList title="Medicamentos por validar" items={item.resumen_json?.emar?.por_validar} render={(row) => (
             <div><strong>{row.residente?.nombre}</strong> · {row.medicamento}{row.dosis ? ` · ${row.dosis}` : ""}</div>
           )} />
 

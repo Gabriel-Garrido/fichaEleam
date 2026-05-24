@@ -13,7 +13,7 @@ export const CARE_CATEGORIES = [
   ["cambios_posicion", "Cambios de posición"],
   ["eliminacion", "Eliminación"],
   ["prevencion_caidas", "Prevención de caídas"],
-  ["prevencion_up", "Prevención UPP"],
+  ["prevencion_up", "Prevención úlceras de presión"],
   ["actividad", "Actividad"],
   ["controles", "Controles"],
   ["otro", "Otro"],
@@ -180,6 +180,8 @@ export const CARE_ACTIVITY_PRESETS = [
   },
 ];
 
+export const CARE_BASE_PRESET_IDS = CARE_ACTIVITY_PRESETS.map((preset) => preset.id);
+
 export const CARE_STATUS_LABEL = {
   pendiente: "Pendiente",
   cumplida: "Cumplida",
@@ -326,6 +328,30 @@ export function normalizeSchedules(schedules = []) {
       id: schedule.id ?? null,
       ...normalizeSchedule(schedule),
     }));
+}
+
+export function buildCarePresetRpcPayload(presets = []) {
+  return presets.map((preset) => {
+    const activity = preset.activity ?? {};
+    const familySummary = activity.resumen_familiar?.trim();
+    return {
+      activity: {
+        categoria: activity.categoria,
+        titulo: activity.titulo,
+        descripcion: activity.descripcion || null,
+        instrucciones: activity.instrucciones || null,
+        prioridad: activity.prioridad || "media",
+        requiere_observacion: activity.requiere_observacion === true,
+        visible_familiar: Boolean(activity.visible_familiar && familySummary),
+        resumen_familiar: activity.visible_familiar && familySummary ? familySummary : null,
+      },
+      schedule: normalizeSchedule(preset.schedule),
+    };
+  });
+}
+
+function isMissingRpc(error) {
+  return error?.code === "42883" || error?.code === "PGRST202" || /function .*crear_rutinas_cuidado_desde_presets/i.test(error?.message ?? "");
 }
 
 function dateIsoFrom(date = new Date()) {
@@ -505,7 +531,7 @@ export async function createCarePresetActivities({ plan, presetIds = [], existin
       .filter((item) => item.activo !== false)
       .map((item) => `${item.categoria}:${item.titulo}`.toLowerCase())
   );
-  let created = 0;
+  const toCreate = [];
   let skipped = 0;
 
   for (const preset of selected) {
@@ -515,44 +541,78 @@ export async function createCarePresetActivities({ plan, presetIds = [], existin
       skipped += 1;
       continue;
     }
+    existingKeys.add(key);
+    toCreate.push({ preset, key });
+  }
 
-    const { data: saved, error } = await supabase
-      .from("plan_cuidado_actividades")
-      .insert({
-        eleam_id: plan.eleam_id,
-        residente_id: plan.residente_id,
-        plan_id: plan.id,
-        categoria: activity.categoria,
-        titulo: activity.titulo,
-        descripcion: activity.descripcion || null,
-        instrucciones: activity.instrucciones || null,
-        prioridad: activity.prioridad || "media",
-        requiere_observacion: activity.requiere_observacion === true,
-        visible_familiar: false,
-        resumen_familiar: null,
-        activo: true,
-        creado_por: userId,
-        actualizado_por: userId,
-      })
-      .select(CARE_ACTIVITY_SELECT)
-      .single();
-    if (error) throw error;
+  if (toCreate.length === 0) return { created: 0, skipped };
 
-    const { error: scheduleError } = await supabase
-      .from("plan_cuidado_horarios")
-      .insert({
+  const rpcPayload = buildCarePresetRpcPayload(toCreate.map(({ preset }) => preset));
+  const { data: rpcData, error: rpcError } = await supabase.rpc("crear_rutinas_cuidado_desde_presets", {
+    p_plan_id: plan.id,
+    p_presets: rpcPayload,
+  });
+  if (!rpcError) {
+    return {
+      created: Number(rpcData?.created ?? 0),
+      skipped: skipped + Number(rpcData?.skipped ?? 0),
+    };
+  }
+  if (!isMissingRpc(rpcError)) throw rpcError;
+
+  const activityRows = toCreate.map(({ preset }) => {
+    const activity = preset.activity;
+    const familySummary = activity.resumen_familiar?.trim();
+    return {
+      eleam_id: plan.eleam_id,
+      residente_id: plan.residente_id,
+      plan_id: plan.id,
+      categoria: activity.categoria,
+      titulo: activity.titulo,
+      descripcion: activity.descripcion || null,
+      instrucciones: activity.instrucciones || null,
+      prioridad: activity.prioridad || "media",
+      requiere_observacion: activity.requiere_observacion === true,
+      visible_familiar: Boolean(activity.visible_familiar && familySummary),
+      resumen_familiar: activity.visible_familiar && familySummary ? familySummary : null,
+      activo: true,
+      creado_por: userId,
+      actualizado_por: userId,
+    };
+  });
+
+  const { data: savedActivities, error } = await supabase
+    .from("plan_cuidado_actividades")
+    .insert(activityRows)
+    .select(CARE_ACTIVITY_SELECT);
+  if (error) throw error;
+
+  const byKey = new Map((savedActivities ?? []).map((activity) => [
+    `${activity.categoria}:${activity.titulo}`.toLowerCase(),
+    activity,
+  ]));
+
+  const scheduleRows = toCreate
+    .map(({ preset, key }) => {
+      const saved = byKey.get(key);
+      if (!saved) return null;
+      return {
         ...normalizeSchedule(preset.schedule),
         eleam_id: plan.eleam_id,
         residente_id: plan.residente_id,
         actividad_id: saved.id,
-      });
-    if (scheduleError) throw scheduleError;
+      };
+    })
+    .filter(Boolean);
 
-    existingKeys.add(key);
-    created += 1;
+  if (scheduleRows.length > 0) {
+    const { error: scheduleError } = await supabase
+      .from("plan_cuidado_horarios")
+      .insert(scheduleRows);
+    if (scheduleError) throw scheduleError;
   }
 
-  return { created, skipped };
+  return { created: savedActivities?.length ?? 0, skipped };
 }
 
 export async function deactivateCareActivity(activityId) {

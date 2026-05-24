@@ -50,7 +50,7 @@ export default function TurnoBuilder() {
     const sinSignos = summary.sin_signos_hoy?.length ?? 0;
     const seguimientos = summary.seguimientos?.length ?? 0;
     if (emarOverdue) return `Administrar ${emarOverdue} medicamento${emarOverdue > 1 ? "s" : ""} vencido${emarOverdue > 1 ? "s" : ""}.`;
-    if (emarValidation) return `Validar ${emarValidation} controlado${emarValidation > 1 ? "s" : ""} antes de cerrar turno.`;
+    if (emarValidation) return `Validar ${emarValidation} registro${emarValidation > 1 ? "s" : ""} de medicamentos antes de cerrar turno.`;
     if (careOverdue) return `Cerrar ${careOverdue} tarea${careOverdue > 1 ? "s" : ""} de cuidado vencida${careOverdue > 1 ? "s" : ""}.`;
     if (carePending) return `Completar ${carePending} tarea${carePending > 1 ? "s" : ""} de cuidado pendiente${carePending > 1 ? "s" : ""}.`;
     if (urgent) return `Priorizar ${urgent} residente${urgent > 1 ? "s" : ""} con signos críticos.`;
@@ -126,7 +126,7 @@ export default function TurnoBuilder() {
       ) : summary && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <section className="space-y-4">
-            <SummarySection title="eMAR por validar" empty="No hay medicamentos controlados pendientes de validación.">
+            <SummarySection title="Medicamentos por validar" empty="No hay medicamentos pendientes de validación.">
               {summary.emar?.por_validar?.map((item) => (
                 <MedicationRow key={item.id} item={item} tone="sky" />
               ))}
@@ -211,7 +211,7 @@ export default function TurnoBuilder() {
                 <SmallMetric label="Signos" value={summary.actividad_turno?.signos ?? 0} />
                 <SmallMetric label="Observaciones" value={summary.actividad_turno?.observaciones ?? 0} />
                 <SmallMetric label="Tareas" value={summary.actividad_turno?.tareas_cuidado_pendientes ?? 0} />
-                <SmallMetric label="eMAR pend." value={(summary.actividad_turno?.medicamentos_pendientes ?? 0) + (summary.actividad_turno?.medicamentos_por_validar ?? 0)} />
+                <SmallMetric label="Medicamentos pend." value={(summary.actividad_turno?.medicamentos_pendientes ?? 0) + (summary.actividad_turno?.medicamentos_por_validar ?? 0)} />
                 <SmallMetric label="Residentes" value={summary.residentes_activos ?? 0} />
                 <SmallMetric label="Fecha" value={turnoLabel(summary.turno)} />
               </div>
@@ -311,7 +311,7 @@ function MedicationRow({ item, tone = "amber" }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm font-semibold text-slate-950">{item.medicamento}</div>
         <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
-          {item.hora?.slice(0, 5) ?? "--:--"}{item.controlado ? " · controlado" : ""}
+          {item.hora?.slice(0, 5) ?? "--:--"}{item.controlado ? " · requiere validación" : ""}
         </span>
       </div>
       <p className="mt-1 text-sm text-slate-600">

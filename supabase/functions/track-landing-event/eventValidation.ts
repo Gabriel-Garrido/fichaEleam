@@ -11,7 +11,8 @@ export const ALLOWED_EVENT_TYPES = new Set([
   "form_submit",
 ]);
 
-// Longitudes maximas por campo (defensa: landing_events es text sin limite).
+// Longitudes maximas por campo. La Edge Function sanea antes de insertar y
+// supabase_schema.sql replica estos límites con constraints de BD.
 export const FIELD_MAX = {
   tipo: 64,
   pagina: 256,

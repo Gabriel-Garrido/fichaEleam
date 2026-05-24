@@ -71,8 +71,8 @@ export const deleteObservation = async (id) => {
   if (error) throw error;
 };
 
-export const getPendingSeguimientos = async (fecha, turno) => {
-  const { data, error } = await supabase
+export const getPendingSeguimientos = async (fecha, turno, { residenteId = null } = {}) => {
+  let query = supabase
     .from("observaciones_diarias")
     .select(`${OBSERVATION_SELECT}, residentes(nombre, apellido)`)
     .eq("requiere_seguimiento", true)
@@ -80,16 +80,24 @@ export const getPendingSeguimientos = async (fecha, turno) => {
     .eq("seguimiento_fecha", fecha)
     .eq("seguimiento_turno", turno)
     .order("creado_en", { ascending: true });
+
+  if (residenteId) query = query.eq("residente_id", residenteId);
+
+  const { data, error } = await query;
   if (error) throw error;
   return data ?? [];
 };
 
 export const resolverSeguimiento = async (id, { notas = null } = {}) => {
+  const cleanNotes = notas?.trim();
+  if (!cleanNotes) {
+    throw new Error("Debes registrar la evolución antes de finalizar el seguimiento.");
+  }
   const { data, error } = await supabase
     .from("observaciones_diarias")
     .update({
       seguimiento_estado: "resuelto",
-      ...(notas?.trim() ? { acciones_tomadas: notas.trim() } : {}),
+      acciones_tomadas: cleanNotes,
     })
     .eq("id", id)
     .select(OBSERVATION_SELECT)
@@ -99,22 +107,27 @@ export const resolverSeguimiento = async (id, { notas = null } = {}) => {
 };
 
 export const continuarSeguimiento = async (id, { notas = null, nuevaFecha, nuevoTurno } = {}) => {
+  const cleanNotes = notas?.trim();
+  if (!cleanNotes) {
+    throw new Error("Debes registrar la evolución antes de continuar el seguimiento.");
+  }
+  if (!nuevaFecha || !nuevoTurno) {
+    throw new Error("Debes indicar fecha y turno para continuar el seguimiento.");
+  }
   const { data: { user } } = await supabase.auth.getUser();
 
   const { data: original, error: resolveError } = await supabase
     .from("observaciones_diarias")
     .update({
       seguimiento_estado: "resuelto",
-      ...(notas?.trim() ? { acciones_tomadas: notas.trim() } : {}),
+      acciones_tomadas: cleanNotes,
     })
     .eq("id", id)
     .select(OBSERVATION_SELECT)
     .single();
   if (resolveError) throw resolveError;
 
-  const nuevaDescripcion = notas?.trim()
-    ? `Seguimiento de: ${original.descripcion}\n\nEvolución: ${notas.trim()}`
-    : `Seguimiento de: ${original.descripcion}`;
+  const nuevaDescripcion = `Seguimiento de: ${original.descripcion}\n\nEvolución: ${cleanNotes}`;
 
   const { data: nueva, error: createError } = await supabase
     .from("observaciones_diarias")

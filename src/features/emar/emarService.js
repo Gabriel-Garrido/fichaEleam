@@ -1,6 +1,7 @@
 import { supabase } from "../../services/supabaseConfig";
 import { normalizeFamilyVisibility } from "../familiar/familyVisibility";
 import { withResidentLocation } from "../beds/bedsUtils";
+import { sortStockLotsByExpiry } from "./emarUi";
 import {
   currentTurno, todayIso,
   getSessionProfile, nextFollowUpSlot, normalizeSchedule, previousTurnos, requireFollowUpSlot,
@@ -22,7 +23,7 @@ export const MED_ROUTES = [
   ["otra", "Otra"],
 ];
 
-export const MED_STATUS_LABEL = {
+const MED_STATUS_LABEL = {
   pendiente: "Pendiente",
   administrado: "Administrado",
   omitido: "Omitido",
@@ -118,6 +119,10 @@ export function isMedicationOverdue(row, now = new Date()) {
   if (row?.estado !== "pendiente" || row?.fecha !== todayIso()) return false;
   const dueAt = medicationDueAt(row);
   return dueAt instanceof Date && dueAt < now;
+}
+
+function isMissingRpc(error) {
+  return error?.code === "PGRST202" || /function .*not found|could not find/i.test(error?.message ?? "");
 }
 
 export async function generateMedicationAdministrations({ fecha = todayIso(), turno = null } = {}) {
@@ -266,6 +271,31 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
     throw new Error("Medicamento y dosis son obligatorios.");
   }
 
+  const sourceSchedules = Array.isArray(indication.schedules) && indication.schedules.length
+    ? indication.schedules
+    : Array.isArray(schedule)
+      ? schedule
+      : [schedule];
+  const horarios = sourceSchedules
+    .filter(Boolean)
+    .map((item) => ({ ...normalizeSchedule(item), id: item.id || null }));
+
+  if (horarios.length === 0) {
+    throw new Error("Debe registrar al menos un horario.");
+  }
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc("guardar_indicacion_medicamento_con_horarios", {
+    p_residente_id: residenteId,
+    p_indicacion: {
+      ...payload,
+      id: indication.id || null,
+      creado_por: indication.id ? undefined : userId,
+    },
+    p_horarios: horarios,
+  });
+  if (!rpcError) return rpcData;
+  if (!isMissingRpc(rpcError)) throw rpcError;
+
   let saved;
   if (indication.id) {
     const { data, error } = await supabase
@@ -284,19 +314,6 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
       .single();
     if (error) throw error;
     saved = data;
-  }
-
-  const sourceSchedules = Array.isArray(indication.schedules) && indication.schedules.length
-    ? indication.schedules
-    : Array.isArray(schedule)
-      ? schedule
-      : [schedule];
-  const horarios = sourceSchedules
-    .filter(Boolean)
-    .map((item) => ({ ...normalizeSchedule(item), id: item.id || null }));
-
-  if (horarios.length === 0) {
-    throw new Error("Debe registrar al menos un horario.");
   }
 
   if (indication.id) {
@@ -408,11 +425,13 @@ export async function saveStockLot({ residenteId, indication = null, lot }) {
 }
 
 export async function listAvailableLots({ residenteId, indicacionId = null, controlado = null } = {}) {
+  const today = todayIso();
   let query = supabase
     .from("medicamentos_stock_lotes")
     .select(STOCK_LOT_SELECT)
     .eq("estado", "activo")
     .gt("cantidad_actual", 0)
+    .or(`fecha_vencimiento.is.null,fecha_vencimiento.gte.${today}`)
     .order("fecha_vencimiento", { ascending: true, nullsFirst: false });
 
   if (residenteId) query = query.eq("residente_id", residenteId);
@@ -422,7 +441,7 @@ export async function listAvailableLots({ residenteId, indicacionId = null, cont
 
   const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+  return sortStockLotsByExpiry(data ?? []);
 }
 
 export async function administerMedication({

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   CARE_OPEN_STATUSES,
+  CARE_ACTIVITY_PRESETS,
+  buildCarePresetRpcPayload,
   careTaskDueAt,
   currentTurno,
   isCareTaskOverdue,
@@ -78,5 +80,33 @@ describe("carePlansService helpers", () => {
       seguimientoFecha: "2026-05-14",
       seguimientoTurno: "tarde",
     })).not.toThrow();
+  });
+
+  it("builds transactional preset payload with normalized schedule shape", () => {
+    const [first] = buildCarePresetRpcPayload([CARE_ACTIVITY_PRESETS[0]]);
+    expect(first.activity).toMatchObject({
+      titulo: CARE_ACTIVITY_PRESETS[0].activity.titulo,
+      prioridad: CARE_ACTIVITY_PRESETS[0].activity.prioridad,
+      visible_familiar: false,
+      resumen_familiar: null,
+    });
+    expect(first.schedule).toMatchObject({
+      frecuencia: "diaria",
+      dias_semana: null,
+      dias_mes: null,
+      fecha_unica: null,
+      activo: true,
+    });
+
+    const [weekly] = buildCarePresetRpcPayload([{
+      activity: { categoria: "higiene", titulo: "Aseo semanal" },
+      schedule: { frecuencia: "semanal", dias_semana: [5, 1, 1, 9], tolerancia_min: 900 },
+    }]);
+    expect(weekly.schedule).toMatchObject({
+      frecuencia: "semanal",
+      dias_semana: [1, 5],
+      dias_mes: null,
+      tolerancia_min: 720,
+    });
   });
 });

@@ -46,12 +46,18 @@ export const PERM_GROUPS = [
     ],
   },
   {
-    label: "eMAR medicamentos",
+    label: "Evaluaciones funcionales",
+    perms: [
+      { key: "aplicar_evaluaciones_clinicas", label: "Aplicar Barthel y Katz" },
+    ],
+  },
+  {
+    label: "Medicamentos",
     perms: [
       { key: "crear_indicaciones_medicamentos",  label: "Crear indicaciones" },
       { key: "editar_indicaciones_medicamentos", label: "Editar indicaciones" },
       { key: "administrar_medicamentos",         label: "Administrar" },
-      { key: "validar_medicamentos_controlados", label: "Validar controlados" },
+      { key: "validar_medicamentos_controlados", label: "Validar medicamentos" },
       { key: "ajustar_stock_medicamentos",       label: "Ajustar stock" },
     ],
   },
@@ -82,6 +88,7 @@ export const DEFAULT_PERMS = {
   asignar_camas: true,
   subir_acreditacion: true,   editar_acreditacion: true,   archivar_acreditacion: false,
   registrar_visitas: true,
+  aplicar_evaluaciones_clinicas: true,
 };
 
 export const PLANTILLAS_CARGO = {
@@ -96,6 +103,7 @@ export const PLANTILLAS_CARGO = {
     asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
     registrar_visitas: true,
+    aplicar_evaluaciones_clinicas: true,
   },
   "Kinesiólogo/a": {
     crear_residentes: false,  editar_residentes: true,   eliminar_residentes: false,
@@ -108,6 +116,7 @@ export const PLANTILLAS_CARGO = {
     asignar_camas: true,
     subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
     registrar_visitas: false,
+    aplicar_evaluaciones_clinicas: true,
   },
   "Médico/a": {
     crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
@@ -120,6 +129,7 @@ export const PLANTILLAS_CARGO = {
     asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
     registrar_visitas: false,
+    aplicar_evaluaciones_clinicas: true,
   },
   "Auxiliar ATD": {
     crear_residentes: false,  editar_residentes: false,  eliminar_residentes: false,
@@ -132,6 +142,7 @@ export const PLANTILLAS_CARGO = {
     asignar_camas: true,
     subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
     registrar_visitas: true,
+    aplicar_evaluaciones_clinicas: false,
   },
   "Administrativo/a": {
     crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
@@ -144,5 +155,6 @@ export const PLANTILLAS_CARGO = {
     asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: true,
     registrar_visitas: false,
+    aplicar_evaluaciones_clinicas: false,
   },
 };

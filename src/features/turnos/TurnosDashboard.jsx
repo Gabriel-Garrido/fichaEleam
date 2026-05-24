@@ -121,7 +121,7 @@ export default function TurnosDashboard() {
                     </p>
                   </div>
                   <div className="grid grid-cols-5 gap-2 text-center text-xs text-slate-500">
-                    <Metric label="eMAR" value={summaryNested(item.resumen_json, "emar", "pendiente") + summaryNested(item.resumen_json, "emar", "pendiente_validacion")} />
+                    <Metric label="Medicamentos" value={summaryNested(item.resumen_json, "emar", "pendiente") + summaryNested(item.resumen_json, "emar", "pendiente_validacion")} />
                     <Metric label="Tareas" value={carePending(item.resumen_json)} />
                     <Metric label="Sin signos" value={summaryCount(item.resumen_json, "sin_signos_hoy")} />
                     <Metric label="Atención" value={summaryCount(item.resumen_json, "signos_atencion")} />

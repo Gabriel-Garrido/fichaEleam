@@ -7,9 +7,7 @@ import { useNavigationItems } from "../navigation/useNavigationItems";
 import { logout } from "../features/auth/authService";
 import {
   OnboardingProvider,
-  ActivationIntro,
-  ActivationPanel,
-  ActivationNudge,
+  ActivationGuide,
 } from "../features/onboarding";
 
 export default function AppShell({ children }) {
@@ -54,7 +52,6 @@ export default function AppShell({ children }) {
               </button>
             </div>
           )}
-          <ActivationNudge />
           <main className="min-h-screen pb-28 lg:pb-0">
             {children ?? <Outlet />}
           </main>
@@ -66,8 +63,7 @@ export default function AppShell({ children }) {
           auth={auth}
           onLogout={handleLogout}
         />
-        <ActivationIntro />
-        <ActivationPanel />
+        <ActivationGuide />
       </div>
     </OnboardingProvider>
   );

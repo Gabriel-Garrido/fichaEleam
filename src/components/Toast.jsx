@@ -38,12 +38,14 @@ function ToastIcon({ type }) {
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
-  const toast = useCallback((message, type = "info", duration = 3500) => {
+  const toast = useCallback((message, type = "info", duration) => {
     const id = ++_toastCounter;
+    const fallback = type === "error" ? 6000 : 3500;
+    const ms = typeof duration === "number" ? duration : fallback;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, duration);
+    }, ms);
   }, []);
 
   const dismiss = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));

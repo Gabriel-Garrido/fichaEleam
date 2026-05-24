@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useCallback, useMemo } from "react";
+import React, { createContext, useState, useEffect, useContext, useCallback, useMemo, useRef } from "react";
 import { supabase, isSupabaseConfigured } from "../services/supabaseConfig";
 import Loading from "../components/Loading";
 import { computeCanFeature } from "./featureAccess";
@@ -44,6 +44,11 @@ export function AuthProvider({ children }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const [supabaseError, setSupabaseError]   = useState(false);
   const [authNotice, setAuthNotice]         = useState(() => takeStoredAuthNotice());
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
 
   const fetchProfileAndEleam = useCallback(async (authUser, { silent = false } = {}) => {
     if (!supabase) return;
@@ -203,8 +208,11 @@ export function AuthProvider({ children }) {
       (event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
-          if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-            fetchProfileAndEleam(session.user);
+          if (event === "SIGNED_IN") {
+            const hasCurrentProfile = profileRef.current?.id === session.user.id;
+            fetchProfileAndEleam(session.user, { silent: hasCurrentProfile });
+          } else if (event === "USER_UPDATED") {
+            fetchProfileAndEleam(session.user, { silent: true });
           } else if (event === "TOKEN_REFRESHED") {
             fetchProfileAndEleam(session.user, { silent: true });
           }

@@ -33,8 +33,8 @@ const EMPTY = {
   nombre_contacto: "", telefono_contacto: "", parentesco_contacto: "",
   prevision: "", diagnostico_principal: "", alergias: "", grupo_sanguineo: "",
   fecha_ingreso: new Date().toISOString().split("T")[0],
-  estado: "activo", nivel_dependencia: "", indice_barthel: "",
-  escala_katz: "", fecha_egreso: "", motivo_egreso: "",
+  estado: "activo", nivel_dependencia: "",
+  fecha_egreso: "", motivo_egreso: "",
 };
 
 const FAMILIAR_EMPTY = { nombre: "", email: "", parentesco: "" };
@@ -97,8 +97,6 @@ export default function ResidentForm() {
         alergias:        Array.isArray(data.alergias) ? data.alergias.join(", ") : "",
         fecha_nacimiento: data.fecha_nacimiento ?? "",
         fecha_ingreso:   data.fecha_ingreso ?? new Date().toISOString().split("T")[0],
-        indice_barthel:  data.indice_barthel ?? "",
-        escala_katz:     data.escala_katz ?? "",
         fecha_egreso:    data.fecha_egreso ?? "",
         motivo_egreso:   data.motivo_egreso ?? "",
       });
@@ -130,12 +128,6 @@ export default function ResidentForm() {
     if (!form.apellido.trim()) e.apellido      = "El apellido es obligatorio.";
     if (form.rut && !validateRut(form.rut)) e.rut = "RUT inválido.";
     if (!form.fecha_ingreso)   e.fecha_ingreso = "La fecha de ingreso es obligatoria.";
-    if (
-      form.indice_barthel !== "" &&
-      (isNaN(form.indice_barthel) || form.indice_barthel < 0 || form.indice_barthel > 100)
-    ) {
-      e.indice_barthel = "Debe ser un número entre 0 y 100.";
-    }
     const egresoEstados = ["egresado", "fallecido"];
     if (egresoEstados.includes(form.estado) && !form.fecha_egreso) {
       e.fecha_egreso = "La fecha de egreso es obligatoria para este estado.";
@@ -168,8 +160,6 @@ export default function ResidentForm() {
         alergias: form.alergias
           ? form.alergias.split(",").map((a) => a.trim()).filter(Boolean)
           : [],
-        indice_barthel: form.indice_barthel !== "" ? parseInt(form.indice_barthel, 10) : null,
-        escala_katz:    form.escala_katz.trim() || null,
         fecha_egreso:   form.fecha_egreso || null,
         motivo_egreso:  form.motivo_egreso.trim() || null,
       };
@@ -446,11 +436,9 @@ export default function ResidentForm() {
             <SelectField label="Nivel de dependencia" name="nivel_dependencia"
               value={form.nivel_dependencia} onChange={handleChange}
               options={[["","Seleccionar"],["leve","Leve"],["moderado","Moderado"],["severo","Severo"],["total","Total"]]} />
-            <Field label="Índice de Barthel (0–100)" name="indice_barthel" type="number"
-              min="0" max="100" value={form.indice_barthel} onChange={handleChange}
-              error={errors.indice_barthel} />
-            <Field label="Escala Katz" name="escala_katz" placeholder="A / B / C…"
-              value={form.escala_katz} onChange={handleChange} />
+          </div>
+          <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50/60 p-3 text-xs text-teal-900">
+            Las escalas funcionales (Barthel y Katz) se aplican con un formulario guiado desde la ficha del residente, en la pestaña Información, una vez creado.
           </div>
         </Card>
 

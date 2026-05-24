@@ -11,7 +11,7 @@ const CATEGORIES = [
     qa: [
       {
         q: "¿Qué es FichaEleam?",
-        a: "FichaEleam es un software web especializado para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile. Centraliza ficha clínica, signos vitales, observaciones por turno, plan de cuidado, eMAR (kardex electrónico), gestión de habitaciones, portal familiar y carpeta SEREMI DS 14/2017 en una sola plataforma.",
+        a: "FichaEleam es un software web especializado para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile. Centraliza ficha clínica, signos vitales, observaciones por turno, plan de cuidado, administración de medicamentos, gestión de habitaciones, portal familiar y carpeta SEREMI DS 14/2017 en una sola plataforma.",
       },
       {
         q: "¿En qué se diferencia de un software clínico genérico?",
@@ -137,7 +137,7 @@ const CATEGORIES = [
       },
       {
         q: "¿Puedo controlar qué ve cada funcionario?",
-        a: "Sí. El admin del ELEAM define permisos granulares por funcionario: crear/editar/eliminar residentes, signos vitales, observaciones, planes de cuidado, eMAR, acreditación y visitas. También puede habilitar o deshabilitar módulos completos por funcionario.",
+        a: "Sí. El admin del ELEAM define permisos granulares por funcionario: crear/editar/eliminar residentes, signos vitales, observaciones, planes de cuidado, medicamentos, acreditación y visitas. También puede habilitar o deshabilitar módulos completos por funcionario.",
       },
       {
         q: "¿Cómo invito a las familias?",

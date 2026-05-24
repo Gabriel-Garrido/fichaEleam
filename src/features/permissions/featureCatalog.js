@@ -36,8 +36,8 @@ export const FEATURE_CATALOG = [
   },
   {
     id: "emar",
-    label: "eMAR medicamentos",
-    description: "Administración, stock y controlados con doble validación.",
+    label: "Medicamentos",
+    description: "Administración, stock y doble revisión.",
     group: "Operación",
     roles: ["admin_eleam", "funcionario"],
   },

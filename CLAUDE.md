@@ -55,6 +55,7 @@ src/
 │   ├── carePlans/              # Plan de cuidado: CarePlanTab (actividades + horarios), CareTasksPage (bandeja diaria cuidado + eMAR), carePlansService
 │   │   └── carePlansService.js # Funciones compartidas: getSessionProfile(), todayIso(), currentTurno(), normalizeSchedule(), previousTurnos()
 │   ├── emar/                   # Kardex electrónico: EmarTurnPage (administración por turno), EmarResidentTab (historial por residente), emarService
+│   ├── clinicalAssessments/    # Escalas funcionales Barthel/Katz con reevaluación MINSAL: ClinicalAssessmentModal, Badge, History, Rules y Service
 │   ├── turnos/                 # Entrega de turno: TurnoEntregaPage, TurnoHistoryPage, turnosService; integra datos de eMAR + plan de cuidado + signos + acreditación
 │   ├── permissions/            # Gestión de features por ELEAM: featureCatalog.js (13 features), FeaturePermissionsPage (admin)
 │   ├── payment/                # PaymentPage, PaymentReturn (MercadoPago)
@@ -622,6 +623,7 @@ Tabla `funcionario_permisos` con columnas bool por acción. Verificación en UI 
 | `asignar_camas` | Asignar, transferir y liberar camas | true |
 | `subir_acreditacion`, `editar_acreditacion`, `archivar_acreditacion` | Acreditación | true / true / **false** |
 | `registrar_visitas` | Visitas familiares | true |
+| `aplicar_evaluaciones_clinicas` | Aplicar escalas Barthel y Katz | true |
 
 `can()` en AuthContext: fail-closed para permisos marcados **false** — cuando no hay row en `funcionario_permisos`, esos permisos se deniegan explícitamente (set `FAIL_CLOSED_PERMS` en AuthContext.jsx). El schema crea filas para funcionarios nuevos y existentes.
 

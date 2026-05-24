@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
+import CollapsibleGuide from "../../components/CollapsibleGuide";
+import MetricCard from "../../components/MetricCard";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { useAuth } from "../../context/AuthContext";
+import useSessionFormDraft from "../../hooks/useSessionFormDraft";
 import { formatDateOnly } from "../../utils/dateUtils";
 import {
   EMAR_TURNOS,
   MED_ROUTES,
-  MED_STATUS_LABEL,
   currentTurno,
   getResidentEmar,
   listPendingControlledReconciliations,
@@ -17,50 +20,26 @@ import {
   saveStockLot,
   todayIso,
 } from "./emarService";
+import {
+  buildStockLotAlerts,
+  DEFAULT_MEDICATION_INDICATION,
+  DEFAULT_MEDICATION_SCHEDULE,
+  DEFAULT_STOCK_LOT,
+  MEDICINE_STATUS_LABEL,
+  getStockLotStatus,
+  hasValidationErrors,
+  summarizeMedicationSchedule,
+  validateMedicationIndicationDraft,
+} from "./emarUi";
 
 const INITIAL_INDICATION = {
-  medicamento_nombre: "",
-  principio_activo: "",
-  concentracion: "",
-  forma_farmaceutica: "",
-  dosis: "",
-  unidad_dosis: "unidad",
-  via: "oral",
-  indicacion: "",
-  prescriptor_nombre: "",
+  ...DEFAULT_MEDICATION_INDICATION,
   fecha_indicacion: todayIso(),
   fecha_inicio: todayIso(),
-  fecha_fin: "",
-  estado: "activo",
-  es_controlado: false,
-  tipo_controlado: "psicotropico",
-  requiere_stock: true,
-  visible_familiar: false,
-  resumen_familiar: "",
-  instrucciones: "",
 };
 
-const INITIAL_SCHEDULE = {
-  frecuencia: "diaria",
-  dias_semana: [1, 2, 3, 4, 5, 6, 7],
-  dias_mes: [1],
-  fecha_unica: "",
-  hora: "09:00",
-  turno: "mañana",
-  tolerancia_min: 60,
-};
-
-const INITIAL_LOT = {
-  medicamento_nombre: "",
-  lote: "",
-  fecha_vencimiento: "",
-  cantidad_actual: 0,
-  unidad: "unidad",
-  ubicacion: "",
-  es_controlado: false,
-  tipo_controlado: "psicotropico",
-  estado: "activo",
-};
+const INITIAL_SCHEDULE = DEFAULT_MEDICATION_SCHEDULE;
+const INITIAL_LOT = DEFAULT_STOCK_LOT;
 
 const WEEK_DAYS = [
   [1, "Lun"],
@@ -76,6 +55,9 @@ const STOCK_TONE = {
   activo: "bg-emerald-50 text-emerald-700 border-emerald-200",
   agotado: "bg-rose-50 text-rose-700 border-rose-200",
   vencido: "bg-rose-50 text-rose-700 border-rose-200",
+  por_vencer: "bg-amber-50 text-amber-800 border-amber-200",
+  sin_stock: "bg-rose-50 text-rose-700 border-rose-200",
+  retirado: "bg-slate-50 text-slate-600 border-slate-200",
   inactivo: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
@@ -89,17 +71,9 @@ function cloneSchedule(schedule = INITIAL_SCHEDULE) {
   };
 }
 
-function formatSchedule(schedule) {
-  if (!schedule) return "Sin horario";
-  const base = `${schedule.turno} · ${schedule.hora?.slice(0, 5) ?? "--:--"}`;
-  if (schedule.frecuencia === "semanal") return `${base} · semanal`;
-  if (schedule.frecuencia === "mensual") return `${base} · dia ${schedule.dias_mes?.[0] ?? 1}`;
-  if (schedule.frecuencia === "una_vez") return `${base} · ${formatDateOnly(schedule.fecha_unica)}`;
-  return `${base} · diaria`;
-}
-
 export default function EmarResidentTab({ resident }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const { can } = useAuth();
   const [data, setData] = useState({ indicaciones: [], lotes: [], administraciones: [] });
   const [pendingReconciliations, setPendingReconciliations] = useState([]);
@@ -128,7 +102,7 @@ export default function EmarResidentTab({ resident }) {
       );
     } catch (err) {
       console.error(err);
-      toast("No se pudo cargar eMAR del residente.", "error");
+      toast("No se pudieron cargar los medicamentos del residente.", "error");
     } finally {
       setLoading(false);
     }
@@ -156,18 +130,32 @@ export default function EmarResidentTab({ resident }) {
     return totals;
   }, [data.lotes]);
 
+  const indicationGroups = useMemo(() => {
+    const groups = {
+      listas: [],
+      sinStock: [],
+      controladas: [],
+      cerradas: [],
+    };
+    for (const item of data.indicaciones) {
+      const closed = ["suspendida", "suspendido", "finalizada"].includes(item.estado);
+      const needsStock = item.requiere_stock || item.es_controlado;
+      const hasStock = Number(stockByIndication[item.id]?.cantidad ?? 0) > 0;
+      if (closed) groups.cerradas.push(item);
+      else if (needsStock && !hasStock) groups.sinStock.push(item);
+      else if (item.es_controlado) groups.controladas.push(item);
+      else groups.listas.push(item);
+    }
+    return groups;
+  }, [data.indicaciones, stockByIndication]);
+
   const controlledLots = useMemo(
     () => data.lotes.filter((lot) => lot.es_controlado),
     [data.lotes]
   );
 
   const stockAlerts = useMemo(() => {
-    const today = new Date(`${todayIso()}T12:00:00`);
-    return data.lotes.filter((lot) => {
-      const qty = Number(lot.cantidad_actual ?? 0);
-      const expired = lot.fecha_vencimiento && new Date(`${lot.fecha_vencimiento}T12:00:00`) < today;
-      return lot.estado !== "retirado" && (qty <= 0 || expired);
-    });
+    return buildStockLotAlerts(data.lotes);
   }, [data.lotes]);
 
   const recentPending = useMemo(
@@ -197,6 +185,7 @@ export default function EmarResidentTab({ resident }) {
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo guardar la indicación.", "error");
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -212,6 +201,7 @@ export default function EmarResidentTab({ resident }) {
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo guardar el lote.", "error");
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -227,6 +217,7 @@ export default function EmarResidentTab({ resident }) {
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo registrar el movimiento.", "error");
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -242,6 +233,7 @@ export default function EmarResidentTab({ resident }) {
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo conciliar el stock.", "error");
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -257,21 +249,21 @@ export default function EmarResidentTab({ resident }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-semibold text-slate-950">eMAR medicamentos</h2>
-              <HelpTooltip label="Ayuda: eMAR del residente">
-                Las indicaciones generan administraciones por turno. Los medicamentos controlados exigen stock por lote y doble validación.
+              <h2 className="text-base font-semibold text-slate-950">Medicamentos</h2>
+              <HelpTooltip label="Ayuda: medicamentos del residente">
+                Las indicaciones generan administraciones por turno. Algunos medicamentos requieren stock por lote y confirmación de un segundo usuario.
               </HelpTooltip>
             </div>
             <p className="text-sm text-slate-500">
-              Indicaciones activas, horarios, stock por lote y control de psicotrópicos/estupefacientes.
+              Indicaciones activas, horarios, stock por lote y registros por validar.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
             {canCreateIndication && (
               <button
                 type="button"
                 onClick={() => setIndicationModal({ indication: INITIAL_INDICATION, schedule: { ...INITIAL_SCHEDULE, turno: currentTurno() } })}
-                className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+                className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:w-auto"
               >
                 Nueva indicación
               </button>
@@ -280,7 +272,7 @@ export default function EmarResidentTab({ resident }) {
               <button
                 type="button"
                 onClick={() => setLotModal({ lot: INITIAL_LOT, indication: activeIndications[0] ?? null })}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
               >
                 Nuevo lote
               </button>
@@ -289,27 +281,49 @@ export default function EmarResidentTab({ resident }) {
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MiniMetric label="Indicaciones activas" value={activeIndications.length} />
-          <MiniMetric label="Lotes con stock" value={data.lotes.filter((lot) => Number(lot.cantidad_actual ?? 0) > 0).length} tone="emerald" />
-          <MiniMetric label="Alertas de stock" value={stockAlerts.length} tone={stockAlerts.length ? "amber" : "emerald"} />
-          <MiniMetric label="Pendiente eMAR" value={recentPending} tone={recentPending ? "amber" : "emerald"} />
+          <MetricCard size="sm" label="Indicaciones activas" value={activeIndications.length} />
+          <MetricCard size="sm" label="Lotes con stock" value={data.lotes.filter((lot) => Number(lot.cantidad_actual ?? 0) > 0).length} tone="emerald" />
+          <MetricCard
+            size="sm"
+            label="Alertas de stock"
+            value={stockAlerts.vencidos.length + stockAlerts.porVencer.length + stockAlerts.sinStock.length}
+            tone={stockAlerts.vencidos.length || stockAlerts.sinStock.length ? "amber" : "emerald"}
+          />
+          <MetricCard size="sm" label="Pendientes" value={recentPending} tone={recentPending ? "amber" : "emerald"} />
         </div>
+
+        <StockAlertsPanel
+          alerts={stockAlerts}
+          canAdjustStock={canAdjustStock}
+          onNewLot={() => setLotModal({ lot: INITIAL_LOT, indication: activeIndications[0] ?? null })}
+        />
 
         {(!canCreateIndication || !canAdjustStock) && (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Tu perfil puede consultar eMAR
+            Tu perfil puede consultar medicamentos
             {!canCreateIndication ? ", pero no crear indicaciones" : ""}
             {!canAdjustStock ? ", ni registrar stock" : ""}. Un administrador puede habilitar esos permisos en Gestión de equipo.
           </div>
         )}
 
-        <EmarResidentWorkflow />
+        <div className="mt-4">
+          <CollapsibleGuide
+            storageKey="emarResident"
+            title="¿Cómo se administran los medicamentos del residente?"
+            steps={[
+              { title: "Indicación", text: "Define medicamento, dosis, vía, prescriptor y vigencia clínica." },
+              { title: "Horarios", text: "Cada horario genera dosis automáticamente para el turno correspondiente." },
+              { title: "Stock por lote", text: "Los lotes alimentan el inventario y se descuentan al administrar." },
+              { title: "Doble firma", text: "Algunos medicamentos exigen lote identificado y confirmación de un segundo usuario." },
+            ]}
+          />
+        </div>
 
         {activeIndications.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
             <h3 className="text-sm font-semibold text-slate-950">Configura la primera indicación</h3>
             <p className="mx-auto mt-1 max-w-xl text-sm text-slate-500">
-              Registra medicamento, dosis y uno o más horarios. Desde ahí eMAR generará las administraciones por turno.
+              Registra medicamento, dosis y uno o más horarios. Desde ahí se generarán las administraciones por turno.
             </p>
             {canCreateIndication && (
               <button
@@ -322,32 +336,49 @@ export default function EmarResidentTab({ resident }) {
             )}
           </div>
         ) : (
-          <div className="mt-4 divide-y divide-slate-100">
-            {activeIndications.map((item) => (
-              <IndicationRow
-                key={item.id}
-                item={item}
+          <div className="mt-4 space-y-4">
+            <IndicationGroup
+              title="Listas para administrar"
+              items={indicationGroups.listas}
+              empty="Sin indicaciones listas."
+              canEdit={canEditIndication}
+              canAdjustStock={canAdjustStock}
+              stockByIndication={stockByIndication}
+              onEdit={setIndicationModal}
+              onNewLot={setLotModal}
+            />
+            <IndicationGroup
+              title="Necesitan stock"
+              items={indicationGroups.sinStock}
+              empty="Sin indicaciones detenidas por stock."
+              canEdit={canEditIndication}
+              canAdjustStock={canAdjustStock}
+              stockByIndication={stockByIndication}
+              onEdit={setIndicationModal}
+              onNewLot={setLotModal}
+            />
+            <IndicationGroup
+              title="Requieren revisión"
+              items={indicationGroups.controladas}
+              empty="Sin medicamentos que requieran doble firma."
+              canEdit={canEditIndication}
+              canAdjustStock={canAdjustStock}
+              stockByIndication={stockByIndication}
+              onEdit={setIndicationModal}
+              onNewLot={setLotModal}
+            />
+            {indicationGroups.cerradas.length > 0 && (
+              <IndicationGroup
+                title="Cerradas o suspendidas"
+                items={indicationGroups.cerradas}
+                empty=""
                 canEdit={canEditIndication}
                 canAdjustStock={canAdjustStock}
-                stock={stockByIndication[item.id]}
-                onEdit={() => setIndicationModal({
-                  indication: item,
-                  schedules: item.horarios?.filter((h) => h.activo !== false).length
-                    ? item.horarios.filter((h) => h.activo !== false)
-                    : [INITIAL_SCHEDULE],
-                })}
-                onNewLot={() => setLotModal({
-                  indication: item,
-                  lot: {
-                    ...INITIAL_LOT,
-                    medicamento_nombre: item.medicamento_nombre,
-                    unidad: item.unidad_dosis || "unidad",
-                    es_controlado: item.es_controlado,
-                    tipo_controlado: item.tipo_controlado || "psicotropico",
-                  },
-                })}
+                stockByIndication={stockByIndication}
+                onEdit={setIndicationModal}
+                onNewLot={setLotModal}
               />
-            ))}
+            )}
           </div>
         )}
       </section>
@@ -358,7 +389,7 @@ export default function EmarResidentTab({ resident }) {
             <div>
               <div className="flex items-center gap-1.5">
                 <h2 className="text-base font-semibold text-slate-950">Stock por lote</h2>
-                <HelpTooltip label="Ayuda: stock eMAR">
+                <HelpTooltip label="Ayuda: stock de medicamentos">
                   Cada administración con stock obligatorio descuenta del lote seleccionado. Editar un lote no cambia cantidades; las cantidades se mueven con acciones auditadas.
                 </HelpTooltip>
               </div>
@@ -377,7 +408,7 @@ export default function EmarResidentTab({ resident }) {
 
           {data.lotes.length === 0 ? (
             <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-              Sin lotes registrados. El stock se exige al administrar medicamentos controlados o con inventario activo.
+              Sin lotes registrados. El stock se exige al administrar medicamentos con inventario activo o doble firma.
             </p>
           ) : (
             <div className="mt-4 divide-y divide-slate-100">
@@ -398,14 +429,14 @@ export default function EmarResidentTab({ resident }) {
         <div className="space-y-5">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-semibold text-slate-950">Controlados</h2>
-              <HelpTooltip label="Ayuda: controlados eMAR">
-                Los controlados requieren lote marcado como controlado. La administración queda por validar y las diferencias de stock se corrigen mediante conciliación.
+              <h2 className="text-base font-semibold text-slate-950">Doble firma</h2>
+              <HelpTooltip label="Ayuda: doble firma">
+                Algunos medicamentos requieren stock identificado y confirmación de un segundo usuario antes de cerrar el registro.
               </HelpTooltip>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3">
-              <MiniMetric label="Lotes" value={controlledLots.length} />
-              <MiniMetric label="Por validar" value={pendingReconciliations.length} tone={pendingReconciliations.length ? "amber" : "emerald"} />
+              <MetricCard size="sm" label="Lotes" value={controlledLots.length} />
+              <MetricCard size="sm" label="Por validar" value={pendingReconciliations.length} tone={pendingReconciliations.length ? "amber" : "emerald"} />
             </div>
             {pendingReconciliations.length > 0 && (
               <div className="mt-3 space-y-2">
@@ -435,7 +466,7 @@ export default function EmarResidentTab({ resident }) {
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-slate-950">{row.indicacion?.medicamento_nombre}</span>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                        {MED_STATUS_LABEL[row.estado] ?? row.estado}
+                        {MEDICINE_STATUS_LABEL[row.estado] ?? row.estado}
                       </span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
@@ -452,6 +483,7 @@ export default function EmarResidentTab({ resident }) {
       <IndicationModal
         modal={indicationModal}
         saving={saving}
+        confirm={confirm}
         onClose={() => !saving && setIndicationModal(null)}
         onSubmit={handleSaveIndication}
       />
@@ -459,6 +491,7 @@ export default function EmarResidentTab({ resident }) {
         modal={lotModal}
         indications={activeIndications}
         saving={saving}
+        confirm={confirm}
         onClose={() => !saving && setLotModal(null)}
         onSubmit={handleSaveLot}
       />
@@ -466,12 +499,14 @@ export default function EmarResidentTab({ resident }) {
         modal={movementModal}
         lots={data.lotes}
         saving={saving}
+        confirm={confirm}
         onClose={() => !saving && setMovementModal(null)}
         onSubmit={handleMovement}
       />
       <ReconcileModal
         modal={reconcileModal}
         saving={saving}
+        confirm={confirm}
         onClose={() => !saving && setReconcileModal(null)}
         onSubmit={handleReconcile}
       />
@@ -479,28 +514,113 @@ export default function EmarResidentTab({ resident }) {
   );
 }
 
-function EmarResidentWorkflow() {
-  const steps = [
-    ["Indicación", "Define medicamento, dosis, vía, prescriptor y vigencia clínica."],
-    ["Horarios", "Cada horario crea administraciones en el turno correspondiente."],
-    ["Stock", "Los lotes alimentan el inventario que se descuenta al administrar."],
-    ["Controlados", "Psicotrópicos y estupefacientes exigen lote controlado, conciliación y segundo usuario."],
-  ];
+function StockAlertsPanel({ alerts, canAdjustStock, onNewLot }) {
+  const groups = [
+    { key: "vencidos", title: "Lotes vencidos", tone: "rose", items: alerts.vencidos, action: "Retirar o reemplazar" },
+    { key: "porVencer", title: "Lotes por vencer", tone: "amber", items: alerts.porVencer, action: "Usar antes o reponer" },
+    { key: "sinStock", title: "Sin stock", tone: "slate", items: alerts.sinStock, action: "Registrar nuevo lote" },
+  ].filter((group) => group.items.length > 0);
+
+  if (groups.length === 0) return null;
 
   return (
-    <div className="mt-4 grid gap-3 lg:grid-cols-4">
-      {steps.map(([title, text], index) => (
-        <div key={title} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="grid h-6 w-6 place-items-center rounded-full bg-teal-50 text-xs font-semibold text-teal-700">
-              {index + 1}
-            </span>
-            <span className="text-sm font-semibold text-slate-950">{title}</span>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-slate-500">{text}</p>
+    <section className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-amber-950">Alertas de stock</h3>
+          <p className="mt-1 text-sm text-amber-800">
+            Revisa vencimientos y reposición antes de iniciar el turno. Los lotes vencidos no deben usarse para administrar.
+          </p>
         </div>
-      ))}
-    </div>
+        {canAdjustStock && (
+          <button
+            type="button"
+            onClick={onNewLot}
+            className="shrink-0 rounded-xl bg-amber-700 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+          >
+            Registrar nuevo lote
+          </button>
+        )}
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        {groups.map((group) => (
+          <div key={group.key} className="rounded-xl bg-white p-3 ring-1 ring-amber-100">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{group.title}</p>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                group.tone === "rose" ? "bg-rose-50 text-rose-700" : group.tone === "amber" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"
+              }`}>
+                {group.items.length}
+              </span>
+            </div>
+            <div className="mt-2 space-y-2">
+              {group.items.slice(0, 3).map(({ lot, status }) => (
+                <div key={lot.id} className="text-xs text-slate-600">
+                  <span className="font-semibold text-slate-800">{lot.medicamento_nombre}</span>
+                  {" · "}
+                  lote {lot.lote || "s/l"}
+                  {status.days != null && status.key === "por_vencer" ? ` · ${status.days} días` : ""}
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs font-semibold text-slate-500">{group.action}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function IndicationGroup({
+  title,
+  items,
+  empty,
+  canEdit,
+  canAdjustStock,
+  stockByIndication,
+  onEdit,
+  onNewLot,
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3">
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
+          {items.length}
+        </span>
+      </div>
+      {items.length === 0 ? (
+        <p className="rounded-xl bg-white p-3 text-sm text-slate-500">{empty}</p>
+      ) : (
+        <div className="divide-y divide-slate-100 rounded-xl bg-white px-3">
+          {items.map((item) => (
+            <IndicationRow
+              key={item.id}
+              item={item}
+              canEdit={canEdit}
+              canAdjustStock={canAdjustStock}
+              stock={stockByIndication[item.id]}
+              onEdit={() => onEdit({
+                indication: item,
+                schedules: item.horarios?.filter((h) => h.activo !== false).length
+                  ? item.horarios.filter((h) => h.activo !== false)
+                  : [INITIAL_SCHEDULE],
+              })}
+              onNewLot={() => onNewLot({
+                indication: item,
+                lot: {
+                  ...INITIAL_LOT,
+                  medicamento_nombre: item.medicamento_nombre,
+                  unidad: item.unidad_dosis || "unidad",
+                  es_controlado: item.es_controlado,
+                  tipo_controlado: item.tipo_controlado || "psicotropico",
+                },
+              })}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -516,18 +636,27 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
               {item.via}
             </span>
             {item.es_controlado && (
-              <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
-                Controlado
+              <span
+                className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+                title="Medicamento controlado: requiere lote identificado y confirmación de un segundo usuario."
+              >
+                Requiere doble firma
               </span>
             )}
             {item.requiere_stock && (
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <span
+                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600"
+                title="Esta indicación descuenta stock al administrar; necesita un lote con cantidad disponible."
+              >
                 Stock obligatorio
               </span>
             )}
-            {item.requiere_doble_validacion && (
-              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
-                Doble validación
+            {item.requiere_doble_validacion && !item.es_controlado && (
+              <span
+                className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700"
+                title="Cada administración debe ser confirmada por un segundo usuario."
+              >
+                Segunda firma
               </span>
             )}
             {item.fecha_fin && (
@@ -561,19 +690,29 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
           <div className="mt-2 flex flex-wrap gap-2">
             {(item.horarios ?? []).filter((h) => h.activo !== false).map((h) => (
               <span key={h.id} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-500">
-                {formatSchedule(h)}
+                {summarizeMedicationSchedule(h)}
               </span>
             ))}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           {canAdjustStock && (
-            <button type="button" onClick={onNewLot} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <button
+              type="button"
+              onClick={onNewLot}
+              title="Registrar un nuevo lote para esta indicación: lote, vencimiento, ubicación y stock inicial."
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
               Agregar lote
             </button>
           )}
           {canEdit && (
-            <button type="button" onClick={onEdit} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+            <button
+              type="button"
+              onClick={onEdit}
+              title="Editar medicamento, dosis, vía, horarios y publicación familiar."
+              className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            >
               Editar indicación
             </button>
           )}
@@ -584,20 +723,22 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
 }
 
 function StockLotRow({ lot, canAdjustStock, onEdit, onMove, onReconcile }) {
-  const lowStock = Number(lot.cantidad_actual ?? 0) <= 0;
-  const expired = lot.fecha_vencimiento && new Date(`${lot.fecha_vencimiento}T12:00:00`) < new Date();
-  const estado = expired ? "vencido" : lowStock ? "agotado" : lot.estado;
+  const status = getStockLotStatus(lot);
+  const estado = status.key;
   return (
     <div className="py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${STOCK_TONE[estado] ?? STOCK_TONE.activo}`}>
-              {estado}
+              {status.label}
             </span>
             {lot.es_controlado && (
-              <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
-                Controlado
+              <span
+                className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+                title="Lote de medicamento controlado: ajustes y administraciones requieren segundo usuario."
+              >
+                Doble firma
               </span>
             )}
           </div>
@@ -606,44 +747,70 @@ function StockLotRow({ lot, canAdjustStock, onEdit, onMove, onReconcile }) {
             Stock {lot.cantidad_actual} {lot.unidad} · lote {lot.lote || "s/l"}
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Vence {formatDateOnly(lot.fecha_vencimiento)}{lot.ubicacion ? ` · ${lot.ubicacion}` : ""}
+            {lot.fecha_vencimiento ? `Vence ${formatDateOnly(lot.fecha_vencimiento)}` : "Sin vencimiento registrado"}
+            {status.key === "por_vencer" && status.days != null ? ` · quedan ${status.days} días` : ""}
+            {status.key === "vencido" && status.days != null ? ` · vencido hace ${Math.abs(status.days)} días` : ""}
+            {lot.ubicacion ? ` · ${lot.ubicacion}` : ""}
           </p>
+          {status.key !== "activo" && (
+            <p className={`mt-2 rounded-xl px-3 py-2 text-xs font-medium ${
+              status.tone === "rose" ? "bg-rose-50 text-rose-700" : status.tone === "amber" ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-600"
+            }`}>
+              {status.actionable}
+            </p>
+          )}
         </div>
         {canAdjustStock && (
           <div className="flex shrink-0 flex-wrap gap-2">
-            <button type="button" onClick={onEdit} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <button
+              type="button"
+              onClick={onEdit}
+              title="Editar datos del lote (medicamento, vencimiento, ubicación). La cantidad solo cambia con movimientos."
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
               Editar lote
             </button>
-            <button type="button" onClick={() => onMove("recepcion")} className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">
+            <button
+              type="button"
+              onClick={() => onMove("recepcion")}
+              title="Registrar nuevas unidades que ingresan al inventario."
+              className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+            >
               Ingreso
             </button>
             {!lot.es_controlado && (
-              <button type="button" onClick={() => onMove("ajuste")} className="rounded-xl border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50">
+              <button
+                type="button"
+                onClick={() => onMove("ajuste")}
+                title="Corregir la cantidad disponible cuando hay diferencias con lo físico."
+                className="rounded-xl border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50"
+              >
                 Ajuste
               </button>
             )}
+            {status.key === "vencido" && !lot.es_controlado && (
+              <button
+                type="button"
+                onClick={() => onMove("retiro")}
+                title="Sacar de circulación el lote vencido. Queda registrado el movimiento."
+                className="rounded-xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+              >
+                Retirar lote vencido
+              </button>
+            )}
             {lot.es_controlado && (
-              <button type="button" onClick={onReconcile} className="rounded-xl bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800">
-                Conciliar
+              <button
+                type="button"
+                onClick={onReconcile}
+                title="Conteo físico que se compara con el sistema. La diferencia queda pendiente para que firme un segundo usuario."
+                className="rounded-xl bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+              >
+                Revisar stock
               </button>
             )}
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function MiniMetric({ label, value, tone = "slate" }) {
-  const cls = {
-    slate: "bg-slate-50 text-slate-900",
-    amber: "bg-amber-50 text-amber-900",
-    emerald: "bg-emerald-50 text-emerald-900",
-  }[tone];
-  return (
-    <div className={`rounded-xl p-3 ${cls}`}>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="text-xs font-medium opacity-70">{label}</div>
     </div>
   );
 }
@@ -697,7 +864,7 @@ function ScheduleFields({ schedule, setSchedule, saving, title = "Horario", onRe
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-950">
           {title}
-          <HelpTooltip label="Ayuda: horario eMAR">
+          <HelpTooltip label="Ayuda: horario de medicamento">
             La frecuencia define cuándo se genera la administración. La tolerancia indica cuántos minutos puede pasar la hora antes de marcar la dosis como vencida.
           </HelpTooltip>
         </div>
@@ -733,9 +900,9 @@ function ScheduleFields({ schedule, setSchedule, saving, title = "Horario", onRe
             value={schedule.turno}
             onChange={(e) => setSchedule((p) => ({ ...p, turno: e.target.value }))}
             disabled={saving}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm capitalize outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
           >
-            {EMAR_TURNOS.map((item) => <option key={item} value={item}>{item}</option>)}
+            {EMAR_TURNOS.map((item) => <option key={item} value={item} className="capitalize">{item}</option>)}
           </select>
         </label>
         <Field label="Hora" type="time" value={schedule.hora} onChange={(value) => setSchedule((p) => ({ ...p, hora: value }))} disabled={saving} />
@@ -787,16 +954,28 @@ function ScheduleFields({ schedule, setSchedule, saving, title = "Horario", onRe
   );
 }
 
-function IndicationModal({ modal, saving, onClose, onSubmit }) {
-  const [indication, setIndication] = useState(INITIAL_INDICATION);
-  const [schedules, setSchedules] = useState([INITIAL_SCHEDULE]);
-
-  useEffect(() => {
-    if (!modal) return;
-    setIndication({ ...INITIAL_INDICATION, ...modal.indication });
-    const incoming = modal.schedules?.length ? modal.schedules : [modal.schedule ?? INITIAL_SCHEDULE];
-    setSchedules(incoming.map(cloneSchedule));
+function IndicationModal({ modal, saving, confirm, onClose, onSubmit }) {
+  const draftKey = modal?.indication?.id
+    ? `fe_medication_indication_${modal.indication.id}`
+    : "fe_medication_indication_new";
+  const initialDraft = useMemo(() => {
+    const incoming = modal?.schedules?.length ? modal.schedules : [modal?.schedule ?? INITIAL_SCHEDULE];
+    return {
+      indication: { ...INITIAL_INDICATION, ...(modal?.indication ?? {}) },
+      schedules: incoming.map(cloneSchedule),
+    };
   }, [modal]);
+  const [draft, setDraft, resetDraft, dirty] = useSessionFormDraft(draftKey, initialDraft);
+  const indication = draft.indication;
+  const schedules = draft.schedules;
+  const setIndication = (updater) => setDraft((prev) => ({
+    ...prev,
+    indication: typeof updater === "function" ? updater(prev.indication) : updater,
+  }));
+  const setSchedules = (updater) => setDraft((prev) => ({
+    ...prev,
+    schedules: typeof updater === "function" ? updater(prev.schedules) : updater,
+  }));
 
   if (!modal) return null;
 
@@ -809,29 +988,48 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
     }));
   };
   const familySummaryMissing = indication.visible_familiar && !indication.resumen_familiar?.trim();
+  const validationErrors = validateMedicationIndicationDraft(indication, schedules);
+
+  const handleClose = async () => {
+    if (dirty) {
+      const ok = await confirm({
+        title: "Descartar indicación",
+        message: "Hay cambios sin guardar en esta indicación.",
+        confirmText: "Descartar",
+        cancelText: "Seguir editando",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
 
   return (
-    <Modal isOpen={!!modal} onClose={onClose} title={indication.id ? "Editar indicación" : "Nueva indicación"}>
+    <Modal isOpen={!!modal} onClose={handleClose} title={indication.id ? "Editar indicación" : "Nueva indicación"}>
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          onSubmit({ indication: { ...indication, schedules }, schedule: schedules });
+          if (hasValidationErrors(validationErrors)) return;
+          try {
+            await onSubmit({ indication: { ...indication, schedules }, schedule: schedules });
+            resetDraft();
+          } catch {
+            // The parent already shows the error. Keep the draft intact.
+          }
         }}
       >
         <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
           <div className="font-semibold">Cómo impacta esta indicación</div>
           <p className="mt-1 text-xs leading-relaxed">
-            Al guardar, cada horario activo generará dosis en eMAR para la fecha y turno correspondiente. Si marcas stock obligatorio, el turno exigirá un lote activo antes de administrar.
+            Al guardar, cada horario activo generará administraciones para la fecha y turno correspondiente. Si marcas stock obligatorio, el turno exigirá un lote activo antes de administrar.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
             <Field label="Medicamento" value={indication.medicamento_nombre} onChange={(value) => setIndication((p) => ({ ...p, medicamento_nombre: value }))} disabled={saving} required />
           </div>
-          <Field label="Principio activo" value={indication.principio_activo ?? ""} onChange={(value) => setIndication((p) => ({ ...p, principio_activo: value }))} disabled={saving} />
-          <Field label="Concentración" value={indication.concentracion ?? ""} onChange={(value) => setIndication((p) => ({ ...p, concentracion: value }))} disabled={saving} />
           <Field label="Dosis" value={indication.dosis} onChange={(value) => setIndication((p) => ({ ...p, dosis: value }))} disabled={saving} required />
           <Field label="Unidad" value={indication.unidad_dosis ?? ""} onChange={(value) => setIndication((p) => ({ ...p, unidad_dosis: value }))} disabled={saving} />
           <label className="block text-sm font-medium text-slate-700">
@@ -845,13 +1043,23 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
               {MED_ROUTES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
-          <Field label="Prescriptor" value={indication.prescriptor_nombre ?? ""} onChange={(value) => setIndication((p) => ({ ...p, prescriptor_nombre: value }))} disabled={saving} />
-          <Field label="Inicio" type="date" value={indication.fecha_inicio ?? ""} onChange={(value) => setIndication((p) => ({ ...p, fecha_inicio: value }))} disabled={saving} />
-          <Field label="Fin" type="date" value={indication.fecha_fin ?? ""} onChange={(value) => setIndication((p) => ({ ...p, fecha_fin: value }))} disabled={saving} />
-          <div className="col-span-2">
-            <TextArea label="Instrucciones" value={indication.instrucciones ?? ""} onChange={(value) => setIndication((p) => ({ ...p, instrucciones: value }))} disabled={saving} />
-          </div>
         </div>
+
+        <details className="rounded-xl border border-slate-200 bg-white p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+            Detalles clínicos opcionales
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Field label="Principio activo" value={indication.principio_activo ?? ""} onChange={(value) => setIndication((p) => ({ ...p, principio_activo: value }))} disabled={saving} />
+            <Field label="Concentración" value={indication.concentracion ?? ""} onChange={(value) => setIndication((p) => ({ ...p, concentracion: value }))} disabled={saving} />
+            <Field label="Prescriptor" value={indication.prescriptor_nombre ?? ""} onChange={(value) => setIndication((p) => ({ ...p, prescriptor_nombre: value }))} disabled={saving} />
+            <Field label="Inicio" type="date" value={indication.fecha_inicio ?? ""} onChange={(value) => setIndication((p) => ({ ...p, fecha_inicio: value }))} disabled={saving} />
+            <Field label="Fin" type="date" value={indication.fecha_fin ?? ""} onChange={(value) => setIndication((p) => ({ ...p, fecha_fin: value }))} disabled={saving} />
+            <div className="sm:col-span-2">
+              <TextArea label="Instrucciones" value={indication.instrucciones ?? ""} onChange={(value) => setIndication((p) => ({ ...p, instrucciones: value }))} disabled={saving} />
+            </div>
+          </div>
+        </details>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <label className="flex items-start gap-2 text-sm text-slate-700">
@@ -899,23 +1107,23 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
           <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
             <input type="checkbox" checked={indication.es_controlado} disabled={saving} onChange={(e) => setControlled(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal-700" />
             <span>
-              Medicamento controlado
-              <span className="block text-xs text-slate-500">Activa stock obligatorio, lote controlado y validación por segundo usuario.</span>
+              Requiere doble firma
+              <span className="block text-xs text-slate-500">Activa stock obligatorio, lote identificado y confirmación por segundo usuario.</span>
             </span>
           </label>
         </div>
 
         {indication.es_controlado && (
           <label className="block text-sm font-medium text-slate-700">
-            Tipo controlado
+            Clasificación legal
             <select
               value={indication.tipo_controlado}
               onChange={(e) => setIndication((p) => ({ ...p, tipo_controlado: e.target.value }))}
               disabled={saving}
               className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             >
-              <option value="psicotropico">Psicotrópico</option>
-              <option value="estupefaciente">Estupefaciente</option>
+              <option value="psicotropico">Receta retenida</option>
+              <option value="estupefaciente">Receta especial</option>
             </select>
           </label>
         )}
@@ -952,11 +1160,11 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
           ))}
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={handleClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving || !indication.medicamento_nombre?.trim() || !indication.dosis?.trim() || schedules.length === 0 || familySummaryMissing} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving || hasValidationErrors(validationErrors) || familySummaryMissing} className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -965,42 +1173,65 @@ function IndicationModal({ modal, saving, onClose, onSubmit }) {
   );
 }
 
-function LotModal({ modal, indications, saving, onClose, onSubmit }) {
-  const [lot, setLot] = useState(INITIAL_LOT);
-  const [indicationId, setIndicationId] = useState("");
-
-  useEffect(() => {
-    if (!modal) return;
-    setLot({ ...INITIAL_LOT, ...modal.lot });
-    setIndicationId(modal.indication?.id ?? modal.lot?.indicacion_id ?? "");
-  }, [modal]);
+function LotModal({ modal, indications, saving, confirm, onClose, onSubmit }) {
+  const draftKey = modal?.lot?.id ? `fe_medication_lot_${modal.lot.id}` : "fe_medication_lot_new";
+  const initialDraft = useMemo(() => ({
+    lot: { ...INITIAL_LOT, ...(modal?.lot ?? {}) },
+    indicationId: modal?.indication?.id ?? modal?.lot?.indicacion_id ?? "",
+  }), [modal]);
+  const [draft, setDraft, resetDraft, dirty] = useSessionFormDraft(draftKey, initialDraft);
+  const lot = draft.lot;
+  const indicationId = draft.indicationId;
+  const setLot = (updater) => setDraft((prev) => ({
+    ...prev,
+    lot: typeof updater === "function" ? updater(prev.lot) : updater,
+  }));
+  const setIndicationId = (value) => setDraft((prev) => ({ ...prev, indicationId: value }));
 
   if (!modal) return null;
 
   const indication = indications.find((item) => item.id === indicationId) ?? modal.indication ?? null;
   const effectiveControlled = indication?.es_controlado === true || lot.es_controlado === true;
+  const handleClose = async () => {
+    if (dirty) {
+      const ok = await confirm({
+        title: "Descartar lote",
+        message: "Hay cambios sin guardar en este lote.",
+        confirmText: "Descartar",
+        cancelText: "Seguir editando",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
 
   return (
-    <Modal isOpen={!!modal} onClose={onClose} title={lot.id ? "Editar lote" : "Nuevo lote"}>
+    <Modal isOpen={!!modal} onClose={handleClose} title={lot.id ? "Editar lote" : "Nuevo lote"}>
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          onSubmit({
-            lot: {
-              ...lot,
-              indicacion_id: indicationId || null,
-              es_controlado: effectiveControlled,
-              tipo_controlado: effectiveControlled ? lot.tipo_controlado || indication?.tipo_controlado || "psicotropico" : null,
-            },
-            indication,
-          });
+          try {
+            await onSubmit({
+              lot: {
+                ...lot,
+                indicacion_id: indicationId || null,
+                es_controlado: effectiveControlled,
+                tipo_controlado: effectiveControlled ? lot.tipo_controlado || indication?.tipo_controlado || "psicotropico" : null,
+              },
+              indication,
+            });
+            resetDraft();
+          } catch {
+            // Parent shows the error. Keep draft for correction.
+          }
         }}
       >
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
           <div className="font-semibold">Trazabilidad de inventario</div>
           <p className="mt-1 text-xs leading-relaxed">
-            El stock inicial se registra como movimiento de recepción. Después, la cantidad solo cambia por movimientos, administraciones eMAR o conciliaciones.
+            El stock inicial se registra como ingreso. Después, la cantidad solo cambia por movimientos, administraciones o revisiones de stock.
           </p>
         </div>
 
@@ -1028,11 +1259,11 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
             {indications.map((item) => <option key={item.id} value={item.id}>{item.medicamento_nombre}</option>)}
           </select>
           <span className="mt-1 block text-xs text-slate-500">
-            Asociar el lote ayuda a que eMAR sugiera el stock correcto al administrar la indicación.
+            Asociar el lote ayuda a sugerir el stock correcto al administrar la indicación.
           </span>
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
             <Field label="Medicamento" value={lot.medicamento_nombre ?? ""} onChange={(value) => setLot((p) => ({ ...p, medicamento_nombre: value }))} disabled={saving} required />
           </div>
           <Field label="Lote" value={lot.lote ?? ""} onChange={(value) => setLot((p) => ({ ...p, lote: value }))} disabled={saving} />
@@ -1046,25 +1277,25 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
         <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
           <input type="checkbox" checked={effectiveControlled} disabled={saving || indication?.es_controlado} onChange={(e) => setLot((p) => ({ ...p, es_controlado: e.target.checked }))} className="mt-0.5 h-4 w-4 accent-teal-700" />
           <span>
-            Lote controlado
-            <span className="block text-xs text-slate-500">Usa esta marca para psicotrópicos o estupefacientes; los ajustes se hacen por conciliación.</span>
+            Lote con doble firma
+            <span className="block text-xs text-slate-500">Usa esta marca cuando el medicamento exige identificación estricta y segundo usuario.</span>
           </span>
         </label>
         {indication?.es_controlado && (
           <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-xs text-teal-900">
-            Esta indicación es controlada; el lote se registrará como controlado y requerirá validación secundaria al administrar.
+            Esta indicación requiere doble firma; el lote quedará identificado y pedirá segundo usuario al administrar.
           </div>
         )}
         {lot.id && (
           <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
-            La cantidad actual no se edita aquí. Usa Ingreso, Ajuste o Conciliar para conservar auditoría.
+            La cantidad actual no se edita aquí. Usa Ingreso, Ajuste o Revisar stock para conservar el registro.
           </div>
         )}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={handleClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving || !lot.medicamento_nombre?.trim()} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving || !lot.medicamento_nombre?.trim()} className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -1073,19 +1304,17 @@ function LotModal({ modal, indications, saving, onClose, onSubmit }) {
   );
 }
 
-function MovementModal({ modal, lots, saving, onClose, onSubmit }) {
-  const [loteId, setLoteId] = useState("");
-  const [tipo, setTipo] = useState("recepcion");
-  const [cantidad, setCantidad] = useState("");
-  const [motivo, setMotivo] = useState("");
-
-  useEffect(() => {
-    if (!modal) return;
-    setLoteId(modal.lot?.id ?? lots[0]?.id ?? "");
-    setTipo(modal.tipo ?? "recepcion");
-    setCantidad("");
-    setMotivo("");
-  }, [modal, lots]);
+function MovementModal({ modal, lots, saving, confirm, onClose, onSubmit }) {
+  const draftKey = modal?.lot?.id ? `fe_medication_movement_${modal.lot.id}_${modal.tipo ?? "recepcion"}` : "fe_medication_movement";
+  const initialDraft = useMemo(() => ({
+    loteId: modal?.lot?.id ?? lots[0]?.id ?? "",
+    tipo: modal?.tipo ?? "recepcion",
+    cantidad: "",
+    motivo: "",
+  }), [modal, lots]);
+  const [draft, setDraft, resetDraft, dirty] = useSessionFormDraft(draftKey, initialDraft);
+  const { loteId, tipo, cantidad, motivo } = draft;
+  const updateDraft = (patch) => setDraft((prev) => ({ ...prev, ...patch }));
 
   if (!modal) return null;
 
@@ -1099,22 +1328,40 @@ function MovementModal({ modal, lots, saving, onClose, onSubmit }) {
         ["merma", "Merma"],
         ["retiro", "Retiro"],
       ];
+  const handleClose = async () => {
+    if (dirty) {
+      const ok = await confirm({
+        title: "Descartar movimiento",
+        message: "Hay cambios sin guardar en este movimiento de stock.",
+        confirmText: "Descartar",
+        cancelText: "Seguir editando",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
 
   return (
-    <Modal isOpen={!!modal} onClose={onClose} title="Movimiento de stock">
+    <Modal isOpen={!!modal} onClose={handleClose} title="Movimiento de stock">
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           const value = Number(cantidad);
           const signedQuantity = ["merma", "retiro"].includes(tipo) ? -Math.abs(value) : value;
-          onSubmit({ loteId, tipo, cantidad: signedQuantity, motivo });
+          try {
+            await onSubmit({ loteId, tipo, cantidad: signedQuantity, motivo });
+            resetDraft();
+          } catch {
+            // Parent shows the error. Keep draft for correction.
+          }
         }}
       >
         <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
           <div className="font-semibold text-slate-950">Regla de stock</div>
           <p className="mt-1 text-xs leading-relaxed">
-            Recepción aumenta inventario. Merma y retiro descuentan. Ajuste y reversa solo están disponibles para lotes no controlados; los controlados se corrigen por conciliación con segundo usuario.
+            Recepción aumenta inventario. Merma y retiro descuentan. Ajuste y reversa solo están disponibles para lotes simples; los lotes con doble firma se corrigen con revisión de stock y segundo usuario.
           </p>
         </div>
 
@@ -1125,8 +1372,7 @@ function MovementModal({ modal, lots, saving, onClose, onSubmit }) {
             onChange={(e) => {
               const nextId = e.target.value;
               const nextLot = lots.find((lot) => lot.id === nextId);
-              setLoteId(nextId);
-              if (nextLot?.es_controlado) setTipo("recepcion");
+              updateDraft({ loteId: nextId, tipo: nextLot?.es_controlado ? "recepcion" : tipo });
             }}
             disabled={saving}
             className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
@@ -1140,7 +1386,7 @@ function MovementModal({ modal, lots, saving, onClose, onSubmit }) {
         </label>
         <label className="block text-sm font-medium text-slate-700">
           Tipo
-          <select value={tipo} onChange={(e) => setTipo(e.target.value)} disabled={saving} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+          <select value={tipo} onChange={(e) => updateDraft({ tipo: e.target.value })} disabled={saving} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
             {movementOptions.map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
@@ -1148,16 +1394,16 @@ function MovementModal({ modal, lots, saving, onClose, onSubmit }) {
         </label>
         {selectedLot?.es_controlado && (
           <div className="rounded-xl bg-sky-50 p-3 text-xs text-sky-800">
-            Los ajustes de controlados se hacen por Conciliar para exigir segundo usuario.
+            Los ajustes de estos lotes se hacen por Revisar stock para exigir segundo usuario.
           </div>
         )}
-        <Field label="Cantidad" type="number" min={tipo === "ajuste" ? undefined : "0.01"} step="0.01" value={cantidad} onChange={setCantidad} disabled={saving} required />
-        <TextArea label="Motivo" value={motivo} onChange={setMotivo} disabled={saving} required />
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <Field label="Cantidad" type="number" min={tipo === "ajuste" ? undefined : "0.01"} step="0.01" value={cantidad} onChange={(value) => updateDraft({ cantidad: value })} disabled={saving} required />
+        <TextArea label="Motivo" value={motivo} onChange={(value) => updateDraft({ motivo: value })} disabled={saving} required />
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={handleClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving || !loteId || !cantidad || !motivo.trim()} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving || !loteId || !cantidad || !motivo.trim()} className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : "Registrar"}
           </button>
         </div>
@@ -1166,36 +1412,54 @@ function MovementModal({ modal, lots, saving, onClose, onSubmit }) {
   );
 }
 
-function ReconcileModal({ modal, saving, onClose, onSubmit }) {
-  const [cantidadFisica, setCantidadFisica] = useState("");
-  const [motivo, setMotivo] = useState("");
-
-  useEffect(() => {
-    setCantidadFisica("");
-    setMotivo("");
-  }, [modal]);
+function ReconcileModal({ modal, saving, confirm, onClose, onSubmit }) {
+  const draftKey = modal?.reconciliation?.id
+    ? `fe_medication_reconcile_validate_${modal.reconciliation.id}`
+    : `fe_medication_reconcile_${modal?.lot?.id ?? "new"}`;
+  const initialDraft = useMemo(() => ({ cantidadFisica: "", motivo: "" }), []);
+  const [draft, setDraft, resetDraft, dirty] = useSessionFormDraft(draftKey, initialDraft);
+  const { cantidadFisica, motivo } = draft;
+  const updateDraft = (patch) => setDraft((prev) => ({ ...prev, ...patch }));
 
   if (!modal) return null;
 
   const isValidation = Boolean(modal.reconciliation);
   const lot = modal.lot ?? modal.reconciliation?.lote;
+  const handleClose = async () => {
+    if (dirty) {
+      const ok = await confirm({
+        title: "Descartar revisión",
+        message: "Hay cambios sin guardar en esta revisión de stock.",
+        confirmText: "Descartar",
+        cancelText: "Seguir editando",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
 
   return (
-    <Modal isOpen={!!modal} onClose={onClose} title={isValidation ? "Validar conciliación" : "Conciliar controlado"}>
+    <Modal isOpen={!!modal} onClose={handleClose} title={isValidation ? "Validar revisión de stock" : "Revisar stock del lote"}>
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          onSubmit({
-            loteId: lot?.id ?? null,
-            cantidadFisica,
-            motivo,
-            conciliacionId: modal.reconciliation?.id ?? null,
-          });
+          try {
+            await onSubmit({
+              loteId: lot?.id ?? null,
+              cantidadFisica,
+              motivo,
+              conciliacionId: modal.reconciliation?.id ?? null,
+            });
+            resetDraft();
+          } catch {
+            // Parent shows the error. Keep draft for correction.
+          }
         }}
       >
         <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
-          <div className="font-semibold">{isValidation ? "Validación secundaria" : "Conciliación de controlado"}</div>
+          <div className="font-semibold">{isValidation ? "Confirmación de segundo usuario" : "Revisión de stock"}</div>
           <p className="mt-1 text-xs leading-relaxed">
             {isValidation
               ? "Al validar, el stock del sistema se ajusta a la cantidad física contada y el movimiento queda firmado por un segundo usuario."
@@ -1216,14 +1480,14 @@ function ReconcileModal({ modal, saving, onClose, onSubmit }) {
           )}
         </div>
         {!isValidation && (
-          <Field label="Cantidad física contada" type="number" min="0" step="0.01" value={cantidadFisica} onChange={setCantidadFisica} disabled={saving} required />
+          <Field label="Cantidad física contada" type="number" min="0" step="0.01" value={cantidadFisica} onChange={(value) => updateDraft({ cantidadFisica: value })} disabled={saving} required />
         )}
-        <TextArea label={isValidation ? "Nota de validación" : "Motivo / acta breve"} value={motivo} onChange={setMotivo} disabled={saving} required={!isValidation} />
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <TextArea label={isValidation ? "Nota de validación" : "Motivo / acta breve"} value={motivo} onChange={(value) => updateDraft({ motivo: value })} disabled={saving} required={!isValidation} />
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={handleClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving || (!isValidation && (cantidadFisica === "" || !motivo.trim()))} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
+          <button type="submit" disabled={saving || (!isValidation && (cantidadFisica === "" || !motivo.trim()))} className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : isValidation ? "Validar" : "Enviar"}
           </button>
         </div>

@@ -63,7 +63,7 @@ export const NAV_SECTIONS = [
       {
         id: "care-tasks",
         featureId: "care-plans",
-        label: "Tareas diarias",
+        label: "Tareas del turno",
         icon: "tasks",
         path: "/turnos/tareas",
         description: "Cumplimiento de planes de cuidado por turno",
@@ -75,10 +75,10 @@ export const NAV_SECTIONS = [
       {
         id: "emar",
         featureId: "emar",
-        label: "eMAR",
+        label: "Medicamentos",
         icon: "meds",
         path: "/turnos/emar",
-        description: "Medicamentos, stock y controlados",
+        description: "Administración, stock y doble revisión",
         roles: ["admin_eleam", "funcionario", "superadmin"],
         requiresEleam: true,
         requiresActive: true,
@@ -302,7 +302,7 @@ export const QUICK_ACTIONS = [
   {
     id: "care-tasks",
     featureId: "care-plans",
-    label: "Tareas diarias",
+    label: "Tareas del turno",
     description: "Abrir cumplimiento del turno",
     icon: "tasks",
     path: "/turnos/tareas",
@@ -314,7 +314,7 @@ export const QUICK_ACTIONS = [
   {
     id: "emar-turno",
     featureId: "emar",
-    label: "eMAR",
+    label: "Medicamentos",
     description: "Administrar medicamentos del turno",
     icon: "meds",
     path: "/turnos/emar",

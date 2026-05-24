@@ -26,7 +26,7 @@ function ProtectedRoute({
     supabaseError, homePath, isSuperadmin, isFamiliar, mustResetPassword, canFeature,
   } = useAuth();
 
-  if (authLoading || profileLoading) return <Loading message="Verificando sesión..." />;
+  if (authLoading || (profileLoading && !profile)) return <Loading message="Verificando sesión..." />;
   if (supabaseError) return <SupabaseError />;
 
   if (!user) {

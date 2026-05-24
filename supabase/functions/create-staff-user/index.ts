@@ -26,10 +26,17 @@ import {
   findAuthUserByEmail,
   isDuplicateAuthUserError,
 } from "../_shared/authUsers.ts";
+import {
+  EMAIL_RE,
+  GMAIL_RE,
+  UUID_RE,
+  createAuthProvisionRequest,
+  deleteAuthProvisionRequest,
+  generateAccessLink,
+  generatePassword,
+  getAppUrl,
+} from "../_shared/provisioning.ts";
 
-const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-const GMAIL_RE = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function eleamHasAccess(eleam: {
   subscription_status?: string | null;
@@ -43,77 +50,6 @@ function eleamHasAccess(eleam: {
     return !Number.isNaN(until.valueOf()) && until > new Date();
   }
   return false;
-}
-
-// Genera contraseña de 12 chars alfanuméricos sin caracteres ambiguos (0/O/I/l/1)
-function generatePassword(): string {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => chars[b % chars.length])
-    .slice(0, 12)
-    .join("");
-}
-
-function getAppUrl(): string {
-  const rawAppUrl = Deno.env.get("PUBLIC_APP_URL")?.trim() || "https://fichaeleam.cl";
-  return rawAppUrl.replace(/\/+$/, "");
-}
-
-async function createAuthProvisionRequest(
-  sb: ReturnType<typeof adminClient>,
-  {
-    email,
-    eleamId,
-    rol,
-    accountSource,
-    residenteId = null,
-  }: {
-    email: string;
-    eleamId: string;
-    rol: "admin_eleam" | "funcionario" | "familiar";
-    accountSource: "demo_approved" | "superadmin_created" | "admin_created" | "funcionario_created";
-    residenteId?: string | null;
-  },
-): Promise<{ id: string | null; error: unknown }> {
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  const { data, error } = await sb
-    .from("auth_provision_requests")
-    .insert({
-      email,
-      account_source: accountSource,
-      eleam_id: eleamId,
-      rol,
-      residente_id: residenteId,
-      expira_en: expiresAt,
-    })
-    .select("id")
-    .single();
-
-  return { id: data?.id ?? null, error };
-}
-
-async function deleteAuthProvisionRequest(sb: ReturnType<typeof adminClient>, id: string | null) {
-  if (!id) return;
-  await sb.from("auth_provision_requests").delete().eq("id", id);
-}
-
-// Genera un enlace de recuperación (un solo uso) para que el usuario defina
-// su contraseña. El enlace nunca se devuelve al cliente, solo se envía al correo.
-async function generateAccessLink(
-  sb: ReturnType<typeof adminClient>,
-  email: string,
-): Promise<{ link: string | null; error: string | null }> {
-  const { data, error } = await sb.auth.admin.generateLink({
-    type: "recovery",
-    email,
-    options: { redirectTo: `${getAppUrl()}/reset-password` },
-  });
-  if (error) return { link: null, error: String(error.message ?? error) };
-  const link = data?.properties?.action_link ?? null;
-  if (!link) return { link: null, error: "No se pudo generar el enlace de acceso" };
-  return { link, error: null };
 }
 
 async function sendStaffAccessLink({
@@ -178,7 +114,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const nombre = String(body.nombre ?? "").trim();
+    const nombre = String(body.nombre ?? "").trim().replace(/\s+/g, " ");
     const cleanEmail = String(body.email ?? "").trim().toLowerCase();
     const rol = String(body.rol ?? "funcionario").trim();
     const residenteId: string | null = body.residente_id
@@ -187,6 +123,12 @@ Deno.serve(async (req) => {
 
     if (!nombre) {
       return jsonResponse(req, { error: "El nombre es obligatorio" }, 400);
+    }
+    if (nombre.length > 120) {
+      return jsonResponse(req, { error: "El nombre no puede superar 120 caracteres" }, 400);
+    }
+    if (cleanEmail.length > 254) {
+      return jsonResponse(req, { error: "Email inválido" }, 400);
     }
     if (!cleanEmail || !EMAIL_RE.test(cleanEmail)) {
       return jsonResponse(req, { error: "Email inválido" }, 400);

@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "../../components/Modal";
 import Button from "../../components/Button";
-import { downloadExcelTemplate, readExcelRows } from "./excelWorkbook";
+import { downloadExcelTemplate, EXCEL_IMPORT_LIMITS, readExcelRows } from "./excelWorkbook";
+
+function formatFileSize(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+}
 
 function StatusPill({ tone, label, value }) {
   const tones = {
@@ -189,7 +193,7 @@ export default function ExcelImportModal({
               ))}
             </div>
             <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              Solo se aceptan archivos `.xlsx`. Si Excel muestra advertencias de formato, guarda el archivo como Libro de Excel antes de subirlo.
+              Solo se aceptan archivos `.xlsx`, hasta {formatFileSize(config.maxFileSizeBytes ?? EXCEL_IMPORT_LIMITS.maxFileSizeBytes)} y {config.maxRows ?? EXCEL_IMPORT_LIMITS.defaultMaxRows} filas por carga. Si Excel muestra advertencias, guarda como Libro de Excel antes de subirlo.
             </p>
           </div>
         </div>

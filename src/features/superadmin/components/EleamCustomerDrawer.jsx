@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import {
   CRM_STATE_MAP, RIESGO_MAP, PLAN_LABEL,
   formatCLP, formatDate, daysUntil,
 } from "../utils/superadminFormatters";
+import Modal from "../../../components/Modal";
 import CustomerHealthBadge from "./CustomerHealthBadge";
 import InteractionTimeline from "./InteractionTimeline";
 import CrmTasksPanel from "./CrmTasksPanel";
@@ -85,13 +85,6 @@ export default function EleamCustomerDrawer({
   onClose, onEdit, onRegisterPayment,
   onCreateTask, onCompleteTask, onCreateInteraction,
 }) {
-  useEffect(() => {
-    if (!eleamId) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [eleamId, onClose]);
-
   if (!eleamId) return null;
 
   const eleam = slot?.detail;
@@ -105,20 +98,21 @@ export default function EleamCustomerDrawer({
   }).length;
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} aria-hidden />
-      <aside
-        className="fixed right-0 top-0 h-full w-full sm:w-[660px] bg-slate-50 border-l border-slate-200 shadow-2xl z-50 overflow-y-auto"
-        role="dialog"
-        aria-modal="true"
-      >
+    <Modal
+      isOpen={!!eleamId}
+      onClose={onClose}
+      labelledById="eleam-customer-drawer-title"
+      showCloseButton={false}
+      backdropClassName="fixed inset-0 z-50 flex justify-end bg-black/30"
+      panelClassName="h-full max-h-full sm:max-h-full max-w-none w-full sm:w-[660px] rounded-none sm:rounded-none bg-slate-50 border-l border-slate-200 shadow-2xl"
+    >
         {/* Header */}
         <header className="sticky top-0 bg-white border-b border-slate-100 p-4 flex items-start justify-between gap-3 z-10">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
               Ficha 360 · CRM
             </p>
-            <h2 className="text-xl font-black text-slate-800 truncate">
+            <h2 id="eleam-customer-drawer-title" className="text-xl font-black text-slate-800 truncate">
               {eleam?.nombre ?? (loading ? "Cargando…" : "—")}
             </h2>
             {eleam && (
@@ -351,7 +345,6 @@ export default function EleamCustomerDrawer({
             </section>
           </div>
         )}
-      </aside>
-    </>
+    </Modal>
   );
 }

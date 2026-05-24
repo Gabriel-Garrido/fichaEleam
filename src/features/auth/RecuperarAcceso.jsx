@@ -83,11 +83,15 @@ export default function RecuperarAcceso() {
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Correo electrónico</label>
+                <label htmlFor="recover-email" className="block text-xs font-medium text-slate-600 mb-1">Correo electrónico</label>
                 <Input
+                  id="recover-email"
                   type="email"
+                  name="email"
                   placeholder="tu@email.cl"
                   autoComplete="email"
+                  inputMode="email"
+                  maxLength={254}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required

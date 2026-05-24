@@ -6,7 +6,7 @@ import PublicShell from "./PublicShell";
 const FAQ = [
   {
     q: "¿Qué es un software para ELEAM?",
-    a: "Un software para ELEAM es una plataforma digital que reemplaza las planillas Excel y las carpetas físicas que tradicionalmente usan los Establecimientos de Larga Estadía para Adultos Mayores en Chile. Centraliza la ficha clínica de cada residente, registros de signos vitales, observaciones por turno, plan de cuidado, administración de medicamentos (eMAR) y la carpeta de acreditación SEREMI exigida por el DS 14/2017.",
+    a: "Un software para ELEAM es una plataforma digital que reemplaza las planillas Excel y las carpetas físicas que tradicionalmente usan los Establecimientos de Larga Estadía para Adultos Mayores en Chile. Centraliza la ficha clínica de cada residente, registros de signos vitales, observaciones por turno, plan de cuidado, administración de medicamentos y la carpeta de acreditación SEREMI exigida por el DS 14/2017.",
   },
   {
     q: "¿Por qué un software especializado y no Excel o software genérico?",
@@ -48,14 +48,14 @@ export default function SoftwareEleamPage() {
 
   useSEO({
     title: "Software para ELEAM en Chile · Gestión clínica y SEREMI",
-    description: "Software web especializado para ELEAM en Chile: ficha clínica digital, signos vitales con alertas, eMAR, observaciones por turno, plan de cuidado y carpeta SEREMI DS 14/2017 — todo en una sola plataforma.",
+    description: "Software web especializado para ELEAM en Chile: ficha clínica digital, signos vitales con alertas, medicamentos, observaciones por turno, plan de cuidado y carpeta SEREMI DS 14/2017 — todo en una sola plataforma.",
     path: "/software-eleam",
     keywords: [
       "software ELEAM",
       "software residencia adulto mayor",
       "sistema gestión ELEAM Chile",
       "ficha clínica digital ELEAM",
-      "kardex electrónico eMAR Chile",
+      "administración de medicamentos ELEAM Chile",
       "digitalización residencia adulto mayor",
     ],
     jsonLd: [
@@ -88,7 +88,7 @@ export default function SoftwareEleamPage() {
                 {" "}Excel y carpetas físicas
               </h1>
               <p className="text-lg text-slate-300 leading-relaxed max-w-2xl">
-                Ficha clínica digital, signos vitales con alertas, eMAR, plan de cuidado, observaciones de turno
+                Ficha clínica digital, signos vitales con alertas, medicamentos, plan de cuidado, observaciones de turno
                 y carpeta SEREMI — en una sola plataforma construida exclusivamente para Establecimientos de Larga
                 Estadía para Adultos Mayores en Chile.
               </p>
@@ -137,7 +137,7 @@ export default function SoftwareEleamPage() {
                       ["Signos vitales", "Tabla con rangos genéricos", "Rangos clínicos para adulto mayor, alertas críticas"],
                       ["Observaciones por turno", "Cuaderno físico o WhatsApp", "12 categorías, seguimiento obligatorio, búsqueda"],
                       ["Plan de cuidado", "Hoja impresa que se pierde", "Tareas por turno, completación con notas"],
-                      ["Medicamentos (eMAR)", "Recetas en carpeta, kardex manual", "Kardex electrónico, doble validación, stock"],
+                      ["Medicamentos", "Recetas en carpeta, kardex manual", "Administración digital, doble validación, stock"],
                       ["Carpeta SEREMI", "Carpeta física con docs sueltos", "14 ámbitos pre-cargados, alertas de vencimiento"],
                       ["Acceso del equipo", "El que tenga la carpeta", "Acceso simultáneo desde cualquier dispositivo"],
                       ["Acceso de familias", "Llamadas telefónicas", "Portal con signos recientes y visitas"],
@@ -190,7 +190,7 @@ export default function SoftwareEleamPage() {
                     desc: "Objetivos, pautas alimentarias e hidratación, riesgo de caídas y de úlceras por presión. Actividades por categoría con horarios diarios; el equipo las completa por turno.",
                   },
                   {
-                    titulo: "eMAR (kardex electrónico)",
+                    titulo: "Administración de medicamentos",
                     desc: "Indicaciones médicas con vía, dosis, frecuencia. Administraciones programadas por turno; medicamentos controlados con doble validación. Historial inmutable y control de stock por lote.",
                   },
                   {
@@ -211,7 +211,7 @@ export default function SoftwareEleamPage() {
                   },
                   {
                     titulo: "Equipo y permisos",
-                    desc: "Funcionarios y familiares se crean desde el panel del administrador. Permisos granulares por funcionario: residentes, signos, observaciones, eMAR, acreditación.",
+                    desc: "Funcionarios y familiares se crean desde el panel del administrador. Permisos granulares por funcionario: residentes, signos, observaciones, medicamentos, acreditación.",
                   },
                   {
                     titulo: "Importación Excel",

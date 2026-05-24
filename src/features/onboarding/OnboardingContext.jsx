@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useLocation } from "react-router-dom";
@@ -23,6 +24,8 @@ import {
 } from "./onboardingUtils";
 
 const OnboardingContext = createContext(null);
+const ACTIVATION_REFRESH_INTERVAL_MS = 60_000;
+const ACTIVATION_FOCUS_REFRESH_MIN_MS = 30_000;
 
 function storageKey(userId, device) {
   return `${ACTIVATION_STORAGE_PREFIX}${userId}_${device}`;
@@ -53,6 +56,7 @@ export function OnboardingProvider({ children }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [snapshot, setSnapshot] = useState(() => buildCompletionSnapshot());
   const [activationError, setActivationError] = useState(null);
+  const lastRefreshAtRef = useRef(0);
 
   useEffect(() => {
     if (!user?.id || !rol || !getActivationPlaybook(rol, canFeature)) {
@@ -77,8 +81,11 @@ export function OnboardingProvider({ children }) {
     return filterAllowedSteps(playbook, { can, canFeature });
   }, [profileLoading, state, playbook, can, canFeature]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ force = false } = {}) => {
     if (!steps.some((step) => step.completionRule)) return;
+    const now = Date.now();
+    if (!force && now - lastRefreshAtRef.current < ACTIVATION_FOCUS_REFRESH_MIN_MS) return;
+    lastRefreshAtRef.current = now;
 
     try {
       const nextSnapshot = await fetchActivationCompletionSnapshot();
@@ -93,13 +100,18 @@ export function OnboardingProvider({ children }) {
   useEffect(() => {
     if (!state || !steps.some((step) => step.completionRule)) return undefined;
 
-    refresh();
-    const intervalId = window.setInterval(refresh, 5000);
-    window.addEventListener("focus", refresh);
+    refresh({ force: true });
+    const intervalId = window.setInterval(() => refresh(), ACTIVATION_REFRESH_INTERVAL_MS);
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
 
     return () => {
       window.clearInterval(intervalId);
-      window.removeEventListener("focus", refresh);
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
     };
   }, [state, steps, refresh, location.pathname]);
 

@@ -2,38 +2,19 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Loading from "../../components/Loading";
-import { formatDateTime } from "../../utils/dateUtils";
+import { formatDateTime, formatRelativeDays } from "../../utils/dateUtils";
 import { TIPO_LABEL, calcAge } from "../residents/residentUtils";
 import { VITAL_DEFS, recordOverallStatus, STATUS } from "../vitalSigns/vitalRanges";
 import { summarizeFamilySnapshot } from "./familiarUtils";
 import { useFamiliarResidentData } from "./useFamiliarResidentData";
-
-/* ─── Iconos inline ─────────────────────────────────────────── */
-const IconHeart = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-  </svg>
-);
-const IconClipboard = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-  </svg>
-);
-const IconPill = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="m21 7.5-2.25-1.313M21 7.5v2.25m0-2.25-2.25 1.313M3 7.5l2.25-1.313M3 7.5l2.25 1.313M3 7.5v2.25m9 3 2.25-1.313M12 12.75l-2.25-1.313M12 12.75V15m0 6.75 2.25-1.313M12 21.75V19.5m0 2.25-2.25-1.313m0-16.875L12 2.25l2.25 1.313M21 14.25v2.25l-2.25 1.313m-13.5 0L3 16.5v-2.25" />
-  </svg>
-);
-const IconUsers = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0z" />
-  </svg>
-);
-const IconCheck = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4">
-    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-  </svg>
-);
+import {
+  IconChat,
+  IconCheck,
+  IconClipboard,
+  IconHeart,
+  IconPill,
+  IconUsers,
+} from "./portalIcons";
 
 /* ─── Visit status helpers ───────────────────────────────────── */
 const VISIT_STATUS = {
@@ -54,10 +35,10 @@ const CARE_STATUS = {
 
 const MED_STATUS = {
   administrado: { label: "Administrado", color: "text-emerald-700 bg-emerald-50" },
-  validado:     { label: "Validado",     color: "text-teal-700 bg-teal-50" },
+  validado:     { label: "Confirmado",   color: "text-teal-700 bg-teal-50" },
   pendiente:    { label: "Pendiente",    color: "text-amber-700 bg-amber-50" },
-  pendiente_validacion: { label: "Por validar", color: "text-sky-700 bg-sky-50" },
-  omitido:      { label: "Omitido",      color: "text-rose-600 bg-rose-50" },
+  pendiente_validacion: { label: "En revisión", color: "text-sky-700 bg-sky-50" },
+  omitido:      { label: "No administrado", color: "text-rose-600 bg-rose-50" },
 };
 
 const CATEGORIA_META = {
@@ -69,7 +50,7 @@ const CATEGORIA_META = {
   cambios_posicion:  { label: "Cambios posición",    tone: "violet" },
   eliminacion:       { label: "Eliminación",         tone: "slate" },
   prevencion_caidas: { label: "Prev. caídas",        tone: "amber" },
-  prevencion_up:     { label: "Prev. UPP",           tone: "amber" },
+  prevencion_up:     { label: "Prev. úlceras",       tone: "amber" },
   actividad:         { label: "Actividad",           tone: "emerald" },
   controles:         { label: "Controles",           tone: "rose" },
   otro:              { label: "Otro",                tone: "slate" },
@@ -134,6 +115,12 @@ function formatDateOnlyLabel(value) {
   if (Number.isNaN(date.valueOf())) return value;
   return date.toLocaleDateString("es-CL", { weekday: "long", day: "2-digit", month: "long" });
 }
+
+const CLINICAL_TOOLTIPS = {
+  "Dependencia": "Nivel de apoyo que la persona necesita para sus actividades diarias.",
+  "Barthel": "Índice de Barthel: escala del 0 al 100 que mide la independencia en actividades básicas. Mayor puntaje = mayor autonomía.",
+  "Katz": "Escala de Katz: mide la independencia en 6 actividades básicas (baño, vestido, uso del WC, traslado, continencia, alimentación).",
+};
 
 /* ─── Resident selector ──────────────────────────────────────── */
 function ResidentSelector({ residentes, activeId, onSelect }) {
@@ -231,18 +218,33 @@ function ResidentHero({ resident, eleam, onNavigateVisitas }) {
   );
 }
 
-function ResidentClinicalSummary({ resident }) {
+function ResidentClinicalSummary({ resident, evaluaciones = {} }) {
+  const barthelEval = evaluaciones?.barthel;
+  const katzEval = evaluaciones?.katz;
+
+  const barthelValue = resident?.indice_barthel != null
+    ? `${resident.indice_barthel}/100`
+    : null;
+  const katzValue = resident?.escala_katz || null;
+
+  const barthelSub = barthelEval?.fecha_evaluacion
+    ? `Última evaluación ${formatRelativeDays(barthelEval.fecha_evaluacion)}`
+    : null;
+  const katzSub = katzEval?.fecha_evaluacion
+    ? `Última evaluación ${formatRelativeDays(katzEval.fecha_evaluacion)}`
+    : null;
+
   const rows = [
-    ["Ingreso", resident?.fecha_ingreso],
-    ["Previsión", resident?.prevision],
-    ["Dependencia", resident?.nivel_dependencia],
-    ["Barthel", resident?.indice_barthel != null ? `${resident.indice_barthel}/100` : null],
-    ["Katz", resident?.escala_katz],
-    ["Diagnóstico principal", resident?.diagnostico_principal],
-    ["Diagnósticos secundarios", Array.isArray(resident?.diagnosticos_secundarios) ? resident.diagnosticos_secundarios.join(", ") : null],
-    ["Alergias", Array.isArray(resident?.alergias) ? resident.alergias.join(", ") : null],
-    ["Grupo sanguíneo", resident?.grupo_sanguineo],
-    ["Contacto", [resident?.nombre_contacto, resident?.parentesco_contacto, resident?.telefono_contacto].filter(Boolean).join(" · ")],
+    ["Ingreso", resident?.fecha_ingreso, null],
+    ["Previsión", resident?.prevision, null],
+    ["Dependencia", resident?.nivel_dependencia, null],
+    ["Barthel", barthelValue, barthelSub],
+    ["Katz", katzValue, katzSub],
+    ["Diagnóstico principal", resident?.diagnostico_principal, null],
+    ["Diagnósticos secundarios", Array.isArray(resident?.diagnosticos_secundarios) ? resident.diagnosticos_secundarios.join(", ") : null, null],
+    ["Alergias", Array.isArray(resident?.alergias) ? resident.alergias.join(", ") : null, null],
+    ["Grupo sanguíneo", resident?.grupo_sanguineo, null],
+    ["Contacto", [resident?.nombre_contacto, resident?.parentesco_contacto, resident?.telefono_contacto].filter(Boolean).join(" · "), null],
   ].filter(([, value]) => value);
 
   if (rows.length === 0) return null;
@@ -254,10 +256,11 @@ function ResidentClinicalSummary({ resident }) {
         <h2 className="text-sm font-bold text-slate-900">Información clínica compartida por el equipo</h2>
       </div>
       <dl className="grid gap-3 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
+        {rows.map(([label, value, sub]) => (
           <div key={label} className="rounded-xl bg-slate-50 p-3">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400" title={CLINICAL_TOOLTIPS[label]}>{label}</dt>
             <dd className="mt-1 text-sm font-medium text-slate-700">{value}</dd>
+            {sub && <dd className="mt-1 text-[11px] font-normal text-slate-500">{sub}</dd>}
           </div>
         ))}
       </dl>
@@ -266,11 +269,6 @@ function ResidentClinicalSummary({ resident }) {
 }
 
 /* ─── Care plan summary (family-safe) ───────────────────────── */
-const IconClipboardList = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-  </svg>
-);
 
 function CarePlanSummarySection({ carePlan }) {
   if (!carePlan) return null;
@@ -288,7 +286,7 @@ function CarePlanSummarySection({ carePlan }) {
 
   return (
     <SectionCard
-      icon={<IconClipboardList />}
+      icon={<IconClipboard />}
       title="Plan de cuidado activo"
     >
       <p className="mb-4 text-xs text-slate-400">
@@ -334,7 +332,10 @@ function CarePlanSummarySection({ carePlan }) {
               </span>
             )}
             {riesgoUp && (
-              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${riesgoUp.pill}`}>
+              <span
+                title="Úlceras Por Presión: lesiones en la piel causadas por presión prolongada en residentes con movilidad reducida."
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${riesgoUp.pill}`}
+              >
                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 7.5l16.5-4.125M12 6.75c-2.708 0-5.363.224-7.948.655C2.906 7.24 1.5 8.973 1.5 10.96v11.25m10.5-11.25c2.708 0 5.363.224 7.948.655C21.094 11.74 22.5 13.473 22.5 15.46v2.54M12 6.75v-.75" />
                 </svg>
@@ -409,7 +410,7 @@ function VitalsSection({ vitals }) {
   const latest = vitals?.[0];
   if (!latest) {
     return (
-      <SectionCard icon={<IconHeart />} title="Salud reciente">
+      <SectionCard icon={<IconHeart />} title="Signos recientes">
         <EmptySection message="El equipo aún no ha registrado controles de salud." />
       </SectionCard>
     );
@@ -420,7 +421,7 @@ function VitalsSection({ vitals }) {
   return (
     <SectionCard
       icon={<IconHeart />}
-      title="Salud reciente"
+      title="Signos recientes"
       badge={overallStyle.label}
       badgeColor={overallStyle.badge}
     >
@@ -462,7 +463,7 @@ function VisitsSummarySection({ visits, onNavigateVisitas }) {
   return (
     <SectionCard
       icon={<IconUsers />}
-      title="Mis visitas recientes"
+      title="Visitas"
       badge={hasExitPending ? "Salida pendiente" : hasActive ? "En visita" : hasPending ? "Pendiente" : null}
       badgeColor={hasExitPending ? "bg-sky-100 text-sky-800" : hasActive ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-800"}
     >
@@ -533,7 +534,7 @@ function TurnoProgressBar({ items }) {
 function CareSection({ care }) {
   if (!care?.length) {
     return (
-      <SectionCard icon={<IconClipboard />} title="Cuidados del día">
+      <SectionCard icon={<IconClipboard />} title="Cuidados de hoy">
         <EmptySection message="El equipo aún no ha compartido cuidados para esta fecha." />
       </SectionCard>
     );
@@ -547,7 +548,7 @@ function CareSection({ care }) {
   return (
     <SectionCard
       icon={<IconClipboard />}
-      title="Cuidados del día"
+      title="Cuidados de hoy"
       badge={`${done}/${care.length}`}
       badgeColor={done === care.length ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}
     >
@@ -627,8 +628,8 @@ function CareSection({ care }) {
 function MedicationSection({ medications }) {
   if (!medications?.length) {
     return (
-      <SectionCard icon={<IconPill />} title="Medicación del día">
-        <EmptySection message="El equipo aún no ha compartido medicación para esta fecha." />
+      <SectionCard icon={<IconPill />} title="Medicamentos del día">
+        <EmptySection message="El equipo aún no ha publicado medicamentos visibles para la familia en esta fecha." />
       </SectionCard>
     );
   }
@@ -641,7 +642,7 @@ function MedicationSection({ medications }) {
   return (
     <SectionCard
       icon={<IconPill />}
-      title="Medicación del día"
+      title="Medicamentos del día"
       badge={`${given}/${medications.length}`}
       badgeColor={given === medications.length ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}
     >
@@ -697,21 +698,15 @@ function MedicationSection({ medications }) {
 
 /* ─── Observations section ───────────────────────────────────── */
 function ObservationsSection({ observations }) {
-  const ObsIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-    </svg>
-  );
-
   if (!observations?.length) {
     return (
-      <SectionCard icon={<ObsIcon />} title="Actualizaciones del equipo">
-        <EmptySection message="Sin actualizaciones del equipo aún." />
+      <SectionCard icon={<IconChat />} title="Actualizaciones del equipo">
+        <EmptySection message="El equipo aún no ha compartido actualizaciones para esta fecha." />
       </SectionCard>
     );
   }
   return (
-    <SectionCard icon={<ObsIcon />} title="Actualizaciones del equipo" badge={observations.length} badgeColor="bg-slate-100 text-slate-600">
+    <SectionCard icon={<IconChat />} title="Actualizaciones del equipo" badge={observations.length} badgeColor="bg-slate-100 text-slate-600">
       <ul className="divide-y divide-slate-100 -mx-1 px-1">
         {observations.map((obs) => (
           <li key={obs.id} className="py-3 flex items-start gap-3">
@@ -761,6 +756,7 @@ export default function FamiliarPortal() {
   const medications  = snapshot?.medications ?? [];
   const visits       = snapshot?.visits ?? [];
   const carePlan     = snapshot?.care_plan ?? null;
+  const evaluaciones = snapshot?.evaluaciones ?? {};
 
   if (loading && residentes.length === 0) {
     return <Loading message="Cargando portal familiar..." />;
@@ -816,7 +812,7 @@ export default function FamiliarPortal() {
                 eleam={eleam}
                 onNavigateVisitas={() => navigate("/familiar/visitas")}
               />
-              <ResidentClinicalSummary resident={resident} />
+              <ResidentClinicalSummary resident={resident} evaluaciones={evaluaciones} />
               <CarePlanSummarySection carePlan={carePlan} />
             </>
           )}

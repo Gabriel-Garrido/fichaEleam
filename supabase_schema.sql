@@ -222,6 +222,9 @@ create table if not exists public.camas_audit (
 
 create index if not exists idx_camas_audit_eleam
   on public.camas_audit(eleam_id, realizado_en desc);
+create index if not exists idx_camas_audit_residente_fecha
+  on public.camas_audit(residente_id, realizado_en desc)
+  where residente_id is not null;
 
 alter table public.residentes
   add column if not exists cama_actual_id uuid references public.camas(id) on delete set null;
@@ -288,9 +291,40 @@ create index if not exists idx_observaciones_seguimiento
 create index if not exists idx_observaciones_seguimiento_turno
   on public.observaciones_diarias(seguimiento_fecha, seguimiento_turno, seguimiento_estado)
   where requiere_seguimiento = true;
+create index if not exists idx_observaciones_residente_seguimiento_turno
+  on public.observaciones_diarias(residente_id, seguimiento_estado, seguimiento_fecha, seguimiento_turno)
+  where requiere_seguimiento = true;
 create index if not exists idx_observaciones_familiar
   on public.observaciones_diarias(residente_id, fecha_hora desc)
   where visible_familiar = true;
+
+-- Escalas funcionales clínicas (Barthel, Katz) con reevaluación MINSAL.
+-- residentes.indice_barthel / residentes.escala_katz quedan como cache rápido
+-- del último puntaje y se sincronizan vía trigger después de cada INSERT.
+create table if not exists public.evaluaciones_clinicas (
+  id                  uuid primary key default gen_random_uuid(),
+  eleam_id            uuid not null references public.eleams(id) on delete cascade,
+  residente_id        uuid not null references public.residentes(id) on delete cascade,
+  tipo                text not null check (tipo in ('barthel','katz')),
+  fecha_evaluacion    date not null default current_date,
+  motivo              text not null default 'rutina'
+                       check (motivo in ('ingreso','rutina','post_hospitalizacion','caida','cambio_clinico','solicitud_medica')),
+  puntaje             integer not null,
+  resultado           text not null,
+  detalle             jsonb not null,
+  observaciones       text,
+  proxima_evaluacion  date not null,
+  evaluado_por        uuid references public.profiles(id) on delete set null,
+  creado_en           timestamptz not null default now(),
+  actualizado_en      timestamptz not null default now()
+);
+
+create index if not exists idx_eval_residente_tipo_fecha
+  on public.evaluaciones_clinicas(residente_id, tipo, fecha_evaluacion desc);
+create index if not exists idx_eval_eleam_proxima
+  on public.evaluaciones_clinicas(eleam_id, proxima_evaluacion);
+create index if not exists idx_eval_residente_proxima
+  on public.evaluaciones_clinicas(residente_id, proxima_evaluacion);
 
 create table if not exists public.turno_entregas (
   id              uuid primary key default gen_random_uuid(),
@@ -312,22 +346,25 @@ create index if not exists idx_turno_entregas_creado_por
   on public.turno_entregas(creado_por);
 
 -- ============================================================
--- 2.b Plan de cuidado y eMAR
+-- 2.b Plan de cuidado y medicamentos
 -- ============================================================
 
 create table if not exists public.planes_cuidado (
   id                    uuid primary key default gen_random_uuid(),
   eleam_id              uuid not null references public.eleams(id) on delete cascade,
   residente_id          uuid not null references public.residentes(id) on delete cascade,
-  titulo                text not null default 'Plan de cuidado',
-  objetivos             text,
-  pauta_alimentacion    text,
-  pauta_hidratacion     text,
-  restricciones         text,
-  riesgo_caidas         text check (riesgo_caidas in ('bajo','medio','alto') or riesgo_caidas is null),
-  riesgo_up             text check (riesgo_up in ('bajo','medio','alto') or riesgo_up is null),
-  estado                text not null default 'activo' check (estado in ('activo','pausado','cerrado')),
-  version               integer not null default 1 check (version > 0),
+  titulo                text not null default 'Plan de cuidado'
+                        constraint planes_cuidado_titulo_len check (char_length(trim(titulo)) between 3 and 120),
+  objetivos             text constraint planes_cuidado_objetivos_len check (objetivos is null or char_length(objetivos) <= 2000),
+  pauta_alimentacion    text constraint planes_cuidado_pauta_alimentacion_len check (pauta_alimentacion is null or char_length(pauta_alimentacion) <= 2000),
+  pauta_hidratacion     text constraint planes_cuidado_pauta_hidratacion_len check (pauta_hidratacion is null or char_length(pauta_hidratacion) <= 2000),
+  restricciones         text constraint planes_cuidado_restricciones_len check (restricciones is null or char_length(restricciones) <= 2000),
+  riesgo_caidas         text constraint planes_cuidado_riesgo_caidas_check check (riesgo_caidas in ('bajo','medio','alto') or riesgo_caidas is null),
+  riesgo_up             text constraint planes_cuidado_riesgo_up_check check (riesgo_up in ('bajo','medio','alto') or riesgo_up is null),
+  estado                text not null default 'activo'
+                        constraint planes_cuidado_estado_check check (estado in ('activo','pausado','cerrado')),
+  version               integer not null default 1
+                        constraint planes_cuidado_version_positive check (version > 0),
   creado_por            uuid references auth.users(id) on delete set null,
   actualizado_por       uuid references auth.users(id) on delete set null,
   creado_en             timestamptz not null default now(),
@@ -345,24 +382,26 @@ create table if not exists public.plan_cuidado_actividades (
   eleam_id              uuid not null references public.eleams(id) on delete cascade,
   residente_id          uuid not null references public.residentes(id) on delete cascade,
   plan_id               uuid not null references public.planes_cuidado(id) on delete cascade,
-  categoria             text not null check (categoria in (
+  categoria             text not null constraint plan_cuidado_actividades_categoria_check check (categoria in (
                           'alimentacion','hidratacion','higiene','bano','movilidad',
                           'cambios_posicion','eliminacion','prevencion_caidas',
                           'prevencion_up','actividad','controles','otro'
                         )),
-  titulo                text not null,
-  descripcion           text,
-  instrucciones         text,
-  prioridad             text not null default 'media' check (prioridad in ('baja','media','alta','urgente')),
+  titulo                text not null constraint plan_cuidado_actividades_titulo_len check (char_length(trim(titulo)) between 3 and 140),
+  descripcion           text constraint plan_cuidado_actividades_descripcion_len check (descripcion is null or char_length(descripcion) <= 1000),
+  instrucciones         text constraint plan_cuidado_actividades_instrucciones_len check (instrucciones is null or char_length(instrucciones) <= 2000),
+  prioridad             text not null default 'media'
+                        constraint plan_cuidado_actividades_prioridad_check check (prioridad in ('baja','media','alta','urgente')),
   requiere_observacion  boolean not null default false,
   visible_familiar      boolean not null default false,
-  resumen_familiar      text,
+  resumen_familiar      text constraint plan_cuidado_actividades_resumen_familiar_len check (resumen_familiar is null or char_length(resumen_familiar) <= 200),
   activo                boolean not null default true,
   creado_por            uuid references auth.users(id) on delete set null,
   actualizado_por       uuid references auth.users(id) on delete set null,
   creado_en             timestamptz not null default now(),
   actualizado_en        timestamptz not null default now(),
-  check (visible_familiar = false or nullif(trim(coalesce(resumen_familiar, '')), '') is not null)
+  constraint plan_cuidado_actividades_visible_familiar_summary_check
+    check (visible_familiar = false or nullif(trim(coalesce(resumen_familiar, '')), '') is not null)
 );
 
 create index if not exists idx_plan_actividades_plan
@@ -378,12 +417,13 @@ create table if not exists public.plan_cuidado_horarios (
   eleam_id              uuid not null references public.eleams(id) on delete cascade,
   residente_id          uuid not null references public.residentes(id) on delete cascade,
   actividad_id          uuid not null references public.plan_cuidado_actividades(id) on delete cascade,
-  frecuencia            text not null default 'diaria' check (frecuencia in ('diaria','semanal','mensual','una_vez')),
-  dias_semana           smallint[] check (
+  frecuencia            text not null default 'diaria'
+                        constraint plan_cuidado_horarios_frecuencia_check check (frecuencia in ('diaria','semanal','mensual','una_vez')),
+  dias_semana           smallint[] constraint plan_cuidado_horarios_dias_semana_check check (
                           dias_semana is null
                           or dias_semana <@ array[1,2,3,4,5,6,7]::smallint[]
                         ),
-  dias_mes              smallint[] check (
+  dias_mes              smallint[] constraint plan_cuidado_horarios_dias_mes_check check (
                           dias_mes is null
                           or dias_mes <@ array[
                             1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
@@ -392,11 +432,18 @@ create table if not exists public.plan_cuidado_horarios (
                         ),
   fecha_unica           date,
   hora                  time not null,
-  turno                 text not null check (turno in ('mañana','tarde','noche')),
-  tolerancia_min        integer not null default 60 check (tolerancia_min between 0 and 720),
+  turno                 text not null constraint plan_cuidado_horarios_turno_check check (turno in ('mañana','tarde','noche')),
+  tolerancia_min        integer not null default 60
+                        constraint plan_cuidado_horarios_tolerancia_range check (tolerancia_min between 0 and 720),
   activo                boolean not null default true,
   creado_en             timestamptz not null default now(),
-  actualizado_en        timestamptz not null default now()
+  actualizado_en        timestamptz not null default now(),
+  constraint plan_cuidado_horarios_frecuencia_shape_check check (
+    (frecuencia = 'diaria' and dias_semana is null and dias_mes is null and fecha_unica is null)
+    or (frecuencia = 'semanal' and dias_semana is not null and cardinality(dias_semana) > 0 and dias_mes is null and fecha_unica is null)
+    or (frecuencia = 'mensual' and dias_mes is not null and cardinality(dias_mes) > 0 and dias_semana is null and fecha_unica is null)
+    or (frecuencia = 'una_vez' and fecha_unica is not null and dias_semana is null and dias_mes is null)
+  )
 );
 
 create index if not exists idx_plan_horarios_actividad
@@ -412,15 +459,15 @@ create table if not exists public.tareas_cuidado (
   actividad_id          uuid not null references public.plan_cuidado_actividades(id) on delete cascade,
   horario_id            uuid not null references public.plan_cuidado_horarios(id) on delete cascade,
   fecha                 date not null,
-  turno                 text not null check (turno in ('mañana','tarde','noche')),
+  turno                 text not null constraint tareas_cuidado_turno_check check (turno in ('mañana','tarde','noche')),
   hora                  time not null,
   estado                text not null default 'pendiente'
-                        check (estado in ('pendiente','cumplida','omitida','reprogramada','cancelada')),
-  motivo_omision        text check (
+                        constraint tareas_cuidado_estado_check check (estado in ('pendiente','cumplida','omitida','reprogramada','cancelada')),
+  motivo_omision        text constraint tareas_cuidado_motivo_omision_check check (
                           motivo_omision is null
                           or motivo_omision in ('rechazo','no_disponible','contraindicado','residente_ausente','otro')
                         ),
-  notas                 text,
+  notas                 text constraint tareas_cuidado_notas_len check (notas is null or char_length(notas) <= 2000),
   requiere_seguimiento  boolean not null default false,
   observacion_id        uuid references public.observaciones_diarias(id) on delete set null,
   fecha_original        date,
@@ -430,6 +477,8 @@ create table if not exists public.tareas_cuidado (
   cumplida_en           timestamptz,
   creado_en             timestamptz not null default now(),
   actualizado_en        timestamptz not null default now(),
+  constraint tareas_cuidado_omitida_motivo_check check (estado <> 'omitida' or motivo_omision is not null),
+  constraint tareas_cuidado_reprogramada_fecha_check check (estado <> 'reprogramada' or reprogramada_para is not null),
   unique (horario_id, fecha)
 );
 
@@ -459,6 +508,9 @@ create table if not exists public.plan_cuidado_audit (
 
 create index if not exists idx_plan_cuidado_audit_eleam
   on public.plan_cuidado_audit(eleam_id, realizado_en desc);
+create index if not exists idx_plan_cuidado_audit_residente_fecha
+  on public.plan_cuidado_audit(residente_id, realizado_en desc)
+  where residente_id is not null;
 
 create table if not exists public.medicamentos_indicaciones (
   id                         uuid primary key default gen_random_uuid(),
@@ -556,6 +608,9 @@ create index if not exists idx_med_stock_lotes_eleam_controlado
   on public.medicamentos_stock_lotes(eleam_id, es_controlado, estado);
 create index if not exists idx_med_stock_lotes_residente
   on public.medicamentos_stock_lotes(residente_id, estado);
+create index if not exists idx_med_stock_lotes_residente_vencimiento
+  on public.medicamentos_stock_lotes(residente_id, estado, fecha_vencimiento)
+  where estado = 'activo';
 
 create table if not exists public.medicamentos_administraciones (
   id                    uuid primary key default gen_random_uuid(),
@@ -653,6 +708,94 @@ create table if not exists public.medicamentos_audit (
 
 create index if not exists idx_medicamentos_audit_eleam
   on public.medicamentos_audit(eleam_id, realizado_en desc);
+create index if not exists idx_medicamentos_audit_residente_fecha
+  on public.medicamentos_audit(residente_id, realizado_en desc)
+  where residente_id is not null;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'med_indicaciones_nombre_len_contract') then
+    alter table public.medicamentos_indicaciones add constraint med_indicaciones_nombre_len_contract
+      check (char_length(trim(medicamento_nombre)) between 1 and 160);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_indicaciones_dosis_len_contract') then
+    alter table public.medicamentos_indicaciones add constraint med_indicaciones_dosis_len_contract
+      check (char_length(trim(dosis)) between 1 and 120);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_indicaciones_textos_len_contract') then
+    alter table public.medicamentos_indicaciones add constraint med_indicaciones_textos_len_contract
+      check (
+        char_length(coalesce(principio_activo, '')) <= 160
+        and char_length(coalesce(concentracion, '')) <= 80
+        and char_length(coalesce(forma_farmaceutica, '')) <= 80
+        and char_length(coalesce(unidad_dosis, '')) <= 40
+        and char_length(coalesce(indicacion, '')) <= 500
+        and char_length(coalesce(prescriptor_nombre, '')) <= 160
+        and char_length(coalesce(resumen_familiar, '')) <= 240
+        and char_length(coalesce(instrucciones, '')) <= 1200
+      );
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_indicaciones_fechas_contract') then
+    alter table public.medicamentos_indicaciones add constraint med_indicaciones_fechas_contract
+      check (fecha_fin is null or fecha_fin >= fecha_inicio);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_indicaciones_familia_contract') then
+    alter table public.medicamentos_indicaciones add constraint med_indicaciones_familia_contract
+      check (visible_familiar = false or char_length(trim(coalesce(resumen_familiar, ''))) between 1 and 240);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_indicaciones_controlados_contract') then
+    alter table public.medicamentos_indicaciones add constraint med_indicaciones_controlados_contract
+      check (
+        es_controlado = false
+        or (
+          tipo_controlado is not null
+          and requiere_stock = true
+          and requiere_doble_validacion = true
+        )
+      );
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_horarios_frecuencia_contract') then
+    alter table public.medicamentos_horarios add constraint med_horarios_frecuencia_contract
+      check (
+        (frecuencia = 'diaria')
+        or (frecuencia = 'semanal' and cardinality(coalesce(dias_semana, '{}'::smallint[])) > 0)
+        or (frecuencia = 'mensual' and cardinality(coalesce(dias_mes, '{}'::smallint[])) > 0)
+        or (frecuencia = 'una_vez' and fecha_unica is not null)
+      );
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_stock_lotes_textos_contract') then
+    alter table public.medicamentos_stock_lotes add constraint med_stock_lotes_textos_contract
+      check (
+        char_length(trim(medicamento_nombre)) between 1 and 160
+        and char_length(coalesce(lote, '')) <= 80
+        and char_length(coalesce(unidad, '')) between 1 and 40
+        and char_length(coalesce(ubicacion, '')) <= 160
+      );
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_stock_lotes_controlados_contract') then
+    alter table public.medicamentos_stock_lotes add constraint med_stock_lotes_controlados_contract
+      check (es_controlado = false or tipo_controlado is not null);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_stock_lotes_vencimiento_contract') then
+    alter table public.medicamentos_stock_lotes add constraint med_stock_lotes_vencimiento_contract
+      check (fecha_vencimiento is null or fecha_vencimiento >= date '2000-01-01');
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_admin_cierre_contract') then
+    alter table public.medicamentos_administraciones add constraint med_admin_cierre_contract
+      check (
+        (estado <> 'omitido' or motivo_omision is not null)
+        and (dosis_administrada is null or dosis_administrada > 0)
+      );
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_movimientos_motivo_contract') then
+    alter table public.medicamentos_stock_movimientos add constraint med_movimientos_motivo_contract
+      check (char_length(coalesce(motivo, '')) <= 500);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'med_conciliaciones_motivo_contract') then
+    alter table public.medicamentos_conciliaciones add constraint med_conciliaciones_motivo_contract
+      check (char_length(trim(motivo)) between 1 and 500);
+  end if;
+end $$;
 
 -- ============================================================
 -- 3. Invitaciones y portal familiar
@@ -661,7 +804,10 @@ create index if not exists idx_medicamentos_audit_eleam
 create table if not exists public.funcionario_invitaciones (
   id            uuid primary key default gen_random_uuid(),
   eleam_id      uuid not null references public.eleams(id) on delete cascade,
-  email         text not null,
+  email         text not null check (
+    char_length(email) <= 254
+    and email ~* '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'
+  ),
   token         text unique not null,
   expira_en     timestamptz not null default (now() + interval '7 days'),
   usado         boolean not null default false,
@@ -669,7 +815,11 @@ create table if not exists public.funcionario_invitaciones (
   rol           text not null default 'funcionario' check (rol in ('funcionario','familiar')),
   residente_id  uuid references public.residentes(id) on delete cascade,
   creado_por    uuid references auth.users(id) on delete set null,
-  creado_en     timestamptz not null default now()
+  creado_en     timestamptz not null default now(),
+  check (
+    (rol = 'familiar' and residente_id is not null)
+    or (rol <> 'familiar' and residente_id is null)
+  )
 );
 
 create index if not exists idx_inv_eleam on public.funcionario_invitaciones(eleam_id);
@@ -679,7 +829,10 @@ create index if not exists idx_inv_eleam_email_active
 
 create table if not exists public.auth_provision_requests (
   id            uuid primary key default gen_random_uuid(),
-  email         text not null,
+  email         text not null check (
+    char_length(email) <= 254
+    and email ~* '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'
+  ),
   account_source text not null check (
     account_source in ('demo_approved','superadmin_created','admin_created','funcionario_created')
   ),
@@ -690,7 +843,15 @@ create table if not exists public.auth_provision_requests (
   usado_en      timestamptz,
   usado_por_auth_user_id uuid,
   expira_en     timestamptz not null default (now() + interval '10 minutes'),
-  creado_en     timestamptz not null default now()
+  creado_en     timestamptz not null default now(),
+  check (
+    (rol = 'familiar' and residente_id is not null)
+    or (rol <> 'familiar' and residente_id is null)
+  ),
+  check (
+    (usado = false and usado_en is null and usado_por_auth_user_id is null)
+    or (usado = true and usado_en is not null and usado_por_auth_user_id is not null)
+  )
 );
 
 create index if not exists idx_auth_provision_active
@@ -735,6 +896,7 @@ create table if not exists public.funcionario_permisos (
   archivar_acreditacion   boolean not null default false,
   registrar_visitas            boolean not null default true,
   editar_indicaciones_cuidado  boolean not null default false,
+  aplicar_evaluaciones_clinicas boolean not null default true,
   actualizado_en               timestamptz not null default now()
 );
 
@@ -752,7 +914,8 @@ alter table public.funcionario_permisos
   add column if not exists validar_medicamentos_controlados boolean not null default false,
   add column if not exists ajustar_stock_medicamentos      boolean not null default false,
   add column if not exists asignar_camas                   boolean not null default true,
-  add column if not exists editar_indicaciones_cuidado     boolean not null default false;
+  add column if not exists editar_indicaciones_cuidado     boolean not null default false,
+  add column if not exists aplicar_evaluaciones_clinicas   boolean not null default true;
 
 create table if not exists public.eleam_feature_permissions (
   id              uuid primary key default gen_random_uuid(),
@@ -1035,17 +1198,17 @@ create index if not exists idx_blog_posts_slug on public.blog_posts(slug);
 
 create table if not exists public.demo_leads (
   id                        uuid default gen_random_uuid() primary key,
-  nombre                    text not null,
-  cargo                     text not null,
-  eleam_nombre              text not null,
-  email                     text not null,
-  telefono                  text not null,
-  num_residentes            text,
-  utm_source                text,
-  utm_medium                text,
-  utm_campaign              text,
-  pagina_origen             text,
-  referrer                  text,
+  nombre                    text not null check (char_length(nombre) <= 120),
+  cargo                     text not null check (char_length(cargo) <= 80),
+  eleam_nombre              text not null check (char_length(eleam_nombre) <= 160),
+  email                     text not null check (char_length(email) <= 254),
+  telefono                  text not null check (char_length(telefono) <= 40),
+  num_residentes            text check (num_residentes is null or char_length(num_residentes) <= 40),
+  utm_source                text check (utm_source is null or char_length(utm_source) <= 128),
+  utm_medium                text check (utm_medium is null or char_length(utm_medium) <= 128),
+  utm_campaign              text check (utm_campaign is null or char_length(utm_campaign) <= 128),
+  pagina_origen             text check (pagina_origen is null or char_length(pagina_origen) <= 256),
+  referrer                  text check (referrer is null or char_length(referrer) <= 512),
   estado                    text not null default 'nuevo'
     check (estado in ('nuevo','contactado','demo_activo','descartado','convertido')),
   notas_admin               text,
@@ -1064,17 +1227,66 @@ create unique index if not exists demo_leads_active_email_unique
 
 create table if not exists public.landing_events (
   id           uuid default gen_random_uuid() primary key,
-  tipo         text not null,
-  pagina       text,
-  elemento     text,
-  valor        text,
-  session_id   text,
-  utm_source   text,
-  utm_medium   text,
-  utm_campaign text,
-  referrer     text,
+  tipo         text not null
+    constraint landing_events_tipo_contract
+    check (
+      char_length(tipo) <= 64
+      and tipo in ('page_view','cta_click','nav_click','scroll_depth','section_view','form_view','form_submit')
+    ),
+  pagina       text constraint landing_events_pagina_contract check (pagina is null or char_length(pagina) <= 256),
+  elemento     text constraint landing_events_elemento_contract check (elemento is null or char_length(elemento) <= 128),
+  valor        text constraint landing_events_valor_contract check (valor is null or char_length(valor) <= 256),
+  session_id   text constraint landing_events_session_contract check (session_id is null or char_length(session_id) <= 64),
+  utm_source   text constraint landing_events_utm_source_contract check (utm_source is null or char_length(utm_source) <= 128),
+  utm_medium   text constraint landing_events_utm_medium_contract check (utm_medium is null or char_length(utm_medium) <= 128),
+  utm_campaign text constraint landing_events_utm_campaign_contract check (utm_campaign is null or char_length(utm_campaign) <= 128),
+  referrer     text constraint landing_events_referrer_contract check (referrer is null or char_length(referrer) <= 512),
   creado_en    timestamptz default now() not null
 );
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_tipo_contract') then
+    alter table public.landing_events add constraint landing_events_tipo_contract
+      check (
+        char_length(tipo) <= 64
+        and tipo in ('page_view','cta_click','nav_click','scroll_depth','section_view','form_view','form_submit')
+      );
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_pagina_contract') then
+    alter table public.landing_events add constraint landing_events_pagina_contract
+      check (pagina is null or char_length(pagina) <= 256);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_elemento_contract') then
+    alter table public.landing_events add constraint landing_events_elemento_contract
+      check (elemento is null or char_length(elemento) <= 128);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_valor_contract') then
+    alter table public.landing_events add constraint landing_events_valor_contract
+      check (valor is null or char_length(valor) <= 256);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_session_contract') then
+    alter table public.landing_events add constraint landing_events_session_contract
+      check (session_id is null or char_length(session_id) <= 64);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_utm_source_contract') then
+    alter table public.landing_events add constraint landing_events_utm_source_contract
+      check (utm_source is null or char_length(utm_source) <= 128);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_utm_medium_contract') then
+    alter table public.landing_events add constraint landing_events_utm_medium_contract
+      check (utm_medium is null or char_length(utm_medium) <= 128);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_utm_campaign_contract') then
+    alter table public.landing_events add constraint landing_events_utm_campaign_contract
+      check (utm_campaign is null or char_length(utm_campaign) <= 128);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'landing_events_referrer_contract') then
+    alter table public.landing_events add constraint landing_events_referrer_contract
+      check (referrer is null or char_length(referrer) <= 512);
+  end if;
+end;
+$$;
 
 create index if not exists idx_landing_events_tipo
   on public.landing_events(tipo, creado_en desc);
@@ -1172,11 +1384,11 @@ begin
         eleam_nombre = v_eleam_nombre,
         telefono = v_telefono,
         num_residentes = v_num_residentes,
-        utm_source = coalesce(nullif(trim(coalesce(p_utm_source, '')), ''), utm_source),
-        utm_medium = coalesce(nullif(trim(coalesce(p_utm_medium, '')), ''), utm_medium),
-        utm_campaign = coalesce(nullif(trim(coalesce(p_utm_campaign, '')), ''), utm_campaign),
-        pagina_origen = coalesce(nullif(trim(coalesce(p_pagina_origen, '')), ''), pagina_origen),
-        referrer = coalesce(nullif(trim(coalesce(p_referrer, '')), ''), referrer)
+        utm_source = coalesce(left(nullif(trim(coalesce(p_utm_source, '')), ''), 128), utm_source),
+        utm_medium = coalesce(left(nullif(trim(coalesce(p_utm_medium, '')), ''), 128), utm_medium),
+        utm_campaign = coalesce(left(nullif(trim(coalesce(p_utm_campaign, '')), ''), 128), utm_campaign),
+        pagina_origen = coalesce(left(nullif(trim(coalesce(p_pagina_origen, '')), ''), 256), pagina_origen),
+        referrer = coalesce(left(nullif(trim(coalesce(p_referrer, '')), ''), 512), referrer)
     where id = v_existing.id
     returning * into v_lead;
 
@@ -1195,11 +1407,11 @@ begin
   )
   values (
     v_nombre, v_cargo, v_eleam_nombre, v_email, v_telefono, v_num_residentes,
-    nullif(trim(coalesce(p_utm_source, '')), ''),
-    nullif(trim(coalesce(p_utm_medium, '')), ''),
-    nullif(trim(coalesce(p_utm_campaign, '')), ''),
-    nullif(trim(coalesce(p_pagina_origen, '')), ''),
-    nullif(trim(coalesce(p_referrer, '')), '')
+    left(nullif(trim(coalesce(p_utm_source, '')), ''), 128),
+    left(nullif(trim(coalesce(p_utm_medium, '')), ''), 128),
+    left(nullif(trim(coalesce(p_utm_campaign, '')), ''), 128),
+    left(nullif(trim(coalesce(p_pagina_origen, '')), ''), 256),
+    left(nullif(trim(coalesce(p_referrer, '')), ''), 512)
   )
   returning * into v_lead;
 
@@ -1496,6 +1708,7 @@ declare
   v_cuidados jsonb;
   v_medicacion jsonb;
   v_plan_cuidado jsonb;
+  v_evaluaciones jsonb;
 begin
   if p_residente_id is null or not public.familiar_can_view_residente(p_residente_id) then
     raise exception 'No autorizado a ver este residente' using errcode = '42501';
@@ -1673,6 +1886,23 @@ begin
     and estado = 'activo'
   limit 1;
 
+  select coalesce(
+    jsonb_object_agg(tipo, jsonb_build_object(
+      'fecha_evaluacion', fecha_evaluacion,
+      'proxima_evaluacion', proxima_evaluacion,
+      'puntaje', puntaje,
+      'resultado', resultado
+    )),
+    '{}'::jsonb
+  )
+  into v_evaluaciones
+  from (
+    select distinct on (tipo) tipo, fecha_evaluacion, proxima_evaluacion, puntaje, resultado
+    from public.evaluaciones_clinicas
+    where residente_id = p_residente_id
+    order by tipo, fecha_evaluacion desc
+  ) ultimas;
+
   return jsonb_build_object(
     'date', v_fecha,
     'resident', v_residente,
@@ -1682,6 +1912,7 @@ begin
     'medications', v_medicacion,
     'visits', v_visitas,
     'care_plan', v_plan_cuidado,
+    'evaluaciones', coalesce(v_evaluaciones, '{}'::jsonb),
     'generated_at', now()
   );
 end;
@@ -1689,6 +1920,236 @@ $$;
 
 revoke all on function public.get_familiar_resident_snapshot(uuid, date) from public;
 grant execute on function public.get_familiar_resident_snapshot(uuid, date) to authenticated;
+
+create or replace function public.listar_trazabilidad_residente(
+  p_residente_id uuid,
+  p_desde date default null,
+  p_hasta date default null,
+  p_tipos text[] default null,
+  p_estado text default null,
+  p_limit integer default 200
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid;
+  v_limit integer := greatest(1, least(coalesce(p_limit, 200), 500));
+  v_tipos text[] := coalesce(p_tipos, '{}'::text[]);
+  v_result jsonb;
+begin
+  if p_residente_id is null then
+    raise exception 'Residente requerido' using errcode = 'P0001';
+  end if;
+
+  select eleam_id into v_eleam_id
+  from public.residentes
+  where id = p_residente_id;
+
+  if v_eleam_id is null then
+    raise exception 'Residente no encontrado' using errcode = 'P0001';
+  end if;
+
+  if public.my_rol() not in ('admin_eleam','funcionario','superadmin')
+     or not public.eleam_has_access(v_eleam_id)
+     or (public.my_rol() <> 'superadmin' and public.my_eleam_id() is distinct from v_eleam_id) then
+    raise exception 'No autorizado a ver trazabilidad de este residente' using errcode = '42501';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', e.id,
+    'tipo', e.tipo,
+    'fecha_hora', e.fecha_hora,
+    'estado', e.estado,
+    'titulo', e.titulo,
+    'detalle_texto', e.detalle_texto,
+    'entidad', e.entidad,
+    'entidad_id', e.entidad_id,
+    'responsable_id', e.responsable_id,
+    'responsable_nombre', e.responsable_nombre,
+    'prioridad_visual', case when e.estado in ('pendiente','pendiente_validacion','validacion') then 0 else 1 end
+  ) order by case when e.estado in ('pendiente','pendiente_validacion','validacion') then 0 else 1 end asc, e.fecha_hora desc), '[]'::jsonb)
+  into v_result
+  from (
+    select *
+    from (
+      select
+        t.id,
+        'cuidado'::text as tipo,
+        coalesce(t.cumplida_en, t.reprogramada_para, ((t.fecha::timestamp + t.hora) at time zone 'America/Santiago')) as fecha_hora,
+        t.estado,
+        coalesce(a.titulo, 'Tarea de cuidado') as titulo,
+        concat_ws(' · ', a.categoria, nullif(t.notas, ''), case when t.motivo_omision is not null then 'Motivo: ' || t.motivo_omision end) as detalle_texto,
+        'tareas_cuidado'::text as entidad,
+        t.id as entidad_id,
+        t.cumplida_por as responsable_id,
+        p.nombre as responsable_nombre
+      from public.tareas_cuidado t
+      join public.plan_cuidado_actividades a on a.id = t.actividad_id
+      left join public.profiles p on p.id = t.cumplida_por
+      where t.residente_id = p_residente_id
+
+      union all
+
+      select
+        ma.id,
+        'medicamentos'::text,
+        coalesce(ma.validado_en, ma.administrado_en, ((ma.fecha::timestamp + ma.hora) at time zone 'America/Santiago')),
+        ma.estado,
+        coalesce(i.medicamento_nombre, 'Medicamento') as titulo,
+        concat_ws(' · ', i.dosis, case when i.via is not null then 'vía ' || i.via end, nullif(ma.notas, ''), case when ma.motivo_omision is not null then 'Motivo: ' || ma.motivo_omision end),
+        'medicamentos_administraciones'::text,
+        ma.id,
+        coalesce(ma.validado_por, ma.administrado_por),
+        p.nombre
+      from public.medicamentos_administraciones ma
+      join public.medicamentos_indicaciones i on i.id = ma.indicacion_id
+      left join public.profiles p on p.id = coalesce(ma.validado_por, ma.administrado_por)
+      where ma.residente_id = p_residente_id
+
+      union all
+
+      select
+        sv.id,
+        'signos'::text,
+        sv.fecha_hora,
+        'realizado'::text,
+        'Signos vitales'::text,
+        concat_ws(' · ',
+          case when sv.presion_sistolica is not null and sv.presion_diastolica is not null then 'P/A ' || sv.presion_sistolica || '/' || sv.presion_diastolica end,
+          case when sv.frecuencia_cardiaca is not null then 'FC ' || sv.frecuencia_cardiaca end,
+          case when sv.temperatura is not null then 'Temp ' || sv.temperatura end,
+          nullif(sv.observaciones, '')
+        ),
+        'signos_vitales'::text,
+        sv.id,
+        sv.registrado_por,
+        p.nombre
+      from public.signos_vitales sv
+      left join public.profiles p on p.id = sv.registrado_por
+      where sv.residente_id = p_residente_id
+
+      union all
+
+      select
+        o.id,
+        case when o.requiere_seguimiento then 'seguimientos' else 'observaciones' end,
+        o.fecha_hora,
+        case when o.requiere_seguimiento then o.seguimiento_estado else 'realizado' end,
+        case when o.requiere_seguimiento then 'Seguimiento pendiente' else 'Observación' end,
+        concat_ws(' · ', o.tipo, nullif(o.descripcion, ''), nullif(o.acciones_tomadas, '')),
+        'observaciones_diarias'::text,
+        o.id,
+        o.registrado_por,
+        p.nombre
+      from public.observaciones_diarias o
+      left join public.profiles p on p.id = o.registrado_por
+      where o.residente_id = p_residente_id
+
+      union all
+
+      select
+        vf.id,
+        'visitas'::text,
+        vf.fecha_hora,
+        vf.estado,
+        'Visita'::text,
+        concat_ws(' · ', case when vf.duracion_min is not null then vf.duracion_min || ' min' end, nullif(vf.notas, '')),
+        'visitas_familiar'::text,
+        vf.id,
+        coalesce(vf.salida_validada_por, vf.validado_por, vf.registrado_por, vf.profile_id),
+        p.nombre
+      from public.visitas_familiar vf
+      left join public.profiles p on p.id = coalesce(vf.salida_validada_por, vf.validado_por, vf.registrado_por, vf.profile_id)
+      where vf.residente_id = p_residente_id
+
+      union all
+
+      select
+        ca.id,
+        'cama'::text,
+        coalesce(ca.fecha_fin, ca.fecha_inicio),
+        ca.estado,
+        'Cambio de cama'::text,
+        concat_ws(' · ', c.codigo, h.codigo, ca.motivo_fin, nullif(ca.notas, '')),
+        'cama_asignaciones'::text,
+        ca.id,
+        coalesce(ca.cerrado_por, ca.creado_por),
+        p.nombre
+      from public.cama_asignaciones ca
+      left join public.camas c on c.id = ca.cama_id
+      left join public.habitaciones h on h.id = c.habitacion_id
+      left join public.profiles p on p.id = coalesce(ca.cerrado_por, ca.creado_por)
+      where ca.residente_id = p_residente_id
+
+      union all
+
+      select
+        pa.id,
+        'auditoria'::text,
+        pa.realizado_en,
+        'realizado'::text,
+        'Auditoría de plan de cuidado'::text,
+        concat_ws(' · ', pa.entidad, pa.accion, left(coalesce(pa.detalle::text, ''), 500)),
+        pa.entidad,
+        pa.entidad_id,
+        pa.realizado_por,
+        p.nombre
+      from public.plan_cuidado_audit pa
+      left join public.profiles p on p.id = pa.realizado_por
+      where pa.residente_id = p_residente_id
+
+      union all
+
+      select
+        maud.id,
+        'auditoria'::text,
+        maud.realizado_en,
+        'realizado'::text,
+        'Auditoría de medicamentos'::text,
+        concat_ws(' · ', maud.entidad, maud.accion, left(coalesce(maud.detalle::text, ''), 500)),
+        maud.entidad,
+        maud.entidad_id,
+        maud.realizado_por,
+        p.nombre
+      from public.medicamentos_audit maud
+      left join public.profiles p on p.id = maud.realizado_por
+      where maud.residente_id = p_residente_id
+
+      union all
+
+      select
+        cau.id,
+        'auditoria'::text,
+        cau.realizado_en,
+        'realizado'::text,
+        'Auditoría de cama'::text,
+        concat_ws(' · ', cau.accion, left(coalesce(cau.detalle::text, ''), 500)),
+        'camas_audit'::text,
+        cau.id,
+        cau.realizado_por,
+        p.nombre
+      from public.camas_audit cau
+      left join public.profiles p on p.id = cau.realizado_por
+      where cau.residente_id = p_residente_id
+    ) e
+    where (cardinality(v_tipos) = 0 or e.tipo = any(v_tipos))
+      and (p_estado is null or e.estado = p_estado)
+      and (p_desde is null or (e.fecha_hora at time zone 'America/Santiago')::date >= p_desde)
+      and (p_hasta is null or (e.fecha_hora at time zone 'America/Santiago')::date <= p_hasta)
+    order by case when e.estado in ('pendiente','pendiente_validacion','validacion') then 0 else 1 end asc, e.fecha_hora desc
+    limit v_limit
+  ) e;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.listar_trazabilidad_residente(uuid, date, date, text[], text, integer) from public;
+grant execute on function public.listar_trazabilidad_residente(uuid, date, date, text[], text, integer) to authenticated;
 
 revoke all on function public.familiar_can_view_cama(uuid) from public;
 grant execute on function public.familiar_can_view_cama(uuid) to authenticated;
@@ -1744,6 +2205,7 @@ begin
     when 'ajustar_stock_medicamentos'    then ajustar_stock_medicamentos
     when 'asignar_camas'                 then asignar_camas
     when 'editar_indicaciones_cuidado'  then editar_indicaciones_cuidado
+    when 'aplicar_evaluaciones_clinicas' then aplicar_evaluaciones_clinicas
     else false
   end
   into v_result
@@ -2615,6 +3077,150 @@ as $$
   end;
 $$;
 
+create or replace function public.crear_rutinas_cuidado_desde_presets(
+  p_plan_id uuid,
+  p_presets jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_profile public.profiles%rowtype;
+  v_plan public.planes_cuidado%rowtype;
+  v_preset jsonb;
+  v_activity jsonb;
+  v_schedule jsonb;
+  v_activity_id uuid;
+  v_created integer := 0;
+  v_skipped integer := 0;
+  v_key text;
+  v_dias_semana smallint[];
+  v_dias_mes smallint[];
+  v_visible_familiar boolean;
+  v_resumen_familiar text;
+begin
+  if v_user_id is null then
+    raise exception 'Debes iniciar sesión.';
+  end if;
+
+  select * into v_profile
+  from public.profiles
+  where id = v_user_id;
+
+  if not found or v_profile.eleam_id is null then
+    raise exception 'Tu cuenta no tiene ELEAM asociado.';
+  end if;
+
+  select * into v_plan
+  from public.planes_cuidado
+  where id = p_plan_id
+    and estado = 'activo';
+
+  if not found then
+    raise exception 'Plan de cuidado no encontrado.';
+  end if;
+
+  if v_plan.eleam_id <> v_profile.eleam_id and not public.is_superadmin() then
+    raise exception 'No puedes modificar este plan de cuidado.';
+  end if;
+
+  if not public.is_superadmin()
+     and not (public.funcionario_can('crear_planes_cuidado') or public.funcionario_can('editar_planes_cuidado')) then
+    raise exception 'No tienes permiso para crear rutinas de cuidado.';
+  end if;
+
+  if jsonb_typeof(coalesce(p_presets, '[]'::jsonb)) <> 'array' then
+    raise exception 'Las rutinas deben enviarse como arreglo JSON.';
+  end if;
+
+  for v_preset in select value from jsonb_array_elements(coalesce(p_presets, '[]'::jsonb))
+  loop
+    v_activity := coalesce(v_preset -> 'activity', '{}'::jsonb);
+    v_schedule := coalesce(v_preset -> 'schedule', '{}'::jsonb);
+    v_key := lower(coalesce(v_activity ->> 'categoria', '') || ':' || coalesce(v_activity ->> 'titulo', ''));
+
+    if exists (
+      select 1
+      from public.plan_cuidado_actividades a
+      where a.plan_id = v_plan.id
+        and a.activo = true
+        and lower(a.categoria || ':' || a.titulo) = v_key
+    ) then
+      v_skipped := v_skipped + 1;
+      continue;
+    end if;
+
+    v_visible_familiar := coalesce((v_activity ->> 'visible_familiar')::boolean, false);
+    v_resumen_familiar := nullif(trim(coalesce(v_activity ->> 'resumen_familiar', '')), '');
+    if v_visible_familiar and v_resumen_familiar is null then
+      v_visible_familiar := false;
+    end if;
+
+    insert into public.plan_cuidado_actividades (
+      eleam_id, residente_id, plan_id, categoria, titulo,
+      descripcion, instrucciones, prioridad, requiere_observacion,
+      visible_familiar, resumen_familiar, activo,
+      creado_por, actualizado_por
+    )
+    values (
+      v_plan.eleam_id,
+      v_plan.residente_id,
+      v_plan.id,
+      v_activity ->> 'categoria',
+      v_activity ->> 'titulo',
+      nullif(trim(coalesce(v_activity ->> 'descripcion', '')), ''),
+      nullif(trim(coalesce(v_activity ->> 'instrucciones', '')), ''),
+      coalesce(v_activity ->> 'prioridad', 'media'),
+      coalesce((v_activity ->> 'requiere_observacion')::boolean, false),
+      v_visible_familiar,
+      case when v_visible_familiar then v_resumen_familiar else null end,
+      true,
+      v_user_id,
+      v_user_id
+    )
+    returning id into v_activity_id;
+
+    select array_agg(value::smallint order by value::smallint)
+      into v_dias_semana
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_schedule -> 'dias_semana') = 'array' then v_schedule -> 'dias_semana' else '[]'::jsonb end
+    );
+
+    select array_agg(value::smallint order by value::smallint)
+      into v_dias_mes
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_schedule -> 'dias_mes') = 'array' then v_schedule -> 'dias_mes' else '[]'::jsonb end
+    );
+
+    insert into public.plan_cuidado_horarios (
+      eleam_id, residente_id, actividad_id, frecuencia,
+      dias_semana, dias_mes, fecha_unica, hora, turno,
+      tolerancia_min, activo
+    )
+    values (
+      v_plan.eleam_id,
+      v_plan.residente_id,
+      v_activity_id,
+      coalesce(v_schedule ->> 'frecuencia', 'diaria'),
+      case when coalesce(v_schedule ->> 'frecuencia', 'diaria') = 'semanal' then v_dias_semana else null end,
+      case when coalesce(v_schedule ->> 'frecuencia', 'diaria') = 'mensual' then v_dias_mes else null end,
+      case when coalesce(v_schedule ->> 'frecuencia', 'diaria') = 'una_vez' then (v_schedule ->> 'fecha_unica')::date else null end,
+      coalesce(v_schedule ->> 'hora', '09:00')::time,
+      coalesce(v_schedule ->> 'turno', 'mañana'),
+      greatest(0, least(720, coalesce((v_schedule ->> 'tolerancia_min')::integer, 60))),
+      coalesce((v_schedule ->> 'activo')::boolean, true)
+    );
+
+    v_created := v_created + 1;
+  end loop;
+
+  return jsonb_build_object('created', v_created, 'skipped', v_skipped);
+end;
+$$;
+
 create or replace function public.registrar_signos_vitales(
   p_residente_id uuid,
   p_fecha_hora timestamptz default now(),
@@ -2748,6 +3354,229 @@ begin
   return v_signos;
 end;
 $$;
+
+-- Sincroniza el snapshot de la última escala funcional en residentes.indice_barthel
+-- y residentes.escala_katz al insertar/actualizar una evaluación más reciente.
+create or replace function public.sync_resumen_evaluacion_residente()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_max_fecha date;
+begin
+  select max(fecha_evaluacion)
+  into v_max_fecha
+  from public.evaluaciones_clinicas
+  where residente_id = new.residente_id
+    and tipo = new.tipo;
+
+  if v_max_fecha is null or new.fecha_evaluacion < v_max_fecha then
+    return new;
+  end if;
+
+  if new.tipo = 'barthel' then
+    update public.residentes
+       set indice_barthel = new.puntaje,
+           actualizado_en = now()
+     where id = new.residente_id;
+  elsif new.tipo = 'katz' then
+    update public.residentes
+       set escala_katz = new.resultado,
+           actualizado_en = now()
+     where id = new.residente_id;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- Intervalos MINSAL en días por motivo de reevaluación.
+create or replace function public.evaluacion_intervalo_dias(p_motivo text)
+returns integer
+language sql
+immutable
+set search_path = public
+as $$
+  select case coalesce(p_motivo, 'rutina')
+    when 'ingreso'              then 30
+    when 'rutina'               then 180
+    when 'post_hospitalizacion' then 7
+    when 'caida'                then 14
+    when 'cambio_clinico'       then 30
+    when 'solicitud_medica'     then 30
+    else 180
+  end;
+$$;
+
+-- Registra una evaluación Barthel o Katz con puntaje, resultado y próxima fecha.
+-- Reutiliza eleam_has_access + funcionario_can('aplicar_evaluaciones_clinicas').
+create or replace function public.registrar_evaluacion_clinica(
+  p_residente_id uuid,
+  p_tipo text,
+  p_puntaje integer,
+  p_resultado text,
+  p_detalle jsonb,
+  p_motivo text default 'rutina',
+  p_observaciones text default null,
+  p_fecha_evaluacion date default current_date
+)
+returns public.evaluaciones_clinicas
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_residente public.residentes;
+  v_row public.evaluaciones_clinicas;
+  v_proxima date;
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_residente_id is null then
+    raise exception 'Residente obligatorio' using errcode = 'P0001';
+  end if;
+
+  if p_tipo is null or p_tipo not in ('barthel','katz') then
+    raise exception 'Tipo de evaluacion invalido' using errcode = 'P0001';
+  end if;
+
+  if coalesce(p_motivo, 'rutina') not in ('ingreso','rutina','post_hospitalizacion','caida','cambio_clinico','solicitud_medica') then
+    raise exception 'Motivo invalido' using errcode = 'P0001';
+  end if;
+
+  if p_detalle is null or jsonb_typeof(p_detalle) <> 'object' then
+    raise exception 'Detalle de la evaluacion invalido' using errcode = 'P0001';
+  end if;
+
+  if p_resultado is null or length(trim(p_resultado)) = 0 then
+    raise exception 'Resultado obligatorio' using errcode = 'P0001';
+  end if;
+
+  if p_tipo = 'barthel' and (p_puntaje is null or p_puntaje < 0 or p_puntaje > 100) then
+    raise exception 'Puntaje Barthel fuera de rango' using errcode = 'P0001';
+  end if;
+
+  if p_tipo = 'katz' and (p_puntaje is null or p_puntaje < 0 or p_puntaje > 6) then
+    raise exception 'Puntaje Katz fuera de rango' using errcode = 'P0001';
+  end if;
+
+  select *
+  into v_residente
+  from public.residentes
+  where id = p_residente_id;
+
+  if not found then
+    raise exception 'Residente no encontrado' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_residente.eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_residente.eleam_id)
+       or not public.funcionario_can('aplicar_evaluaciones_clinicas') then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  v_proxima := coalesce(p_fecha_evaluacion, current_date)
+               + (public.evaluacion_intervalo_dias(coalesce(p_motivo, 'rutina')) || ' days')::interval;
+
+  insert into public.evaluaciones_clinicas (
+    eleam_id, residente_id, tipo, fecha_evaluacion, motivo, puntaje, resultado,
+    detalle, observaciones, proxima_evaluacion, evaluado_por
+  )
+  values (
+    v_residente.eleam_id,
+    p_residente_id,
+    p_tipo,
+    coalesce(p_fecha_evaluacion, current_date),
+    coalesce(p_motivo, 'rutina'),
+    p_puntaje,
+    p_resultado,
+    p_detalle,
+    nullif(trim(coalesce(p_observaciones, '')), ''),
+    v_proxima,
+    v_user
+  )
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+revoke all on function public.registrar_evaluacion_clinica(uuid, text, integer, text, jsonb, text, text, date) from public;
+grant execute on function public.registrar_evaluacion_clinica(uuid, text, integer, text, jsonb, text, text, date) to authenticated;
+
+-- Listado de evaluaciones vencidas/próximas del ELEAM (usado por dashboard).
+create or replace function public.evaluaciones_pendientes_eleam(p_horizonte_dias integer default 30)
+returns table (
+  residente_id uuid,
+  residente_nombre text,
+  tipo text,
+  ultima_fecha date,
+  proxima_evaluacion date,
+  dias_restantes integer,
+  puntaje integer,
+  resultado text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid;
+begin
+  if (select auth.uid()) is null then
+    return;
+  end if;
+
+  v_eleam_id := public.my_eleam_id();
+
+  if v_eleam_id is null then
+    return;
+  end if;
+
+  if not public.is_superadmin() and not public.eleam_has_access(v_eleam_id) then
+    return;
+  end if;
+
+  return query
+  with ultimas as (
+    select distinct on (e.residente_id, e.tipo)
+      e.residente_id,
+      e.tipo,
+      e.fecha_evaluacion,
+      e.proxima_evaluacion,
+      e.puntaje,
+      e.resultado
+    from public.evaluaciones_clinicas e
+    join public.residentes r on r.id = e.residente_id
+    where r.eleam_id = v_eleam_id
+      and r.estado in ('activo','hospitalizado')
+    order by e.residente_id, e.tipo, e.fecha_evaluacion desc
+  )
+  select
+    u.residente_id,
+    trim(coalesce(r.nombre, '') || ' ' || coalesce(r.apellido, '')) as residente_nombre,
+    u.tipo,
+    u.fecha_evaluacion,
+    u.proxima_evaluacion,
+    (u.proxima_evaluacion - current_date)::integer,
+    u.puntaje,
+    u.resultado
+  from ultimas u
+  join public.residentes r on r.id = u.residente_id
+  where u.proxima_evaluacion <= current_date + (greatest(p_horizonte_dias, 0) || ' days')::interval
+  order by u.proxima_evaluacion asc, r.apellido asc;
+end;
+$$;
+
+revoke all on function public.evaluaciones_pendientes_eleam(integer) from public;
+grant execute on function public.evaluaciones_pendientes_eleam(integer) to authenticated;
 
 create or replace function public.generar_tareas_cuidado(
   p_fecha date default current_date,
@@ -3121,6 +3950,187 @@ begin
 end;
 $$;
 
+create or replace function public.guardar_indicacion_medicamento_con_horarios(
+  p_residente_id uuid,
+  p_indicacion jsonb,
+  p_horarios jsonb
+)
+returns public.medicamentos_indicaciones
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_eleam_id uuid := coalesce(public.my_eleam_id(), nullif(p_indicacion->>'eleam_id', '')::uuid);
+  v_indicacion_id uuid := nullif(p_indicacion->>'id', '')::uuid;
+  v_saved public.medicamentos_indicaciones;
+  v_horario record;
+  v_active_ids uuid[] := '{}';
+begin
+  if v_user is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+
+  if p_residente_id is null or v_eleam_id is null then
+    raise exception 'Residente y ELEAM son obligatorios' using errcode = 'P0001';
+  end if;
+
+  if jsonb_typeof(p_horarios) <> 'array' or jsonb_array_length(p_horarios) = 0 then
+    raise exception 'Debe registrar al menos un horario' using errcode = 'P0001';
+  end if;
+
+  if not public.is_superadmin() then
+    if v_eleam_id is distinct from public.my_eleam_id()
+       or not public.eleam_has_access(v_eleam_id)
+       or not public.funcionario_can(
+         case when v_indicacion_id is null
+              then 'crear_indicaciones_medicamentos'
+              else 'editar_indicaciones_medicamentos'
+         end
+       ) then
+      raise exception 'No autorizado' using errcode = '42501';
+    end if;
+  end if;
+
+  if v_indicacion_id is null then
+    insert into public.medicamentos_indicaciones (
+      eleam_id, residente_id, medicamento_nombre, principio_activo, concentracion,
+      forma_farmaceutica, dosis, unidad_dosis, via, indicacion, prescriptor_nombre,
+      fecha_indicacion, fecha_inicio, fecha_fin, estado, es_controlado,
+      tipo_controlado, requiere_doble_validacion, requiere_stock, visible_familiar,
+      resumen_familiar, instrucciones, creado_por, actualizado_por
+    )
+    values (
+      v_eleam_id,
+      p_residente_id,
+      nullif(trim(p_indicacion->>'medicamento_nombre'), ''),
+      nullif(trim(coalesce(p_indicacion->>'principio_activo', '')), ''),
+      nullif(trim(coalesce(p_indicacion->>'concentracion', '')), ''),
+      nullif(trim(coalesce(p_indicacion->>'forma_farmaceutica', '')), ''),
+      nullif(trim(p_indicacion->>'dosis'), ''),
+      nullif(trim(coalesce(p_indicacion->>'unidad_dosis', '')), ''),
+      coalesce(nullif(p_indicacion->>'via', ''), 'oral'),
+      nullif(trim(coalesce(p_indicacion->>'indicacion', '')), ''),
+      nullif(trim(coalesce(p_indicacion->>'prescriptor_nombre', '')), ''),
+      nullif(p_indicacion->>'fecha_indicacion', '')::date,
+      coalesce(nullif(p_indicacion->>'fecha_inicio', '')::date, current_date),
+      nullif(p_indicacion->>'fecha_fin', '')::date,
+      coalesce(nullif(p_indicacion->>'estado', ''), 'activo'),
+      coalesce((p_indicacion->>'es_controlado')::boolean, false),
+      nullif(p_indicacion->>'tipo_controlado', ''),
+      coalesce((p_indicacion->>'requiere_doble_validacion')::boolean, false),
+      coalesce((p_indicacion->>'requiere_stock')::boolean, true),
+      coalesce((p_indicacion->>'visible_familiar')::boolean, false),
+      nullif(trim(coalesce(p_indicacion->>'resumen_familiar', '')), ''),
+      nullif(trim(coalesce(p_indicacion->>'instrucciones', '')), ''),
+      v_user,
+      v_user
+    )
+    returning * into v_saved;
+  else
+    update public.medicamentos_indicaciones
+    set medicamento_nombre = nullif(trim(p_indicacion->>'medicamento_nombre'), ''),
+        principio_activo = nullif(trim(coalesce(p_indicacion->>'principio_activo', '')), ''),
+        concentracion = nullif(trim(coalesce(p_indicacion->>'concentracion', '')), ''),
+        forma_farmaceutica = nullif(trim(coalesce(p_indicacion->>'forma_farmaceutica', '')), ''),
+        dosis = nullif(trim(p_indicacion->>'dosis'), ''),
+        unidad_dosis = nullif(trim(coalesce(p_indicacion->>'unidad_dosis', '')), ''),
+        via = coalesce(nullif(p_indicacion->>'via', ''), 'oral'),
+        indicacion = nullif(trim(coalesce(p_indicacion->>'indicacion', '')), ''),
+        prescriptor_nombre = nullif(trim(coalesce(p_indicacion->>'prescriptor_nombre', '')), ''),
+        fecha_indicacion = nullif(p_indicacion->>'fecha_indicacion', '')::date,
+        fecha_inicio = coalesce(nullif(p_indicacion->>'fecha_inicio', '')::date, fecha_inicio),
+        fecha_fin = nullif(p_indicacion->>'fecha_fin', '')::date,
+        estado = coalesce(nullif(p_indicacion->>'estado', ''), estado),
+        es_controlado = coalesce((p_indicacion->>'es_controlado')::boolean, false),
+        tipo_controlado = nullif(p_indicacion->>'tipo_controlado', ''),
+        requiere_doble_validacion = coalesce((p_indicacion->>'requiere_doble_validacion')::boolean, false),
+        requiere_stock = coalesce((p_indicacion->>'requiere_stock')::boolean, true),
+        visible_familiar = coalesce((p_indicacion->>'visible_familiar')::boolean, false),
+        resumen_familiar = nullif(trim(coalesce(p_indicacion->>'resumen_familiar', '')), ''),
+        instrucciones = nullif(trim(coalesce(p_indicacion->>'instrucciones', '')), ''),
+        actualizado_por = v_user,
+        actualizado_en = now()
+    where id = v_indicacion_id
+      and residente_id = p_residente_id
+      and eleam_id = v_eleam_id
+    returning * into v_saved;
+
+    if not found then
+      raise exception 'Indicacion no encontrada' using errcode = 'P0001';
+    end if;
+  end if;
+
+  for v_horario in
+    select *
+    from jsonb_to_recordset(p_horarios) as h(
+      id uuid,
+      frecuencia text,
+      dias_semana smallint[],
+      dias_mes smallint[],
+      fecha_unica date,
+      hora time,
+      turno text,
+      tolerancia_min integer,
+      activo boolean
+    )
+  loop
+    if v_horario.id is null then
+      insert into public.medicamentos_horarios (
+        eleam_id, residente_id, indicacion_id, frecuencia, dias_semana,
+        dias_mes, fecha_unica, hora, turno, tolerancia_min, activo
+      )
+      values (
+        v_eleam_id, p_residente_id, v_saved.id,
+        coalesce(v_horario.frecuencia, 'diaria'),
+        v_horario.dias_semana,
+        v_horario.dias_mes,
+        v_horario.fecha_unica,
+        v_horario.hora,
+        v_horario.turno,
+        coalesce(v_horario.tolerancia_min, 60),
+        coalesce(v_horario.activo, true)
+      )
+      returning id into v_horario.id;
+    else
+      update public.medicamentos_horarios
+      set frecuencia = coalesce(v_horario.frecuencia, 'diaria'),
+          dias_semana = v_horario.dias_semana,
+          dias_mes = v_horario.dias_mes,
+          fecha_unica = v_horario.fecha_unica,
+          hora = v_horario.hora,
+          turno = v_horario.turno,
+          tolerancia_min = coalesce(v_horario.tolerancia_min, 60),
+          activo = coalesce(v_horario.activo, true),
+          actualizado_en = now()
+      where id = v_horario.id
+        and indicacion_id = v_saved.id
+        and eleam_id = v_eleam_id;
+    end if;
+    v_active_ids := array_append(v_active_ids, v_horario.id);
+  end loop;
+
+  update public.medicamentos_horarios
+  set activo = false,
+      actualizado_en = now()
+  where indicacion_id = v_saved.id
+    and not (id = any(v_active_ids));
+
+  insert into public.medicamentos_audit (
+    eleam_id, residente_id, entidad, entidad_id, accion, detalle, realizado_por
+  )
+  values (
+    v_eleam_id, p_residente_id, 'medicamentos_indicaciones', v_saved.id,
+    case when v_indicacion_id is null then 'creado' else 'actualizado' end,
+    jsonb_build_object('horarios', jsonb_array_length(p_horarios)),
+    v_user
+  );
+
+  return v_saved;
+end;
+$$;
+
 create or replace function public.generar_administraciones_medicamentos(
   p_fecha date default current_date,
   p_turno text default null
@@ -3299,6 +4309,10 @@ begin
         raise exception 'Lote no valido para esta administracion' using errcode = 'P0001';
       end if;
 
+      if v_lote.fecha_vencimiento is not null and v_lote.fecha_vencimiento < current_date then
+        raise exception 'No se puede administrar con un lote vencido' using errcode = 'P0001';
+      end if;
+
       if v_admin.es_controlado and v_lote.es_controlado = false then
         raise exception 'La indicacion controlada requiere lote controlado' using errcode = 'P0001';
       end if;
@@ -3324,7 +4338,7 @@ begin
       values (
         v_admin.eleam_id, v_lote.id, v_admin.indicacion_id, p_administracion_id,
         'administracion', -v_dosis, v_stock,
-        'Administracion eMAR',
+        'Administracion de medicamentos',
         v_admin.es_controlado,
         case when v_admin.es_controlado then null else v_user end,
         case when v_admin.es_controlado then null else now() end,
@@ -3358,7 +4372,7 @@ begin
       now(),
       v_admin.turno,
       'administracion_medicamento',
-      'eMAR ' || case when p_estado = 'omitido' then 'omitido' else 'registrado' end ||
+      'Medicamento ' || case when p_estado = 'omitido' then 'omitido' else 'registrado' end ||
         ': ' || v_admin.medicamento_nombre,
       nullif(trim(coalesce(p_notas, '')), ''),
       true,
@@ -4384,6 +5398,16 @@ create trigger trg_observaciones_updated_at
   before update on public.observaciones_diarias
   for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_evaluaciones_clinicas_updated_at on public.evaluaciones_clinicas;
+create trigger trg_evaluaciones_clinicas_updated_at
+  before update on public.evaluaciones_clinicas
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_eval_sync_resumen_residente on public.evaluaciones_clinicas;
+create trigger trg_eval_sync_resumen_residente
+  after insert or update of puntaje, resultado, fecha_evaluacion on public.evaluaciones_clinicas
+  for each row execute function public.sync_resumen_evaluacion_residente();
+
 drop trigger if exists trg_turno_entregas_updated_at on public.turno_entregas;
 create trigger trg_turno_entregas_updated_at
   before update on public.turno_entregas
@@ -4505,6 +5529,9 @@ grant execute on function public.blog_increment_views(text) to anon, authenticat
 revoke all on function public.registrar_signos_vitales(uuid, timestamptz, text, integer, integer, integer, integer, numeric, integer, integer, numeric, integer, text, text, boolean, date, text) from public;
 grant execute on function public.registrar_signos_vitales(uuid, timestamptz, text, integer, integer, integer, integer, numeric, integer, integer, numeric, integer, text, text, boolean, date, text) to authenticated;
 
+revoke all on function public.crear_rutinas_cuidado_desde_presets(uuid, jsonb) from public;
+grant execute on function public.crear_rutinas_cuidado_desde_presets(uuid, jsonb) to authenticated;
+
 revoke all on function public.generar_tareas_cuidado(date, text) from public;
 grant execute on function public.generar_tareas_cuidado(date, text) to authenticated;
 
@@ -4516,6 +5543,9 @@ grant execute on function public.reprogramar_tarea_cuidado(uuid, date, text, tim
 
 revoke all on function public.generar_administraciones_medicamentos(date, text) from public;
 grant execute on function public.generar_administraciones_medicamentos(date, text) to authenticated;
+
+revoke all on function public.guardar_indicacion_medicamento_con_horarios(uuid, jsonb, jsonb) from public;
+grant execute on function public.guardar_indicacion_medicamento_con_horarios(uuid, jsonb, jsonb) to authenticated;
 
 revoke all on function public.registrar_administracion_medicamento(uuid, text, uuid, numeric, text, text, boolean, date, text) from public;
 grant execute on function public.registrar_administracion_medicamento(uuid, text, uuid, numeric, text, text, boolean, date, text) to authenticated;
@@ -4931,6 +5961,58 @@ create policy "sv_delete" on public.signos_vitales
     )
   );
 
+-- Evaluaciones clínicas (Barthel/Katz)
+alter table public.evaluaciones_clinicas enable row level security;
+
+drop policy if exists "eval_select" on public.evaluaciones_clinicas;
+drop policy if exists "eval_insert" on public.evaluaciones_clinicas;
+drop policy if exists "eval_update" on public.evaluaciones_clinicas;
+drop policy if exists "eval_delete" on public.evaluaciones_clinicas;
+
+create policy "eval_select" on public.evaluaciones_clinicas
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+    )
+    or (
+      public.my_rol() = 'familiar'
+      and residente_id in (select public.my_familiar_residente_ids())
+    )
+  );
+
+create policy "eval_insert" on public.evaluaciones_clinicas
+  for insert with check (
+    public.funcionario_can('aplicar_evaluaciones_clinicas')
+    and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+  );
+
+create policy "eval_update" on public.evaluaciones_clinicas
+  for update using (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('aplicar_evaluaciones_clinicas')
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.funcionario_can('aplicar_evaluaciones_clinicas')
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+    )
+  );
+
+create policy "eval_delete" on public.evaluaciones_clinicas
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+    )
+  );
+
 -- Observaciones diarias
 drop policy if exists "obs_select" on public.observaciones_diarias;
 drop policy if exists "obs_insert" on public.observaciones_diarias;
@@ -5260,7 +6342,7 @@ create policy "pc_audit_select" on public.plan_cuidado_audit
     )
   );
 
--- eMAR
+-- Medicamentos
 drop policy if exists "mi_select" on public.medicamentos_indicaciones;
 drop policy if exists "mi_insert" on public.medicamentos_indicaciones;
 drop policy if exists "mi_update" on public.medicamentos_indicaciones;

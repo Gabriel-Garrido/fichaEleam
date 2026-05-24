@@ -10,7 +10,7 @@ describe("team permission presets", () => {
     });
   });
 
-  it("only enables eMAR indication create/edit permissions for doctors", () => {
+  it("only enables medication indication create/edit permissions for doctors", () => {
     const eMarEditorCargos = Object.entries(PLANTILLAS_CARGO)
       .filter(([, permisos]) =>
         permisos.crear_indicaciones_medicamentos ||
