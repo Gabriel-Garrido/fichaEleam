@@ -35,7 +35,7 @@ function SectionBlock({ title, children, cols = 2 }) {
       <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2 pb-1 border-b border-slate-100">
         {title}
       </p>
-      <div className={`grid gap-3 ${cols === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+      <div className={`grid grid-cols-1 gap-3 ${cols === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         {children}
       </div>
     </div>
@@ -44,12 +44,12 @@ function SectionBlock({ title, children, cols = 2 }) {
 
 function Stat({ label, value, tip }) {
   return (
-    <div>
+    <div className="min-w-0 rounded-xl bg-slate-50/70 p-3 sm:bg-transparent sm:p-0">
       <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1">
         {label}
         {tip && <HelpTooltip label={label}>{tip}</HelpTooltip>}
       </p>
-      <p className="text-sm text-slate-800 mt-0.5 leading-snug">
+      <p className="mt-0.5 min-w-0 text-sm leading-snug text-slate-800">
         {value ?? <span className="text-slate-400">—</span>}
       </p>
     </div>

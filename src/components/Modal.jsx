@@ -152,7 +152,7 @@ function Modal({
         aria-labelledby={labelledBy}
         aria-label={accessibleLabel}
         tabIndex={-1}
-        className={`relative bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto ${panelClasses}`}
+        className={`relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto overflow-x-hidden ${panelClasses}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {showCloseButton && (

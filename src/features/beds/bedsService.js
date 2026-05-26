@@ -6,6 +6,7 @@ import {
   normalizeAssignment,
   withResidentLocation,
 } from "./bedsUtils";
+import { validateBedForm, validateRoomForm } from "./bedsFormSchema";
 
 const ROOM_SELECT = `
   id, eleam_id, codigo, nombre, piso, sector, estado, notas, orden,
@@ -154,11 +155,12 @@ export async function getAssignableResidents() {
 
 export async function saveHabitacion(form) {
   const profile = await getMyProfile();
-  const payload = roomPayload(form, profile);
-  if (!payload.codigo) throw new Error("El codigo de la habitacion es obligatorio.");
+  const result = validateRoomForm(form);
+  if (!result.ok) throw new Error(Object.values(result.errors)[0] || "Revisa los datos de la habitación.");
+  const payload = roomPayload(result.data, profile);
 
-  const query = form.id
-    ? supabase.from("habitaciones").update(payload).eq("id", form.id)
+  const query = result.data.id
+    ? supabase.from("habitaciones").update(payload).eq("id", result.data.id)
     : supabase.from("habitaciones").insert({
         ...payload,
         eleam_id: profile.eleamId,
@@ -172,12 +174,12 @@ export async function saveHabitacion(form) {
 
 export async function saveCama(form) {
   const profile = await getMyProfile();
-  const payload = bedPayload(form, profile);
-  if (!payload.habitacion_id) throw new Error("Selecciona una habitacion para la cama.");
-  if (!payload.codigo) throw new Error("El codigo de la cama es obligatorio.");
+  const result = validateBedForm(form);
+  if (!result.ok) throw new Error(Object.values(result.errors)[0] || "Revisa los datos de la cama.");
+  const payload = bedPayload(result.data, profile);
 
-  const query = form.id
-    ? supabase.from("camas").update(payload).eq("id", form.id)
+  const query = result.data.id
+    ? supabase.from("camas").update(payload).eq("id", result.data.id)
     : supabase.from("camas").insert({
         ...payload,
         eleam_id: profile.eleamId,

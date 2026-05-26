@@ -279,7 +279,7 @@ function LauncherTile({ item, active, onClick }) {
         <NavIcon id={item.icon} className="h-5 w-5" />
       </span>
       <span
-        className={`block w-full truncate text-[11px] leading-tight ${
+        className={`block min-h-[1.8rem] w-full overflow-hidden text-[10px] leading-[0.9rem] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] ${
           active ? "font-semibold text-teal-800" : "font-medium text-slate-700"
         }`}
       >
@@ -298,7 +298,7 @@ function DisabledTile({ item }) {
       <span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-700 ring-1 ring-amber-200/80">
         <NavIcon id={item.icon} className="h-5 w-5" />
       </span>
-      <span className="block w-full truncate text-[11px] leading-tight font-medium text-amber-700">
+      <span className="block min-h-[1.8rem] w-full overflow-hidden text-[10px] leading-[0.9rem] font-medium text-amber-700 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
         {item.label}
       </span>
     </div>

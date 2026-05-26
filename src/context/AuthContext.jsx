@@ -18,6 +18,7 @@ const FAIL_CLOSED_PERMS = new Set([
   "crear_indicaciones_medicamentos",
   "editar_indicaciones_medicamentos",
   "editar_indicaciones_cuidado",
+  "cerrar_eventos_adversos",
 ]);
 const AUTH_NOTICE_STORAGE_KEY = "fichaeleam_auth_notice";
 
@@ -31,6 +32,21 @@ function takeStoredAuthNotice() {
 function storeAuthNotice(message) {
   if (typeof window === "undefined" || !message) return;
   window.sessionStorage.setItem(AUTH_NOTICE_STORAGE_KEY, message);
+}
+
+function purgeLegacyOnboardingKeys() {
+  if (typeof window === "undefined") return;
+  try {
+    const prefixes = ["fichaeleam_activation_v1_", "fichaeleam_onboarding_v2_"];
+    const toRemove = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (key && prefixes.some((p) => key.startsWith(p))) toRemove.push(key);
+    }
+    toRemove.forEach((k) => window.localStorage.removeItem(k));
+  } catch {
+    // localStorage puede no estar disponible en algunos contextos
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -222,6 +238,7 @@ export function AuthProvider({ children }) {
           setPermisos(null);
           setFeaturePermissions(null);
           setAuthNotice(takeStoredAuthNotice());
+          purgeLegacyOnboardingKeys();
         }
       }
     );

@@ -430,6 +430,7 @@ export default function AccreditationDashboard() {
 
   return (
     <PageLayout
+      coachFeatureId="accreditation"
       title="Carpeta SEREMI"
       eyebrow="Acreditación"
       description={`Prioriza vencidos, observaciones y requisitos sin evidencia${eleam?.nombre ? ` · ${eleam.nombre}` : ""}.`}

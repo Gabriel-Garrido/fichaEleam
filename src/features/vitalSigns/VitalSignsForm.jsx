@@ -5,10 +5,11 @@ import { CARE_TURNOS, nextFollowUpSlot } from "../carePlans/carePlansService";
 import { getResidents } from "../residents/residentService";
 import { isValidUUID } from "../../utils/validators";
 import { useToast } from "../../components/Toast";
-import { friendlyError } from "../../utils/errorMessages";
-import { scrollToFirstError } from "../../utils/formValidation";
+import { scrollToFirstError, userFacingFormError } from "../../utils/formValidation";
 import { ErrorSummary } from "../../components/forms/FormKit";
 import Button from "../../components/Button";
+import { FeatureCoach } from "../featureCoach";
+import { validateVitalSignsForm } from "./vitalSignsFormSchema";
 import {
   STATUS,
   systolicStatus,
@@ -55,18 +56,6 @@ function followUpFromControl(fechaHora, turno) {
 
 const INPUT_CLS = "w-full min-h-11 sm:min-h-10 border rounded-xl px-3 py-2.5 sm:py-2 text-base sm:text-sm text-slate-900 bg-white focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 hover:border-slate-400 border-slate-300 transition-all placeholder:text-slate-400";
 const SELECT_CLS = INPUT_CLS + " appearance-none";
-
-const NUMERIC_RULES = {
-  presion_sistolica: ["P/A sistólica", 50, 300],
-  presion_diastolica: ["P/A diastólica", 30, 200],
-  frecuencia_cardiaca: ["Frecuencia cardiaca", 20, 300],
-  frecuencia_respiratoria: ["Frecuencia respiratoria", 5, 60],
-  temperatura: ["Temperatura", 30, 45],
-  saturacion_oxigeno: ["SatO₂", 0, 100],
-  glucosa: ["Glucosa", 20, 800],
-  peso: ["Peso", 10, 300],
-  dolor_escala: ["Dolor", 0, 10],
-};
 
 function VitalSignsForm() {
   const navigate = useNavigate();
@@ -146,48 +135,15 @@ function VitalSignsForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    const nextErrors = {};
-    if (!form.residente_id) nextErrors.residente_id = "Debe seleccionar un residente.";
-    if (form.requiere_seguimiento && (!form.seguimiento_fecha || !form.seguimiento_turno)) {
-      if (!form.seguimiento_fecha) nextErrors.seguimiento_fecha = "Indica la fecha del seguimiento.";
-      if (!form.seguimiento_turno) nextErrors.seguimiento_turno = "Indica el turno del seguimiento.";
-    }
-    Object.entries(NUMERIC_RULES).forEach(([key, [label, min, max]]) => {
-      if (form[key] === "") return;
-      const value = Number(form[key]);
-      if (!Number.isFinite(value) || value < min || value > max) {
-        nextErrors[key] = `${label} debe estar entre ${min} y ${max}.`;
-      }
-    });
-    setFieldErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
-      scrollToFirstError(nextErrors);
+    const result = validateVitalSignsForm(form);
+    setFieldErrors(result.errors);
+    if (!result.ok) {
+      scrollToFirstError(result.errors);
       return;
     }
     setSaving(true);
     try {
-      const toNum = (v) => (v !== "" ? parseFloat(v) : null);
-      const toInt = (v) => (v !== "" ? parseInt(v) : null);
-      const payload = {
-        residente_id: form.residente_id,
-        fecha_hora: form.fecha_hora,
-        turno: form.turno,
-        presion_sistolica: toInt(form.presion_sistolica),
-        presion_diastolica: toInt(form.presion_diastolica),
-        frecuencia_cardiaca: toInt(form.frecuencia_cardiaca),
-        frecuencia_respiratoria: toInt(form.frecuencia_respiratoria),
-        temperatura: toNum(form.temperatura),
-        saturacion_oxigeno: toInt(form.saturacion_oxigeno),
-        glucosa: toInt(form.glucosa),
-        peso: toNum(form.peso),
-        dolor_escala: toInt(form.dolor_escala),
-        estado_conciencia: form.estado_conciencia || null,
-        observaciones: form.observaciones || null,
-        requiere_seguimiento: form.requiere_seguimiento,
-        seguimiento_fecha: form.requiere_seguimiento ? form.seguimiento_fecha : null,
-        seguimiento_turno: form.requiere_seguimiento ? form.seguimiento_turno : null,
-      };
-      await createVitalSigns(payload);
+      await createVitalSigns(result.data);
       toast("Signos vitales registrados correctamente.", "success");
       if (preselectedId) {
         navigate(`/residents/${preselectedId}`);
@@ -196,7 +152,9 @@ function VitalSignsForm() {
       }
     } catch (err) {
       console.error("createVitalSigns failed:", err);
-      toast(friendlyError(err, "No se pudo guardar el registro."), "error");
+      const message = userFacingFormError(err, "No se pudo guardar el registro. Revisa los datos e intenta nuevamente.");
+      setError(message);
+      toast(message, "error");
     } finally {
       setSaving(false);
     }
@@ -215,6 +173,7 @@ function VitalSignsForm() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
+      <FeatureCoach featureId="vital-signs-new" standalone />
       <div className="flex items-center gap-3 mb-6">
         <button type="button" onClick={() => navigate(-1)}
           className="tap-highlight-none flex items-center gap-1.5 text-sm text-slate-500 hover:text-teal-700 transition-colors">

@@ -51,6 +51,7 @@ export default function TurnosDashboard() {
 
   return (
     <PageLayout
+      coachFeatureId="turnos"
       title="Entrega de turno"
       eyebrow="Cuidado diario"
       description="Resumen breve para que el siguiente equipo parta con prioridades claras."

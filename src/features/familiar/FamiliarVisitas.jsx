@@ -1,13 +1,23 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../components/Toast";
 import { friendlyError } from "../../utils/errorMessages";
 import PageLayout from "../../layout/PageLayout";
 import Button from "../../components/Button";
+import FilterBar from "../../components/FilterBar";
 import HelpTooltip from "../../components/HelpTooltip";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { getMyVisits, requestVisit, announceVisitExit, cancelVisit } from "./familiarService";
 import { useFamiliarResidentData } from "./useFamiliarResidentData";
 import { formatDateTime } from "../../utils/dateUtils";
+
+const VISIT_STATUS_OPTIONS = [
+  ["pendiente", "Esperando validación"],
+  ["activa", "En visita"],
+  ["salida_pendiente", "Salida por validar"],
+  ["completada", "Completadas"],
+  ["cancelada", "Canceladas"],
+];
 
 const VISIT_STATUS = {
   pendiente:  { label: "Esperando validación", pill: "bg-amber-100 text-amber-800",    dot: "bg-amber-400 animate-pulse" },
@@ -27,6 +37,29 @@ export default function FamiliarVisitas() {
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [announceNotes, setAnnounceNotes] = useState("");
   const [cancelling, setCancelling] = useState(null);
+  const [visitFilters, setVisitFilter, clearVisitFilters] = useFilterParams({
+    schema: { q: "string", estado: "string", desde: "date", hasta: "date" },
+    defaults: { q: "", estado: "", desde: "", hasta: "" },
+  });
+  const visitSearch = visitFilters.q ?? "";
+  const visitEstado = visitFilters.estado ?? "";
+  const visitDesde  = visitFilters.desde ?? "";
+  const visitHasta  = visitFilters.hasta ?? "";
+
+  const filteredVisitas = useMemo(() => {
+    const q = visitSearch.trim().toLowerCase();
+    return visitas.filter((v) => {
+      if (visitEstado && v.estado !== visitEstado) return false;
+      const fecha = (v.fecha_hora ?? "").slice(0, 10);
+      if (visitDesde && fecha && fecha < visitDesde) return false;
+      if (visitHasta && fecha && fecha > visitHasta) return false;
+      if (q) {
+        const text = [v.notas, v.estado].filter(Boolean).join(" ").toLowerCase();
+        if (!text.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [visitas, visitSearch, visitEstado, visitDesde, visitHasta]);
 
   const {
     residentes,
@@ -119,6 +152,7 @@ export default function FamiliarVisitas() {
 
   return (
     <PageLayout
+      coachFeatureId="familiar-visitas"
       title="Mis visitas"
       eyebrow="Portal familiar"
       description={`Historial de visitas a ${activeResident?.nombre ?? "tu familiar"} ${activeResident?.apellido ?? ""}.`}
@@ -126,9 +160,13 @@ export default function FamiliarVisitas() {
       actions={
         <Button
           onClick={() => navigate("/familiar")}
-          className="bg-white text-teal-700 border border-teal-200 hover:bg-teal-50"
+          className="border border-teal-200 bg-white text-teal-700 hover:bg-teal-50"
+          title="Volver al portal"
         >
-          ← Volver al portal
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+          </svg>
+          <span className="hidden sm:inline">Volver al portal</span>
         </Button>
       }
       className="space-y-5"
@@ -198,17 +236,20 @@ export default function FamiliarVisitas() {
             {showAnnounce ? (
               <div className="space-y-3">
                 <div>
-                  <label htmlFor="announce-notes" className="text-xs font-semibold uppercase tracking-wide text-slate-500 block mb-1">
+                  <label htmlFor="announce-notes" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Notas para el equipo (opcional)
                   </label>
                   <textarea
                     id="announce-notes"
-                    rows={2}
+                    rows={3}
                     value={announceNotes}
                     onChange={(e) => setAnnounceNotes(e.target.value)}
-                    placeholder="Ej: Llegué al portón principal. Traje ropa para el fin de semana."
-                    className="w-full rounded-xl border border-slate-200 text-sm px-3 py-2 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 resize-none"
+                    placeholder="Algún detalle del equipo debería saber…"
+                    className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Ej.: <em>Llegué al portón principal. Traje ropa para el fin de semana.</em>
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -290,58 +331,106 @@ export default function FamiliarVisitas() {
             Actualizar
           </button>
         </div>
+        {visitas.length > 0 && (
+          <div className="px-5 py-3 border-b border-slate-100">
+            <FilterBar
+              search={visitSearch}
+              onSearchChange={(v) => setVisitFilter("q", v)}
+              searchPlaceholder="Buscar en notas o estado..."
+              filters={[
+                {
+                  type: "select",
+                  name: "estado",
+                  label: "Estado",
+                  options: VISIT_STATUS_OPTIONS,
+                  placeholder: "Todos los estados",
+                },
+                {
+                  type: "dateRange",
+                  name: "fecha",
+                  nameDesde: "desde",
+                  nameHasta: "hasta",
+                  label: "Período",
+                },
+              ]}
+              values={visitFilters}
+              onFilterChange={setVisitFilter}
+              onClearAll={clearVisitFilters}
+              resultCount={filteredVisitas.length}
+              totalCount={visitas.length}
+              loading={loadingVisits}
+            />
+          </div>
+        )}
         <div className="p-5">
           {loadingVisits ? (
             <p className="text-sm text-slate-400 text-center py-4">Cargando historial...</p>
           ) : visitas.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-4">Aún no tienes visitas registradas.</p>
+          ) : filteredVisitas.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">No hay visitas con esos filtros.</p>
           ) : (
-            <ul className="divide-y divide-slate-100 -mx-1 px-1">
-              {visitas.map((v) => {
-                const st = VISIT_STATUS[v.estado] ?? VISIT_STATUS.completada;
-                const canCancel = v.estado === "pendiente";
-                return (
-                  <li key={v.id} className="py-3 flex items-start gap-3">
-                    <div className="pt-1 shrink-0">
-                      <span className={`block h-2.5 w-2.5 rounded-full ${st.dot}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold text-slate-800">
-                          {formatDateTime(v.fecha_hora)}
-                        </p>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.pill}`}>
-                          {st.label}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-400">
-                        {v.duracion_min && <span>{v.duracion_min} min</span>}
-                        {v.salida_anunciada_en && <span>Salida anunciada {formatDateTime(v.salida_anunciada_en)}</span>}
-                        {v.salida_validada_en && <span>Salida validada {formatDateTime(v.salida_validada_en)}</span>}
-                        {v.salida_hora && !v.salida_validada_en && <span>Salida: {formatDateTime(v.salida_hora)}</span>}
-                        {v.validado_en && <span>Ingreso validado {formatDateTime(v.validado_en)}</span>}
-                      </div>
-                      {v.notas && (
-                        <p className="text-xs text-slate-500 mt-1 italic">{v.notas}</p>
-                      )}
-                    </div>
-                    {canCancel && (
-                      <button
-                        type="button"
-                        onClick={() => handleCancel(v.id)}
-                        disabled={cancelling === v.id}
-                        className="shrink-0 text-xs text-rose-500 hover:text-rose-700 underline disabled:opacity-50"
-                      >
-                        {cancelling === v.id ? "..." : "Cancelar"}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
+            <ul className="-mx-1 divide-y divide-slate-100 px-1">
+              {filteredVisitas.map((v) => <VisitItem key={v.id} v={v} cancelling={cancelling} handleCancel={handleCancel} />)}
             </ul>
           )}
         </div>
       </section>
     </PageLayout>
+  );
+}
+
+function VisitItem({ v, cancelling, handleCancel }) {
+  const [expanded, setExpanded] = useState(false);
+  const st = VISIT_STATUS[v.estado] ?? VISIT_STATUS.completada;
+  const canCancel = v.estado === "pendiente";
+  const hasDetails =
+    v.salida_anunciada_en || v.salida_validada_en || v.salida_hora || v.validado_en || v.notas;
+
+  return (
+    <li className="flex items-start gap-3 py-3">
+      <div className="shrink-0 pt-1">
+        <span className={`block h-2.5 w-2.5 rounded-full ${st.dot}`} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-semibold text-slate-800">{formatDateTime(v.fecha_hora)}</p>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.pill}`}>{st.label}</span>
+          {v.duracion_min && <span className="text-xs text-slate-400">{v.duracion_min} min</span>}
+        </div>
+        {hasDetails && (
+          <>
+            {!expanded && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="mt-1 text-xs font-medium text-teal-700 hover:underline sm:hidden"
+              >
+                Ver detalles
+              </button>
+            )}
+            <div className={`${expanded ? "block" : "hidden sm:block"} mt-1 space-y-1`}>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
+                {v.salida_anunciada_en && <span>Salida anunciada {formatDateTime(v.salida_anunciada_en)}</span>}
+                {v.salida_validada_en && <span>Salida validada {formatDateTime(v.salida_validada_en)}</span>}
+                {v.salida_hora && !v.salida_validada_en && <span>Salida: {formatDateTime(v.salida_hora)}</span>}
+                {v.validado_en && <span>Ingreso validado {formatDateTime(v.validado_en)}</span>}
+              </div>
+              {v.notas && <p className="text-xs italic text-slate-500">{v.notas}</p>}
+            </div>
+          </>
+        )}
+      </div>
+      {canCancel && (
+        <button
+          type="button"
+          onClick={() => handleCancel(v.id)}
+          disabled={cancelling === v.id}
+          className="shrink-0 text-xs font-medium text-rose-500 underline transition-colors hover:text-rose-700 disabled:opacity-50"
+        >
+          {cancelling === v.id ? "…" : "Cancelar"}
+        </button>
+      )}
+    </li>
   );
 }

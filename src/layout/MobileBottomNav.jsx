@@ -76,7 +76,7 @@ function NavButton({ item, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="tap-highlight-none flex min-h-12 flex-col items-center justify-end gap-0.5 rounded-2xl px-1 pb-0.5 pt-1 text-[11px] font-medium transition-colors active:bg-slate-100"
+      className="tap-highlight-none flex min-h-[3.5rem] flex-col items-center justify-end gap-0.5 rounded-2xl px-0.5 pb-0.5 pt-1 transition-colors active:bg-slate-100"
       title={item.description}
       aria-current={active ? "page" : undefined}
     >
@@ -90,11 +90,11 @@ function NavButton({ item, active, onClick }) {
         <NavIcon id={item.icon} className="h-[18px] w-[18px]" />
       </span>
       <span
-        className={`max-w-[68px] truncate transition-colors ${
-          active ? "text-teal-700 font-semibold" : "text-slate-500"
+        className={`min-h-[1.75rem] max-w-[72px] overflow-hidden text-center text-[11px] leading-tight transition-colors [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] ${
+          active ? "text-teal-700 font-semibold" : "text-slate-500 font-medium"
         }`}
       >
-        {item.label}
+        {item.shortLabel || item.label}
       </span>
     </button>
   );
@@ -103,13 +103,13 @@ function NavButton({ item, active, onClick }) {
 function DisabledButton({ item }) {
   return (
     <div
-      className="flex min-h-12 flex-col items-center justify-end gap-0.5 rounded-2xl px-1 pb-0.5 pt-1 text-[11px] font-medium text-amber-700"
+      className="flex min-h-[3.5rem] flex-col items-center justify-end gap-0.5 rounded-2xl px-0.5 pb-0.5 pt-1 text-amber-700"
       title={item.description}
     >
       <span className="grid h-9 w-9 place-items-center rounded-2xl bg-amber-50 text-amber-700 ring-1 ring-amber-200/80">
         <NavIcon id={item.icon} className="h-[18px] w-[18px]" />
       </span>
-      <span className="max-w-[68px] truncate">{item.label}</span>
+      <span className="min-h-[1.75rem] max-w-[72px] overflow-hidden text-center text-[11px] leading-tight font-medium [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{item.label}</span>
     </div>
   );
 }
@@ -132,8 +132,8 @@ function HomeButton({ active, onClick }) {
       >
         <NavIcon id="home" className="h-6 w-6 text-white" />
       </span>
-      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-teal-700">
-        Inicio
+      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-teal-700">
+        Menú
       </span>
     </button>
   );

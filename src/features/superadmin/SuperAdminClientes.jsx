@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Loading from "../../components/Loading";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import EleamFilters from "./components/EleamFilters";
 import EleamTable from "./components/EleamTable";
 import EleamEditModal from "./components/EleamEditModal";
@@ -24,11 +25,28 @@ export default function SuperAdminClientes() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [eleams, setEleams] = useState([]);
   const [tasks, setTasks] = useState([]);
-  // Pre-populate crmEstado filter from ?estado= query param (sent by Dashboard pipeline cards)
-  const [filters, setFilters] = useState(() => {
-    const estado = searchParams.get("estado");
-    return estado ? { crmEstado: estado } : {};
+  // Mapeo bidireccional URL ↔ filtros (claves cortas en URL, mismo shape para EleamFilters).
+  const [urlFilters, setUrlFilter] = useFilterParams({
+    schema: { search: "string", crmEstado: "string", plan: "string", riesgo: "string", pagoActivo: "string" },
+    defaults: { search: "", crmEstado: "", plan: "", riesgo: "", pagoActivo: "" },
   });
+  const filters = useMemo(() => ({
+    search: urlFilters.search || undefined,
+    crmEstado: urlFilters.crmEstado || (searchParams.get("estado") ?? undefined),
+    plan: urlFilters.plan || undefined,
+    riesgo: urlFilters.riesgo || undefined,
+    pagoActivo: urlFilters.pagoActivo || undefined,
+  }), [urlFilters, searchParams]);
+  const setFilters = useCallback((next) => {
+    const value = typeof next === "function" ? next(filters) : next;
+    setUrlFilter({
+      search: value?.search ?? "",
+      crmEstado: value?.crmEstado ?? "",
+      plan: value?.plan ?? "",
+      riesgo: value?.riesgo ?? "",
+      pagoActivo: value?.pagoActivo ?? "",
+    });
+  }, [filters, setUrlFilter]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editEleam, setEditEleam] = useState(null);
@@ -58,8 +76,14 @@ export default function SuperAdminClientes() {
 
   useEffect(() => {
     refresh();
-    // Clear query param so refresh doesn't re-apply the filter
-    if (searchParams.get("estado")) setSearchParams({}, { replace: true });
+    // Migrar el viejo ?estado= (link desde el pipeline del dashboard) a crmEstado en URL.
+    const legacyEstado = searchParams.get("estado");
+    if (legacyEstado) {
+      setUrlFilter("crmEstado", legacyEstado);
+      const next = new URLSearchParams(searchParams);
+      next.delete("estado");
+      setSearchParams(next, { replace: true });
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {

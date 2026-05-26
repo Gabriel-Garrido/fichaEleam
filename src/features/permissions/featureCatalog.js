@@ -56,6 +56,13 @@ export const FEATURE_CATALOG = [
     roles: ["admin_eleam", "funcionario"],
   },
   {
+    id: "adverse-events",
+    label: "Eventos adversos",
+    description: "Registro reglamentario de caídas, errores y eventos serios.",
+    group: "Operación",
+    roles: ["admin_eleam", "funcionario"],
+  },
+  {
     id: "accreditation",
     label: "Carpeta SEREMI",
     description: "Acreditación, documentos y observaciones.",

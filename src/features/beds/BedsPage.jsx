@@ -1,12 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Button from "../../components/Button";
+import Badge from "../../components/Badge";
+import ChipGroup from "../../components/ChipGroup";
+import EmptyState from "../../components/EmptyState";
+import FilterBar from "../../components/FilterBar";
 import HelpTooltip from "../../components/HelpTooltip";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import {
+  ErrorSummary,
+  FormGrid,
+  Notice,
+  SelectField,
+  SubmitBar,
+  TextareaField,
+  TextField,
+} from "../../components/forms/FormKit";
 import PageLayout from "../../layout/PageLayout";
 import { useAuth } from "../../context/AuthContext";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { friendlyError } from "../../utils/errorMessages";
+import { scrollToFirstError, setFieldErrorCleared } from "../../utils/formValidation";
 import {
   assignResidentToBed,
   deleteCama,
@@ -22,6 +37,7 @@ import {
   formatBedLocation,
   groupBedsByRoom,
 } from "./bedsUtils";
+import { validateBedForm, validateRoomForm } from "./bedsFormSchema";
 
 const BED_TYPES = [
   ["estandar", "Estándar"],
@@ -66,35 +82,32 @@ function Kpi({ label, value, sub, tone = "teal", help }) {
     slate: "border-slate-100 bg-slate-50 text-slate-700",
   };
   return (
-    <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        <span>{label}</span>
+    <article className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:p-4">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">
+        <span className="truncate">{label}</span>
         {help && <HelpTooltip label={`Ayuda: ${label}`}>{help}</HelpTooltip>}
       </div>
-      <div className={`mt-2 inline-flex min-w-14 justify-center rounded-xl border px-3 py-1 text-2xl font-bold tabular-nums ${tones[tone]}`}>
+      <div className={`mt-2 inline-flex min-w-12 justify-center rounded-xl border px-2.5 py-0.5 text-lg font-bold tabular-nums sm:px-3 sm:py-1 sm:text-2xl ${tones[tone]}`}>
         {value}
       </div>
-      {sub && <p className="mt-2 text-xs text-slate-500">{sub}</p>}
+      {sub && <p className="mt-1 text-[11px] text-slate-500 sm:mt-2 sm:text-xs">{sub}</p>}
     </article>
   );
 }
+
+const STATUS_BADGE_TONE = {
+  operativa: "emerald",
+  mantenimiento: "amber",
+  inactiva: "slate",
+  ocupada: "primary",
+  reservada_hospitalizacion: "sky",
+};
 
 function StatusBadge({ status, type = "bed" }) {
   const label = type === "assignment"
     ? ASSIGNMENT_STATUS_LABELS[status] ?? status
     : BED_STATUS_LABELS[status] ?? status;
-  const cls = {
-    operativa: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    mantenimiento: "bg-amber-50 text-amber-800 border-amber-100",
-    inactiva: "bg-slate-100 text-slate-600 border-slate-200",
-    ocupada: "bg-teal-50 text-teal-700 border-teal-100",
-    reservada_hospitalizacion: "bg-indigo-50 text-indigo-700 border-indigo-100",
-  }[status] ?? "bg-slate-50 text-slate-600 border-slate-100";
-  return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>
-      {label}
-    </span>
-  );
+  return <Badge tone={STATUS_BADGE_TONE[status] ?? "slate"} size="sm">{label}</Badge>;
 }
 
 function Field({ label, children }) {
@@ -121,41 +134,35 @@ function RoomModal({ initial, onClose, onSubmit, saving }) {
     orden: initial?.orden ?? 0,
     notas: initial?.notas ?? "",
   }));
-  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const [errors, setErrors] = useState({});
+  const set = (key, value) => {
+    setFieldErrorCleared(setErrors, key);
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+  const submit = (event) => {
+    event.preventDefault();
+    const result = validateRoomForm(form);
+    setErrors(result.errors);
+    if (!result.ok) {
+      scrollToFirstError(result.errors);
+      return;
+    }
+    onSubmit(result.data);
+  };
   return (
     <Modal isOpen onClose={onClose} title={form.id ? "Editar habitación" : "Nueva habitación"}>
-      <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); onSubmit(form); }}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Código">
-            <input className={inputClass()} value={form.codigo} onChange={(e) => set("codigo", e.target.value)} required />
-          </Field>
-          <Field label="Orden">
-            <input className={inputClass()} type="number" value={form.orden} onChange={(e) => set("orden", e.target.value)} />
-          </Field>
-          <Field label="Nombre">
-            <input className={inputClass()} value={form.nombre} onChange={(e) => set("nombre", e.target.value)} />
-          </Field>
-          <Field label="Estado">
-            <select className={inputClass()} value={form.estado} onChange={(e) => set("estado", e.target.value)}>
-              {BED_STATUS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </Field>
-          <Field label="Piso">
-            <input className={inputClass()} value={form.piso} onChange={(e) => set("piso", e.target.value)} />
-          </Field>
-          <Field label="Sector">
-            <input className={inputClass()} value={form.sector} onChange={(e) => set("sector", e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Notas">
-          <textarea className={inputClass()} rows={3} value={form.notas} onChange={(e) => set("notas", e.target.value)} />
-        </Field>
-        <div className="flex justify-end gap-2">
-          <Button className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" disabled={saving} className="bg-teal-600 text-white hover:bg-teal-700">
-            Guardar
-          </Button>
-        </div>
+      <form className="space-y-4" onSubmit={submit} noValidate>
+        <ErrorSummary errors={errors} />
+        <FormGrid>
+          <TextField id="codigo" name="codigo" label="Código" required value={form.codigo} onChange={(e) => set("codigo", e.target.value)} error={errors.codigo} maxLength={40} placeholder="101" />
+          <TextField id="orden" name="orden" type="number" label="Orden" value={form.orden} onChange={(e) => set("orden", e.target.value)} error={errors.orden} min={0} max={9999} />
+          <TextField id="nombre" name="nombre" label="Nombre" value={form.nombre} onChange={(e) => set("nombre", e.target.value)} error={errors.nombre} maxLength={120} placeholder="Habitación norte" />
+          <SelectField id="estado" name="estado" label="Estado" required value={form.estado} onChange={(e) => set("estado", e.target.value)} options={BED_STATUS} error={errors.estado} placeholder={null} />
+          <TextField id="piso" name="piso" label="Piso" value={form.piso} onChange={(e) => set("piso", e.target.value)} error={errors.piso} maxLength={80} />
+          <TextField id="sector" name="sector" label="Sector" value={form.sector} onChange={(e) => set("sector", e.target.value)} error={errors.sector} maxLength={120} />
+        </FormGrid>
+        <TextareaField id="notas" name="notas" label="Notas" value={form.notas} onChange={(e) => set("notas", e.target.value)} error={errors.notas} maxLength={500} rows={3} />
+        <SubmitBar onCancel={onClose} submitLabel="Guardar habitación" busy={saving} helperText="El código debe ser único dentro del ELEAM." />
       </form>
     </Modal>
   );
@@ -172,54 +179,49 @@ function BedModal({ habitaciones, initial, onClose, onSubmit, saving }) {
     orden: initial?.orden ?? 0,
     notas: initial?.notas ?? "",
   }));
-  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const [errors, setErrors] = useState({});
+  const set = (key, value) => {
+    setFieldErrorCleared(setErrors, key);
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+  const submit = (event) => {
+    event.preventDefault();
+    const result = validateBedForm(form);
+    setErrors(result.errors);
+    if (!result.ok) {
+      scrollToFirstError(result.errors);
+      return;
+    }
+    onSubmit(result.data);
+  };
   return (
     <Modal isOpen onClose={onClose} title={form.id ? "Editar cama" : "Nueva cama"}>
-      <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); onSubmit(form); }}>
-        <Field label="Habitación">
-          <select className={inputClass()} value={form.habitacion_id} onChange={(e) => set("habitacion_id", e.target.value)} required>
-            {habitaciones.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.codigo}{room.nombre ? ` · ${room.nombre}` : ""}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Código">
-            <input className={inputClass()} value={form.codigo} onChange={(e) => set("codigo", e.target.value)} required />
-          </Field>
-          <Field label="Orden">
-            <input className={inputClass()} type="number" value={form.orden} onChange={(e) => set("orden", e.target.value)} />
-          </Field>
-          <Field label="Tipo">
-            <select className={inputClass()} value={form.tipo} onChange={(e) => set("tipo", e.target.value)}>
-              {BED_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </Field>
-          <Field label="Estado">
-            <select className={inputClass()} value={form.estado} onChange={(e) => set("estado", e.target.value)}>
-              {BED_STATUS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </Field>
-        </div>
-        <Field label="Nombre">
-          <input className={inputClass()} value={form.nombre} onChange={(e) => set("nombre", e.target.value)} />
-        </Field>
-        <Field label="Notas">
-          <textarea className={inputClass()} rows={3} value={form.notas} onChange={(e) => set("notas", e.target.value)} />
-        </Field>
+      <form className="space-y-4" onSubmit={submit} noValidate>
+        <ErrorSummary errors={errors} />
+        <SelectField
+          id="habitacion_id"
+          name="habitacion_id"
+          label="Habitación"
+          required
+          value={form.habitacion_id}
+          onChange={(e) => set("habitacion_id", e.target.value)}
+          options={habitaciones.map((room) => [room.id, `${room.codigo}${room.nombre ? ` · ${room.nombre}` : ""}`])}
+          error={errors.habitacion_id}
+        />
+        <FormGrid>
+          <TextField id="codigo" name="codigo" label="Código" required value={form.codigo} onChange={(e) => set("codigo", e.target.value)} error={errors.codigo} maxLength={40} placeholder="A" />
+          <TextField id="orden" name="orden" type="number" label="Orden" value={form.orden} onChange={(e) => set("orden", e.target.value)} error={errors.orden} min={0} max={9999} />
+          <SelectField id="tipo" name="tipo" label="Tipo" required value={form.tipo} onChange={(e) => set("tipo", e.target.value)} options={BED_TYPES} error={errors.tipo} placeholder={null} />
+          <SelectField id="estado" name="estado" label="Estado" required value={form.estado} onChange={(e) => set("estado", e.target.value)} options={BED_STATUS} error={errors.estado} placeholder={null} />
+        </FormGrid>
+        <TextField id="nombre" name="nombre" label="Nombre" value={form.nombre} onChange={(e) => set("nombre", e.target.value)} error={errors.nombre} maxLength={120} />
+        <TextareaField id="notas" name="notas" label="Notas" value={form.notas} onChange={(e) => set("notas", e.target.value)} error={errors.notas} maxLength={500} rows={3} />
         {initial?.assignment && form.estado !== "operativa" && (
-          <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <Notice tone="amber">
             Libera o transfiere al residente antes de dejar esta cama fuera de servicio.
-          </p>
+          </Notice>
         )}
-        <div className="flex justify-end gap-2">
-          <Button className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" disabled={saving} className="bg-teal-600 text-white hover:bg-teal-700">
-            Guardar
-          </Button>
-        </div>
+        <SubmitBar onCancel={onClose} submitLabel="Guardar cama" busy={saving} helperText="La cama debe pertenecer a una habitación operativa para poder asignarla." />
       </form>
     </Modal>
   );
@@ -229,55 +231,83 @@ function AssignModal({ bed, residentes, onClose, onSubmit, saving }) {
   const [residentId, setResidentId] = useState("");
   const [query, setQuery] = useState("");
   const [notas, setNotas] = useState("");
-  const filtered = residentes.filter((resident) => {
+  const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return `${resident.nombre} ${resident.apellido} ${resident.rut ?? ""}`.toLowerCase().includes(q);
-  });
+    if (!q) return residentes;
+    return residentes.filter((resident) =>
+      `${resident.nombre} ${resident.apellido} ${resident.rut ?? ""}`.toLowerCase().includes(q),
+    );
+  }, [residentes, query]);
   const selected = residentes.find((resident) => resident.id === residentId);
   return (
-    <Modal isOpen onClose={onClose} title={`Asignar ${formatBedLocation(bed)}`} panelClassName="max-w-2xl p-4 sm:p-6">
+    <Modal isOpen onClose={onClose} title={`Asignar ${formatBedLocation(bed)}`} panelClassName="max-w-lg p-4 sm:max-w-2xl sm:p-6">
       <form className="space-y-4" onSubmit={(event) => {
         event.preventDefault();
         if (residentId) onSubmit({ residentId, notas });
       }}>
         <Field label="Buscar residente activo">
-          <input className={inputClass()} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nombre, apellido o RUT" />
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-3.5-3.5" strokeLinecap="round" />
+              </svg>
+            </span>
+            <input
+              className={`${inputClass()} pl-9`}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Nombre, apellido o RUT"
+              autoFocus
+            />
+          </div>
+          {residentes.length > 12 && (
+            <p className="mt-1 text-[11px] text-slate-400">{filtered.length} de {residentes.length} residentes</p>
+          )}
         </Field>
-        <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-100">
+        <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-100 sm:max-h-80">
           {filtered.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500">No hay residentes activos disponibles.</div>
-          ) : filtered.map((resident) => (
-            <button
-              key={resident.id}
-              type="button"
-              onClick={() => setResidentId(resident.id)}
-              className={`flex w-full items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 ${
-                residentId === resident.id ? "bg-teal-50" : "bg-white hover:bg-slate-50"
-              }`}
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-slate-800">{occupantName(resident)}</span>
-                <span className="block truncate text-xs text-slate-500">
-                  {resident.cama_actual_id ? resident.ubicacion_label : "Sin cama asignada"}
+            <div className="p-4 text-sm text-slate-500">
+              {residentes.length === 0
+                ? "No hay residentes activos disponibles."
+                : "Sin coincidencias. Prueba otro nombre o limpia la búsqueda."}
+            </div>
+          ) : filtered.map((resident) => {
+            const isSelected = residentId === resident.id;
+            return (
+              <button
+                key={resident.id}
+                type="button"
+                onClick={() => setResidentId(resident.id)}
+                className={`flex w-full items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-left transition-colors last:border-b-0 ${
+                  isSelected ? "bg-teal-50" : "bg-white hover:bg-slate-50"
+                }`}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-slate-800">{occupantName(resident)}</span>
+                  <span className="block truncate text-xs text-slate-500">
+                    {resident.cama_actual_id ? resident.ubicacion_label : "Sin cama asignada"}
+                  </span>
                 </span>
-              </span>
-              {residentId === resident.id && <span className="text-sm font-semibold text-teal-700">Seleccionado</span>}
-            </button>
-          ))}
+                {isSelected && (
+                  <span className="shrink-0 text-xs font-semibold text-teal-700">✓ Seleccionado</span>
+                )}
+              </button>
+            );
+          })}
         </div>
         {selected?.cama_actual_id && (
           <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             {occupantName(selected)} será transferido desde {selected.ubicacion_label}.
           </p>
         )}
-        <Field label="Notas">
-          <textarea className={inputClass()} rows={3} value={notas} onChange={(e) => setNotas(e.target.value)} />
+        <Field label="Notas (opcional)">
+          <textarea className={inputClass()} rows={2} value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Motivo o detalles del cambio…" />
         </Field>
-        <div className="flex justify-end gap-2">
-          <Button className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" disabled={saving || !residentId} className="bg-teal-600 text-white hover:bg-teal-700">
-            Asignar
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button className="w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={saving || !residentId} className="w-full bg-teal-700 text-white hover:bg-teal-800 sm:w-auto">
+            {saving ? "Asignando…" : "Asignar"}
           </Button>
         </div>
       </form>
@@ -436,8 +466,12 @@ export default function BedsPage() {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [filter, setFilter] = useState("todos");
-  const [query, setQuery] = useState("");
+  const [filters, setFilterParam, clearFilters] = useFilterParams({
+    schema: { estado: "string", q: "string" },
+    defaults: { estado: "todos", q: "" },
+  });
+  const filter = filters.estado || "todos";
+  const query = filters.q ?? "";
   const [roomModal, setRoomModal] = useState(null);
   const [bedModal, setBedModal] = useState(null);
   const [assignModal, setAssignModal] = useState(null);
@@ -523,6 +557,7 @@ export default function BedsPage() {
 
   return (
     <PageLayout
+      coachFeatureId="beds"
       title="Camas"
       eyebrow="Operación"
       description="Inventario, disponibilidad y ocupación en tiempo real."
@@ -542,7 +577,7 @@ export default function BedsPage() {
       }
     >
       <div className="space-y-5">
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-7">
+        <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-7">
           <Kpi label="Operativas" value={metrics.operativas} sub="Aptas para uso" />
           <Kpi label="Ocupadas" value={metrics.ocupadas} tone="teal" sub="Con residente" />
           <Kpi label="Reservadas" value={metrics.reservadasHospitalizacion} tone="amber" sub="Hospitalización" />
@@ -566,43 +601,56 @@ export default function BedsPage() {
         </section>
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap gap-2">
-              {FILTERS.map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setFilter(value)}
-                  className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                    filter === value
-                      ? "border-teal-200 bg-teal-50 text-teal-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <input
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 lg:max-w-xs"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar cama, habitación o residente"
+          <FilterBar
+            search={query}
+            onSearchChange={(v) => setFilterParam("q", v)}
+            searchPlaceholder="Buscar cama, habitación o residente..."
+            filters={[]}
+            values={filters}
+            onFilterChange={setFilterParam}
+            onClearAll={clearFilters}
+            resultCount={loading ? undefined : filteredRooms.reduce((acc, r) => acc + r.camas.length, 0)}
+            totalCount={loading ? undefined : (overview?.camas?.length ?? 0)}
+            loading={loading}
+          >
+            <ChipGroup
+              ariaLabel="Filtrar camas por estado"
+              value={filter}
+              onChange={(value) => setFilterParam("estado", value)}
+              options={FILTERS.map(([value, label]) => ({ value, label, tone: "primary" }))}
+              size="md"
             />
-          </div>
+
+          </FilterBar>
         </section>
 
         {loading ? (
-          <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-            Cargando camas...
+          <div className="space-y-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" role="status" aria-live="polite">
+            <p className="text-xs font-medium text-slate-500">Cargando ocupación de camas…</p>
+            {[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-xl bg-slate-100" />)}
           </div>
         ) : filteredRooms.length === 0 ? (
-          <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Sin camas para mostrar</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {overview?.camas?.length ? "Ajusta los filtros para ver otros resultados." : "Crea habitaciones y camas para comenzar a medir ocupación."}
-            </p>
-          </div>
+          <EmptyState
+            tone="teal"
+            title={overview?.camas?.length ? "Sin camas para los filtros seleccionados" : "Crea tu primera habitación"}
+            description={
+              overview?.camas?.length
+                ? "Ajusta los filtros o limpia la búsqueda para ver otros resultados."
+                : "Crea habitaciones y camas para comenzar a medir ocupación y asignar residentes."
+            }
+            icon={
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 21V8m0 0V5a2 2 0 012-2h14a2 2 0 012 2v3m-18 0h18m-18 0v13m18-13v13M3 21h18M7 14h.01M7 11h.01" />
+              </svg>
+            }
+            action={
+              !overview?.camas?.length && canAdminBeds
+                ? { label: "Nueva habitación", onClick: () => setRoomModal({}) }
+                : overview?.camas?.length
+                  ? { label: "Limpiar filtros", onClick: clearFilters }
+                  : null
+            }
+          />
         ) : (
           <div className="space-y-4">
             {filteredRooms.map((room) => (

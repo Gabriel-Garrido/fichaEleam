@@ -43,6 +43,26 @@ npx supabase functions deploy
 
 ---
 
+## Estándar De Formularios
+
+Los formularios nuevos o modificados deben usar la infraestructura compartida de `src/components/forms/FormKit.jsx`:
+
+- `FormPage`, `FormHeader`, `FormSection` y `FormGrid` para layouts mobile-first.
+- `TextField`, `TextareaField`, `SelectField`, `CheckboxField` o `ToggleField` para controles con labels, hints, errores y accesibilidad consistentes.
+- `ErrorSummary` al inicio del `<form>` y `SubmitBar` para acciones sticky en mobile.
+- `Notice` para estados recuperables: sin residentes activos, conexión fallida, permisos insuficientes o warnings operativos.
+
+Las validaciones deben vivir en helpers o schemas testeables, no embebidas en JSX cuando el flujo tenga reglas de negocio. Usa `src/utils/formValidation.js` para normalizar texto, números, fechas, selects, errores Zod y mensajes backend orientados al usuario. Antes de enviar a Supabase/RPC, normaliza vacíos a `null`, aplica límites de longitud y conserva los nombres de payload esperados por el schema SQL.
+
+Criterios mínimos antes de mergear cambios de formularios:
+
+- Mobile: 1 columna por defecto, controles táctiles de altura estable y sin texto superpuesto.
+- Errores: resumen superior, mensaje junto al campo, foco/scroll al primer error y textos accionables.
+- Estados: submit deshabilitado durante guardado, feedback de éxito/fallo y recuperación clara.
+- Producción: ejecutar `npm run lint`, `npm run test:run`, `npm run test:contracts` y `npm run build`.
+
+---
+
 ## Variables de Entorno
 
 Frontend (`.env`, basado en `.env.example`):

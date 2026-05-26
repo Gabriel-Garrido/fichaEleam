@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/Modal";
+import { ErrorSummary } from "../../components/forms/FormKit";
 import useSessionFormDraft from "../../hooks/useSessionFormDraft";
 import { isSupabaseConfigured } from "../../services/supabaseConfig";
+import { scrollToFirstError } from "../../utils/formValidation";
 import { trackEvent } from "./landingAnalytics";
 import { getLandingContext } from "./landingContext";
 import { requestDemoLead } from "./landingService";
@@ -54,7 +56,11 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
   async function handleSubmit(e) {
     e.preventDefault();
     const errs = validateWhatsAppLeadForm(form);
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      scrollToFirstError(errs);
+      return;
+    }
 
     setStatus("submitting");
     setErrorMsg("");
@@ -158,6 +164,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
             <p className="text-xs text-slate-500 leading-relaxed">
               Completa estos datos y abriremos WhatsApp con tu mensaje listo para enviar.
             </p>
+            <ErrorSummary errors={errors} />
 
             <div>
               <label htmlFor="wa-nombre" className="block text-xs font-semibold text-slate-600 mb-1">
@@ -166,7 +173,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
               <input
                 id="wa-nombre"
                 type="text"
-                name="name"
+                name="nombre"
                 value={form.nombre}
                 onChange={set("nombre")}
                 placeholder="María González"
@@ -186,7 +193,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
               <input
                 id="wa-eleam"
                 type="text"
-                name="organization"
+                name="eleam_nombre"
                 value={form.eleam_nombre}
                 onChange={set("eleam_nombre")}
                 placeholder="Residencia Los Arrayanes"
@@ -228,7 +235,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
                 <input
                   id="wa-telefono"
                   type="tel"
-                  name="tel"
+                  name="telefono"
                   value={form.telefono}
                   onChange={set("telefono")}
                   placeholder="+56 9 XXXX XXXX"

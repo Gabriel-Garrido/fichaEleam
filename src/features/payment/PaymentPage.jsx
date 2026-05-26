@@ -18,6 +18,7 @@ import { canStartSubscription, subscriptionButtonLabel } from "./paymentStatus";
 import { formatDate } from "../../utils/dateUtils";
 import { getEffectivePlanLimits, planLimitError, PUBLIC_PLAN_CATALOG } from "./planCatalog";
 import { isMercadoPagoCheckoutUrl } from "./mercadoPagoUrls";
+import { FeatureCoach } from "../featureCoach";
 import { buildWhatsAppUrl } from "../landing/whatsAppLeadUtils";
 
 function daysUntil(iso) {
@@ -323,6 +324,7 @@ export default function PaymentPage() {
 
   const body = (
     <div className={`${showPublicNav ? "max-w-5xl py-12" : "max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8"} mx-auto px-4`}>
+        {user && <FeatureCoach featureId="subscription" standalone />}
         {sinAcceso && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
             <div className="text-amber-500 text-2xl shrink-0">!</div>

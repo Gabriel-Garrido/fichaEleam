@@ -89,7 +89,7 @@ const CATEGORIES = [
       },
       {
         q: "¿Tengo que capacitar a mi equipo?",
-        a: "El sistema tiene onboarding adaptativo por rol: cada funcionario ve los pasos relevantes a sus permisos. La curva de aprendizaje es de minutos, no horas. Si necesitas capacitación dedicada, podemos coordinarla.",
+        a: "El sistema está diseñado para que cada rol vea solo lo que necesita: la curva de aprendizaje es de minutos, no horas. Si necesitas capacitación dedicada, podemos coordinarla.",
       },
       {
         q: "¿Puedo importar mis datos desde Excel?",

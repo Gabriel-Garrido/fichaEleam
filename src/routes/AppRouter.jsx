@@ -27,6 +27,9 @@ const VitalSignsList = lazy(() => import("../features/vitalSigns/VitalSignsList"
 const VitalSignsForm = lazy(() => import("../features/vitalSigns/VitalSignsForm"));
 const ObservationList = lazy(() => import("../features/observations/ObservationList"));
 const ObservationForm = lazy(() => import("../features/observations/ObservationForm"));
+const AdverseEventsList = lazy(() => import("../features/adverseEvents/AdverseEventsList"));
+const AdverseEventForm = lazy(() => import("../features/adverseEvents/AdverseEventForm"));
+const AdverseEventDetail = lazy(() => import("../features/adverseEvents/AdverseEventDetail"));
 
 const TurnosDashboard = lazy(() => import("../features/turnos/TurnosDashboard"));
 const TurnoBuilder = lazy(() => import("../features/turnos/TurnoBuilder"));
@@ -145,6 +148,19 @@ function AppRouter() {
           } />
           <Route path="/observations/new" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="observations"><ObservationForm /></ProtectedRoute>
+          } />
+
+          <Route path="/eventos-adversos" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="adverse-events"><AdverseEventsList /></ProtectedRoute>
+          } />
+          <Route path="/eventos-adversos/nuevo" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="adverse-events"><AdverseEventForm /></ProtectedRoute>
+          } />
+          <Route path="/eventos-adversos/:id" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="adverse-events"><AdverseEventDetail /></ProtectedRoute>
+          } />
+          <Route path="/eventos-adversos/:id/edit" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="adverse-events"><AdverseEventForm /></ProtectedRoute>
           } />
 
           {/* Acreditación / Carpeta SEREMI: lectura para staff,

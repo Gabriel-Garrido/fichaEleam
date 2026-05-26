@@ -6,8 +6,8 @@ export default function PageHeader({
   compact = false,
 }) {
   return (
-    <header className={`flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${compact ? "" : "mb-5 sm:mb-6"}`}>
-      <div className="min-w-0">
+    <header className={`flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${compact ? "" : "mb-5 sm:mb-6"}`}>
+      <div className="min-w-0 max-w-full">
         {eyebrow && (
           <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-teal-700">
             {eyebrow}
@@ -22,7 +22,7 @@ export default function PageHeader({
           </p>
         )}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>}
+      {actions && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">{actions}</div>}
     </header>
   );
 }

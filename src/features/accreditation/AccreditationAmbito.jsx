@@ -10,6 +10,7 @@ import {
   diasHasta,
 } from "./accreditationService";
 import { formatDate } from "../../utils/dateUtils";
+import { FeatureCoach } from "../featureCoach";
 
 const FILTROS = [
   { key: "all",       label: "Todos" },
@@ -214,6 +215,7 @@ export default function AccreditationAmbito() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
+      <FeatureCoach featureId="accreditation-ambito" standalone />
       <button
         type="button"
         onClick={() => navigate("/accreditation")}

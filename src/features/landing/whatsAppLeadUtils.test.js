@@ -15,10 +15,10 @@ import {
 describe("validateWhatsAppLeadForm", () => {
   it("requiere nombre, eleam, email y teléfono válidos", () => {
     expect(validateWhatsAppLeadForm({})).toEqual({
-      nombre: "Requerido",
-      eleam_nombre: "Requerido",
-      email: "Email no válido",
-      telefono: "Ingresa un teléfono válido",
+      nombre: "Ingresa tu nombre completo.",
+      eleam_nombre: "Ingresa el nombre del ELEAM o residencia.",
+      email: "Ingresa un email válido para responderte.",
+      telefono: "Ingresa un teléfono válido para contactarte.",
     });
   });
 
@@ -41,7 +41,7 @@ describe("validateWhatsAppLeadForm", () => {
         email: "no-email",
         telefono: "+56912345678",
       }).email,
-    ).toBe("Email no válido");
+    ).toBe("Ingresa un email válido para responderte.");
   });
 
   it("rechaza teléfonos demasiado cortos", () => {
@@ -52,7 +52,7 @@ describe("validateWhatsAppLeadForm", () => {
         email: "ana@residencia.cl",
         telefono: "123",
       }).telefono,
-    ).toBe("Ingresa un teléfono válido");
+    ).toBe("Ingresa un teléfono válido para contactarte.");
   });
 
   it("rechaza campos por sobre los límites permitidos", () => {
@@ -63,10 +63,10 @@ describe("validateWhatsAppLeadForm", () => {
       telefono: `+56${"9".repeat(41)}`,
     });
 
-    expect(errors.nombre).toBe("Máximo 120 caracteres");
-    expect(errors.eleam_nombre).toBe("Máximo 160 caracteres");
-    expect(errors.email).toBe("Máximo 254 caracteres");
-    expect(errors.telefono).toBe("Máximo 40 caracteres");
+    expect(errors.nombre).toBe("El nombre no puede superar 120 caracteres.");
+    expect(errors.eleam_nombre).toBe("El nombre del ELEAM no puede superar 160 caracteres.");
+    expect(errors.email).toBe("El email no puede superar 254 caracteres.");
+    expect(errors.telefono).toBe("El teléfono no puede superar 40 caracteres.");
   });
 });
 

@@ -1,4 +1,5 @@
 import Button from "../Button";
+import { FeatureCoach } from "../../features/featureCoach";
 
 export function FieldError({ id, message }) {
   if (!message) return null;
@@ -13,16 +14,65 @@ export function FieldError({ id, message }) {
 }
 
 export function ErrorSummary({ errors = {}, title = "Revisa los campos marcados" }) {
-  const messages = Object.values(errors).filter(Boolean);
+  const entries = Object.entries(errors).filter(([, message]) => Boolean(message));
+  const messages = entries.map(([, message]) => message);
   if (messages.length === 0) return null;
   return (
-    <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+    <div
+      className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+      role="alert"
+      aria-live="polite"
+    >
       <p className="font-semibold">{title}</p>
       <ul className="mt-2 list-disc space-y-1 pl-5">
-        {messages.slice(0, 4).map((message) => (
-          <li key={message}>{message}</li>
+        {entries.slice(0, 4).map(([field, message]) => (
+          <li key={`${field}-${message}`}>
+            <a
+              href={`#${String(field).replace(/\./g, "_")}`}
+              className="rounded underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-rose-300"
+            >
+              {message}
+            </a>
+          </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+export function FormPage({ children, className = "", size = "lg", coachFeatureId }) {
+  const sizes = {
+    md: "max-w-2xl",
+    lg: "max-w-3xl",
+    xl: "max-w-5xl",
+  };
+  return (
+    <div className={`${sizes[size] ?? sizes.lg} mx-auto w-full px-4 py-6 sm:px-6 sm:py-8 ${className}`}>
+      {coachFeatureId && <FeatureCoach featureId={coachFeatureId} standalone />}
+      {children}
+    </div>
+  );
+}
+
+export function FormHeader({ eyebrow, title, description, onBack, backLabel = "Volver", actions }) {
+  return (
+    <div className="mb-6 flex items-start gap-3">
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="tap-highlight-none mt-0.5 inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-200"
+        >
+          <span aria-hidden="true">←</span>
+          <span className="hidden sm:inline">{backLabel}</span>
+        </button>
+      )}
+      <div className="min-w-0 flex-1">
+        {eyebrow && <p className="text-[11px] font-semibold uppercase tracking-widest text-teal-700">{eyebrow}</p>}
+        <h1 className="text-xl font-semibold leading-tight text-slate-950 sm:text-2xl">{title}</h1>
+        {description && <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{description}</p>}
+      </div>
+      {actions && <div className="shrink-0">{actions}</div>}
     </div>
   );
 }
@@ -41,6 +91,38 @@ export function FormSection({ title, description, icon, children, className = ""
       </div>
       <div className="p-4 sm:p-5">{children}</div>
     </section>
+  );
+}
+
+export function FormGrid({ children, columns = 2, className = "" }) {
+  const gridCols = columns === 3 ? "md:grid-cols-3" : "sm:grid-cols-2";
+  return <div className={`grid grid-cols-1 gap-4 ${gridCols} ${className}`}>{children}</div>;
+}
+
+export function FieldGroup({ children, tone = "slate", className = "" }) {
+  const tones = {
+    slate: "border-slate-200 bg-slate-50",
+    amber: "border-amber-200 bg-amber-50",
+    teal: "border-teal-100 bg-teal-50",
+    rose: "border-rose-200 bg-rose-50",
+  };
+  return <div className={`rounded-2xl border p-4 ${tones[tone] ?? tones.slate} ${className}`}>{children}</div>;
+}
+
+export function Notice({ title, children, tone = "slate", action }) {
+  const tones = {
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-900",
+    teal: "border-teal-100 bg-teal-50 text-teal-900",
+    rose: "border-rose-200 bg-rose-50 text-rose-800",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  };
+  return (
+    <div className={`rounded-2xl border px-4 py-3 text-sm ${tones[tone] ?? tones.slate}`}>
+      {title && <p className="font-semibold">{title}</p>}
+      {children && <div className={title ? "mt-1 text-xs leading-5 opacity-90" : "text-xs leading-5"}>{children}</div>}
+      {action && <div className="mt-3">{action}</div>}
+    </div>
   );
 }
 
@@ -63,6 +145,10 @@ function Label({ htmlFor, label, required }) {
   );
 }
 
+function describedBy(fieldId, error, hint) {
+  return [error ? `${fieldId}-err` : null, hint ? `${fieldId}-hint` : null].filter(Boolean).join(" ") || undefined;
+}
+
 export function TextField({
   id,
   name,
@@ -79,12 +165,16 @@ export function TextField({
   inputMode,
   autoComplete,
   disabled = false,
+  min,
+  max,
+  step,
+  className = "",
 }) {
   const fieldId = id ?? name;
-  const hintId = hint ? `${fieldId}-hint` : undefined;
-  const errorId = error ? `${fieldId}-err` : undefined;
+  const hintId = `${fieldId}-hint`;
+  const errorId = `${fieldId}-err`;
   return (
-    <div>
+    <div className={className}>
       <Label htmlFor={fieldId} label={label} required={required} />
       <input
         id={fieldId}
@@ -98,8 +188,11 @@ export function TextField({
         inputMode={inputMode}
         autoComplete={autoComplete}
         disabled={disabled}
+        min={min}
+        max={max}
+        step={step}
         aria-invalid={error ? "true" : "false"}
-        aria-describedby={errorId || hintId}
+        aria-describedby={describedBy(fieldId, error, hint)}
         className={fieldClasses(error)}
       />
       {hint && !error && <p id={hintId} className="mt-1.5 text-xs leading-tight text-slate-500">{hint}</p>}
@@ -121,14 +214,15 @@ export function TextareaField({
   maxLength,
   rows = 3,
   disabled = false,
+  className = "",
 }) {
   const fieldId = id ?? name;
   const currentLength = value?.length ?? 0;
   return (
-    <div>
+    <div className={className}>
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <Label htmlFor={fieldId} label={label} required={required} />
-        {maxLength && currentLength > 0 && (
+        {maxLength && (
           <span className={`text-[11px] tabular-nums ${currentLength > maxLength * 0.85 ? "text-amber-600" : "text-slate-400"}`}>
             {currentLength}/{maxLength}
           </span>
@@ -144,7 +238,7 @@ export function TextareaField({
         rows={rows}
         disabled={disabled}
         aria-invalid={error ? "true" : "false"}
-        aria-describedby={error ? `${fieldId}-err` : hint ? `${fieldId}-hint` : undefined}
+        aria-describedby={describedBy(fieldId, error, hint)}
         className={`${fieldClasses(error)} resize-y`}
       />
       {hint && !error && <p id={`${fieldId}-hint`} className="mt-1.5 text-xs leading-tight text-slate-500">{hint}</p>}
@@ -164,10 +258,12 @@ export function SelectField({
   hint,
   required = false,
   disabled = false,
+  placeholder = "Seleccionar...",
+  className = "",
 }) {
   const fieldId = id ?? name;
   return (
-    <div>
+    <div className={className}>
       <Label htmlFor={fieldId} label={label} required={required} />
       <select
         id={fieldId}
@@ -176,9 +272,10 @@ export function SelectField({
         onChange={onChange}
         disabled={disabled}
         aria-invalid={error ? "true" : "false"}
-        aria-describedby={error ? `${fieldId}-err` : hint ? `${fieldId}-hint` : undefined}
+        aria-describedby={describedBy(fieldId, error, hint)}
         className={`${fieldClasses(error)} appearance-none`}
       >
+        {placeholder !== null && <option value="">{placeholder}</option>}
         {options.map(([optionValue, labelText]) => (
           <option key={optionValue} value={optionValue}>{labelText}</option>
         ))}
@@ -189,10 +286,107 @@ export function SelectField({
   );
 }
 
-export function SubmitBar({ cancelLabel = "Cancelar", submitLabel, busyLabel = "Guardando...", busy = false, disabled = false, onCancel }) {
+export function CheckboxField({
+  id,
+  name,
+  label,
+  description,
+  checked,
+  onChange,
+  error,
+  disabled = false,
+  className = "",
+}) {
+  const fieldId = id ?? name;
+  return (
+    <div className={className}>
+      <label
+        htmlFor={fieldId}
+        className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
+          error ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-slate-50 hover:border-teal-200"
+        } ${disabled ? "cursor-not-allowed opacity-70" : ""}`}
+      >
+        <input
+          id={fieldId}
+          name={name}
+          type="checkbox"
+          checked={Boolean(checked)}
+          onChange={onChange}
+          disabled={disabled}
+          aria-invalid={error ? "true" : "false"}
+          aria-describedby={describedBy(fieldId, error, description)}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-teal-700 focus:ring-2 focus:ring-teal-200"
+        />
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-slate-800">{label}</span>
+          {description && <span id={`${fieldId}-hint`} className="mt-0.5 block text-xs leading-5 text-slate-500">{description}</span>}
+        </span>
+      </label>
+      <FieldError id={`${fieldId}-err`} message={error} />
+    </div>
+  );
+}
+
+export function ToggleField({
+  id,
+  name,
+  label,
+  description,
+  checked,
+  onChange,
+  disabled = false,
+  error,
+  className = "",
+}) {
+  const fieldId = id ?? name;
+  return (
+    <div className={className}>
+      <button
+        type="button"
+        role="switch"
+        id={fieldId}
+        name={name}
+        aria-checked={Boolean(checked)}
+        aria-invalid={error ? "true" : "false"}
+        aria-describedby={describedBy(fieldId, error, description)}
+        disabled={disabled}
+        onClick={() => onChange?.({ target: { name, type: "checkbox", checked: !checked } })}
+        className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:opacity-70 ${
+          error ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-slate-50 hover:border-teal-200"
+        }`}
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-slate-800">{label}</span>
+          {description && <span id={`${fieldId}-hint`} className="mt-0.5 block text-xs leading-5 text-slate-500">{description}</span>}
+        </span>
+        <span
+          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+            checked ? "bg-teal-700" : "bg-slate-300"
+          }`}
+          aria-hidden="true"
+        >
+          <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
+        </span>
+      </button>
+      <FieldError id={`${fieldId}-err`} message={error} />
+    </div>
+  );
+}
+
+export function SubmitBar({
+  cancelLabel = "Cancelar",
+  submitLabel,
+  busyLabel = "Guardando...",
+  busy = false,
+  disabled = false,
+  onCancel,
+  helperText,
+  destructive = false,
+}) {
   return (
     <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-slate-100 bg-slate-50/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0">
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+        {helperText && <p className="text-xs leading-5 text-slate-500 sm:mr-auto">{helperText}</p>}
         {onCancel && (
           <Button type="button" disabled={busy} onClick={onCancel}
             className="w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto">
@@ -200,7 +394,7 @@ export function SubmitBar({ cancelLabel = "Cancelar", submitLabel, busyLabel = "
           </Button>
         )}
         <Button type="submit" disabled={busy || disabled}
-          className="w-full bg-teal-700 text-white hover:bg-teal-800 sm:w-auto">
+          className={`w-full text-white sm:w-auto ${destructive ? "bg-rose-700 hover:bg-rose-800" : "bg-teal-700 hover:bg-teal-800"}`}>
           {busy ? busyLabel : submitLabel}
         </Button>
       </div>

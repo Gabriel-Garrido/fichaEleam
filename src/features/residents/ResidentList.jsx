@@ -5,7 +5,9 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
+import FilterBar from "../../components/FilterBar";
 import PageLayout from "../../layout/PageLayout";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { ESTADO_CONFIG, DEPENDENCIA_TONE, initials, calcAge, getAllergySummary } from "./residentUtils";
 import ExcelImportModal from "../import/ExcelImportModal";
 import { residentImportConfig, normalizeResidentRows } from "../import/bulkImportConfigs";
@@ -23,10 +25,15 @@ export default function ResidentList() {
   const [residents,    setResidents]    = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
-  const [filtroEstado, setFiltroEstado] = useState("");
-  const [busqueda,     setBusqueda]     = useState("");
   const [view,         setView]         = useState("grid"); // grid | list
   const [importModal,  setImportModal]  = useState(false);
+
+  const [filters, setFilter, clearFilters] = useFilterParams({
+    schema: { q: "string", estado: "string" },
+    defaults: { q: "", estado: "" },
+  });
+  const busqueda = filters.q ?? "";
+  const filtroEstado = filters.estado ?? "";
 
   const fetchResidents = useCallback(async () => {
     setLoading(true);
@@ -104,6 +111,7 @@ export default function ResidentList() {
 
   return (
     <PageLayout
+      coachFeatureId="residents"
       title="Residentes"
       eyebrow="Operación clínica"
       description={stats.total === 0 ? "Registra y gestiona el historial clínico de cada residente del ELEAM." : `${stats.total} residente${stats.total !== 1 ? "s" : ""} registrado${stats.total !== 1 ? "s" : ""}${filtroEstado ? ` · filtrando por ${ESTADO_CONFIG[filtroEstado]?.label.toLowerCase() ?? filtroEstado}` : ""}`}
@@ -270,80 +278,78 @@ export default function ResidentList() {
               value={stats.total}
               tone="primary"
               active={filtroEstado === ""}
-              onClick={() => setFiltroEstado("")}
+              onClick={() => setFilter("estado", "")}
             />
             <StatChip
               label="Activos"
               value={stats.activo}
               tone="emerald"
               active={filtroEstado === "activo"}
-              onClick={() => setFiltroEstado(filtroEstado === "activo" ? "" : "activo")}
+              onClick={() => setFilter("estado", filtroEstado === "activo" ? "" : "activo")}
             />
             <StatChip
               label="Hospitalizados"
               value={stats.hospitalizado}
               tone="amber"
               active={filtroEstado === "hospitalizado"}
-              onClick={() => setFiltroEstado(filtroEstado === "hospitalizado" ? "" : "hospitalizado")}
+              onClick={() => setFilter("estado", filtroEstado === "hospitalizado" ? "" : "hospitalizado")}
             />
             <StatChip
               label="Egresados"
               value={stats.egresado}
               tone="slate"
               active={filtroEstado === "egresado"}
-              onClick={() => setFiltroEstado(filtroEstado === "egresado" ? "" : "egresado")}
+              onClick={() => setFilter("estado", filtroEstado === "egresado" ? "" : "egresado")}
             />
             <StatChip
               label="Fallecidos"
               value={stats.fallecido}
               tone="rose"
               active={filtroEstado === "fallecido"}
-              onClick={() => setFiltroEstado(filtroEstado === "fallecido" ? "" : "fallecido")}
+              onClick={() => setFilter("estado", filtroEstado === "fallecido" ? "" : "fallecido")}
             />
           </div>
 
-          {/* Toolbar: búsqueda + selector vista */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-5 flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-            <div className="relative flex-1">
-              <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                </svg>
-              </span>
-              <input
-                type="search"
-                placeholder="Buscar por nombre, apellido o RUT..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-200"
-              />
-            </div>
-            <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch md:self-auto">
-              <button
-                type="button"
-                onClick={() => setView("grid")}
-                aria-pressed={view === "grid"}
-                className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium ${
-                  view === "grid"
-                    ? "bg-teal-700 text-white"
-                    : "bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                Tarjetas
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                aria-pressed={view === "list"}
-                className={`flex-1 md:flex-none px-3 py-2 text-xs font-medium border-l border-slate-200 ${
-                  view === "list"
-                    ? "bg-teal-700 text-white"
-                    : "bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                Lista
-              </button>
-            </div>
+          {/* Filter bar + toggle vista */}
+          <div className="mb-5 bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5">
+            <FilterBar
+              search={busqueda}
+              onSearchChange={(v) => setFilter("q", v)}
+              searchPlaceholder="Buscar por nombre, apellido o RUT..."
+              filters={[]}
+              values={filters}
+              onFilterChange={setFilter}
+              onClearAll={clearFilters}
+              resultCount={filtered.length}
+              totalCount={residents.length}
+              loading={loading}
+            >
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Vista:</span>
+                <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setView("grid")}
+                    aria-pressed={view === "grid"}
+                    className={`px-3 py-2 text-xs font-medium min-h-11 sm:min-h-10 ${
+                      view === "grid" ? "bg-teal-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    Tarjetas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView("list")}
+                    aria-pressed={view === "list"}
+                    className={`px-3 py-2 text-xs font-medium border-l border-slate-200 min-h-11 sm:min-h-10 ${
+                      view === "list" ? "bg-teal-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    Lista
+                  </button>
+                </div>
+              </div>
+            </FilterBar>
           </div>
 
           {/* Lista */}
@@ -356,11 +362,13 @@ export default function ResidentList() {
               </div>
               <p className="text-sm font-semibold text-slate-700">Sin resultados</p>
               <p className="mt-1 text-sm text-slate-500">
-                Ningún residente coincide con los filtros aplicados.
+                {busqueda || filtroEstado
+                  ? `No hay residentes que coincidan${busqueda ? ` con "${busqueda}"` : ""}${filtroEstado ? ` en estado ${ESTADO_CONFIG[filtroEstado]?.label.toLowerCase() ?? filtroEstado}` : ""}.`
+                  : "Ningún residente coincide con los filtros aplicados."}
               </p>
               <button
                 type="button"
-                onClick={() => { setBusqueda(""); setFiltroEstado(""); }}
+                onClick={clearFilters}
                 className="mt-4 text-sm font-semibold text-teal-700 hover:underline"
               >
                 Limpiar filtros

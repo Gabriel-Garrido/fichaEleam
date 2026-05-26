@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { useFilterParams } from "../../hooks/useFilterParams";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import PageLayout from "../../layout/PageLayout";
 import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
 import CollapsibleGuide from "../../components/CollapsibleGuide";
 import MetricCard from "../../components/MetricCard";
+import EmptyState from "../../components/EmptyState";
+import ChipGroup from "../../components/ChipGroup";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -112,10 +116,20 @@ function residentName(residente) {
 export default function CareTasksPage() {
   const toast = useToast();
   const { can, profile } = useAuth();
-  const [fecha, setFecha] = useState(todayIso());
-  const [turno, setTurno] = useState(currentTurno());
-  const [filter, setFilter] = useState("pendientes");
-  const [type, setType] = useState("todos");
+  const [pageFilters, setPageFilter, clearPageFilters] = useFilterParams({
+    schema: { fecha: "date", turno: "string", filter: "string", type: "string", q: "string" },
+    defaults: { fecha: todayIso(), turno: currentTurno(), filter: "pendientes", type: "todos", q: "" },
+  });
+  const fecha = pageFilters.fecha || todayIso();
+  const turno = pageFilters.turno || currentTurno();
+  const filter = pageFilters.filter || "pendientes";
+  const type = pageFilters.type || "todos";
+  const searchQuery = pageFilters.q ?? "";
+  const debouncedQuery = useDebouncedValue(searchQuery, 200);
+  const setFecha = (value) => setPageFilter("fecha", value);
+  const setTurno = (value) => setPageFilter("turno", value);
+  const setFilter = (value) => setPageFilter("filter", value);
+  const setType = (value) => setPageFilter("type", value);
   const [allItems, setAllItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -168,12 +182,24 @@ export default function CareTasksPage() {
   }, [fecha, turno]);
 
   const items = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    const matchesQuery = q
+      ? (item) => {
+          const residente = item.residente ?? item.residentes;
+          const text = [
+            residente?.nombre, residente?.apellido,
+            item.titulo, item.descripcion, item.medicamento?.nombre,
+          ].filter(Boolean).join(" ").toLowerCase();
+          return text.includes(q);
+        }
+      : () => true;
     return sortWorkItemsByUrgency(
       allItems
         .filter((item) => matchesType(item, type))
         .filter((item) => matchesFilter(item, filter))
+        .filter(matchesQuery)
     );
-  }, [allItems, filter, type]);
+  }, [allItems, filter, type, debouncedQuery]);
 
   const metrics = useMemo(() => buildTaskMetrics(allItems), [allItems]);
   const focus = useMemo(() => getTurnFocus(metrics), [metrics]);
@@ -315,6 +341,7 @@ export default function CareTasksPage() {
 
   return (
     <PageLayout
+      coachFeatureId="care-tasks"
       title="Tareas del turno"
       eyebrow="Bandeja del turno"
       description="Plan de cuidado y medicamentos programados, generados automáticamente por recurrencia."
@@ -376,6 +403,38 @@ export default function CareTasksPage() {
           </div>
         </div>
 
+        <div className="mt-4">
+          <label htmlFor="careTasks-search" className="sr-only">Buscar residente o tarea</label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-3.5-3.5" strokeLinecap="round" />
+              </svg>
+            </span>
+            <input
+              id="careTasks-search"
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setPageFilter("q", e.target.value)}
+              placeholder="Buscar por residente, medicamento o título de tarea..."
+              className="w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-300 bg-white pl-9 pr-9 py-2 text-base sm:text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setPageFilter("q", "")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                aria-label="Limpiar búsqueda"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M6 6l12 12M6 18 18 6" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           <SegmentedFilter
             label="Estado"
@@ -392,6 +451,18 @@ export default function CareTasksPage() {
             tooltips={TYPE_FILTER_TOOLTIPS}
           />
         </div>
+
+        {(filter !== "pendientes" || type !== "todos" || searchQuery) && (
+          <div className="mt-3 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={clearPageFilters}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 hover:underline"
+            >
+              Limpiar filtros y búsqueda
+            </button>
+          </div>
+        )}
       </section>
 
       <CollapsibleGuide
@@ -405,24 +476,24 @@ export default function CareTasksPage() {
         ]}
       />
 
-      <section className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 xl:grid-cols-9">
         <MetricCard label="Pendientes" value={metrics.pendientes} tone="amber" tooltip="Tareas del turno aún sin cerrar." />
         <MetricCard label="Vencidas" value={metrics.vencidas} tone="rose" tooltip="Tareas que pasaron su hora o ventana de ejecución." />
         <MetricCard label="Por validar" value={metrics.porValidar} tone="sky" tooltip="Medicamentos administrados que esperan confirmación de un segundo usuario." />
-        <MetricCard label="Total" value={metrics.total} tooltip="Total de tareas del turno (cuidado, medicamentos, signos y controles)." className={showMetricDetails ? "" : "hidden sm:block"} />
-        <MetricCard label="Reprogramadas" value={metrics.reprogramadas} tone="sky" tooltip="Tareas movidas a otra hora o turno." className={showMetricDetails ? "" : "hidden sm:block"} />
-        <MetricCard label="Cuidado" value={metrics.cuidado} tone="teal" tooltip="Rutinas y actividades del plan de cuidado (alimentación, higiene, movilidad, etc.)." className={showMetricDetails ? "" : "hidden sm:block"} />
-        <MetricCard label="Medicamentos" value={metrics.medicamentos} tone="sky" tooltip="Dosis programadas del turno." className={showMetricDetails ? "" : "hidden sm:block"} />
-        <MetricCard label="Signos" value={metrics.signos} tone="teal" tooltip="Control de presión, frecuencia, temperatura, saturación y dolor." className={showMetricDetails ? "" : "hidden sm:block"} />
-        <MetricCard label="Seguimiento" value={metrics.seguimientos} tone="amber" tooltip="Controles pendientes del equipo (caídas, reacciones, heridas) que requieren cierre." className={showMetricDetails ? "" : "hidden sm:block"} />
+        <MetricCard label="Total" value={metrics.total} tooltip="Total de tareas del turno (cuidado, medicamentos, signos y controles)." />
+        <MetricCard label="Reprogramadas" value={metrics.reprogramadas} tone="sky" tooltip="Tareas movidas a otra hora o turno." className={showMetricDetails ? "" : "hidden xl:block"} />
+        <MetricCard label="Cuidado" value={metrics.cuidado} tone="teal" tooltip="Rutinas y actividades del plan de cuidado (alimentación, higiene, movilidad, etc.)." className={showMetricDetails ? "" : "hidden xl:block"} />
+        <MetricCard label="Medicamentos" value={metrics.medicamentos} tone="sky" tooltip="Dosis programadas del turno." className={showMetricDetails ? "" : "hidden xl:block"} />
+        <MetricCard label="Signos" value={metrics.signos} tone="teal" tooltip="Control de presión, frecuencia, temperatura, saturación y dolor." className={showMetricDetails ? "" : "hidden xl:block"} />
+        <MetricCard label="Seguimiento" value={metrics.seguimientos} tone="amber" tooltip="Controles pendientes del equipo (caídas, reacciones, heridas) que requieren cierre." className={showMetricDetails ? "" : "hidden xl:block"} />
       </section>
 
       <button
         type="button"
         onClick={() => setShowMetricDetails((prev) => !prev)}
-        className="text-xs font-semibold text-teal-700 hover:underline sm:hidden"
+        className="text-xs font-semibold text-teal-700 hover:underline xl:hidden"
       >
-        {showMetricDetails ? "Ocultar detalle del turno" : "Ver detalle del turno"}
+        {showMetricDetails ? "Ocultar desglose por categoría" : "Ver desglose por categoría"}
       </button>
 
       <TurnProgressStrip metrics={metrics} />
@@ -443,35 +514,33 @@ export default function CareTasksPage() {
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <div className="space-y-3 p-4">
+          <div className="space-y-3 p-4" role="status" aria-live="polite">
+            <p className="text-xs font-medium text-slate-500">Cargando tareas del turno…</p>
             {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-100" />)}
           </div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-teal-50">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-teal-600">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h2 className="mt-3 text-sm font-semibold text-slate-950">
-              {filter === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {filter === "pendientes" && metrics.total > 0
-                ? "No quedan pendientes ni vencidas para este turno."
-                : metrics.total > 0
-                  ? "El turno tiene tareas cargadas, pero ninguna coincide con el filtro."
-                  : "Configura actividades en Plan de cuidado o indicaciones de medicamentos desde la ficha del residente."}
-            </p>
-            {metrics.total > 0 && filter !== "pendientes" && (
-              <button
-                type="button"
-                onClick={() => { setFilter("pendientes"); setType("todos"); }}
-                className="mt-4 text-sm font-semibold text-teal-700 hover:underline"
-              >
-                Ver tareas pendientes
-              </button>
-            )}
+          <div className="p-4 sm:p-6">
+            <EmptyState
+              tone={filter === "pendientes" && metrics.total > 0 ? "emerald" : "teal"}
+              title={filter === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
+              description={
+                filter === "pendientes" && metrics.total > 0
+                  ? "No quedan pendientes ni vencidas para este turno."
+                  : metrics.total > 0
+                    ? "El turno tiene tareas cargadas, pero ninguna coincide con el filtro seleccionado."
+                    : "Configura actividades en Plan de cuidado o indicaciones de medicamentos desde la ficha del residente."
+              }
+              icon={
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              }
+              action={
+                metrics.total > 0 && filter !== "pendientes"
+                  ? { label: "Ver tareas pendientes", onClick: () => { setFilter("pendientes"); setType("todos"); } }
+                  : null
+              }
+            />
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -539,9 +608,19 @@ function TurnProgressStrip({ metrics }) {
     pct >= 40 ? { bar: "bg-amber-400",   pill: "bg-amber-100 text-amber-800"    } :
                 { bar: "bg-rose-400",    pill: "bg-rose-100 text-rose-700"      };
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <div
+      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+      title={`${completed} de ${metrics.total} tareas completadas en el turno`}
+    >
       <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Progreso del turno</span>
-      <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+      <div
+        className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${completed} de ${metrics.total} tareas completadas`}
+      >
         <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${pct}%` }} />
       </div>
       <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full tabular-nums ${tone.pill}`}>
@@ -552,30 +631,16 @@ function TurnProgressStrip({ metrics }) {
 }
 
 function SegmentedFilter({ label, value, options, onChange, tooltips = {} }) {
+  const items = Object.entries(options).map(([optionValue, optionLabel]) => ({
+    value: optionValue,
+    label: optionLabel,
+    title: tooltips[optionValue],
+    tone: "primary",
+  }));
   return (
     <div>
       <p className="mb-2 text-xs font-semibold uppercase text-slate-400">{label}</p>
-      <div className="snap-tabs scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
-        {Object.entries(options).map(([optionValue, optionLabel]) => {
-          const active = value === optionValue;
-          return (
-            <button
-              key={optionValue}
-              type="button"
-              onClick={() => onChange(optionValue)}
-              title={tooltips[optionValue]}
-              aria-pressed={active}
-              className={`tap-highlight-none snap-start shrink-0 whitespace-nowrap rounded-full border px-3.5 py-2 sm:py-1.5 text-xs font-semibold transition-colors ${
-                active
-                  ? "border-teal-600 bg-teal-50 text-teal-800"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 active:bg-slate-100"
-              }`}
-            >
-              {optionLabel}
-            </button>
-          );
-        })}
-      </div>
+      <ChipGroup ariaLabel={label} value={value} onChange={onChange} options={items} size="md" />
     </div>
   );
 }
@@ -596,8 +661,8 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
         : "border-sky-200 bg-sky-50 text-sky-700";
 
   return (
-    <li className="p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <li className="p-3 sm:p-4">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${typeBadgeClass}`}>
@@ -629,7 +694,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
             )}
             <span className="text-xs font-medium text-slate-500">{item.hora?.slice(0, 5)}</span>
           </div>
-          <h3 className="mt-2 text-sm font-semibold text-slate-950">{item.title}</h3>
+          <h3 className="mt-2 min-w-0 text-sm font-semibold text-slate-950">{item.title}</h3>
           <p className="mt-1 text-sm text-slate-600">
             {residentName(item.resident)}{item.meta ? ` · ${item.meta}` : ""}
           </p>
@@ -653,13 +718,13 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
           )}
           {item.row.notas && <p className="mt-1 text-xs text-slate-400">Notas: {item.row.notas}</p>}
         </div>
-        <div className="flex w-full shrink-0 flex-wrap gap-2 lg:w-auto lg:justify-end">
+        <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:shrink-0 lg:flex-wrap lg:justify-end">
           {isVitals && item.open && canCreateVitals && (
             <button
               type="button"
               onClick={onVitalsAction}
               title="Registrar presión, frecuencia, temperatura, saturación y dolor del residente."
-              className="rounded-xl bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800"
+              className="min-h-11 rounded-xl bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800 sm:min-h-0"
             >
               Registrar
             </button>
@@ -675,7 +740,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
                 type="button"
                 onClick={() => onCareAction("cumplida")}
                 title="Marca la tarea como realizada y deja registro firmado."
-                className="min-w-[7rem] flex-1 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none"
+                className="min-h-11 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 lg:min-w-[7rem]"
               >
                 Cumplir
               </button>
@@ -683,7 +748,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
                 type="button"
                 onClick={onCareReschedule}
                 title="Mover esta tarea a otro día, turno u hora sin marcarla como cumplida ni omitida."
-                className="min-w-[7rem] flex-1 rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm font-semibold text-sky-700 hover:bg-sky-50 sm:flex-none"
+                className="min-h-11 rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm font-semibold text-sky-700 hover:bg-sky-50 lg:min-w-[7rem]"
               >
                 Reprogramar
               </button>
@@ -691,7 +756,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
                 type="button"
                 onClick={() => onCareAction("omitida")}
                 title="Registrar que la tarea no se ejecutó. Se solicita motivo para mantener trazabilidad."
-                className="min-w-[7rem] flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 sm:flex-none"
+                className="min-h-11 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 lg:min-w-[7rem]"
               >
                 Omitir
               </button>
@@ -703,7 +768,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
                 type="button"
                 onClick={() => onMedicationAction("administrado")}
                 title="Registrar que se administró la dosis. Si requiere stock, descuenta del lote elegido."
-                className="min-w-[7rem] flex-1 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 sm:flex-none"
+                className="min-h-11 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 lg:min-w-[7rem]"
               >
                 Administrar
               </button>
@@ -711,7 +776,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
                 type="button"
                 onClick={() => onMedicationAction("omitido")}
                 title="Registrar que no se administró la dosis. Se solicita motivo y no descuenta stock."
-                className="min-w-[7rem] flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 sm:flex-none"
+                className="min-h-11 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 lg:min-w-[7rem]"
               >
                 Omitir
               </button>
@@ -722,7 +787,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
               type="button"
               onClick={() => onMedicationAction("validar")}
               title="Confirmar como segundo usuario que la administración está correcta."
-              className="min-w-[7rem] flex-1 rounded-xl bg-sky-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 sm:flex-none"
+              className="min-h-11 rounded-xl bg-sky-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 lg:min-w-[7rem]"
             >
               Validar
             </button>
@@ -740,7 +805,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
               type="button"
               onClick={onSeguimientoAction}
               title="Cerrar el seguimiento con evolución, o continuarlo en otro turno."
-              className="min-w-[7rem] flex-1 rounded-xl bg-amber-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 sm:flex-none"
+              className="min-h-11 rounded-xl bg-amber-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 lg:min-w-[7rem]"
             >
               Resolver
             </button>

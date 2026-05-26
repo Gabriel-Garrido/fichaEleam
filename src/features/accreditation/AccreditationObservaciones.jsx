@@ -3,9 +3,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
+import FilterBar from "../../components/FilterBar";
 import { friendlyError } from "../../utils/errorMessages";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
+import { FeatureCoach } from "../featureCoach";
 import {
   getObservaciones,
   crearObservacion,
@@ -220,8 +223,13 @@ export default function AccreditationObservaciones() {
   const { isAdminEleam } = useAuth();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtroEstado, setFiltroEstado] = useState("abiertas");
-  const [filtroOrigen, setFiltroOrigen] = useState("todas");
+  const [obsFilters, setObsFilter, clearObsFilters] = useFilterParams({
+    schema: { q: "string", estado: "string", origen: "string" },
+    defaults: { q: "", estado: "abiertas", origen: "todas" },
+  });
+  const filtroEstado = obsFilters.estado || "abiertas";
+  const filtroOrigen = obsFilters.origen || "todas";
+  const busqueda = obsFilters.q ?? "";
   const [showNueva, setShowNueva] = useState(params.get("nuevo") === "1");
 
   const load = useCallback(async () => {
@@ -239,13 +247,21 @@ export default function AccreditationObservaciones() {
   useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
     return list.filter((o) => {
       if (filtroEstado === "abiertas" && o.estado === "cerrada") return false;
       if (filtroEstado === "cerradas" && o.estado !== "cerrada") return false;
       if (filtroOrigen !== "todas" && o.origen !== filtroOrigen) return false;
+      if (q) {
+        const text = [
+          o.descripcion, o.acciones_subsanacion, o.cerrada_nota,
+          o.requisito_eleam?.requisito?.codigo, o.requisito_eleam?.requisito?.nombre,
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!text.includes(q)) return false;
+      }
       return true;
     });
-  }, [list, filtroEstado, filtroOrigen]);
+  }, [list, filtroEstado, filtroOrigen, busqueda]);
 
   const handleCerrar = async (id, nota) => {
     try {
@@ -259,6 +275,7 @@ export default function AccreditationObservaciones() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
+      <FeatureCoach featureId="accreditation-observaciones" standalone />
       <button
         type="button"
         onClick={() => navigate("/accreditation")}
@@ -292,39 +309,56 @@ export default function AccreditationObservaciones() {
         />
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <div className="flex gap-1">
-          {FILTROS_ESTADO.map((f) => (
-            <button
-              type="button"
-              key={f.key}
-              onClick={() => setFiltroEstado(f.key)}
-              className={`text-sm px-3 py-1.5 rounded-full border ${
-                filtroEstado === f.key
-                  ? "bg-teal-700 text-white border-teal-700"
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1">
-          {FILTROS_ORIGEN.map((f) => (
-            <button
-              type="button"
-              key={f.key}
-              onClick={() => setFiltroOrigen(f.key)}
-              className={`text-sm px-3 py-1.5 rounded-full border ${
-                filtroOrigen === f.key
-                  ? "bg-slate-700 text-white border-slate-700"
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5">
+        <FilterBar
+          search={busqueda}
+          onSearchChange={(v) => setObsFilter("q", v)}
+          searchPlaceholder="Buscar por descripción, requisito o subsanación..."
+          filters={[]}
+          values={obsFilters}
+          onFilterChange={setObsFilter}
+          onClearAll={clearObsFilters}
+          resultCount={filtered.length}
+          totalCount={list.length}
+          loading={loading}
+        >
+          <div className="flex flex-wrap gap-2">
+            <div className="flex gap-1 flex-wrap">
+              {FILTROS_ESTADO.map((f) => (
+                <button
+                  type="button"
+                  key={f.key}
+                  onClick={() => setObsFilter("estado", f.key)}
+                  aria-pressed={filtroEstado === f.key}
+                  className={`tap-highlight-none text-sm px-3 py-1.5 rounded-full border ${
+                    filtroEstado === f.key
+                      ? "bg-teal-700 text-white border-teal-700"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              {FILTROS_ORIGEN.map((f) => (
+                <button
+                  type="button"
+                  key={f.key}
+                  onClick={() => setObsFilter("origen", f.key)}
+                  aria-pressed={filtroOrigen === f.key}
+                  className={`tap-highlight-none text-sm px-3 py-1.5 rounded-full border ${
+                    filtroOrigen === f.key
+                      ? "bg-slate-700 text-white border-slate-700"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </FilterBar>
       </div>
 
       {filtered.length === 0 ? (

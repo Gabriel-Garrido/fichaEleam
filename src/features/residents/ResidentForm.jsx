@@ -17,6 +17,7 @@ import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 import Modal from "../../components/Modal";
+import { FeatureCoach } from "../featureCoach";
 import {
   ErrorSummary,
   FormSection,
@@ -40,13 +41,6 @@ import {
 const OPTIONS = {
   sexo: [["", "Seleccionar"], ["masculino", "Masculino"], ["femenino", "Femenino"], ["otro", "Otro"]],
   estadoCivil: [["", "Seleccionar"], ["soltero", "Soltero/a"], ["casado", "Casado/a"], ["viudo", "Viudo/a"], ["divorciado", "Divorciado/a"], ["otro", "Otro"]],
-  dependencia: [
-    ["", "Seleccionar"],
-    ["leve", "Leve - apoyo ocasional"],
-    ["moderado", "Moderado - apoyo parcial"],
-    ["severo", "Severo - apoyo constante"],
-    ["total", "Total - dependencia completa"],
-  ],
   estadoCreate: [["activo", "Activo"], ["hospitalizado", "Hospitalizado"]],
   estadoEdit: [["activo", "Activo"], ["hospitalizado", "Hospitalizado"], ["egresado", "Egresado"], ["fallecido", "Fallecido"]],
 };
@@ -432,6 +426,7 @@ export default function ResidentForm() {
   return (
     <>
       <div className="mx-auto max-w-4xl px-4 py-6">
+        <FeatureCoach featureId={isEditing ? "residents-edit" : "residents-new"} standalone />
         <div className="mb-6 flex items-center gap-3">
           <button
             type="button"
@@ -470,7 +465,7 @@ export default function ResidentForm() {
             </div>
           </FormSection>
 
-          <FormSection icon={<IconHeart />} title="Información clínica base" description="Las escalas Barthel y Katz se registran después desde la ficha del residente.">
+          <FormSection icon={<IconHeart />} title="Información clínica base" description="Antecedentes iniciales para orientar al equipo de cuidado.">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <TextareaField id="diagnostico_principal" name="diagnostico_principal" label="Diagnóstico principal" value={form.diagnostico_principal} onChange={handleChange} error={errors.diagnostico_principal} maxLength={500} rows={3} placeholder="Hipertensión arterial, diabetes mellitus tipo 2..." />
@@ -479,7 +474,6 @@ export default function ResidentForm() {
                 <TextField id="alergias" name="alergias" label="Alergias conocidas" value={form.alergias} onChange={handleChange} error={errors.alergias} placeholder="Penicilina, ibuprofeno..." hint="Separa múltiples alergias con coma. Deja vacío si no hay alergias conocidas." />
               </div>
               <SelectField id="grupo_sanguineo" name="grupo_sanguineo" label="Grupo sanguíneo" value={form.grupo_sanguineo} onChange={handleChange} options={GRUPOS_SANGUINEOS} error={errors.grupo_sanguineo} />
-              <SelectField id="nivel_dependencia" name="nivel_dependencia" label="Nivel de dependencia" value={form.nivel_dependencia} onChange={handleChange} options={OPTIONS.dependencia} error={errors.nivel_dependencia} />
             </div>
           </FormSection>
 

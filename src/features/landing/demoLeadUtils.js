@@ -1,4 +1,5 @@
 import { validateEmail } from "../../utils/validators";
+import { cleanText as cleanSharedText } from "../../utils/formValidation";
 
 const FIELD_LIMITS = {
   nombre: 120,
@@ -13,7 +14,7 @@ const FIELD_LIMITS = {
 };
 
 function cleanText(value, max) {
-  const text = String(value ?? "").trim().replace(/\s+/g, " ");
+  const text = cleanSharedText(value);
   return text ? text.slice(0, max) : "";
 }
 
@@ -49,21 +50,21 @@ export function validateDemoLeadForm(form = {}) {
   const email = cleanText(form.email, FIELD_LIMITS.email + 1);
   const telefono = cleanText(form.telefono, FIELD_LIMITS.telefono + 1);
 
-  if (!nombre) errs.nombre = "Requerido";
-  else if (nombre.length > FIELD_LIMITS.nombre) errs.nombre = "Máximo 120 caracteres";
+  if (!nombre) errs.nombre = "Ingresa tu nombre completo.";
+  else if (nombre.length > FIELD_LIMITS.nombre) errs.nombre = "El nombre no puede superar 120 caracteres.";
 
-  if (!cargo) errs.cargo = "Selecciona tu cargo";
-  else if (cargo.length > FIELD_LIMITS.cargo) errs.cargo = "Máximo 80 caracteres";
+  if (!cargo) errs.cargo = "Selecciona tu cargo para orientar la demo.";
+  else if (cargo.length > FIELD_LIMITS.cargo) errs.cargo = "El cargo no puede superar 80 caracteres.";
 
-  if (!eleamNombre) errs.eleam_nombre = "Requerido";
-  else if (eleamNombre.length > FIELD_LIMITS.eleam_nombre) errs.eleam_nombre = "Máximo 160 caracteres";
+  if (!eleamNombre) errs.eleam_nombre = "Ingresa el nombre del ELEAM o residencia.";
+  else if (eleamNombre.length > FIELD_LIMITS.eleam_nombre) errs.eleam_nombre = "El nombre del ELEAM no puede superar 160 caracteres.";
 
-  if (email.length > FIELD_LIMITS.email) errs.email = "Máximo 254 caracteres";
-  else if (!validateEmail(email)) errs.email = "Email no válido";
+  if (email.length > FIELD_LIMITS.email) errs.email = "El email no puede superar 254 caracteres.";
+  else if (!validateEmail(email)) errs.email = "Ingresa un email válido para coordinar el acceso.";
 
   const phoneDigits = telefono.replace(/[^0-9+]/g, "");
-  if (!phoneDigits || phoneDigits.length < 8) errs.telefono = "Ingresa un teléfono válido";
-  else if (telefono.length > FIELD_LIMITS.telefono) errs.telefono = "Máximo 40 caracteres";
+  if (!phoneDigits || phoneDigits.length < 8) errs.telefono = "Ingresa un teléfono válido para contactarte.";
+  else if (telefono.length > FIELD_LIMITS.telefono) errs.telefono = "El teléfono no puede superar 40 caracteres.";
 
   return errs;
 }

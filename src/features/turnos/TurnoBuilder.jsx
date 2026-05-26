@@ -75,6 +75,7 @@ export default function TurnoBuilder() {
 
   return (
     <PageLayout
+      coachFeatureId="turnos-nuevo"
       title="Nueva entrega"
       eyebrow="Entrega de turno"
       description="Revisa lo importante, agrega notas breves y deja pendientes accionables."

@@ -912,16 +912,17 @@ function ScheduleFields({ schedule, setSchedule, saving, title = "Horario", onRe
       {schedule.frecuencia === "semanal" && (
         <div className="mt-3">
           <div className="mb-2 text-sm font-medium text-slate-700">Días</div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
             {WEEK_DAYS.map(([day, label]) => (
               <button
                 key={day}
                 type="button"
                 onClick={() => toggleDay(day)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                aria-pressed={schedule.dias_semana?.includes(day)}
+                className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-semibold transition-colors ${
                   schedule.dias_semana?.includes(day)
                     ? "border-teal-600 bg-teal-50 text-teal-700"
-                    : "border-slate-200 text-slate-500"
+                    : "border-slate-200 text-slate-500 hover:bg-slate-50"
                 }`}
               >
                 {label}

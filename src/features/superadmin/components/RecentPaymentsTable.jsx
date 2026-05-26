@@ -51,18 +51,18 @@ export default function RecentPaymentsTable({ payments, onSelectEleam }) {
   return (
     <div className="space-y-3">
       {/* Stats strip */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm text-center">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="min-w-0 rounded-xl border border-slate-100 bg-white p-3 text-center shadow-sm">
           <p className="text-xs text-slate-500 font-medium">Ingresos mostrados</p>
           <p className="text-xl font-bold tabular-nums text-emerald-700 mt-0.5">{formatCLP(stats.total)}</p>
           <p className="text-[11px] text-slate-400 mt-0.5">{stats.count} pago{stats.count !== 1 ? "s" : ""} completado{stats.count !== 1 ? "s" : ""}</p>
         </div>
-        <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm text-center">
+        <div className="min-w-0 rounded-xl border border-slate-100 bg-white p-3 text-center shadow-sm">
           <p className="text-xs text-slate-500 font-medium">Registros en vista</p>
           <p className="text-xl font-bold tabular-nums text-slate-800 mt-0.5">{filtered.length}</p>
           <p className="text-[11px] text-slate-400 mt-0.5">{search ? `de ${payments.length} total` : "Total cargado"}</p>
         </div>
-        <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm text-center">
+        <div className="min-w-0 rounded-xl border border-slate-100 bg-white p-3 text-center shadow-sm">
           <p className="text-xs text-slate-500 font-medium">Pendientes</p>
           <p className={`text-xl font-bold tabular-nums mt-0.5 ${stats.pending > 0 ? "text-amber-700" : "text-slate-400"}`}>
             {stats.pending}
@@ -75,7 +75,7 @@ export default function RecentPaymentsTable({ payments, onSelectEleam }) {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         {/* Search bar */}
         <div className="px-4 py-3 border-b border-slate-50">
-          <div className="relative max-w-xs">
+          <div className="relative w-full max-w-xs">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
               <SearchIcon />
             </span>

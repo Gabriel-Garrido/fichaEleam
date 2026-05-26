@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import { useFilterParams } from "../../hooks/useFilterParams";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import PageLayout from "../../layout/PageLayout";
 import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
 import CollapsibleGuide from "../../components/CollapsibleGuide";
 import MetricCard from "../../components/MetricCard";
+import ChipGroup from "../../components/ChipGroup";
+import Badge from "../../components/Badge";
+import EmptyState from "../../components/EmptyState";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useAuth } from "../../context/AuthContext";
@@ -30,14 +35,14 @@ import {
   sortMedicationRowsByFocus,
 } from "./emarUi";
 
-const STATUS_TONE = {
-  pendiente: "bg-amber-50 text-amber-800 border-amber-200",
-  administrado: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  validado: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  omitido: "bg-rose-50 text-rose-700 border-rose-200",
-  pendiente_validacion: "bg-sky-50 text-sky-700 border-sky-200",
-  revertido: "bg-slate-50 text-slate-600 border-slate-200",
-  cancelado: "bg-slate-50 text-slate-600 border-slate-200",
+const STATUS_BADGE_TONE = {
+  pendiente: "amber",
+  administrado: "emerald",
+  validado: "emerald",
+  omitido: "rose",
+  pendiente_validacion: "sky",
+  revertido: "slate",
+  cancelado: "slate",
 };
 
 const FOCUS_TONE = {
@@ -66,9 +71,18 @@ export default function EmarTurnPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { can, profile } = useAuth();
-  const [fecha, setFecha] = useState(todayIso());
-  const [turno, setTurno] = useState(currentTurno());
-  const [estado, setEstado] = useState("ahora");
+  const [emarFilters, setEmarFilter] = useFilterParams({
+    schema: { fecha: "date", turno: "string", estado: "string", q: "string" },
+    defaults: { fecha: todayIso(), turno: currentTurno(), estado: "ahora", q: "" },
+  });
+  const fecha = emarFilters.fecha || todayIso();
+  const turno = emarFilters.turno || currentTurno();
+  const estado = emarFilters.estado || "ahora";
+  const searchQuery = emarFilters.q ?? "";
+  const debouncedQuery = useDebouncedValue(searchQuery, 200);
+  const setFecha = (value) => setEmarFilter("fecha", value);
+  const setTurno = (value) => setEmarFilter("turno", value);
+  const setEstado = (value) => setEmarFilter("estado", value);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -103,11 +117,25 @@ export default function EmarTurnPage() {
   }, [fecha, turno]);
 
   const visibleRows = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    const matchesQuery = q
+      ? (row) => {
+          const residente = row.residente ?? row.residentes;
+          const text = [
+            residente?.nombre, residente?.apellido,
+            row.medicamento?.nombre, row.medicamento?.dosis,
+            row.indicacion?.detalle,
+          ].filter(Boolean).join(" ").toLowerCase();
+          return text.includes(q);
+        }
+      : () => true;
     return sortMedicationRowsByFocus(
-      rows.filter((row) => matchesMedicationFilter(row, estado, isMedicationOverdue)),
+      rows
+        .filter((row) => matchesMedicationFilter(row, estado, isMedicationOverdue))
+        .filter(matchesQuery),
       isMedicationOverdue,
     );
-  }, [estado, rows]);
+  }, [estado, rows, debouncedQuery]);
 
   const metrics = useMemo(() => {
     return buildMedicationMetrics(rows, isMedicationOverdue);
@@ -147,6 +175,7 @@ export default function EmarTurnPage() {
 
   return (
     <PageLayout
+      coachFeatureId="emar"
       title="Medicamentos del turno"
       eyebrow="Administración"
       description="Qué administrar ahora, omisiones, stock y registros por validar."
@@ -165,7 +194,7 @@ export default function EmarTurnPage() {
       }
       className="space-y-5"
     >
-      <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_160px_160px]">
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className={`rounded-xl p-3 ${focusTone.bg}`}>
           <div className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${focusTone.label}`}>
             Qué hacer ahora
@@ -179,43 +208,67 @@ export default function EmarTurnPage() {
           <p className={`mt-1 text-xs ${focusTone.detail}`}>
             {focus.detail}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {Object.entries(MEDICINE_FILTER_LABEL).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setEstado(value)}
-                className={`tap-highlight-none rounded-full px-3 py-1.5 sm:py-1 text-xs font-semibold transition-colors ${
-                  estado === value
-                    ? "bg-slate-900 text-white"
-                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100"
-                }`}
-                aria-pressed={estado === value}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="mt-3">
+            <ChipGroup
+              ariaLabel="Filtrar medicamentos por estado"
+              value={estado}
+              onChange={setEstado}
+              options={Object.entries(MEDICINE_FILTER_LABEL).map(([value, label]) => ({ value, label, tone: "slate" }))}
+            />
           </div>
         </div>
-        <label className="text-sm font-medium text-slate-700">
-          Fecha
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-          />
-        </label>
-        <label className="text-sm font-medium text-slate-700">
-          Turno
-          <select
-            value={turno}
-            onChange={(e) => setTurno(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm capitalize outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-          >
-            {EMAR_TURNOS.map((item) => <option key={item} value={item} className="capitalize">{item}</option>)}
-          </select>
-        </label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_160px_160px]">
+          <div>
+            <label htmlFor="emar-search" className="sr-only">Buscar medicamento o residente</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m21 21-3.5-3.5" strokeLinecap="round" />
+                </svg>
+              </span>
+              <input
+                id="emar-search"
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setEmarFilter("q", e.target.value)}
+                placeholder="Buscar por residente, medicamento o dosis…"
+                className="w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-200 bg-white pl-9 pr-9 py-2 text-base sm:text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setEmarFilter("q", "")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                  aria-label="Limpiar búsqueda"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M6 6l12 12M6 18 18 6" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Fecha
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="mt-1 w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-200 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Turno
+            <select
+              value={turno}
+              onChange={(e) => setTurno(e.target.value)}
+              className="mt-1 w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-200 px-3 py-2 text-base sm:text-sm text-slate-900 capitalize outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            >
+              {EMAR_TURNOS.map((item) => <option key={item} value={item} className="capitalize">{item}</option>)}
+            </select>
+          </label>
+        </div>
       </section>
 
       <CollapsibleGuide
@@ -269,34 +322,40 @@ export default function EmarTurnPage() {
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <div className="space-y-3 p-4">
+          <div className="space-y-3 p-4" role="status" aria-live="polite">
+            <p className="text-xs font-medium text-slate-500">Cargando medicamentos del turno…</p>
             {[0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />)}
           </div>
         ) : rows.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-sky-50">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-sky-600">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-              </svg>
-            </div>
-            <h2 className="mt-3 text-sm font-semibold text-slate-950">Sin medicamentos para este turno</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Configura indicaciones y horarios desde la ficha del residente, pestaña Medicamentos.
-            </p>
+          <div className="p-4 sm:p-6">
+            <EmptyState
+              tone="sky"
+              title="Sin medicamentos programados en este turno"
+              description="Cuando configures indicaciones y horarios desde la ficha del residente (pestaña Medicamentos), aparecerán acá automáticamente."
+              icon={
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+                </svg>
+              }
+            />
           </div>
         ) : visibleRows.length === 0 ? (
-          <div className="p-8 text-center">
-            <h2 className="text-sm font-semibold text-slate-950">No hay registros en este estado</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              El turno tiene medicamentos cargados, pero ninguno coincide con el filtro seleccionado.
-            </p>
-            <button
-              type="button"
-              onClick={() => setEstado("todas")}
-              className="mt-4 text-sm font-semibold text-teal-700 hover:underline"
-            >
-              Ver todos los medicamentos
-            </button>
+          <div className="p-4 sm:p-6">
+            <EmptyState
+              tone="emerald"
+              title={estado === "ahora" ? "Todo al día para este momento" : "No hay registros en este estado"}
+              description={
+                estado === "ahora"
+                  ? "No hay administraciones pendientes en este momento. Cambia el filtro para ver el resto del turno."
+                  : "El turno tiene medicamentos cargados, pero ninguno coincide con el filtro seleccionado."
+              }
+              icon={
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+              }
+              action={{ label: "Ver todos los medicamentos", onClick: () => setEstado("todas") }}
+            />
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -334,48 +393,39 @@ function EmarRow({ row, currentUserId, canAdminister, canValidate, onAction }) {
   return (
     <li className="p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[row.estado]}`}>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge tone={STATUS_BADGE_TONE[row.estado] ?? "slate"} size="sm">
               {MEDICINE_STATUS_LABEL[row.estado] ?? row.estado}
-            </span>
+            </Badge>
             {row.indicacion?.es_controlado && (
-              <span
-                className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
-                title="Medicamento controlado: requiere lote identificado y confirmación de un segundo usuario."
-              >
-                Requiere doble firma
-              </span>
+              <Badge tone="rose" size="sm" title="Medicamento controlado: requiere lote identificado y confirmación de un segundo usuario.">
+                Doble firma
+              </Badge>
             )}
             {row.indicacion?.requiere_doble_validacion && !row.indicacion?.es_controlado && (
-              <span
-                className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700"
-                title="Necesita que un segundo usuario confirme antes de cerrar."
-              >
+              <Badge tone="sky" size="sm" title="Necesita que un segundo usuario confirme antes de cerrar.">
                 Segunda firma
-              </span>
+              </Badge>
             )}
             {needsStock && (
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                Requiere stock
-              </span>
+              <Badge tone="slate" size="sm" title="Esta indicación descuenta del stock al administrar.">
+                Stock
+              </Badge>
             )}
             {overdue && (
-              <span
-                className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
-                title={row._arrastre ? "Dosis pendiente de un turno anterior que se mantuvo abierta." : "Pasó la hora o la ventana de tolerancia."}
-              >
+              <Badge tone="rose" size="sm" title={row._arrastre ? "Dosis pendiente de un turno anterior que se mantuvo abierta." : "Pasó la hora o la ventana de tolerancia."}>
                 {row._arrastre ? "Pendiente anterior" : "Vencido"}
-              </span>
+              </Badge>
             )}
             <span className="text-xs font-medium text-slate-500">
               {row._arrastre ? `${row.fecha} · ` : ""}{formatTime(row.hora)}
             </span>
           </div>
-          <h3 className="mt-2 text-sm font-semibold text-slate-950">
+          <h3 className="mt-2 truncate text-sm font-semibold text-slate-950" title={row.indicacion?.medicamento_nombre}>
             {row.indicacion?.medicamento_nombre}
           </h3>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 truncate text-sm text-slate-600" title={`${residentName(row)} · ${row.indicacion?.dosis ?? ""} · vía ${row.indicacion?.via ?? ""}`}>
             {residentName(row)} · {row.indicacion?.dosis} · vía {row.indicacion?.via}
           </p>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">

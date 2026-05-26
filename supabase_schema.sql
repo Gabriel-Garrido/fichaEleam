@@ -351,6 +351,99 @@ create index if not exists idx_turno_entregas_eleam_fecha
 create index if not exists idx_turno_entregas_creado_por
   on public.turno_entregas(creado_por);
 
+create table if not exists public.eventos_adversos (
+  id                            uuid primary key default gen_random_uuid(),
+  eleam_id                      uuid not null references public.eleams(id) on delete cascade,
+  residente_id                  uuid references public.residentes(id) on delete set null,
+  observacion_id                uuid references public.observaciones_diarias(id) on delete set null,
+  fecha_evento                  date not null default current_date,
+  hora_evento                   time,
+  turno                         text check (turno in ('mañana','tarde','noche') or turno is null),
+  lugar                         text check (lugar is null or char_length(lugar) <= 200),
+  categoria                     text not null
+                                check (categoria in (
+                                  'caida_con_lesion','caida_sin_lesion','error_medicacion',
+                                  'broncoaspiracion','lesion_por_presion','fuga','agresion',
+                                  'agitacion_severa','infeccion','accidente_via_publica',
+                                  'reaccion_alergica','autolesion','otro'
+                                )),
+  severidad                     text not null default 'leve'
+                                check (severidad in ('leve','moderado','grave','critico')),
+  descripcion                   text not null check (char_length(trim(descripcion)) between 10 and 4000),
+  causas_probables              text check (causas_probables is null or char_length(causas_probables) <= 2000),
+  acciones_inmediatas           text check (acciones_inmediatas is null or char_length(acciones_inmediatas) <= 2000),
+  testigos                      text check (testigos is null or char_length(testigos) <= 500),
+  estado                        text not null default 'registrado'
+                                check (estado in ('registrado','en_revision','en_seguimiento','cerrado','cancelado')),
+  requiere_seguimiento          boolean not null default true,
+  fecha_compromiso_cierre       date,
+  notificado_familia            boolean not null default false,
+  fecha_notificacion_familia    timestamptz,
+  notificado_por                uuid references public.profiles(id) on delete set null,
+  medio_notificacion_familia    text check (
+                                  medio_notificacion_familia is null
+                                  or medio_notificacion_familia in ('presencial','telefono','whatsapp','email','otro')
+                                ),
+  visible_familiar              boolean not null default false,
+  resumen_familiar              text check (resumen_familiar is null or char_length(resumen_familiar) <= 500),
+  registrado_por                uuid references public.profiles(id) on delete set null,
+  cerrado_por                   uuid references public.profiles(id) on delete set null,
+  fecha_cierre                  timestamptz,
+  conclusiones                  text check (conclusiones is null or char_length(conclusiones) <= 2000),
+  creado_en                     timestamptz not null default now(),
+  actualizado_en                timestamptz not null default now(),
+  constraint eventos_adversos_familiar_visible_check
+    check (visible_familiar = false or nullif(trim(coalesce(resumen_familiar, '')), '') is not null),
+  constraint eventos_adversos_notificacion_check
+    check (notificado_familia = false or medio_notificacion_familia is not null),
+  constraint eventos_adversos_cierre_check
+    check (
+      (estado <> 'cerrado' and fecha_cierre is null)
+      or (estado = 'cerrado' and fecha_cierre is not null)
+    )
+);
+
+create index if not exists idx_eventos_adv_eleam_estado
+  on public.eventos_adversos(eleam_id, estado, fecha_evento desc);
+create index if not exists idx_eventos_adv_residente_fecha
+  on public.eventos_adversos(residente_id, fecha_evento desc)
+  where residente_id is not null;
+create index if not exists idx_eventos_adv_observacion
+  on public.eventos_adversos(observacion_id)
+  where observacion_id is not null;
+create index if not exists idx_eventos_adv_familiar
+  on public.eventos_adversos(residente_id, fecha_evento desc)
+  where visible_familiar = true;
+
+create table if not exists public.eventos_adversos_acciones (
+  id              uuid primary key default gen_random_uuid(),
+  evento_id       uuid not null references public.eventos_adversos(id) on delete cascade,
+  fecha           date not null default current_date,
+  tipo            text not null default 'nota'
+                  check (tipo in ('nota','accion','reevaluacion','contacto_familia','contacto_medico','derivacion','cierre','reabertura')),
+  descripcion     text not null check (char_length(trim(descripcion)) between 1 and 2000),
+  realizado_por   uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now()
+);
+
+create index if not exists idx_eventos_adv_acciones_evento
+  on public.eventos_adversos_acciones(evento_id, creado_en desc);
+
+create table if not exists public.eventos_adversos_audit (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid references public.eleams(id) on delete cascade,
+  evento_id       uuid references public.eventos_adversos(id) on delete cascade,
+  accion          text not null check (char_length(accion) <= 80),
+  detalle         jsonb,
+  realizado_por   uuid references public.profiles(id) on delete set null,
+  realizado_en    timestamptz not null default now()
+);
+
+create index if not exists idx_eventos_adv_audit_evento
+  on public.eventos_adversos_audit(evento_id, realizado_en desc);
+create index if not exists idx_eventos_adv_audit_eleam
+  on public.eventos_adversos_audit(eleam_id, realizado_en desc);
+
 -- ============================================================
 -- 2.b Plan de cuidado y medicamentos
 -- ============================================================
@@ -911,6 +1004,9 @@ create table if not exists public.funcionario_permisos (
   registrar_visitas            boolean not null default true,
   editar_indicaciones_cuidado  boolean not null default false,
   aplicar_evaluaciones_clinicas boolean not null default true,
+  crear_eventos_adversos        boolean not null default true,
+  editar_eventos_adversos       boolean not null default true,
+  cerrar_eventos_adversos       boolean not null default false,
   actualizado_en               timestamptz not null default now()
 );
 
@@ -929,7 +1025,10 @@ alter table public.funcionario_permisos
   add column if not exists ajustar_stock_medicamentos      boolean not null default false,
   add column if not exists asignar_camas                   boolean not null default true,
   add column if not exists editar_indicaciones_cuidado     boolean not null default false,
-  add column if not exists aplicar_evaluaciones_clinicas   boolean not null default true;
+  add column if not exists aplicar_evaluaciones_clinicas   boolean not null default true,
+  add column if not exists crear_eventos_adversos          boolean not null default true,
+  add column if not exists editar_eventos_adversos         boolean not null default true,
+  add column if not exists cerrar_eventos_adversos         boolean not null default false;
 
 create table if not exists public.eleam_feature_permissions (
   id              uuid primary key default gen_random_uuid(),
@@ -1143,47 +1242,8 @@ create table if not exists public.acred_audit (
 create index if not exists idx_acred_audit_eleam on public.acred_audit(eleam_id, realizado_en desc);
 
 -- ============================================================
--- 6. CRM superadmin y blog publico
+-- 6. CRM superadmin, funnel comercial y blog publico
 -- ============================================================
-
-create table if not exists public.crm_tasks (
-  id                 uuid primary key default gen_random_uuid(),
-  eleam_id           uuid references public.eleams(id) on delete cascade,
-  titulo             text not null,
-  descripcion        text,
-  tipo               text not null default 'general'
-                     check (tipo in ('general','llamada','correo','reunion','demo','seguimiento','onboarding','renovacion','otro')),
-  estado             text not null default 'pendiente'
-                     check (estado in ('pendiente','en_curso','completada','cancelada')),
-  prioridad          text not null default 'media'
-                     check (prioridad in ('baja','media','alta','urgente')),
-  fecha_vencimiento  date,
-  creado_por         uuid references public.profiles(id) on delete set null,
-  completado_por     uuid references public.profiles(id) on delete set null,
-  creado_en          timestamptz not null default now(),
-  completado_en      timestamptz,
-  actualizado_en     timestamptz not null default now()
-);
-
-create index if not exists idx_crm_tasks_eleam on public.crm_tasks(eleam_id, estado);
-create index if not exists idx_crm_tasks_venc on public.crm_tasks(fecha_vencimiento)
-  where estado in ('pendiente','en_curso');
-create index if not exists idx_crm_tasks_estado on public.crm_tasks(estado);
-
-create table if not exists public.crm_interactions (
-  id              uuid primary key default gen_random_uuid(),
-  eleam_id        uuid not null references public.eleams(id) on delete cascade,
-  tipo            text not null default 'nota'
-                  check (tipo in ('nota','llamada','correo','reunion','demo','soporte','sistema','otro')),
-  canal           text check (canal in ('telefono','email','whatsapp','presencial','videollamada','sistema','otro') or canal is null),
-  resumen         text not null,
-  resultado       text check (resultado in ('positivo','neutro','negativo','sin_respuesta','sistema') or resultado is null),
-  proxima_accion  text,
-  creado_por      uuid references public.profiles(id) on delete set null,
-  creado_en       timestamptz not null default now()
-);
-
-create index if not exists idx_crm_int_eleam_fecha on public.crm_interactions(eleam_id, creado_en desc);
 
 create table if not exists public.blog_posts (
   id                  uuid primary key default gen_random_uuid(),
@@ -1238,6 +1298,264 @@ create unique index if not exists demo_leads_active_email_unique
   on public.demo_leads(lower(email))
   where estado in ('nuevo','contactado','demo_activo')
     and demo_user_id is null;
+
+create table if not exists public.crm_prospect_lists (
+  id              uuid primary key default gen_random_uuid(),
+  nombre          text not null check (char_length(nombre) <= 120),
+  descripcion     text check (descripcion is null or char_length(descripcion) <= 500),
+  origen          text not null default 'manual'
+                  check (origen in ('manual','import_excel','landing','whatsapp','outbound','campana','referido','otro')),
+  creado_por      uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now()
+);
+
+create index if not exists idx_crm_prospect_lists_origen
+  on public.crm_prospect_lists(origen, creado_en desc);
+
+create table if not exists public.crm_prospects (
+  id                         uuid primary key default gen_random_uuid(),
+  list_id                    uuid references public.crm_prospect_lists(id) on delete set null,
+  demo_lead_id               uuid references public.demo_leads(id) on delete set null,
+  eleam_id                   uuid references public.eleams(id) on delete set null,
+  eleam_nombre               text not null check (char_length(eleam_nombre) <= 200),
+  comuna                     text check (comuna is null or char_length(comuna) <= 100),
+  telefono                   text check (telefono is null or char_length(telefono) <= 40),
+  email                      text check (
+                               email is null
+                               or (
+                                 char_length(email) <= 254
+                                 and email ~* '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'
+                               )
+                             ),
+  facebook_url               text check (facebook_url is null or char_length(facebook_url) <= 500),
+  instagram_url              text check (instagram_url is null or char_length(instagram_url) <= 500),
+  tiktok_url                 text check (tiktok_url is null or char_length(tiktok_url) <= 500),
+  origen                     text not null default 'outbound'
+                             check (origen in ('outbound','landing','whatsapp','referido','manual','campana','import_excel','otro')),
+  canal_preferido            text not null default 'desconocido'
+                             check (canal_preferido in ('desconocido','telefono','email','whatsapp','redes','presencial')),
+  cargo_contacto             text check (cargo_contacto is null or char_length(cargo_contacto) <= 120),
+  decision_maker_nombre      text check (decision_maker_nombre is null or char_length(decision_maker_nombre) <= 160),
+  decision_maker_cargo       text check (decision_maker_cargo is null or char_length(decision_maker_cargo) <= 120),
+  num_residentes             integer check (num_residentes is null or (num_residentes between 1 and 10000)),
+  digitalizacion_estado      text not null default 'desconocido'
+                             check (digitalizacion_estado in ('desconocido','papel_excel_whatsapp','software_generico','software_eleam','mixto')),
+  software_actual            text check (software_actual is null or char_length(software_actual) <= 160),
+  dolor_principal            text check (dolor_principal is null or char_length(dolor_principal) <= 500),
+  urgencia                   text not null default 'desconocida'
+                             check (urgencia in ('desconocida','baja','media','alta')),
+  fit_score                  integer not null default 50 check (fit_score between 0 and 100),
+  valor_estimado_clp         integer check (valor_estimado_clp is null or valor_estimado_clp >= 0),
+  probabilidad_cierre        integer not null default 10 check (probabilidad_cierre between 0 and 100),
+  proxima_accion_fecha       date,
+  motivo_perdida             text check (motivo_perdida is null or char_length(motivo_perdida) <= 500),
+  competidor                 text check (competidor is null or char_length(competidor) <= 160),
+  estado                     text not null default 'nuevo'
+                             check (estado in (
+                               'nuevo','investigacion','contactar','contactado','calificado',
+                               'demo_agendada','demo_realizada','prueba_activa',
+                               'propuesta_enviada','negociacion','ganado','perdido','no_contactar'
+                             )),
+  no_contactar               boolean not null default false,
+  unsubscribe_token          uuid not null default gen_random_uuid(),
+  notas                      text check (notas is null or char_length(notas) <= 3000),
+  ultimo_email_enviado_en    timestamptz,
+  ultimo_contacto_en         timestamptz,
+  creado_por                 uuid references public.profiles(id) on delete set null,
+  creado_en                  timestamptz not null default now(),
+  actualizado_en             timestamptz not null default now(),
+  constraint crm_prospects_lost_reason_required
+    check (estado <> 'perdido' or motivo_perdida is not null),
+  constraint crm_prospects_no_contactar_consistent
+    check ((estado = 'no_contactar' and no_contactar = true) or (estado <> 'no_contactar' and no_contactar = false))
+);
+
+create unique index if not exists crm_prospects_email_unique
+  on public.crm_prospects(lower(email))
+  where email is not null;
+create unique index if not exists crm_prospects_demo_lead_unique
+  on public.crm_prospects(demo_lead_id)
+  where demo_lead_id is not null;
+create unique index if not exists crm_prospects_unsubscribe_token_unique
+  on public.crm_prospects(unsubscribe_token);
+create index if not exists idx_crm_prospects_list_estado
+  on public.crm_prospects(list_id, estado, creado_en desc);
+create index if not exists idx_crm_prospects_estado
+  on public.crm_prospects(estado, creado_en desc);
+create index if not exists idx_crm_prospects_origen
+  on public.crm_prospects(origen, creado_en desc);
+create index if not exists idx_crm_prospects_next_action
+  on public.crm_prospects(proxima_accion_fecha)
+  where proxima_accion_fecha is not null and estado not in ('ganado','perdido','no_contactar');
+create index if not exists idx_crm_prospects_no_contactar
+  on public.crm_prospects(no_contactar, creado_en desc);
+create index if not exists idx_crm_prospects_eleam
+  on public.crm_prospects(eleam_id)
+  where eleam_id is not null;
+
+create table if not exists public.crm_email_campaigns (
+  id                         uuid primary key default gen_random_uuid(),
+  nombre                     text not null check (char_length(nombre) <= 160),
+  objetivo                   text check (objetivo is null or char_length(objetivo) <= 1000),
+  audiencia_notas            text check (audiencia_notas is null or char_length(audiencia_notas) <= 1000),
+  asunto_default             text not null check (char_length(asunto_default) <= 200),
+  cuerpo_default             text check (cuerpo_default is null or char_length(cuerpo_default) <= 8000),
+  mensaje_rrss_template      text check (mensaje_rrss_template is null or char_length(mensaje_rrss_template) <= 4000),
+  script_llamada_template    text check (script_llamada_template is null or char_length(script_llamada_template) <= 8000),
+  variables_usadas           text[] not null default '{}',
+  from_email                 text check (
+                               from_email is null
+                               or (
+                                 char_length(from_email) <= 254
+                                 and from_email ~* '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'
+                               )
+                             ),
+  from_name                  text check (from_name is null or char_length(from_name) <= 120),
+  reply_to_email             text check (
+                               reply_to_email is null
+                               or (
+                                 char_length(reply_to_email) <= 254
+                                 and reply_to_email ~* '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'
+                               )
+                             ),
+  estado                     text not null default 'borrador'
+                             check (estado in ('borrador','enviando','enviada','fallida')),
+  total_destinatarios        integer not null default 0 check (total_destinatarios >= 0),
+  total_enviados             integer not null default 0 check (total_enviados >= 0),
+  total_fallidos             integer not null default 0 check (total_fallidos >= 0),
+  total_omitidos             integer not null default 0 check (total_omitidos >= 0),
+  iniciada_en                timestamptz,
+  finalizada_en              timestamptz,
+  creado_por                 uuid references public.profiles(id) on delete set null,
+  creado_en                  timestamptz not null default now(),
+  actualizado_en             timestamptz not null default now(),
+  constraint crm_email_campaigns_totals_consistent
+    check (total_enviados + total_fallidos + total_omitidos <= greatest(total_destinatarios, total_enviados + total_fallidos + total_omitidos))
+);
+
+create index if not exists idx_crm_email_campaigns_estado
+  on public.crm_email_campaigns(estado, creado_en desc);
+
+create table if not exists public.crm_campaign_members (
+  id                    uuid primary key default gen_random_uuid(),
+  campaign_id           uuid not null references public.crm_email_campaigns(id) on delete cascade,
+  prospect_id           uuid not null references public.crm_prospects(id) on delete cascade,
+  estado                text not null default 'seleccionado'
+                        check (estado in (
+                          'seleccionado','contactado','respondio','interesado','no_interesado',
+                          'demo_agendada','no_contactar','rebotado','omitido'
+                        )),
+  canal                 text check (canal is null or canal in ('desconocido','telefono','email','whatsapp','redes','presencial')),
+  ultimo_toque_en       timestamptz,
+  proxima_accion_fecha  date,
+  notas                 text check (notas is null or char_length(notas) <= 1000),
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now(),
+  unique (campaign_id, prospect_id)
+);
+
+create index if not exists idx_crm_campaign_members_prospect
+  on public.crm_campaign_members(prospect_id, creado_en desc);
+create index if not exists idx_crm_campaign_members_campaign_estado
+  on public.crm_campaign_members(campaign_id, estado);
+
+create table if not exists public.crm_email_sends (
+  id              uuid primary key default gen_random_uuid(),
+  campaign_id     uuid not null references public.crm_email_campaigns(id) on delete cascade,
+  prospect_id     uuid not null references public.crm_prospects(id) on delete cascade,
+  email           text not null check (char_length(email) <= 254),
+  asunto_final    text not null check (char_length(asunto_final) <= 200),
+  estado          text not null default 'pendiente'
+                  check (estado in ('pendiente','enviado','fallido','omitido','baja')),
+  resend_id       text check (resend_id is null or char_length(resend_id) <= 200),
+  error_mensaje   text check (error_mensaje is null or char_length(error_mensaje) <= 1000),
+  enviado_en      timestamptz,
+  creado_en       timestamptz not null default now(),
+  unique (campaign_id, prospect_id)
+);
+
+create index if not exists idx_crm_email_sends_campaign_estado
+  on public.crm_email_sends(campaign_id, estado);
+create index if not exists idx_crm_email_sends_prospect
+  on public.crm_email_sends(prospect_id, creado_en desc);
+
+create table if not exists public.crm_stage_history (
+  id              uuid primary key default gen_random_uuid(),
+  prospect_id     uuid not null references public.crm_prospects(id) on delete cascade,
+  etapa_anterior  text check (
+                    etapa_anterior is null
+                    or etapa_anterior in (
+                      'nuevo','investigacion','contactar','contactado','calificado',
+                      'demo_agendada','demo_realizada','prueba_activa',
+                      'propuesta_enviada','negociacion','ganado','perdido','no_contactar'
+                    )
+                  ),
+  etapa_nueva     text not null check (etapa_nueva in (
+                    'nuevo','investigacion','contactar','contactado','calificado',
+                    'demo_agendada','demo_realizada','prueba_activa',
+                    'propuesta_enviada','negociacion','ganado','perdido','no_contactar'
+                  )),
+  detalle         text check (detalle is null or char_length(detalle) <= 1000),
+  cambiado_por    uuid references public.profiles(id) on delete set null,
+  cambiado_en     timestamptz not null default now()
+);
+
+create index if not exists idx_crm_stage_history_prospect
+  on public.crm_stage_history(prospect_id, cambiado_en desc);
+
+create table if not exists public.crm_tasks (
+  id                 uuid primary key default gen_random_uuid(),
+  eleam_id           uuid references public.eleams(id) on delete cascade,
+  prospect_id        uuid references public.crm_prospects(id) on delete cascade,
+  campaign_id        uuid references public.crm_email_campaigns(id) on delete set null,
+  titulo             text not null check (char_length(titulo) <= 200),
+  descripcion        text check (descripcion is null or char_length(descripcion) <= 2000),
+  tipo               text not null default 'general'
+                     check (tipo in ('general','llamada','correo','reunion','demo','seguimiento','onboarding','renovacion','otro')),
+  estado             text not null default 'pendiente'
+                     check (estado in ('pendiente','en_curso','completada','cancelada')),
+  prioridad          text not null default 'media'
+                     check (prioridad in ('baja','media','alta','urgente')),
+  fecha_vencimiento  date,
+  creado_por         uuid references public.profiles(id) on delete set null,
+  completado_por     uuid references public.profiles(id) on delete set null,
+  creado_en          timestamptz not null default now(),
+  completado_en      timestamptz,
+  actualizado_en     timestamptz not null default now()
+);
+
+create index if not exists idx_crm_tasks_eleam on public.crm_tasks(eleam_id, estado);
+create index if not exists idx_crm_tasks_prospect on public.crm_tasks(prospect_id, estado);
+create index if not exists idx_crm_tasks_campaign on public.crm_tasks(campaign_id);
+create index if not exists idx_crm_tasks_venc on public.crm_tasks(fecha_vencimiento)
+  where estado in ('pendiente','en_curso');
+create index if not exists idx_crm_tasks_estado on public.crm_tasks(estado);
+
+create table if not exists public.crm_interactions (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid references public.eleams(id) on delete cascade,
+  prospect_id     uuid references public.crm_prospects(id) on delete cascade,
+  campaign_id     uuid references public.crm_email_campaigns(id) on delete set null,
+  tipo            text not null default 'nota'
+                  check (tipo in ('nota','llamada','correo','reunion','demo','soporte','sistema','otro')),
+  canal           text check (canal in ('telefono','email','whatsapp','redes','presencial','videollamada','sistema','otro') or canal is null),
+  resumen         text not null check (char_length(resumen) <= 3000),
+  resultado       text check (resultado in ('positivo','neutro','negativo','sin_respuesta','sistema') or resultado is null),
+  proxima_accion  text check (proxima_accion is null or char_length(proxima_accion) <= 1000),
+  creado_por      uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now()
+);
+
+create index if not exists idx_crm_int_eleam_fecha
+  on public.crm_interactions(eleam_id, creado_en desc)
+  where eleam_id is not null;
+create index if not exists idx_crm_int_prospect_fecha
+  on public.crm_interactions(prospect_id, creado_en desc)
+  where prospect_id is not null;
+create index if not exists idx_crm_int_campaign
+  on public.crm_interactions(campaign_id, creado_en desc)
+  where campaign_id is not null;
 
 create table if not exists public.landing_events (
   id           uuid default gen_random_uuid() primary key,
@@ -1476,6 +1794,250 @@ as $$
 begin
   new.actualizado_en = now();
   return new;
+end;
+$$;
+
+create or replace function public.crm_normalize_prospect()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.eleam_nombre := nullif(trim(coalesce(new.eleam_nombre, '')), '');
+  new.comuna := nullif(trim(coalesce(new.comuna, '')), '');
+  new.telefono := nullif(regexp_replace(trim(coalesce(new.telefono, '')), '\s+', ' ', 'g'), '');
+  new.email := lower(nullif(trim(coalesce(new.email, '')), ''));
+  new.facebook_url := nullif(trim(coalesce(new.facebook_url, '')), '');
+  new.instagram_url := nullif(trim(coalesce(new.instagram_url, '')), '');
+  new.tiktok_url := nullif(trim(coalesce(new.tiktok_url, '')), '');
+  new.cargo_contacto := nullif(trim(coalesce(new.cargo_contacto, '')), '');
+  new.decision_maker_nombre := nullif(trim(coalesce(new.decision_maker_nombre, '')), '');
+  new.decision_maker_cargo := nullif(trim(coalesce(new.decision_maker_cargo, '')), '');
+  new.software_actual := nullif(trim(coalesce(new.software_actual, '')), '');
+  new.dolor_principal := nullif(trim(coalesce(new.dolor_principal, '')), '');
+  new.motivo_perdida := nullif(trim(coalesce(new.motivo_perdida, '')), '');
+  new.competidor := nullif(trim(coalesce(new.competidor, '')), '');
+  new.notas := nullif(trim(coalesce(new.notas, '')), '');
+
+  if new.eleam_nombre is null then
+    raise exception 'eleam_nombre es obligatorio' using errcode = 'P0001';
+  end if;
+
+  if new.no_contactar = true then
+    new.estado := 'no_contactar';
+  end if;
+
+  if new.estado = 'no_contactar' then
+    new.no_contactar := true;
+  else
+    new.no_contactar := false;
+  end if;
+
+  if new.estado = 'perdido' and new.motivo_perdida is null then
+    raise exception 'motivo_perdida es obligatorio para prospectos perdidos' using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.crm_log_prospect_stage_change()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.crm_stage_history (
+      prospect_id, etapa_anterior, etapa_nueva, detalle, cambiado_por
+    )
+    values (
+      new.id, null, new.estado, 'Prospecto creado', (select auth.uid())
+    );
+    return new;
+  end if;
+
+  if new.estado is distinct from old.estado then
+    insert into public.crm_stage_history (
+      prospect_id, etapa_anterior, etapa_nueva, detalle, cambiado_por
+    )
+    values (
+      new.id, old.estado, new.estado, null, (select auth.uid())
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.crm_sync_demo_lead_to_prospect()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_origen text;
+  v_canal text;
+  v_estado text;
+  v_first_residents text;
+  v_num_residentes integer;
+  v_motivo_perdida text;
+  v_touched_id uuid;
+begin
+  v_origen := case
+    when lower(coalesce(new.utm_source, '')) = 'whatsapp'
+      or lower(coalesce(new.cargo, '')) = 'contacto whatsapp'
+      then 'whatsapp'
+    else 'landing'
+  end;
+
+  v_canal := case when v_origen = 'whatsapp' then 'whatsapp' else 'email' end;
+
+  v_estado := case new.estado
+    when 'contactado' then 'contactado'
+    when 'demo_activo' then 'prueba_activa'
+    when 'convertido' then 'ganado'
+    when 'descartado' then 'perdido'
+    else 'nuevo'
+  end;
+
+  if new.estado = 'descartado' then
+    v_motivo_perdida := 'Descartado desde solicitud de demo';
+  end if;
+
+  v_first_residents := substring(coalesce(new.num_residentes, '') from '[0-9]+');
+  if v_first_residents is not null then
+    v_num_residentes := v_first_residents::integer;
+    if lower(coalesce(new.num_residentes, '')) like 'menos%' then
+      v_num_residentes := greatest(v_num_residentes - 1, 1);
+    end if;
+  end if;
+
+  update public.crm_prospects p
+  set demo_lead_id = new.id,
+      eleam_nombre = new.eleam_nombre,
+      telefono = new.telefono,
+      email = lower(new.email),
+      origen = v_origen,
+      canal_preferido = case
+        when p.canal_preferido = 'desconocido' then v_canal
+        else p.canal_preferido
+      end,
+      cargo_contacto = new.cargo,
+      decision_maker_nombre = new.nombre,
+      decision_maker_cargo = new.cargo,
+      num_residentes = coalesce(v_num_residentes, p.num_residentes),
+      estado = case
+        when p.estado = 'no_contactar' then 'no_contactar'
+        when v_estado in ('prueba_activa','ganado','perdido') then v_estado
+        when p.estado in (
+          'calificado','demo_agendada','demo_realizada','prueba_activa',
+          'propuesta_enviada','negociacion','ganado','perdido'
+        ) then p.estado
+        else v_estado
+      end,
+      no_contactar = case when p.estado = 'no_contactar' then true else false end,
+      motivo_perdida = case
+        when v_estado = 'perdido' then coalesce(p.motivo_perdida, v_motivo_perdida)
+        else p.motivo_perdida
+      end,
+      ultimo_contacto_en = coalesce(p.ultimo_contacto_en, new.creado_en),
+      actualizado_en = now()
+  where p.demo_lead_id = new.id
+     or (
+       p.demo_lead_id is null
+       and p.email is not null
+       and lower(p.email) = lower(new.email)
+     )
+  returning p.id into v_touched_id;
+
+  if found then
+    return new;
+  end if;
+
+  insert into public.crm_prospects (
+    demo_lead_id, eleam_nombre, telefono, email, origen, canal_preferido,
+    cargo_contacto, decision_maker_nombre, decision_maker_cargo, num_residentes,
+    estado, motivo_perdida, ultimo_contacto_en, notas
+  )
+  values (
+    new.id, new.eleam_nombre, new.telefono, lower(new.email), v_origen, v_canal,
+    new.cargo, new.nombre, new.cargo, v_num_residentes,
+    v_estado, v_motivo_perdida, new.creado_en,
+    case
+      when nullif(trim(coalesce(new.utm_campaign, '')), '') is null then null
+      else 'Campana UTM: ' || new.utm_campaign
+    end
+  );
+
+  return new;
+end;
+$$;
+
+create or replace function public.crm_unsubscribe_by_token(p_token uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_prospect record;
+begin
+  if p_token is null then
+    return jsonb_build_object('ok', false, 'reason', 'token_invalido');
+  end if;
+
+  select id, email, no_contactar
+  into v_prospect
+  from public.crm_prospects
+  where unsubscribe_token = p_token
+  limit 1;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'reason', 'token_invalido');
+  end if;
+
+  if v_prospect.no_contactar then
+    return jsonb_build_object(
+      'ok', true,
+      'reason', 'ya_dado_de_baja',
+      'email', v_prospect.email
+    );
+  end if;
+
+  update public.crm_prospects
+  set estado = 'no_contactar',
+      no_contactar = true,
+      actualizado_en = now()
+  where id = v_prospect.id;
+
+  update public.crm_campaign_members
+  set estado = 'no_contactar',
+      actualizado_en = now()
+  where prospect_id = v_prospect.id;
+
+  update public.crm_email_sends
+  set estado = 'baja'
+  where prospect_id = v_prospect.id
+    and estado = 'enviado';
+
+  insert into public.crm_interactions (
+    prospect_id, tipo, canal, resumen, resultado
+  )
+  values (
+    v_prospect.id,
+    'sistema',
+    'email',
+    'Prospecto dado de baja mediante enlace de unsubscribe',
+    'sistema'
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'reason', 'baja_efectiva',
+    'email', v_prospect.email
+  );
 end;
 $$;
 
@@ -2217,6 +2779,9 @@ begin
     when 'asignar_camas'                 then asignar_camas
     when 'editar_indicaciones_cuidado'  then editar_indicaciones_cuidado
     when 'aplicar_evaluaciones_clinicas' then aplicar_evaluaciones_clinicas
+    when 'crear_eventos_adversos'        then crear_eventos_adversos
+    when 'editar_eventos_adversos'       then editar_eventos_adversos
+    when 'cerrar_eventos_adversos'       then cerrar_eventos_adversos
     else false
   end
   into v_result
@@ -5434,6 +5999,11 @@ create trigger trg_turno_entregas_updated_at
   before update on public.turno_entregas
   for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_eventos_adversos_updated_at on public.eventos_adversos;
+create trigger trg_eventos_adversos_updated_at
+  before update on public.eventos_adversos
+  for each row execute function public.set_updated_at();
+
 drop trigger if exists trg_planes_cuidado_updated_at on public.planes_cuidado;
 create trigger trg_planes_cuidado_updated_at
   before update on public.planes_cuidado
@@ -5508,6 +6078,41 @@ create trigger trg_acred_obs_updated_at
   before update on public.acred_observaciones
   for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_crm_prospect_lists_updated_at on public.crm_prospect_lists;
+create trigger trg_crm_prospect_lists_updated_at
+  before update on public.crm_prospect_lists
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_crm_prospects_normalize on public.crm_prospects;
+create trigger trg_crm_prospects_normalize
+  before insert or update on public.crm_prospects
+  for each row execute function public.crm_normalize_prospect();
+
+drop trigger if exists trg_crm_prospects_updated_at on public.crm_prospects;
+create trigger trg_crm_prospects_updated_at
+  before update on public.crm_prospects
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_crm_prospects_stage_history on public.crm_prospects;
+create trigger trg_crm_prospects_stage_history
+  after insert or update of estado on public.crm_prospects
+  for each row execute function public.crm_log_prospect_stage_change();
+
+drop trigger if exists trg_demo_leads_sync_crm_prospect on public.demo_leads;
+create trigger trg_demo_leads_sync_crm_prospect
+  after insert or update of nombre, cargo, eleam_nombre, email, telefono, num_residentes, utm_source, utm_campaign, estado, demo_user_id on public.demo_leads
+  for each row execute function public.crm_sync_demo_lead_to_prospect();
+
+drop trigger if exists trg_crm_email_campaigns_updated_at on public.crm_email_campaigns;
+create trigger trg_crm_email_campaigns_updated_at
+  before update on public.crm_email_campaigns
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_crm_campaign_members_updated_at on public.crm_campaign_members;
+create trigger trg_crm_campaign_members_updated_at
+  before update on public.crm_campaign_members
+  for each row execute function public.set_updated_at();
+
 drop trigger if exists trg_crm_tasks_updated_at on public.crm_tasks;
 create trigger trg_crm_tasks_updated_at
   before update on public.crm_tasks
@@ -5534,6 +6139,9 @@ grant execute on function public.request_demo_lead(text, text, text, text, text,
 
 revoke all on function public.demo_lead_status(text) from public;
 grant execute on function public.demo_lead_status(text) to anon, authenticated;
+
+revoke all on function public.crm_unsubscribe_by_token(uuid) from public;
+grant execute on function public.crm_unsubscribe_by_token(uuid) to anon, authenticated;
 
 revoke all on function public.acred_provision_requisitos(uuid) from public;
 grant execute on function public.acred_provision_requisitos(uuid) to authenticated;
@@ -5590,6 +6198,43 @@ revoke all on function public.resolver_cama_hospitalizacion(uuid, text, text) fr
 grant execute on function public.resolver_cama_hospitalizacion(uuid, text, text) to authenticated;
 
 -- ============================================================
+-- 7.5 Grants base de schema para anon / authenticated / service_role
+-- ============================================================
+-- Sin estos grants a nivel SQL, ninguna query del cliente Supabase pasa,
+-- aun cuando RLS lo permita: PostgREST devolveria 42501 "permission denied
+-- for table X". Supabase normalmente aplica default privileges al crear el
+-- proyecto, pero si fueron revocados o el schema se aplica antes de que
+-- existan esos defaults, todo el cliente falla. Estos grants son la base
+-- minima; RLS sigue filtrando filas.
+
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
+grant select on all tables in schema public to anon;
+grant usage, select on all sequences in schema public to anon;
+
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+grant all on all routines in schema public to service_role;
+
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant usage, select on sequences to authenticated;
+alter default privileges in schema public
+  grant select on tables to anon;
+alter default privileges in schema public
+  grant usage, select on sequences to anon;
+alter default privileges in schema public
+  grant all on tables to service_role;
+alter default privileges in schema public
+  grant all on sequences to service_role;
+alter default privileges in schema public
+  grant all on routines to service_role;
+
+-- ============================================================
 -- 8. Row Level Security
 -- ============================================================
 
@@ -5604,6 +6249,9 @@ alter table public.camas_audit enable row level security;
 alter table public.signos_vitales enable row level security;
 alter table public.observaciones_diarias enable row level security;
 alter table public.turno_entregas enable row level security;
+alter table public.eventos_adversos enable row level security;
+alter table public.eventos_adversos_acciones enable row level security;
+alter table public.eventos_adversos_audit enable row level security;
 alter table public.planes_cuidado enable row level security;
 alter table public.plan_cuidado_actividades enable row level security;
 alter table public.plan_cuidado_horarios enable row level security;
@@ -5630,6 +6278,12 @@ alter table public.acred_requisitos_eleam enable row level security;
 alter table public.acred_documentos enable row level security;
 alter table public.acred_observaciones enable row level security;
 alter table public.acred_audit enable row level security;
+alter table public.crm_prospect_lists enable row level security;
+alter table public.crm_prospects enable row level security;
+alter table public.crm_email_campaigns enable row level security;
+alter table public.crm_campaign_members enable row level security;
+alter table public.crm_email_sends enable row level security;
+alter table public.crm_stage_history enable row level security;
 alter table public.crm_tasks enable row level security;
 alter table public.crm_interactions enable row level security;
 alter table public.blog_posts enable row level security;
@@ -6146,6 +6800,146 @@ create policy "te_delete" on public.turno_entregas
       public.my_rol() = 'admin_eleam'
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
+    )
+  );
+
+-- Eventos adversos
+drop policy if exists "eventos_adv_select" on public.eventos_adversos;
+drop policy if exists "eventos_adv_insert" on public.eventos_adversos;
+drop policy if exists "eventos_adv_update" on public.eventos_adversos;
+
+create policy "eventos_adv_select" on public.eventos_adversos
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+    or (
+      visible_familiar = true
+      and residente_id is not null
+      and public.familiar_can_view_residente(residente_id)
+    )
+  );
+
+create policy "eventos_adv_insert" on public.eventos_adversos
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and public.funcionario_can('crear_eventos_adversos')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and (residente_id is null or public.residente_belongs_to_eleam(residente_id, public.my_eleam_id()))
+    )
+  );
+
+create policy "eventos_adv_update" on public.eventos_adversos
+  for update using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and (
+        public.funcionario_can('editar_eventos_adversos')
+        or public.funcionario_can('cerrar_eventos_adversos')
+      )
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and (residente_id is null or public.residente_belongs_to_eleam(residente_id, public.my_eleam_id()))
+      and (
+        public.funcionario_can('editar_eventos_adversos')
+        or public.funcionario_can('cerrar_eventos_adversos')
+      )
+    )
+  );
+
+drop policy if exists "eventos_adv_acciones_select" on public.eventos_adversos_acciones;
+drop policy if exists "eventos_adv_acciones_insert" on public.eventos_adversos_acciones;
+
+create policy "eventos_adv_acciones_select" on public.eventos_adversos_acciones
+  for select using (
+    exists (
+      select 1
+      from public.eventos_adversos e
+      where e.id = evento_id
+        and (
+          public.is_superadmin()
+          or (
+            public.my_rol() in ('admin_eleam','funcionario')
+            and e.eleam_id = public.my_eleam_id()
+            and public.eleam_has_access(e.eleam_id)
+          )
+        )
+    )
+  );
+
+create policy "eventos_adv_acciones_insert" on public.eventos_adversos_acciones
+  for insert with check (
+    exists (
+      select 1
+      from public.eventos_adversos e
+      where e.id = evento_id
+        and (
+          public.is_superadmin()
+          or (
+            public.my_rol() in ('admin_eleam','funcionario')
+            and e.eleam_id = public.my_eleam_id()
+            and public.eleam_has_access(e.eleam_id)
+            and (
+              public.funcionario_can('crear_eventos_adversos')
+              or public.funcionario_can('editar_eventos_adversos')
+              or public.funcionario_can('cerrar_eventos_adversos')
+            )
+          )
+        )
+    )
+  );
+
+drop policy if exists "eventos_adv_audit_select" on public.eventos_adversos_audit;
+drop policy if exists "eventos_adv_audit_insert" on public.eventos_adversos_audit;
+
+create policy "eventos_adv_audit_select" on public.eventos_adversos_audit
+  for select using (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.my_rol() in ('admin_eleam','funcionario')
+      and public.eleam_has_access(eleam_id)
+    )
+    or exists (
+      select 1
+      from public.eventos_adversos e
+      where e.id = evento_id
+        and e.eleam_id = public.my_eleam_id()
+        and public.my_rol() in ('admin_eleam','funcionario')
+        and public.eleam_has_access(e.eleam_id)
+    )
+  );
+
+create policy "eventos_adv_audit_insert" on public.eventos_adversos_audit
+  for insert with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.my_rol() in ('admin_eleam','funcionario')
+      and public.eleam_has_access(eleam_id)
+    )
+    or exists (
+      select 1
+      from public.eventos_adversos e
+      where e.id = evento_id
+        and e.eleam_id = public.my_eleam_id()
+        and public.my_rol() in ('admin_eleam','funcionario')
+        and public.eleam_has_access(e.eleam_id)
     )
   );
 
@@ -7121,6 +7915,36 @@ create policy "acred_audit_insert" on public.acred_audit
   );
 
 -- CRM y blog
+drop policy if exists "crm_prospect_lists_superadmin_all" on public.crm_prospect_lists;
+create policy "crm_prospect_lists_superadmin_all" on public.crm_prospect_lists
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+drop policy if exists "crm_prospects_superadmin_all" on public.crm_prospects;
+create policy "crm_prospects_superadmin_all" on public.crm_prospects
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+drop policy if exists "crm_email_campaigns_superadmin_all" on public.crm_email_campaigns;
+create policy "crm_email_campaigns_superadmin_all" on public.crm_email_campaigns
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+drop policy if exists "crm_campaign_members_superadmin_all" on public.crm_campaign_members;
+create policy "crm_campaign_members_superadmin_all" on public.crm_campaign_members
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+drop policy if exists "crm_email_sends_superadmin_all" on public.crm_email_sends;
+create policy "crm_email_sends_superadmin_all" on public.crm_email_sends
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
+drop policy if exists "crm_stage_history_superadmin_all" on public.crm_stage_history;
+create policy "crm_stage_history_superadmin_all" on public.crm_stage_history
+  for all using (public.is_superadmin())
+  with check (public.is_superadmin());
+
 drop policy if exists "crm_tasks_superadmin_all" on public.crm_tasks;
 create policy "crm_tasks_superadmin_all" on public.crm_tasks
   for all using (public.is_superadmin())

@@ -40,7 +40,7 @@ export function ToastProvider({ children }) {
 
   const toast = useCallback((message, type = "info", duration) => {
     const id = ++_toastCounter;
-    const fallback = type === "error" ? 6000 : 3500;
+    const fallback = type === "error" ? 7000 : 4500;
     const ms = typeof duration === "number" ? duration : fallback;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {

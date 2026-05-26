@@ -10,7 +10,7 @@ const OBSERVATION_SELECT = `
 
 export const getObservations = async (
   residenteId = null,
-  { limit = 50, desde = null, hasta = null, tipo = null, soloSeguimiento = false } = {}
+  { limit = 50, desde = null, hasta = null, tipo = null, soloSeguimiento = false, search = null } = {}
 ) => {
   let query = supabase
     .from("observaciones_diarias")
@@ -25,6 +25,14 @@ export const getObservations = async (
   if (hasta)          query = query.lte("fecha_hora", new Date(hasta + "T23:59:59").toISOString());
   if (tipo)           query = query.eq("tipo", tipo);
   if (soloSeguimiento) query = query.eq("requiere_seguimiento", true);
+  if (search) {
+    const term = String(search).trim();
+    if (term) {
+      // Escapar comas y paréntesis para evitar inyección en el filtro `or`.
+      const safe = term.replace(/[,()]/g, " ");
+      query = query.or(`descripcion.ilike.%${safe}%,acciones_tomadas.ilike.%${safe}%`);
+    }
+  }
 
   const { data, error } = await query;
   if (error) throw error;

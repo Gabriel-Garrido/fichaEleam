@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
@@ -7,6 +8,14 @@ import { TIPO_LABEL, calcAge } from "../residents/residentUtils";
 import { VITAL_DEFS, recordOverallStatus, STATUS } from "../vitalSigns/vitalRanges";
 import { summarizeFamilySnapshot } from "./familiarUtils";
 import { useFamiliarResidentData } from "./useFamiliarResidentData";
+import {
+  CATEGORIA_LABEL as ADVERSE_CATEGORIA_LABEL,
+  SEVERIDAD_LABEL as ADVERSE_SEVERIDAD_LABEL,
+  formatEventDateTime as formatAdverseEventDateTime,
+  severityTone as adverseSeverityTone,
+} from "../adverseEvents/eventosAdversosUtils";
+import { listFamiliarAdverseEvents } from "../adverseEvents/eventosAdversosService";
+import { FeatureCoach } from "../featureCoach";
 import {
   IconChat,
   IconCheck,
@@ -181,33 +190,33 @@ function ResidentHero({ resident, eleam, onNavigateVisitas }) {
   }[resident?.estado] ?? "bg-slate-100 text-slate-600";
 
   return (
-    <div className="relative bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+    <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
       <div className="h-16 bg-gradient-to-r from-teal-200 via-teal-400 to-teal-600" />
-      <div className="px-5 pb-5">
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3 -mt-8">
+      <div className="px-4 pb-5 sm:px-5">
+        <div className="-mt-8 flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-white text-xl font-black text-teal-700 shadow-md ring-4 ring-white">
             {initials}
           </div>
-          <div className="flex-1 min-w-0 pb-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-slate-900">
+          <div className="min-w-0 flex-1 pb-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="break-words text-xl font-bold leading-tight text-slate-900 sm:text-2xl">
                 {resident?.nombre} {resident?.apellido}
               </h1>
-              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full capitalize ${estadoBadge}`}>
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${estadoBadge}`}>
                 {resident?.estado ?? "—"}
               </span>
             </div>
-            <p className="text-sm text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
+            <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-slate-500">
               {age != null && <span>{age} años</span>}
               {resident?.parentesco && <span className="capitalize">{resident.parentesco}</span>}
               {resident?.ubicacion_label && <span>{resident.ubicacion_label}</span>}
-              {eleam?.nombre && <span>{eleam.nombre}</span>}
+              {eleam?.nombre && <span className="truncate">{eleam.nombre}</span>}
             </p>
           </div>
           <button
             type="button"
             onClick={onNavigateVisitas}
-            className="tap-highlight-none w-full sm:w-auto sm:shrink-0 inline-flex items-center justify-center gap-1.5 rounded-xl bg-teal-700 px-4 min-h-11 sm:min-h-10 py-2 text-sm font-semibold text-white hover:bg-teal-800 active:bg-teal-900 transition-colors"
+            className="tap-highlight-none inline-flex w-full min-h-11 items-center justify-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-800 active:bg-teal-900 sm:w-auto sm:min-h-10 sm:shrink-0"
           >
             <IconUsers />
             Gestionar visitas
@@ -255,13 +264,25 @@ function ResidentClinicalSummary({ resident, evaluaciones = {} }) {
         <h2 className="text-sm font-bold text-slate-900">Información clínica compartida por el equipo</h2>
       </div>
       <dl className="grid gap-3 sm:grid-cols-2">
-        {rows.map(([label, value, sub]) => (
-          <div key={label} className="rounded-xl bg-slate-50 p-3">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400" title={CLINICAL_TOOLTIPS[label]}>{label}</dt>
-            <dd className="mt-1 text-sm font-medium text-slate-700">{value}</dd>
-            {sub && <dd className="mt-1 text-[11px] font-normal text-slate-500">{sub}</dd>}
-          </div>
-        ))}
+        {rows.map(([label, value, sub]) => {
+          const tip = CLINICAL_TOOLTIPS[label];
+          return (
+            <div key={label} className="rounded-xl bg-slate-50 p-3">
+              <dt className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400" title={tip}>
+                <span>{label}</span>
+                {tip && (
+                  <span className="cursor-help text-slate-300" title={tip} aria-label={`Ayuda: ${label}`}>
+                    <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.94 6.94a.75.75 0 11-1.061-1.061 3 3 0 112.871 5.026v.345a.75.75 0 01-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 108.94 6.94zM10 15a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                    </svg>
+                  </span>
+                )}
+              </dt>
+              <dd className="mt-1 break-words text-sm font-medium text-slate-700">{value}</dd>
+              {sub && <dd className="mt-1 text-[11px] font-normal text-slate-500">{sub}</dd>}
+            </div>
+          );
+        })}
       </dl>
     </section>
   );
@@ -299,17 +320,17 @@ function CarePlanSummarySection({ carePlan }) {
           </div>
         )}
         {(carePlan.pauta_alimentacion?.trim() || carePlan.pauta_hidratacion?.trim()) && (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {carePlan.pauta_alimentacion?.trim() && (
-              <div className="rounded-xl bg-teal-50 border border-teal-100 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-500 mb-1">Alimentación</p>
-                <p className="text-sm text-teal-800 leading-relaxed">{carePlan.pauta_alimentacion}</p>
+              <div className="rounded-xl border border-teal-100 bg-teal-50 p-3">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-teal-500">Alimentación</p>
+                <p className="text-sm leading-relaxed text-teal-800">{carePlan.pauta_alimentacion}</p>
               </div>
             )}
             {carePlan.pauta_hidratacion?.trim() && (
-              <div className="rounded-xl bg-sky-50 border border-sky-100 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-500 mb-1">Hidratación</p>
-                <p className="text-sm text-sky-800 leading-relaxed">{carePlan.pauta_hidratacion}</p>
+              <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-sky-500">Hidratación</p>
+                <p className="text-sm leading-relaxed text-sky-800">{carePlan.pauta_hidratacion}</p>
               </div>
             )}
           </div>
@@ -392,11 +413,11 @@ function DaySummary({ care, medications, selectedDate }) {
           <div className={`h-full rounded-full transition-all ${progTone.bar}`} style={{ width: `${pct}%` }} />
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         {stats.map((s) => (
-          <div key={s.label} className={`rounded-xl border p-3 ${tones[s.tone]}`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 leading-tight">{s.label}</p>
-            <p className="mt-1 text-2xl font-black tabular-nums">{s.value}</p>
+          <div key={s.label} className={`rounded-xl border p-2 sm:p-3 ${tones[s.tone]}`}>
+            <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide opacity-60 sm:text-[11px]">{s.label}</p>
+            <p className="mt-1 text-xl font-black tabular-nums sm:text-2xl">{s.value}</p>
           </div>
         ))}
       </div>
@@ -424,8 +445,8 @@ function VitalsSection({ vitals }) {
       badge={overallStyle.label}
       badgeColor={overallStyle.badge}
     >
-      <p className="text-xs text-slate-400 mb-3">Último control · {formatDateTime(latest.fecha_hora)}</p>
-      <div className="grid grid-cols-2 gap-2.5">
+      <p className="mb-3 text-xs text-slate-400">Último control · {formatDateTime(latest.fecha_hora)}</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
         {Object.entries(VITAL_DEFS).map(([key, def]) => {
           const status = def.statusFor(latest);
           const tone = STATUS[status] ?? STATUS.unknown;
@@ -438,11 +459,11 @@ function VitalsSection({ vitals }) {
             ? def.format(latest.presion_sistolica, latest.presion_diastolica)
             : def.format(latest[field]);
           return (
-            <div key={key} className={`rounded-xl border p-3 ring-1 ${tone.ring} bg-white`}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 truncate">{def.label}</p>
+            <div key={key} className={`rounded-xl border p-3 ring-1 ${tone.ring} bg-white`} title={def.label}>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{def.label}</p>
               <p className={`mt-0.5 text-base font-black ${tone.text}`}>
                 {value}
-                {def.unit && <span className="text-[10px] font-semibold text-slate-400 ml-1">{def.unit}</span>}
+                {def.unit && <span className="ml-1 text-[10px] font-semibold text-slate-400">{def.unit}</span>}
               </p>
             </div>
           );
@@ -496,9 +517,12 @@ function VisitsSummarySection({ visits, onNavigateVisitas }) {
       <button
         type="button"
         onClick={onNavigateVisitas}
-        className="mt-3 w-full rounded-xl border border-teal-200 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 transition-colors"
+        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-teal-200 py-2 text-sm font-semibold text-teal-700 transition-colors hover:bg-teal-50"
       >
-        Ver historial completo →
+        Ver historial completo
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+        </svg>
       </button>
     </SectionCard>
   );
@@ -757,6 +781,18 @@ export default function FamiliarPortal() {
   const carePlan     = snapshot?.care_plan ?? null;
   const evaluaciones = snapshot?.evaluaciones ?? {};
 
+  // Eventos adversos visibles para el familiar (separado del snapshot principal
+  // porque requiere su propia RLS y no depende de la fecha seleccionada).
+  const [adverseEvents, setAdverseEvents] = useState([]);
+  useEffect(() => {
+    if (!activeId) { setAdverseEvents([]); return; }
+    let cancelled = false;
+    listFamiliarAdverseEvents(activeId, { limit: 20 })
+      .then((rows) => { if (!cancelled) setAdverseEvents(rows); })
+      .catch(() => { if (!cancelled) setAdverseEvents([]); });
+    return () => { cancelled = true; };
+  }, [activeId]);
+
   if (loading && residentes.length === 0) {
     return <Loading message="Cargando portal familiar..." />;
   }
@@ -779,6 +815,7 @@ export default function FamiliarPortal() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 space-y-5">
+      <FeatureCoach featureId="familiar" standalone />
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -842,8 +879,66 @@ export default function FamiliarPortal() {
 
           {/* Observations */}
           <ObservationsSection observations={observations} />
+
+          {/* Eventos comunicados a la familia */}
+          {adverseEvents.length > 0 && <AdverseEventsSection events={adverseEvents} />}
         </>
       )}
     </div>
+  );
+}
+
+/* ─── Eventos adversos comunicados a la familia ────────────────────────── */
+function AdverseEventsSection({ events }) {
+  return (
+    <section className="rounded-2xl border border-amber-100 bg-white shadow-sm overflow-hidden">
+      <header className="border-b border-slate-100 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-amber-50 text-amber-700">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </span>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Eventos comunicados</h2>
+            <p className="text-xs text-slate-500">
+              Resumen de eventos serios que el equipo decidió compartir contigo.
+            </p>
+          </div>
+        </div>
+      </header>
+      <ul className="divide-y divide-slate-100">
+        {events.map((e) => {
+          const tone = adverseSeverityTone(e.severidad);
+          return (
+            <li key={e.id} className="px-5 py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${tone.badge}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                  {ADVERSE_SEVERIDAD_LABEL[e.severidad] ?? e.severidad}
+                </span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  {ADVERSE_CATEGORIA_LABEL[e.categoria] ?? e.categoria}
+                </span>
+                <span className="ml-auto text-xs text-slate-400 tabular-nums">
+                  {formatAdverseEventDateTime(e.fecha_evento, e.hora_evento)}
+                </span>
+              </div>
+              {e.resumen_familiar && (
+                <p className="mt-2 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {e.resumen_familiar}
+                </p>
+              )}
+              {e.notificado_familia && (
+                <p className="mt-2 text-[11px] text-slate-400">
+                  Comunicado a la familia
+                  {e.fecha_notificacion_familia ? ` · ${formatDateTime(e.fecha_notificacion_familia)}` : ""}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

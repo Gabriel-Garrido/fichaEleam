@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Modal from "../../components/Modal";
+import { ErrorSummary } from "../../components/forms/FormKit";
 import useSessionFormDraft from "../../hooks/useSessionFormDraft";
+import { scrollToFirstError } from "../../utils/formValidation";
 import { isSupabaseConfigured } from "../../services/supabaseConfig";
 import { trackEvent } from "./landingAnalytics";
 import { getLandingContext } from "./landingContext";
@@ -45,7 +47,11 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
   async function handleSubmit(e) {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      scrollToFirstError(errs);
+      return;
+    }
     if (!isSupabaseConfigured) {
       setErrorMsg("No pudimos conectar con el servidor. Intenta nuevamente en unos minutos.");
       setStatus("error");
@@ -139,6 +145,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
           </div>
         ) : (
           <form onSubmit={handleSubmit} noValidate className="p-6 space-y-4">
+            <ErrorSummary errors={errors} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="demo-nombre" className="block text-xs font-semibold text-slate-600 mb-1">
@@ -147,7 +154,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 <input
                   id="demo-nombre"
                   type="text"
-                  name="name"
+                  name="nombre"
                   autoComplete="name"
                   maxLength={120}
                   value={form.nombre}
@@ -166,7 +173,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 <label htmlFor="demo-cargo" className="block text-xs font-semibold text-slate-600 mb-1">Cargo *</label>
                 <select
                   id="demo-cargo"
-                  name="organization-title"
+                  name="cargo"
                   value={form.cargo}
                   onChange={set("cargo")}
                   aria-invalid={errors.cargo ? "true" : undefined}
@@ -189,7 +196,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
               <input
                 id="demo-eleam_nombre"
                 type="text"
-                name="organization"
+                name="eleam_nombre"
                 autoComplete="organization"
                 maxLength={160}
                 value={form.eleam_nombre}
@@ -233,7 +240,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
                 <input
                   id="demo-telefono"
                   type="tel"
-                  name="tel"
+                  name="telefono"
                   autoComplete="tel"
                   inputMode="tel"
                   maxLength={40}

@@ -102,13 +102,17 @@ export const createResidentsBatch = async (rows, onProgress = null) => {
       if (!row.familyPayload) {
         throw new Error("Cada residente debe incluir un familiar responsable completo.");
       }
+      const residenteId = createdResident?.id;
+      if (!isValidUUID(residenteId)) {
+        throw new Error("No se pudo confirmar el ID del residente creado para vincular su familiar responsable.");
+      }
       const family = await createStaffUser({
         nombre: row.familyPayload.nombre,
         email: row.familyPayload.email,
         telefono: row.familyPayload.telefono,
         parentesco: row.familyPayload.parentesco,
         rol: "familiar",
-        residenteId: createdResident.id,
+        residenteId,
       });
       results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data: createdResident, family });
     } catch (error) {

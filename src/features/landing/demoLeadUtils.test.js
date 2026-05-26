@@ -52,11 +52,11 @@ describe("validateDemoLeadForm", () => {
       email: "bad",
       telefono: "123",
     })).toMatchObject({
-      nombre: "Requerido",
-      cargo: "Selecciona tu cargo",
-      eleam_nombre: "Requerido",
-      email: "Email no válido",
-      telefono: "Ingresa un teléfono válido",
+      nombre: "Ingresa tu nombre completo.",
+      cargo: "Selecciona tu cargo para orientar la demo.",
+      eleam_nombre: "Ingresa el nombre del ELEAM o residencia.",
+      email: "Ingresa un email válido para coordinar el acceso.",
+      telefono: "Ingresa un teléfono válido para contactarte.",
     });
   });
 
@@ -78,10 +78,10 @@ describe("validateDemoLeadForm", () => {
       email: "maria@example.cl",
       telefono: "+56 9 1234 5678".padEnd(41, "0"),
     })).toMatchObject({
-      nombre: "Máximo 120 caracteres",
-      cargo: "Máximo 80 caracteres",
-      eleam_nombre: "Máximo 160 caracteres",
-      telefono: "Máximo 40 caracteres",
+      nombre: "El nombre no puede superar 120 caracteres.",
+      cargo: "El cargo no puede superar 80 caracteres.",
+      eleam_nombre: "El nombre del ELEAM no puede superar 160 caracteres.",
+      telefono: "El teléfono no puede superar 40 caracteres.",
     });
   });
 });

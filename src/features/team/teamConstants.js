@@ -37,6 +37,14 @@ export const PERM_GROUPS = [
     ],
   },
   {
+    label: "Eventos adversos",
+    perms: [
+      { key: "crear_eventos_adversos",  label: "Registrar evento" },
+      { key: "editar_eventos_adversos", label: "Editar y agregar acciones" },
+      { key: "cerrar_eventos_adversos", label: "Cerrar / cancelar / reabrir" },
+    ],
+  },
+  {
     label: "Plan de cuidado",
     perms: [
       { key: "crear_planes_cuidado",         label: "Crear plan" },
@@ -89,6 +97,7 @@ export const DEFAULT_PERMS = {
   subir_acreditacion: true,   editar_acreditacion: true,   archivar_acreditacion: false,
   registrar_visitas: true,
   aplicar_evaluaciones_clinicas: true,
+  crear_eventos_adversos: true, editar_eventos_adversos: true, cerrar_eventos_adversos: false,
 };
 
 export const PLANTILLAS_CARGO = {
@@ -104,6 +113,7 @@ export const PLANTILLAS_CARGO = {
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
     registrar_visitas: true,
     aplicar_evaluaciones_clinicas: true,
+    crear_eventos_adversos: true, editar_eventos_adversos: true, cerrar_eventos_adversos: true,
   },
   "Kinesiólogo/a": {
     crear_residentes: false,  editar_residentes: true,   eliminar_residentes: false,
@@ -117,6 +127,7 @@ export const PLANTILLAS_CARGO = {
     subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
     registrar_visitas: false,
     aplicar_evaluaciones_clinicas: true,
+    crear_eventos_adversos: true, editar_eventos_adversos: true, cerrar_eventos_adversos: false,
   },
   "Médico/a": {
     crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
@@ -130,6 +141,7 @@ export const PLANTILLAS_CARGO = {
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
     registrar_visitas: false,
     aplicar_evaluaciones_clinicas: true,
+    crear_eventos_adversos: true, editar_eventos_adversos: true, cerrar_eventos_adversos: true,
   },
   "Auxiliar ATD": {
     crear_residentes: false,  editar_residentes: false,  eliminar_residentes: false,
@@ -143,6 +155,7 @@ export const PLANTILLAS_CARGO = {
     subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
     registrar_visitas: true,
     aplicar_evaluaciones_clinicas: false,
+    crear_eventos_adversos: true, editar_eventos_adversos: false, cerrar_eventos_adversos: false,
   },
   "Administrativo/a": {
     crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
@@ -156,5 +169,6 @@ export const PLANTILLAS_CARGO = {
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: true,
     registrar_visitas: false,
     aplicar_evaluaciones_clinicas: false,
+    crear_eventos_adversos: false, editar_eventos_adversos: false, cerrar_eventos_adversos: false,
   },
 };

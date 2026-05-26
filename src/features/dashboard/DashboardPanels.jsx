@@ -16,7 +16,16 @@ import {
 
 /* ─── Critical alerts strip ──────────────────────────────────── */
 
-export function CriticalAlerts({ latestVitals, followUps, expiring, operational, assessments = [], loading, navigate }) {
+export function CriticalAlerts({
+  latestVitals,
+  followUps,
+  expiring,
+  operational,
+  assessments = [],
+  adverseEvents = { total: 0, gravesOCriticos: 0 },
+  loading,
+  navigate,
+}) {
   if (loading) return null;
 
   const critical = latestVitals.filter(
@@ -30,7 +39,9 @@ export function CriticalAlerts({ latestVitals, followUps, expiring, operational,
   const careUrgent = operational?.care?.vencidas ?? 0;
   const overdueAssessments = assessments.filter((a) => (a.dias_restantes ?? 0) < 0);
   const assessmentsCount = overdueAssessments.length;
-  const totalAlertas = critical.length + followUps.length + docs7d.length + emarUrgent + careUrgent + assessmentsCount;
+  const adverseOpen = adverseEvents?.total ?? 0;
+  const adverseSerious = adverseEvents?.gravesOCriticos ?? 0;
+  const totalAlertas = critical.length + followUps.length + docs7d.length + emarUrgent + careUrgent + assessmentsCount + adverseOpen;
 
   if (!totalAlertas) {
     return (
@@ -102,6 +113,17 @@ export function CriticalAlerts({ latestVitals, followUps, expiring, operational,
           hint={assessmentsCount
             ? overdueAssessments.slice(0, 2).map((a) => `${a.residente_nombre}`).join(" · ")
             : "Barthel y Katz al día"}
+        />
+        <AlertChip
+          label="Eventos adversos abiertos"
+          value={adverseOpen}
+          tone={adverseSerious > 0 ? "rose" : "amber"}
+          onClick={adverseOpen ? () => navigate("/eventos-adversos") : null}
+          hint={adverseOpen
+            ? adverseSerious > 0
+              ? `${adverseSerious} grave${adverseSerious === 1 ? "" : "s"} o crítico${adverseSerious === 1 ? "" : "s"}`
+              : "En seguimiento — leves o moderados"
+            : "Sin pendientes"}
         />
       </div>
     </div>

@@ -22,7 +22,7 @@ const baseResident = {
 };
 
 describe("residentFormSchema", () => {
-  it("normalizes a resident without Barthel/Katz/contact fields", () => {
+  it("normalizes a resident without Barthel/Katz/dependency/contact fields", () => {
     const result = validateResidentForm(baseResident, { isEditing: false });
 
     expect(result.ok).toBe(true);
@@ -33,6 +33,7 @@ describe("residentFormSchema", () => {
       alergias: ["Penicilina", "Ibuprofeno"],
     });
     expect(result.data).not.toHaveProperty("indice_barthel");
+    expect(result.data).not.toHaveProperty("nivel_dependencia");
     expect(result.data).not.toHaveProperty("nombre_contacto");
   });
 

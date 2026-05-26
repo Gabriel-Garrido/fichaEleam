@@ -4,6 +4,7 @@ import { LeadsSkeletonList } from "../../components/Skeleton";
 import LeadsPanel from "./components/LeadsPanel";
 import LandingMetrics from "./components/LandingMetrics";
 import SuperAdminPageHeader from "./components/SuperAdminPageHeader";
+import ProspectingTab from "./crm/ProspectingTab";
 import {
   getLandingMetrics,
   getLeads,
@@ -12,7 +13,7 @@ import {
 } from "./superadminService";
 
 export default function SuperAdminLeads() {
-  const [tab, setTab] = useState("leads");
+  const [tab, setTab] = useState("prospect");
   const [leads, setLeads] = useState([]);
   const [landingMetrics, setLandingMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -67,15 +68,16 @@ export default function SuperAdminLeads() {
   }, []);
 
   const TABS = [
-    { key: "leads",    label: "Leads", badge: loading ? null : leads.length },
-    { key: "metricas", label: "Métricas landing" },
+    { key: "prospect",  label: "Funnel comercial" },
+    { key: "leads",     label: "Leads landing", badge: loading ? null : leads.length },
+    { key: "metricas",  label: "Métricas landing" },
   ];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
       <SuperAdminPageHeader
         title="Leads y demo"
-        description="Solicitudes de demo captadas desde la landing y métricas de conversión."
+        description="Funnel comercial unificado para leads de landing, WhatsApp, importados y outbound."
         actions={
           <button
             type="button"
@@ -122,7 +124,7 @@ export default function SuperAdminLeads() {
         ))}
       </div>
 
-      {tab === "leads" ? (
+      {tab === "leads" && (
         loading ? (
           <LeadsSkeletonList count={6} />
         ) : (
@@ -134,27 +136,33 @@ export default function SuperAdminLeads() {
             onLoadLeads={loadCore}
           />
         )
-      ) : metricsLoading ? (
-        <Loading message="Cargando métricas..." />
-      ) : metricsError ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
-          <p className="text-sm font-semibold text-rose-700 mb-1">Error al cargar métricas</p>
-          <p className="text-xs text-rose-600 mb-3">{metricsError}</p>
-          <p className="text-xs text-rose-500 mb-4">
-            Si todas las métricas muestran 0, verifica que el Edge Function <code className="bg-rose-100 px-1 rounded">track-landing-event</code> esté desplegado:{" "}
-            <code className="bg-rose-100 px-1 rounded">npx supabase functions deploy track-landing-event</code>
-          </p>
-          <button
-            type="button"
-            onClick={() => { metricsLoadedRef.current = false; loadMetrics(true); }}
-            className="rounded-xl bg-rose-600 text-white text-xs font-semibold px-4 py-2 hover:bg-rose-700"
-          >
-            Reintentar
-          </button>
-        </div>
-      ) : (
-        <LandingMetrics metrics={landingMetrics} />
       )}
+
+      {tab === "metricas" && (
+        metricsLoading ? (
+          <Loading message="Cargando métricas..." />
+        ) : metricsError ? (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
+            <p className="text-sm font-semibold text-rose-700 mb-1">Error al cargar métricas</p>
+            <p className="text-xs text-rose-600 mb-3">{metricsError}</p>
+            <p className="text-xs text-rose-500 mb-4">
+              Si todas las métricas muestran 0, verifica que el Edge Function <code className="bg-rose-100 px-1 rounded">track-landing-event</code> esté desplegado:{" "}
+              <code className="bg-rose-100 px-1 rounded">npx supabase functions deploy track-landing-event</code>
+            </p>
+            <button
+              type="button"
+              onClick={() => { metricsLoadedRef.current = false; loadMetrics(true); }}
+              className="rounded-xl bg-rose-600 text-white text-xs font-semibold px-4 py-2 hover:bg-rose-700"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : (
+          <LandingMetrics metrics={landingMetrics} />
+        )
+      )}
+
+      {tab === "prospect" && <ProspectingTab />}
     </div>
   );
 }

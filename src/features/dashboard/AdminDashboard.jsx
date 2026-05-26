@@ -5,6 +5,7 @@ import HelpTooltip from "../../components/HelpTooltip";
 import PageLayout from "../../layout/PageLayout";
 import { loadDashboard } from "./dashboardService";
 import { recordOverallStatus } from "../vitalSigns/vitalRanges";
+import { getOpenAdverseEventsCount } from "../adverseEvents/eventosAdversosService";
 import {
   currentShift, todayDateLong, daysUntil, isSameDay,
 } from "./dashboardUtils";
@@ -22,6 +23,7 @@ export default function AdminDashboard() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [adverseCount, setAdverseCount] = useState({ total: 0, gravesOCriticos: 0 });
 
   useEffect(() => {
     setLoadError(false);
@@ -30,6 +32,15 @@ export default function AdminDashboard() {
       .catch((err) => { console.error("loadDashboard", err); setLoadError(true); })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!eleam?.id) { setAdverseCount({ total: 0, gravesOCriticos: 0 }); return; }
+    let cancelled = false;
+    getOpenAdverseEventsCount(eleam.id)
+      .then((counts) => { if (!cancelled) setAdverseCount(counts); })
+      .catch(() => { if (!cancelled) setAdverseCount({ total: 0, gravesOCriticos: 0 }); });
+    return () => { cancelled = true; };
+  }, [eleam?.id]);
 
   const stats   = data?.residentStats ?? null;
   const errors  = data?.errors ?? {};
@@ -150,6 +161,7 @@ export default function AdminDashboard() {
 
   return (
     <PageLayout
+      coachFeatureId="dashboard"
       title={profile?.nombre ? `Hola, ${profile.nombre}` : "Inicio"}
       eyebrow={`${todayDateLong()} · turno ${turno}`}
       description={`${eleam?.nombre ? `${eleam.nombre}. ` : ""}${loading ? "Cargando actividad del día..." : `${data?.signosHoy ?? 0} signos vitales y ${data?.observacionesHoy ?? 0} observaciones registradas hoy${cobertura ? ` · ${cobertura.pct}% de cobertura` : ""}.`}`}
@@ -318,6 +330,7 @@ export default function AdminDashboard() {
         expiring={data?.expiringDocuments ?? []}
         operational={operational}
         assessments={data?.pendingAssessments ?? []}
+        adverseEvents={adverseCount}
         loading={loading}
         navigate={navigate}
       />

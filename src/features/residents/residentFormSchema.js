@@ -45,7 +45,6 @@ export const RESIDENT_EMPTY = {
   grupo_sanguineo: "",
   fecha_ingreso: new Date().toISOString().split("T")[0],
   estado: "activo",
-  nivel_dependencia: "",
   fecha_egreso: "",
   motivo_egreso: "",
 };
@@ -61,7 +60,6 @@ const SEXO = ["masculino", "femenino", "otro"];
 const CIVIL = ["soltero", "casado", "viudo", "divorciado", "otro"];
 const ESTADOS_CREATE = ["activo", "hospitalizado"];
 const ESTADOS_EDIT = ["activo", "hospitalizado", "egresado", "fallecido"];
-const DEPENDENCIA = ["leve", "moderado", "severo", "total"];
 const SANGRE = GRUPOS_SANGUINEOS.map(([value]) => value).filter(Boolean);
 
 function localNoon(value) {
@@ -87,7 +85,6 @@ export function residentSchema({ isEditing = false } = {}) {
     grupo_sanguineo: selectField("Grupo sanguíneo", SANGRE),
     fecha_ingreso: requiredDate("Fecha de ingreso"),
     estado: selectField("Estado", allowedStates, { required: true }),
-    nivel_dependencia: selectField("Nivel de dependencia", DEPENDENCIA),
     fecha_egreso: optionalDate("Fecha de egreso"),
     motivo_egreso: optionalText("Motivo de egreso", 300),
   }).superRefine((value, ctx) => {
@@ -145,6 +142,5 @@ export function residentToForm(resident = {}) {
     sexo: resident.sexo ?? "",
     estado_civil: resident.estado_civil ?? "",
     grupo_sanguineo: resident.grupo_sanguineo ?? "",
-    nivel_dependencia: resident.nivel_dependencia ?? "",
   };
 }

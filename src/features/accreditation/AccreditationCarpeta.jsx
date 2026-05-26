@@ -11,6 +11,7 @@ import {
   estadoMeta,
 } from "./accreditationService";
 import { formatDate } from "../../utils/dateUtils";
+import { FeatureCoach } from "../featureCoach";
 
 // Carpeta SEREMI imprimible. La idea es ser una vista limpia, sin nav,
 // optimizada para impresión a PDF (Ctrl+P → Guardar como PDF).
@@ -63,6 +64,9 @@ export default function AccreditationCarpeta() {
 
   return (
     <div className="bg-white">
+      <div className="print:hidden max-w-4xl mx-auto px-4 pt-4">
+        <FeatureCoach featureId="accreditation-carpeta" standalone />
+      </div>
       {/* Toolbar (oculta al imprimir) */}
       <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">

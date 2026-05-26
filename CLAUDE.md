@@ -61,13 +61,6 @@ src/
 │   ├── payment/                # PaymentPage, PaymentReturn (MercadoPago)
 │   ├── team/                   # TeamManagement (crear funcionarios/familiares), teamConstants.js (PERM_GROUPS, PLANTILLAS_CARGO, DEFAULT_PERMS) + ChangePasswordPage
 │   ├── familiar/               # Portal restringido + registro de visitas
-│   ├── onboarding/             # Sistema de onboarding adaptativo por rol/permisos
-│   │   ├── onboardingConfig.js # ROLE_CONFIG por rol + COLOR_CLASSES (Tailwind estático)
-│   │   ├── OnboardingContext.jsx  # Provider: estado localStorage, auto-complete, detección nuevos permisos
-│   │   ├── OnboardingWelcomeModal.jsx  # Modal primer ingreso con highlights filtrados por permiso
-│   │   ├── OnboardingChecklist.jsx    # Widget flotante con progress ring y lista de pasos
-│   │   ├── OnboardingBanner.jsx       # Barra contextual en la ruta del paso activo
-│   │   └── index.js            # Barrel exports
 │   ├── superadmin/             # Dashboard CRM + blog editor + gestión de pagos + LeadsPanel
 │   │   └── blog/               # BlogManagement, BlogEditor (solo para superadmin)
 │   └── utils/                  # Markdown renderer, customer health, etc.
@@ -354,7 +347,7 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 
 ### admin_eleam (Dueño del ELEAM)
 
-1. **Onboarding vía demo**: Prospecto llena formulario en landing → superadmin aprueba en LeadsPanel → Edge Function `create-demo-user` crea el ELEAM demo + cuenta `admin_eleam` con enlace de acceso usando `app_metadata` server-side, reutiliza una cuenta `admin_eleam` existente o repara Auth huérfano → email con enlace enviado si aplica + resultado visible en modal UI. Suscripción activada con 30 días de prueba.
+1. **Activación vía demo**: Prospecto llena formulario en landing → superadmin aprueba en LeadsPanel → Edge Function `create-demo-user` crea el ELEAM demo + cuenta `admin_eleam` con enlace de acceso usando `app_metadata` server-side, reutiliza una cuenta `admin_eleam` existente o repara Auth huérfano → email con enlace enviado si aplica + resultado visible en modal UI. Suscripción activada con 30 días de prueba.
 2. **Primer acceso**: `must_reset_password=true` → forzado a `/cambiar-clave` → establece contraseña personal o vincula Google (si Gmail, usando `linkIdentity`).
 3. **Sin pago**: Redirige a `/pago?sinAcceso=1`. Solo ve "Activar ELEAM", "Demo", "Cerrar sesión".
 4. **Con pago activo**: `/dashboard` + todas las operaciones clínicas + `/camas` + `/equipo` + `/accreditation`.
@@ -761,44 +754,15 @@ El proyecto usa **Tailwind CSS 4 puro** sin CSS variables de colores. No hay `va
 
 ---
 
-## Onboarding Adaptativo
-
-Sistema de guía de primeros pasos en `src/features/onboarding/`. Montado en `AppShell.jsx` via `<OnboardingProvider>`.
-
-### Tres capas
-
-| Componente | Cuándo se muestra |
-|-----------|-------------------|
-| `OnboardingWelcomeModal` | Primer ingreso: `!seenWelcome && availableSteps.length > 0` |
-| `OnboardingChecklist` | Siempre visible (widget flotante) mientras `isActive && !dismissed` |
-| `OnboardingBanner` | Solo en la ruta que corresponde al paso pendiente actual |
-
-### Adaptación por rol y permisos
-
-- Los pasos de funcionario tienen `requiredPermission` (e.g. `crear_signos_vitales`).
-- `availableSteps` se computa en `OnboardingContext` filtrando con `can()` + `canFeature()`, esperando a que `profileLoading = false`.
-- Si a un usuario se le otorgan nuevos permisos en una sesión posterior, el sistema detecta los pasos "recién visibles" mediante `knownAvailableIds` en localStorage y reactiva el onboarding (`dismissed: false`).
-
-### Estado
-
-Persistido en localStorage con clave `fichaeleam_onboarding_v2_{userId}`. Campos: `role`, `seenWelcome`, `steps: { [stepId]: bool }`, `knownAvailableIds`, `dismissed`, `completedAt`.
-
-### Colores (por rol)
-
-`COLOR_CLASSES` en `onboardingConfig.js` mapea nombre de color a clases Tailwind **estáticas** (no dinámicas) para que Tailwind las incluya en el bundle. Roles: `teal` (admin_eleam), `violet` (funcionario), `rose` (familiar), `slate` (superadmin).
-
----
-
 ## Qué Hacer Ahora
 
 1. **Permisos granulares de funcionario**: Si necesitas más permisos o cambiar defaults, edita `FAIL_CLOSED_PERMS` en `AuthContext.jsx`, `PERM_GROUPS`/`DEFAULT_PERMS` en `teamConstants.js` y `funcionario_permisos`/`funcionario_can` en `supabase_schema.sql`.
-2. **Onboarding**: Para agregar pasos, edita `ROLE_CONFIG` en `onboardingConfig.js` (sin cambiar los componentes). Las clases Tailwind del color deben ser estáticas en `COLOR_CLASSES`.
-3. **Acreditación**: Si el modelo v9 requiere cambios (ámbitos, requisitos, estados), edita `supabase_schema.sql` + servicios.
-4. **Blog/CRM**: Editable desde UI; no requiere cambios de código.
-5. **MercadoPago**: Secrets en Edge Functions; pruebas con TEST token.
-6. **SEO**: Valida sitemap + JSON-LD con Google Search Console.
-7. **Headers en producción**: Configurar los security headers en el servidor / CDN que sirve `/dist`. El archivo `public/_headers` cubre Netlify y Cloudflare Pages.
-8. **eMAR / Plan de cuidado**: Nuevos permisos (`completar_tareas_cuidado`, `editar_indicaciones_cuidado`, etc.) están en `FAIL_CLOSED_PERMS` — deniegan acceso hasta que admin los otorgue explícitamente.
+2. **Acreditación**: Si el modelo v9 requiere cambios (ámbitos, requisitos, estados), edita `supabase_schema.sql` + servicios.
+3. **Blog/CRM**: Editable desde UI; no requiere cambios de código.
+4. **MercadoPago**: Secrets en Edge Functions; pruebas con TEST token.
+5. **SEO**: Valida sitemap + JSON-LD con Google Search Console.
+6. **Headers en producción**: Configurar los security headers en el servidor / CDN que sirve `/dist`. El archivo `public/_headers` cubre Netlify y Cloudflare Pages.
+7. **eMAR / Plan de cuidado**: Nuevos permisos (`completar_tareas_cuidado`, `editar_indicaciones_cuidado`, etc.) están en `FAIL_CLOSED_PERMS` — deniegan acceso hasta que admin los otorgue explícitamente.
 
 ---
 
@@ -812,6 +776,4 @@ Persistido en localStorage con clave `fichaeleam_onboarding_v2_{userId}`. Campos
 - `src/features/carePlans/carePlansService.js` — Helpers compartidos: `getSessionProfile()`, `todayIso()`, `currentTurno()`, `normalizeSchedule()`, `previousTurnos()`.
 - `src/features/team/teamConstants.js` — `PERM_GROUPS`, `DEFAULT_PERMS`, `PLANTILLAS_CARGO`.
 - `src/features/permissions/featureCatalog.js` — Catálogo de 13 features con IDs, labels y defaults.
-- `src/features/onboarding/onboardingConfig.js` — Pasos y colores del onboarding por rol.
-- `src/features/onboarding/OnboardingContext.jsx` — Lógica de estado, permisos y auto-complete.
 - `public/_headers` — Security headers para Netlify / Cloudflare Pages.

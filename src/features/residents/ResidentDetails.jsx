@@ -21,6 +21,7 @@ import {
 } from "../carePlans/carePlansService";
 import CollapsibleGuide from "../../components/CollapsibleGuide";
 import MetricCard from "../../components/MetricCard";
+import { FeatureCoach } from "../featureCoach";
 import {
   CareTaskModal,
   MedicationTaskModal,
@@ -144,7 +145,8 @@ function ResidentDetails() {
   ].filter(Boolean);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="mx-auto w-full max-w-5xl min-w-0 px-3 py-4 sm:px-4 sm:py-8">
+      <FeatureCoach featureId="residents-detail" standalone />
       <button
         type="button"
         onClick={() => navigate("/residents")}
@@ -154,56 +156,56 @@ function ResidentDetails() {
       </button>
 
       {/* Header card */}
-      <div className="relative bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
-        <div className="h-20 bg-gradient-to-r from-teal-200 via-teal-500 to-teal-700" />
-        <div className="px-6 pb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-10">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-teal-700 shadow-md ring-4 ring-white">
+      <div className="relative mb-5 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:mb-6">
+        <div className="h-16 bg-gradient-to-r from-teal-200 via-teal-500 to-teal-700 sm:h-20" />
+        <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+          <div className="-mt-8 flex min-w-0 flex-col gap-4 sm:-mt-10 sm:flex-row sm:items-end">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white text-xl font-bold text-teal-700 shadow-md ring-4 ring-white sm:h-20 sm:w-20 sm:text-2xl">
               {initials(resident.nombre, resident.apellido)}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold text-slate-900 truncate">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <h1 className="min-w-0 text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">
                   {resident.nombre} {resident.apellido}
                 </h1>
                 <span
-                  className={`text-xs font-medium px-2.5 py-0.5 rounded-full capitalize ${
+                  className={`w-fit text-xs font-medium px-2.5 py-0.5 rounded-full capitalize ${
                     ESTADO_BADGE[resident.estado] ?? "bg-slate-100 text-slate-700"
                   }`}
                 >
                   {resident.estado}
                 </span>
               </div>
-              <div className="text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                {age != null && <span>{age} años</span>}
-                {resident.sexo && <span className="capitalize">{resident.sexo}</span>}
-                {resident.rut && <span>RUT: {resident.rut}</span>}
+              <div className="mt-2 flex min-w-0 flex-wrap gap-1.5 text-sm text-slate-500">
+                {age != null && <InfoPill>{age} años</InfoPill>}
+                {resident.sexo && <InfoPill className="capitalize">{resident.sexo}</InfoPill>}
+                {resident.rut && <InfoPill>RUT: {resident.rut}</InfoPill>}
                 {resident.ubicacion_label && (
-                  <span>
+                  <InfoPill>
                     {resident.ubicacion_label}
-                  </span>
+                  </InfoPill>
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => navigate(`/residents/${id}/edit`)}
-                className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 shadow-sm"
+                className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 sm:min-h-0"
               >
                 Editar
               </button>
               <button
                 type="button"
                 onClick={() => navigate(`/vital-signs/new?residenteId=${id}`)}
-                className="rounded-xl bg-white text-teal-700 border border-teal-600 px-4 py-2 text-sm font-semibold hover:bg-teal-50"
+                className="min-h-11 rounded-xl border border-teal-600 bg-white px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 sm:min-h-0"
               >
                 + Signos
               </button>
               <button
                 type="button"
                 onClick={() => navigate(`/observations/new?residenteId=${id}`)}
-                className="rounded-xl bg-white text-teal-700 border border-teal-600 px-4 py-2 text-sm font-semibold hover:bg-teal-50"
+                className="min-h-11 rounded-xl border border-teal-600 bg-white px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 sm:min-h-0"
               >
                 + Observación
               </button>
@@ -211,7 +213,7 @@ function ResidentDetails() {
           </div>
 
           {/* Quick info strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:mt-6 sm:grid-cols-2 lg:grid-cols-4">
             <QuickStat
               label="Ingreso"
               value={
@@ -264,8 +266,8 @@ function ResidentDetails() {
       </div>
 
       {/* Tabs — scrollable on mobile with snap + fade hint */}
-      <div className="relative mb-6 -mx-4 sm:mx-0">
-        <div className="snap-tabs scrollbar-none overflow-x-auto px-3 sm:px-0">
+      <div className="relative mb-5 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:mb-6">
+        <div className="snap-tabs scrollbar-none overflow-x-auto px-2 sm:px-0">
           <div className="flex min-w-max items-end border-b border-slate-200">
             {tabs.map((t) => (
               <button
@@ -333,16 +335,16 @@ function ClinicalScalesSection({ resident }) {
   }, [byTipo]);
 
   return (
-    <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-slate-100 pb-2">
-        <div>
-          <h3 className="font-semibold text-slate-700">Escalas funcionales</h3>
+    <section className="min-w-0 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
+      <div className="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-slate-800">Escalas funcionales</h3>
           <p className="text-xs text-slate-500">
             Reevaluación cada 6 meses según norma MINSAL, o antes ante hospitalización, caída o cambio clínico.
           </p>
         </div>
         {hasAnyOverdue && (
-          <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
+          <span className="w-fit rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
             Tienes reevaluaciones pendientes
           </span>
         )}
@@ -373,15 +375,23 @@ function ClinicalScalesSection({ resident }) {
   );
 }
 
+function InfoPill({ children, className = "" }) {
+  return (
+    <span className={`inline-flex max-w-full items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200 ${className}`}>
+      <span className="min-w-0 truncate">{children}</span>
+    </span>
+  );
+}
+
 function QuickStat({ label, value, sub, tone, capitalize, truncate }) {
   return (
-    <div className={`rounded-xl border bg-white px-3 py-2.5 ${tone || "border-slate-100"}`}>
+    <div className={`min-w-0 rounded-xl border bg-white px-3 py-2.5 ${tone || "border-slate-100"}`}>
       <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">
         {label}
       </div>
       <div
-        className={`text-sm font-semibold text-slate-800 ${capitalize ? "capitalize" : ""} ${
-          truncate ? "truncate" : ""
+        className={`min-w-0 text-sm font-semibold text-slate-800 ${capitalize ? "capitalize" : ""} ${
+          truncate ? "line-clamp-2" : ""
         }`}
         title={truncate ? value : undefined}
       >
@@ -398,18 +408,20 @@ function InfoTab({ resident, familiar }) {
   const allergies = getAllergySummary(resident.alergias);
   const familiarProfile = familiar?.profiles ?? null;
   const InfoRow = ({ label, value }) =>
-    value ? (
-      <div>
-        <dt className="text-xs text-slate-400 uppercase tracking-wide">{label}</dt>
-        <dd className="text-sm text-slate-700 mt-0.5">{value}</dd>
+    value != null && value !== "" ? (
+      <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-100">
+        <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
+        <dd className="mt-0.5 min-w-0 text-sm font-medium text-slate-700">{value}</dd>
       </div>
     ) : null;
 
   return (
-    <div className="space-y-6">
-      <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-        <h3 className="font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">Datos Personales</h3>
-        <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <ResidentInfoSection
+        title="Datos personales"
+        description="Identificación y antecedentes administrativos del residente."
+      >
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <InfoRow
             label="Fecha nacimiento"
             value={
@@ -424,23 +436,25 @@ function InfoTab({ resident, familiar }) {
           <InfoRow label="Previsión"       value={resident.prevision} />
           <InfoRow label="Grupo sanguíneo" value={resident.grupo_sanguineo} />
         </dl>
-      </section>
+      </ResidentInfoSection>
 
-      <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-        <h3 className="font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">Información Clínica</h3>
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <ResidentInfoSection
+        title="Información clínica"
+        description="Datos esenciales para el cuidado diario y la continuidad del turno."
+      >
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <InfoRow label="Diagnóstico principal" value={resident.diagnostico_principal} />
           <InfoRow label="Nivel de dependencia"  value={resident.nivel_dependencia} />
           {(allergies.hasRealAllergies || allergies.hasExplicitNoKnownAllergies) && (
-            <div>
-              <dt className="text-xs text-slate-400 uppercase tracking-wide">Alergias</dt>
+            <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-100 sm:col-span-2">
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Alergias</dt>
               <dd className="flex flex-wrap gap-1 mt-1">
                 {allergies.hasRealAllergies ? allergies.items.map((a) => (
-                  <span key={a} className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full">
+                  <span key={a} className="max-w-full rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-700">
                     {a}
                   </span>
                 )) : (
-                  <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full">
+                  <span className="max-w-full rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
                     {allergies.label}
                   </span>
                 )}
@@ -448,13 +462,15 @@ function InfoTab({ resident, familiar }) {
             </div>
           )}
         </dl>
-      </section>
+      </ResidentInfoSection>
 
       <ClinicalScalesSection resident={resident} />
 
-      <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-        <h3 className="font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">Familiar vinculado</h3>
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <ResidentInfoSection
+        title="Familiar vinculado"
+        description="Contacto asociado para comunicaciones y portal familiar."
+      >
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <InfoRow label="Nombre" value={familiarProfile?.nombre} />
           <InfoRow label="Parentesco" value={familiar?.parentesco} />
           <InfoRow label="Correo" value={familiarProfile?.email} />
@@ -466,22 +482,33 @@ function InfoTab({ resident, familiar }) {
             Este residente aún no tiene familiar vinculado.
           </p>
         )}
-      </section>
+      </ResidentInfoSection>
 
       {(resident.estado === "egresado" || resident.estado === "fallecido") &&
         resident.fecha_egreso && (
-          <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-            <h3 className="font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">Egreso</h3>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <ResidentInfoSection title="Egreso">
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <InfoRow
                 label="Fecha de egreso"
                 value={new Date(resident.fecha_egreso + "T12:00:00").toLocaleDateString("es-CL")}
               />
               <InfoRow label="Motivo de egreso" value={resident.motivo_egreso} />
             </dl>
-          </section>
+          </ResidentInfoSection>
         )}
     </div>
+  );
+}
+
+function ResidentInfoSection({ title, description, children }) {
+  return (
+    <section className="min-w-0 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
+      <div className="mb-4 border-b border-slate-100 pb-3">
+        <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+        {description && <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -519,9 +546,9 @@ function SignosTab({ residenteId, navigate }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-slate-700">Signos vitales recientes</h3>
-        <div className="flex gap-3">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="font-semibold text-slate-800">Signos vitales recientes</h3>
+        <div className="flex flex-wrap gap-3">
           <button type="button"
  onClick={load} className="text-xs text-slate-500 hover:text-slate-700 underline">
             Actualizar
@@ -561,9 +588,9 @@ function SignosTab({ residenteId, navigate }) {
       ) : (
         <>
           {/* Snapshot del último registro con tarjetas grandes */}
-          <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+            <div className="flex flex-col gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="min-w-0">
                 <div className="text-xs uppercase tracking-wide text-slate-400">Último registro</div>
                 <div className="text-sm font-medium text-slate-700">
                   {new Date(latest.fecha_hora).toLocaleString("es-CL", {
@@ -584,7 +611,7 @@ function SignosTab({ residenteId, navigate }) {
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4">
+            <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-3 sm:p-4 lg:grid-cols-4">
               <VitalCard
                 icon={VITAL_DEFS.presion.icon}
                 label={VITAL_DEFS.presion.label}
@@ -643,11 +670,11 @@ function SignosTab({ residenteId, navigate }) {
 
           {/* Histórico breve */}
           {records.length > 1 && (
-            <section className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <section className="min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
               <div className="px-5 py-3 border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                 Registros anteriores
               </div>
-              <div className="overflow-x-auto">
+              <div className="max-w-full overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
                     <tr>
@@ -741,10 +768,10 @@ function ObservacionesTab({ residenteId, navigate }) {
   );
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-slate-700">Últimas 5 observaciones</h3>
-        <div className="flex gap-2">
+    <div className="min-w-0">
+      <div className="mb-4 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="font-semibold text-slate-800">Últimas 5 observaciones</h3>
+        <div className="flex flex-wrap gap-2">
           <button type="button"
  onClick={load} className="text-xs text-slate-500 hover:text-slate-700 underline">
             Actualizar
@@ -802,7 +829,7 @@ function ObservacionesTab({ residenteId, navigate }) {
                   </span>
                 )}
                 <span className="text-xs text-slate-400 capitalize">{r.turno}</span>
-                <span className="text-xs text-slate-400 ml-auto">
+                <span className="basis-full text-xs text-slate-400 sm:ml-auto sm:basis-auto">
                   {new Date(r.fecha_hora).toLocaleString("es-CL", {
                     dateStyle: "short",
                     timeStyle: "short",
@@ -916,8 +943,8 @@ function VisitasTab({ residenteId }) {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-slate-800">Registro de visitas</h3>
             <HelpTooltip label="Ayuda: flujo de visitas">
@@ -949,7 +976,7 @@ function VisitasTab({ residenteId }) {
           </div>
           <div className="space-y-2">
             {pending.map((v) => (
-              <div key={v.id} className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+              <div key={v.id} className="flex min-w-0 flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-start">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800">
                     {v.profiles?.nombre ?? "Familiar"}
@@ -959,12 +986,12 @@ function VisitasTab({ residenteId }) {
                   </p>
                   {v.notas && <p className="text-xs text-slate-500 italic mt-0.5">{v.notas}</p>}
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:shrink-0">
                   <button
                     type="button"
                     onClick={() => doValidateEntry(v.id)}
                     disabled={busyId === v.id}
-                    className="rounded-xl bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                    className="min-h-10 rounded-xl bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-50 sm:min-h-0"
                   >
                     {busyId === v.id ? "..." : "Validar ingreso"}
                   </button>
@@ -972,7 +999,7 @@ function VisitasTab({ residenteId }) {
                     type="button"
                     onClick={() => doCancel(v.id)}
                     disabled={busyId === v.id}
-                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    className="min-h-10 rounded-xl border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 sm:min-h-0"
                   >
                     Cancelar
                   </button>
@@ -1031,7 +1058,7 @@ function VisitasTab({ residenteId }) {
           </div>
           <div className="space-y-2">
             {exitPending.map((v) => (
-              <div key={v.id} className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 flex items-start gap-3">
+              <div key={v.id} className="flex min-w-0 flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 sm:flex-row sm:items-start">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800">
                     {v.profiles?.nombre ?? "Familiar"}
@@ -1046,7 +1073,7 @@ function VisitasTab({ residenteId }) {
                   type="button"
                   onClick={() => setExitModal(v)}
                   disabled={!!busyId}
-                  className="shrink-0 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
+                  className="min-h-10 w-full rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-50 sm:min-h-0 sm:w-auto sm:shrink-0"
                 >
                   Validar salida
                 </button>
@@ -1325,15 +1352,15 @@ function ResidentDailyTasksTab({ residenteId }) {
   };
 
   if (error) return (
-    <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:flex-row sm:items-center">
       <span>{error}</span>
-      <button type="button" onClick={() => load()} className="underline text-xs ml-auto">Reintentar</button>
+      <button type="button" onClick={() => load()} className="text-left text-xs underline sm:ml-auto">Reintentar</button>
     </div>
   );
 
   return (
     <div className="space-y-5">
-      <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_145px_145px_150px_145px]">
+      <section className="grid min-w-0 gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_145px_145px_150px_145px]">
         <div className="rounded-xl bg-teal-50 p-3">
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-teal-700">
             Tareas del residente
@@ -1387,7 +1414,7 @@ function ResidentDailyTasksTab({ residenteId }) {
         ]}
       />
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <MetricCard label="Total" value={metrics.total} />
         <MetricCard label="Pendientes" value={metrics.pendientes} tone="amber" />
         <MetricCard label="Vencidas" value={metrics.vencidas} tone="rose" />

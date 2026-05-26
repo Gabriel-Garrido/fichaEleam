@@ -2,9 +2,9 @@
 export const validateEmail = (email) =>
   /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(email?.trim() ?? "");
 
-// Formato UUID v4
+// Formato UUID RFC 4122 / compatible con PostgreSQL uuid
 export const isValidUUID = (str) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str ?? "");
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str ?? "");
 
 /**
  * Valida RUT chileno con algoritmo módulo-11.
@@ -55,3 +55,31 @@ export const normalizeWhitespace = (value) =>
 
 export const normalizePhone = (phone) =>
   normalizeWhitespace(phone).replace(/[()]/g, "");
+
+/**
+ * Normaliza una URL agregando https:// si falta el protocolo.
+ * Retorna null si está vacío.
+ */
+export const normalizeUrl = (url) => {
+  if (!url) return null;
+  const trimmed = String(url).trim();
+  if (!trimmed) return null;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+/**
+ * Valida una URL aceptando "ejemplo.cl" (sin protocolo). Retorna true si
+ * está vacío (campo opcional).
+ */
+export const validateUrl = (url) => {
+  if (!url) return true;
+  const normalized = normalizeUrl(url);
+  if (!normalized) return true;
+  try {
+    const parsed = new URL(normalized);
+    // Requiere host con punto (ej: "ejemplo.cl"), no localhost ni IPs.
+    return /[^.]+\.[^.]+/.test(parsed.host);
+  } catch {
+    return false;
+  }
+};

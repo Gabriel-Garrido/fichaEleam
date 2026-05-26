@@ -1,4 +1,5 @@
 import { validateEmail } from "../../utils/validators";
+import { cleanText as cleanSharedText } from "../../utils/formValidation";
 
 export const WHATSAPP_PHONE = "56951187764";
 export const WHATSAPP_CARGO_TAG = "Contacto WhatsApp";
@@ -17,7 +18,7 @@ export const WHATSAPP_FIELD_LIMITS = {
 };
 
 function cleanText(value = "", max = Number.POSITIVE_INFINITY) {
-  const text = String(value ?? "").trim().replace(/\s+/g, " ");
+  const text = cleanSharedText(value);
   return text ? text.slice(0, max) : "";
 }
 
@@ -33,20 +34,20 @@ export function validateWhatsAppLeadForm(form = {}) {
   const email = cleanText(form.email, WHATSAPP_FIELD_LIMITS.email + 1).toLowerCase();
   const telefono = cleanText(form.telefono, WHATSAPP_FIELD_LIMITS.telefono + 1);
 
-  if (!nombre) errs.nombre = "Requerido";
-  else if (nombre.length > WHATSAPP_FIELD_LIMITS.nombre) errs.nombre = "Máximo 120 caracteres";
+  if (!nombre) errs.nombre = "Ingresa tu nombre completo.";
+  else if (nombre.length > WHATSAPP_FIELD_LIMITS.nombre) errs.nombre = "El nombre no puede superar 120 caracteres.";
 
-  if (!eleamNombre) errs.eleam_nombre = "Requerido";
+  if (!eleamNombre) errs.eleam_nombre = "Ingresa el nombre del ELEAM o residencia.";
   else if (eleamNombre.length > WHATSAPP_FIELD_LIMITS.eleam_nombre) {
-    errs.eleam_nombre = "Máximo 160 caracteres";
+    errs.eleam_nombre = "El nombre del ELEAM no puede superar 160 caracteres.";
   }
 
-  if (email.length > WHATSAPP_FIELD_LIMITS.email) errs.email = "Máximo 254 caracteres";
-  else if (!validateEmail(email)) errs.email = "Email no válido";
+  if (email.length > WHATSAPP_FIELD_LIMITS.email) errs.email = "El email no puede superar 254 caracteres.";
+  else if (!validateEmail(email)) errs.email = "Ingresa un email válido para responderte.";
 
   const phoneDigits = telefono.replace(/[^0-9+]/g, "");
-  if (!phoneDigits || phoneDigits.length < 8) errs.telefono = "Ingresa un teléfono válido";
-  else if (telefono.length > WHATSAPP_FIELD_LIMITS.telefono) errs.telefono = "Máximo 40 caracteres";
+  if (!phoneDigits || phoneDigits.length < 8) errs.telefono = "Ingresa un teléfono válido para contactarte.";
+  else if (telefono.length > WHATSAPP_FIELD_LIMITS.telefono) errs.telefono = "El teléfono no puede superar 40 caracteres.";
 
   return errs;
 }

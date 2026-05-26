@@ -6,6 +6,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
+import { FeatureCoach } from "../featureCoach";
 import {
   getRequisitoEleam,
   getDocumentos,
@@ -918,6 +919,7 @@ export default function AccreditationRequisito() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
+      <FeatureCoach featureId="accreditation-requisito" standalone />
       <button
         type="button"
         onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}

@@ -174,6 +174,22 @@ function createColumnValidation(column, columnIndex) {
     };
   }
 
+  // Columnas tipo URL: foo_url, link_foo, etc. Acepta "ejemplo.cl" o "https://...".
+  // No exige protocolo (se normaliza al importar) pero sí un punto en el host.
+  if (column.key.endsWith("_url") || column.key.startsWith("link_")) {
+    return {
+      ...base,
+      type: "custom",
+      formula1: column.required
+        ? `AND(LEN(TRIM(${cell}))>0,ISNUMBER(SEARCH(".",${cell})),LEN(${cell})<=500)`
+        : `OR(${cell}="",AND(ISNUMBER(SEARCH(".",${cell})),LEN(${cell})<=500))`,
+      promptTitle: "Enlace web",
+      prompt: "Pega la URL completa (puedes omitir https://). Ej: facebook.com/MiPagina",
+      errorTitle: "Enlace inválido",
+      error: "Debe contener un punto (.) y tener máximo 500 caracteres.",
+    };
+  }
+
   if (column.required) {
     return {
       ...base,

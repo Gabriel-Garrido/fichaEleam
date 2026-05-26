@@ -37,6 +37,7 @@ export default function TurnoPrintable() {
 
   return (
     <PageLayout
+      coachFeatureId="turnos-detalle"
       title="Entrega guardada"
       eyebrow="Entrega de turno"
       description={item ? `${turnoLabel(item.turno)} · ${formatDate(item.fecha)}` : ""}

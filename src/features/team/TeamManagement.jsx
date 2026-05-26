@@ -1,10 +1,12 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { friendlyError } from "../../utils/errorMessages";
 import { validateEmail } from "../../utils/validators";
 import Button from "../../components/Button";
+import FilterBar from "../../components/FilterBar";
 import Input from "../../components/Input";
 import Modal from "../../components/Modal";
 import Loading from "../../components/Loading";
@@ -53,7 +55,13 @@ export default function TeamManagement() {
   const toast = useToast();
   const { eleam, plan, isAdminEleam, pagoActivo } = useAuth();
 
-  const [tab, setTab] = useState("funcionarios");
+  const [teamFilters, setTeamFilter, clearTeamFilters] = useFilterParams({
+    schema: { tab: "string", q: "string" },
+    defaults: { tab: "funcionarios", q: "" },
+  });
+  const tab = teamFilters.tab || "funcionarios";
+  const teamSearch = teamFilters.q ?? "";
+  const setTab = (value) => setTeamFilter("tab", value);
   const [members,    setMembers]    = useState([]);
   const [invites,    setInvites]    = useState([]);
   const [residentes, setResidentes] = useState([]);
@@ -122,6 +130,39 @@ export default function TeamManagement() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // ─── Derivados y filtros (deben ir ANTES de cualquier early return por rules-of-hooks) ───
+
+  const funcionarios    = useMemo(() => members.filter((m) => m.rol === "funcionario"), [members]);
+  const admins          = useMemo(() => members.filter((m) => m.rol === "admin_eleam"), [members]);
+  const invitesFunc     = useMemo(() => invites.filter((i) => (i.rol ?? "funcionario") === "funcionario"), [invites]);
+  const invitesFam      = useMemo(() => invites.filter((i) => i.rol === "familiar"), [invites]);
+
+  const matchesTeamSearch = useMemo(() => {
+    const q = teamSearch.trim().toLowerCase();
+    if (!q) return () => true;
+    return (item) => {
+      const fields = [item.nombre, item.email, item.cargo, item.parentesco];
+      return fields.some((f) => typeof f === "string" && f.toLowerCase().includes(q));
+    };
+  }, [teamSearch]);
+  const matchesFamiliarSearch = useMemo(() => {
+    const q = teamSearch.trim().toLowerCase();
+    if (!q) return () => true;
+    return (row) => {
+      const fields = [
+        row.profiles?.nombre, row.profiles?.email, row.profiles?.telefono,
+        row.parentesco,
+        row.residentes?.nombre, row.residentes?.apellido,
+      ];
+      return fields.some((f) => typeof f === "string" && f.toLowerCase().includes(q));
+    };
+  }, [teamSearch]);
+  const filteredFuncionarios = useMemo(() => funcionarios.filter(matchesTeamSearch), [funcionarios, matchesTeamSearch]);
+  const filteredAdmins        = useMemo(() => admins.filter(matchesTeamSearch), [admins, matchesTeamSearch]);
+  const filteredInvitesFunc   = useMemo(() => invitesFunc.filter(matchesTeamSearch), [invitesFunc, matchesTeamSearch]);
+  const filteredFamiliares    = useMemo(() => familiares.filter(matchesFamiliarSearch), [familiares, matchesFamiliarSearch]);
+  const filteredInvitesFam    = useMemo(() => invitesFam.filter(matchesTeamSearch), [invitesFam, matchesTeamSearch]);
+
   // ─── Guards ──────────────────────────────────────────────────────────────
 
   if (!isAdminEleam) {
@@ -148,10 +189,6 @@ export default function TeamManagement() {
 
   // ─── Datos derivados ─────────────────────────────────────────────────────
 
-  const funcionarios    = members.filter((m) => m.rol === "funcionario");
-  const admins          = members.filter((m) => m.rol === "admin_eleam");
-  const invitesFunc     = invites.filter((i) => (i.rol ?? "funcionario") === "funcionario");
-  const invitesFam      = invites.filter((i) => i.rol === "familiar");
   const { maxStaff: maxFunc } = getEffectivePlanLimits({ ...eleam, planes: plan ?? eleam?.planes });
   const funcionarioSlotsUsed = countFuncionarioSlots({ members, pendingInvites: invites });
   const limiteAlcanzado = maxFunc !== null && funcionarioSlotsUsed >= maxFunc;
@@ -418,6 +455,7 @@ export default function TeamManagement() {
 
   return (
     <PageLayout
+      coachFeatureId="team"
       title="Equipo y permisos"
       eyebrow="Gestión del ELEAM"
       description="Crea usuarios, vincula familiares y define qué módulos verá cada persona."
@@ -490,6 +528,24 @@ export default function TeamManagement() {
         ))}
       </div>
 
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5">
+        <FilterBar
+          search={teamSearch}
+          onSearchChange={(v) => setTeamFilter("q", v)}
+          searchPlaceholder={tab === "funcionarios" ? "Buscar por nombre o correo..." : "Buscar familiar por nombre, correo o parentesco..."}
+          filters={[]}
+          values={teamFilters}
+          onFilterChange={setTeamFilter}
+          onClearAll={clearTeamFilters}
+          resultCount={tab === "funcionarios"
+            ? filteredFuncionarios.length + filteredAdmins.length + filteredInvitesFunc.length
+            : filteredFamiliares.length + filteredInvitesFam.length}
+          totalCount={tab === "funcionarios"
+            ? funcionarios.length + admins.length + invitesFunc.length
+            : familiares.length + invitesFam.length}
+        />
+      </div>
+
       {/* ── Tab Funcionarios ─────────────────────────────────────────────── */}
       {tab === "funcionarios" && (
         <>
@@ -518,9 +574,11 @@ export default function TeamManagement() {
 
             {members.length === 0 ? (
               <p className="text-sm text-slate-500">Sin miembros todavía.</p>
+            ) : (filteredAdmins.length + filteredFuncionarios.length) === 0 ? (
+              <p className="text-sm text-slate-500">Ningún miembro coincide con la búsqueda.</p>
             ) : (
               <ul className="divide-y">
-                {[...admins, ...funcionarios].map((m) => (
+                {[...filteredAdmins, ...filteredFuncionarios].map((m) => (
                   <li key={m.id} className="py-3 flex items-center gap-3 flex-wrap sm:flex-nowrap">
                     {/* Avatar */}
                     <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-sm font-bold shrink-0">
@@ -570,7 +628,7 @@ export default function TeamManagement() {
             <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
               <h2 className="font-bold text-slate-800 mb-3">Invitaciones pendientes</h2>
               <ul className="divide-y">
-                {invitesFunc.map((inv) => (
+                {filteredInvitesFunc.map((inv) => (
                   <li key={inv.id} className="py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-slate-800 truncate">{inv.email}</p>
@@ -614,9 +672,11 @@ export default function TeamManagement() {
 
             {familiares.length === 0 ? (
               <p className="text-sm text-slate-500">Aún no hay familiares vinculados.</p>
+            ) : filteredFamiliares.length === 0 ? (
+              <p className="text-sm text-slate-500">Ningún familiar coincide con la búsqueda.</p>
             ) : (
               <ul className="divide-y">
-                {familiares.map((row) => (
+                {filteredFamiliares.map((row) => (
                   <li key={`${row.profile_id}-${row.residente_id}`}
                     className="py-3 flex items-center gap-3 flex-wrap sm:flex-nowrap">
                     <div className="w-9 h-9 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold shrink-0">
@@ -662,11 +722,11 @@ export default function TeamManagement() {
           </section>
 
           {/* Accesos familiares Google pendientes */}
-          {invitesFam.length > 0 && (
+          {invitesFam.length > 0 && filteredInvitesFam.length > 0 && (
             <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
               <h2 className="font-bold text-slate-800 mb-3">Invitaciones pendientes</h2>
               <ul className="divide-y">
-                {invitesFam.map((inv) => {
+                {filteredInvitesFam.map((inv) => {
                   const res = residentes.find((r) => r.id === inv.residente_id);
                   return (
                     <li key={inv.id} className="py-3 flex items-center justify-between gap-3">

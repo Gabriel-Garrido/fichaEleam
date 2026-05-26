@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { getVitalSigns, deleteVitalSigns } from "./vitalSignsService";
 import { getResidents } from "../residents/residentService";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
+import FilterBar from "../../components/FilterBar";
 import VitalCard from "./VitalCard";
 import PageLayout from "../../layout/PageLayout";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { turnoLabel } from "../turnos/turnosService";
 import {
   VITAL_DEFS,
@@ -23,6 +25,17 @@ function firstOfMonth() {
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
+function daysAgoIso(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+const DATE_PRESETS = [
+  { label: "Hoy", desde: today(), hasta: today() },
+  { label: "Últ. 7 días", desde: daysAgoIso(6), hasta: today() },
+  { label: "Este mes", desde: firstOfMonth(), hasta: today() },
+];
 
 export default function VitalSignsList() {
   const navigate = useNavigate();
@@ -31,17 +44,20 @@ export default function VitalSignsList() {
   const { can } = useAuth();
   const canDelete = can("eliminar_signos_vitales");
   const canCreate = can("crear_signos_vitales");
-  const [searchParams] = useSearchParams();
-  const preselectedId = searchParams.get("residenteId");
+
+  const [filters, setFilter, clearFilters] = useFilterParams({
+    schema: { residenteId: "string", desde: "date", hasta: "date", estado: "string", view: "string" },
+    defaults: { residenteId: "", desde: firstOfMonth(), hasta: today(), estado: "", view: "cards" },
+  });
+  const filtroResidente = filters.residenteId ?? "";
+  const filtroDesde = filters.desde ?? "";
+  const filtroHasta = filters.hasta ?? "";
+  const filtroEstado = filters.estado ?? "";
+  const view = filters.view || "cards";
+  const preselectedId = filtroResidente;
 
   const [records, setRecords] = useState([]);
   const [residents, setResidents] = useState([]);
-  const [filtroResidente, setFiltroResidente] = useState(preselectedId ?? "");
-  const [filtroDesde, setFiltroDesde] = useState(firstOfMonth());
-  const [filtroHasta, setFiltroHasta] = useState(today());
-  const [filtroEstado, setFiltroEstado] = useState(""); // normal | warning | critical
-  const [view, setView] = useState("cards"); // cards | table
-  const [filtersOpen, setFiltersOpen] = useState(!!preselectedId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -70,13 +86,6 @@ export default function VitalSignsList() {
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
-
-  const clearFilters = () => {
-    setFiltroResidente("");
-    setFiltroDesde(firstOfMonth());
-    setFiltroHasta(today());
-    setFiltroEstado("");
-  };
 
   const handleDelete = async (id) => {
     const ok = await confirm({
@@ -121,6 +130,7 @@ export default function VitalSignsList() {
 
   return (
     <PageLayout
+      coachFeatureId="vital-signs"
       title="Signos vitales"
       eyebrow="Cuidado diario"
       description={`${stats.total} registro${stats.total !== 1 ? "s" : ""} en el período seleccionado. Prioriza críticos y residentes en atención.`}
@@ -156,136 +166,90 @@ export default function VitalSignsList() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <StatChip
           active={filtroEstado === ""}
-          onClick={() => setFiltroEstado("")}
+          onClick={() => setFilter("estado", "")}
           label="Todos"
           value={stats.total}
           tone="slate"
         />
         <StatChip
           active={filtroEstado === "normal"}
-          onClick={() => setFiltroEstado(filtroEstado === "normal" ? "" : "normal")}
+          onClick={() => setFilter("estado", filtroEstado === "normal" ? "" : "normal")}
           label="Dentro de rango"
           value={stats.normal}
           tone="emerald"
         />
         <StatChip
           active={filtroEstado === "warning"}
-          onClick={() => setFiltroEstado(filtroEstado === "warning" ? "" : "warning")}
+          onClick={() => setFilter("estado", filtroEstado === "warning" ? "" : "warning")}
           label="Atención"
           value={stats.warning}
           tone="amber"
         />
         <StatChip
           active={filtroEstado === "critical"}
-          onClick={() => setFiltroEstado(filtroEstado === "critical" ? "" : "critical")}
+          onClick={() => setFilter("estado", filtroEstado === "critical" ? "" : "critical")}
           label="Crítico"
           value={stats.critical}
           tone="rose"
         />
       </div>
 
-      {/* Filters — controlled open state so re-renders don't collapse the panel */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm mb-5">
-        <button
-          type="button"
-          onClick={() => setFiltersOpen((v) => !v)}
-          className="w-full flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
-          aria-expanded={filtersOpen}
+      {/* Filter bar + toggle vista */}
+      <div className="mb-5 bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5">
+        <FilterBar
+          search=""
+          onSearchChange={() => {}}
+          searchPlaceholder=""
+          filters={[
+            {
+              type: "select",
+              name: "residenteId",
+              label: "Residente",
+              options: residents.map((r) => [r.id, `${r.apellido}, ${r.nombre}`]),
+              placeholder: "Todos los residentes",
+            },
+            {
+              type: "dateRange",
+              name: "fecha",
+              nameDesde: "desde",
+              nameHasta: "hasta",
+              label: "Período",
+              presets: DATE_PRESETS,
+            },
+          ]}
+          values={filters}
+          onFilterChange={setFilter}
+          onClearAll={clearFilters}
+          resultCount={filtered.length}
+          totalCount={records.length}
+          loading={loading}
         >
-          <div className="text-left">
-            <p className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-              Filtros y vista
-              {filtroResidente && (
-                <span className="inline-flex h-2 w-2 rounded-full bg-teal-500" aria-label="Filtros activos" />
-              )}
-            </p>
-            <p className="text-xs text-slate-500">
-              {filtroResidente ? "Filtrando por residente" : "Mes actual por defecto"}
-            </p>
-          </div>
-          <span className={`flex items-center gap-1 text-xs font-semibold transition-colors ${filtersOpen ? "text-slate-500" : "text-teal-700"}`}>
-            {filtersOpen ? "Cerrar" : "Ajustar"}
-            <svg className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-            </svg>
-          </span>
-        </button>
-        {filtersOpen && <div className="border-t border-slate-100 p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Residente</label>
-              <select
-                value={filtroResidente}
-                onChange={(e) => setFiltroResidente(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="">Todos los residentes</option>
-                {residents.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.apellido}, {r.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Desde</label>
-              <input
-                type="date"
-                value={filtroDesde}
-                onChange={(e) => setFiltroDesde(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Hasta</label>
-              <input
-                type="date"
-                value={filtroHasta}
-                onChange={(e) => setFiltroHasta(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-            </div>
-            <div className="hidden lg:inline-flex rounded-xl border border-slate-200 overflow-hidden self-stretch">
+          <div className="hidden lg:flex flex-wrap items-center justify-end gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Vista:</span>
+            <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden">
               <button
                 type="button"
-                onClick={() => setView("cards")}
+                onClick={() => setFilter("view", "cards")}
                 aria-pressed={view === "cards"}
-                className={`flex-1 px-3 py-2 text-xs font-medium ${
-                  view === "cards"
-                    ? "bg-teal-700 text-white"
-                    : "bg-white text-slate-600 hover:bg-slate-50"
+                className={`px-3 py-2 text-xs font-medium min-h-11 sm:min-h-10 ${
+                  view === "cards" ? "bg-teal-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 Tarjetas
               </button>
               <button
                 type="button"
-                onClick={() => setView("table")}
+                onClick={() => setFilter("view", "table")}
                 aria-pressed={view === "table"}
-                className={`flex-1 px-3 py-2 text-xs font-medium border-l border-slate-200 ${
-                  view === "table"
-                    ? "bg-teal-700 text-white"
-                    : "bg-white text-slate-600 hover:bg-slate-50"
+                className={`px-3 py-2 text-xs font-medium border-l border-slate-200 min-h-11 sm:min-h-10 ${
+                  view === "table" ? "bg-teal-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 Tabla
               </button>
             </div>
           </div>
-          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <p className="text-xs text-slate-500">
-              <span className="lg:hidden">En móvil siempre se muestran tarjetas.</span>
-              <span className="hidden lg:inline">Tarjetas es la vista recomendada; tabla queda para revisión compacta.</span>
-            </p>
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="self-start text-sm text-slate-500 hover:text-slate-700 underline"
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        </div>}
+        </FilterBar>
       </div>
 
       {filtered.length === 0 ? (
@@ -303,7 +267,7 @@ export default function VitalSignsList() {
           {(filtroEstado || filtroResidente) && (
             <button
               type="button"
-              onClick={() => { setFiltroEstado(""); setFiltroResidente(""); }}
+              onClick={clearFilters}
               className="mt-4 text-sm font-semibold text-teal-700 hover:underline"
             >
               Limpiar filtros
