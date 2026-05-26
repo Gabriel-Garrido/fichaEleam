@@ -2,12 +2,18 @@ import { useEffect, useState } from "react";
 import Modal from "../../../components/Modal";
 import { TextField, TextareaField, SubmitBar, ErrorSummary } from "../../../components/forms/FormKit";
 import { useToast } from "../../../components/Toast";
-import { userFacingFormError } from "../../../utils/formValidation";
+import { applyPostgresErrorToForm, scrollToFirstError } from "../../../utils/formValidation";
 import {
   PROSPECT_LIST_EMPTY,
   validateProspectListForm,
 } from "../crmEmailFormSchema";
 import { createProspectList, updateProspectList } from "../crmEmailService";
+
+const LIST_DB_FIELD_MAP = {
+  nombre: { field: "nombre", message: "El nombre de la lista no tiene el formato permitido (máximo 120 caracteres)." },
+  descripcion: { field: "descripcion", message: "La descripción no tiene el formato permitido (máximo 500 caracteres)." },
+  origen: { field: null, message: "El origen no es uno de los valores permitidos." },
+};
 
 export default function ListFormModal({ isOpen, list, onClose, onSaved }) {
   const isEditing = Boolean(list?.id);
@@ -26,9 +32,10 @@ export default function ListFormModal({ isOpen, list, onClose, onSaved }) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => {
-      if (!prev[name]) return prev;
+      if (!prev[name] && !prev._form) return prev;
       const next = { ...prev };
       delete next[name];
+      delete next._form;
       return next;
     });
   };
@@ -38,6 +45,7 @@ export default function ListFormModal({ isOpen, list, onClose, onSaved }) {
     const result = validateProspectListForm(form);
     if (!result.ok) {
       setErrors(result.errors);
+      scrollToFirstError(result.errors);
       return;
     }
     setSaving(true);
@@ -49,7 +57,15 @@ export default function ListFormModal({ isOpen, list, onClose, onSaved }) {
       onSaved?.(saved);
       onClose();
     } catch (err) {
-      toast(userFacingFormError(err, "No se pudo guardar la lista."), "error");
+      const applied = applyPostgresErrorToForm(err, setErrors, {
+        fieldMap: LIST_DB_FIELD_MAP,
+        fallback: "No se pudo guardar la lista.",
+      });
+      if (applied.field) {
+        scrollToFirstError({ [applied.field]: applied.message });
+      } else {
+        toast(applied.message, "error");
+      }
     } finally {
       setSaving(false);
     }

@@ -14,28 +14,47 @@ export function FieldError({ id, message }) {
 }
 
 export function ErrorSummary({ errors = {}, title = "Revisa los campos marcados" }) {
-  const entries = Object.entries(errors).filter(([, message]) => Boolean(message));
-  const messages = entries.map(([, message]) => message);
-  if (messages.length === 0) return null;
+  // `_form` y `__general` son claves reservadas para errores que no
+  // pertenecen a un campo específico (ej: rechazo de la BD que no se pudo
+  // mapear a una columna). Se renderizan arriba con énfasis.
+  const generalMessage = errors._form || errors.__general;
+  const fieldEntries = Object.entries(errors).filter(
+    ([key, message]) => key !== "_form" && key !== "__general" && Boolean(message),
+  );
+  if (!generalMessage && fieldEntries.length === 0) return null;
   return (
     <div
       className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
       role="alert"
       aria-live="polite"
     >
-      <p className="font-semibold">{title}</p>
-      <ul className="mt-2 list-disc space-y-1 pl-5">
-        {entries.slice(0, 4).map(([field, message]) => (
-          <li key={`${field}-${message}`}>
-            <a
-              href={`#${String(field).replace(/\./g, "_")}`}
-              className="rounded underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-rose-300"
-            >
-              {message}
-            </a>
-          </li>
-        ))}
-      </ul>
+      {generalMessage && (
+        <div className="flex items-start gap-2">
+          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-200 text-xs font-bold text-rose-800">
+            !
+          </span>
+          <p className="font-semibold leading-snug">{generalMessage}</p>
+        </div>
+      )}
+      {fieldEntries.length > 0 && (
+        <>
+          <p className={generalMessage ? "mt-2 text-xs font-semibold uppercase tracking-wide text-rose-700/80" : "font-semibold"}>
+            {generalMessage ? "Campos a revisar" : title}
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {fieldEntries.slice(0, 5).map(([field, message]) => (
+              <li key={`${field}-${message}`}>
+                <a
+                  href={`#${String(field).replace(/\./g, "_")}`}
+                  className="rounded underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-rose-300"
+                >
+                  {message}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

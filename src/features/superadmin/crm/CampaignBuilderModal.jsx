@@ -12,8 +12,25 @@ import {
 } from "../../../components/forms/FormKit";
 import { useToast } from "../../../components/Toast";
 import { useConfirm } from "../../../components/ConfirmDialog";
-import { userFacingFormError } from "../../../utils/formValidation";
+import {
+  applyPostgresErrorToForm,
+  scrollToFirstError,
+  userFacingFormError,
+} from "../../../utils/formValidation";
 import { validateEmail } from "../../../utils/validators";
+
+const CAMPAIGN_DB_FIELD_MAP = {
+  nombre: { field: "nombre", message: "El nombre de la campaña no tiene el formato permitido (máximo 160 caracteres)." },
+  asunto_default: { field: "asunto_default", message: "El asunto no tiene el formato permitido (máximo 200 caracteres)." },
+  cuerpo_default: { field: "cuerpo_default", message: "El cuerpo del correo excede el largo permitido (máximo 8.000 caracteres)." },
+  mensaje_rrss_template: { field: "mensaje_rrss_template", message: "El mensaje de RRSS excede el largo permitido (máximo 4.000 caracteres)." },
+  script_llamada_template: { field: "script_llamada_template", message: "El script de llamada excede el largo permitido (máximo 8.000 caracteres)." },
+  objetivo: { field: "objetivo", message: "El objetivo excede el largo permitido (máximo 1.000 caracteres)." },
+  audiencia_notas: { field: "audiencia_notas", message: "Las notas de audiencia exceden el largo permitido (máximo 1.000 caracteres)." },
+  from_email: { field: "from_email", message: "El email \"From\" no tiene un formato válido." },
+  from_name: { field: "from_name", message: "El nombre del remitente excede el largo permitido (máximo 120 caracteres)." },
+  reply_to_email: { field: "reply_to_email", message: "El email de \"Reply-To\" no tiene un formato válido." },
+};
 import {
   CAMPAIGN_FORM_EMPTY,
   validateCampaignForm,
@@ -165,9 +182,10 @@ export default function CampaignBuilderModal({
     const { name, value } = e.target;
     setCampaignForm((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => {
-      if (!prev[name]) return prev;
+      if (!prev[name] && !prev._form) return prev;
       const next = { ...prev };
       delete next[name];
+      delete next._form;
       return next;
     });
   };
@@ -223,6 +241,7 @@ export default function CampaignBuilderModal({
       const result = validateCampaignForm(campaignForm);
       if (!result.ok) {
         setErrors(result.errors);
+        scrollToFirstError(result.errors);
         return;
       }
       setCampaignForm({
@@ -277,7 +296,19 @@ export default function CampaignBuilderModal({
         setCreatedCampaignId(created.id);
         setStep(3);
       } catch (err) {
-        toast(userFacingFormError(err, "No se pudo crear la campaña."), "error");
+        // Si la BD rechazó la campaña, volvemos al paso 0 con el campo
+        // resaltado para que el usuario corrija (no perder el progreso de
+        // audiencia/preview ya selecciona).
+        const applied = applyPostgresErrorToForm(err, setErrors, {
+          fieldMap: CAMPAIGN_DB_FIELD_MAP,
+          fallback: "No se pudo crear la campaña.",
+        });
+        setStep(0);
+        if (applied.field) {
+          scrollToFirstError({ [applied.field]: applied.message });
+        } else {
+          toast(applied.message, "error");
+        }
       } finally {
         setCreating(false);
       }

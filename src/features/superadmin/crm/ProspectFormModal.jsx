@@ -12,13 +12,65 @@ import {
   Notice,
 } from "../../../components/forms/FormKit";
 import { useToast } from "../../../components/Toast";
-import { userFacingFormError } from "../../../utils/formValidation";
+import {
+  applyPostgresErrorToForm,
+  scrollToFirstError,
+} from "../../../utils/formValidation";
 import {
   PROSPECT_ESTADOS,
   PROSPECT_FORM_EMPTY,
   validateProspectForm,
 } from "../crmEmailFormSchema";
 import { createProspect, updateProspect } from "../crmEmailService";
+
+// Mapeo de constraints / columnas de crm_prospects a campos del formulario
+// para mostrar errores específicos cuando la BD rechaza la inserción.
+// Cuando agregues una constraint nueva al schema, mapéala aquí.
+const PROSPECT_DB_FIELD_MAP = {
+  // Columnas (NOT NULL / column-level checks auto-named):
+  eleam_nombre: { field: "eleam_nombre", message: "El nombre del ELEAM no tiene el formato permitido (máximo 200 caracteres)." },
+  comuna: { field: "comuna", message: "La comuna no tiene el formato permitido (máximo 100 caracteres)." },
+  telefono: { field: "telefono", message: "El teléfono no tiene el formato permitido (máximo 40 caracteres)." },
+  email: { field: "email", message: "El correo no tiene un formato válido (usa solo letras, números y los símbolos . _ + - %)." },
+  facebook_url: { field: "facebook_url", message: "El enlace de Facebook no tiene el formato permitido (máximo 500 caracteres)." },
+  instagram_url: { field: "instagram_url", message: "El enlace de Instagram no tiene el formato permitido (máximo 500 caracteres)." },
+  tiktok_url: { field: "tiktok_url", message: "El enlace de TikTok no tiene el formato permitido (máximo 500 caracteres)." },
+  origen: { field: "origen", message: "El origen no es uno de los valores permitidos." },
+  canal_preferido: { field: "canal_preferido", message: "El canal preferido no es uno de los valores permitidos." },
+  cargo_contacto: { field: "cargo_contacto", message: "El cargo de contacto no tiene el formato permitido." },
+  decision_maker_nombre: { field: "decision_maker_nombre", message: "El nombre del decisor no tiene el formato permitido." },
+  decision_maker_cargo: { field: "decision_maker_cargo", message: "El cargo del decisor no tiene el formato permitido." },
+  num_residentes: { field: "num_residentes", message: "El número de residentes debe estar entre 1 y 10.000." },
+  digitalizacion_estado: { field: "digitalizacion_estado", message: "El estado digital no es uno de los valores permitidos." },
+  software_actual: { field: "software_actual", message: "El software actual no tiene el formato permitido." },
+  dolor_principal: { field: "dolor_principal", message: "El dolor principal no tiene el formato permitido (máximo 500 caracteres)." },
+  urgencia: { field: "urgencia", message: "La urgencia no es uno de los valores permitidos." },
+  fit_score: { field: "fit_score", message: "El fit score debe estar entre 0 y 100." },
+  valor_estimado_clp: { field: "valor_estimado_clp", message: "El valor estimado no puede ser negativo." },
+  probabilidad_cierre: { field: "probabilidad_cierre", message: "La probabilidad de cierre debe estar entre 0 y 100." },
+  motivo_perdida: { field: "motivo_perdida", message: "El motivo de pérdida no tiene el formato permitido (máximo 500 caracteres)." },
+  competidor: { field: "competidor", message: "El competidor no tiene el formato permitido." },
+  estado: { field: "estado", message: "La etapa no es uno de los valores permitidos." },
+  notas: { field: "notas", message: "Las notas no tienen el formato permitido (máximo 3.000 caracteres)." },
+  // Constraints custom (named):
+  crm_prospects_lost_reason_required: {
+    field: "motivo_perdida",
+    message: "Cuando la etapa es \"perdido\" debes indicar un motivo de pérdida.",
+  },
+  crm_prospects_no_contactar_consistent: {
+    field: "estado",
+    message: "La etapa y la marca \"no contactar\" deben coincidir.",
+  },
+  // Unique indexes:
+  crm_prospects_email_unique: {
+    field: "email",
+    message: "Ya existe un prospecto con ese correo en la base.",
+  },
+  crm_prospects_demo_lead_unique: {
+    field: null,
+    message: "Este prospecto ya está vinculado a un lead de demo.",
+  },
+};
 import {
   CHANNEL_OPTIONS,
   DIGITALIZATION_OPTIONS,
@@ -96,9 +148,12 @@ export default function ProspectFormModal({ isOpen, prospect, lists = [], defaul
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => {
-      if (!prev[name]) return prev;
+      // Limpia error del campo + el banner general al editar cualquier cosa,
+      // así el usuario percibe progreso al corregir.
+      if (!prev[name] && !prev._form) return prev;
       const next = { ...prev };
       delete next[name];
+      delete next._form;
       return next;
     });
   };
@@ -108,6 +163,7 @@ export default function ProspectFormModal({ isOpen, prospect, lists = [], defaul
     const result = validateProspectForm(form);
     if (!result.ok) {
       setErrors(result.errors);
+      scrollToFirstError(result.errors);
       return;
     }
     setSaving(true);
@@ -120,11 +176,17 @@ export default function ProspectFormModal({ isOpen, prospect, lists = [], defaul
       onSaved?.(saved);
       onClose();
     } catch (err) {
-      if (err?.code === "23505") {
-        setErrors({ email: "Ya existe un prospecto con ese correo." });
-        return;
+      // Parsea el error de Postgres → resalta el campo culpable cuando se
+      // puede identificar, si no muestra un banner general dentro del form.
+      const applied = applyPostgresErrorToForm(err, setErrors, {
+        fieldMap: PROSPECT_DB_FIELD_MAP,
+        fallback: "No se pudo guardar el prospecto.",
+      });
+      if (applied.field) {
+        scrollToFirstError({ [applied.field]: applied.message });
+      } else {
+        toast(applied.message, "error");
       }
-      toast(userFacingFormError(err, "No se pudo guardar el prospecto."), "error");
     } finally {
       setSaving(false);
     }
