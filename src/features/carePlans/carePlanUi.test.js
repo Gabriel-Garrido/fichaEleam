@@ -4,29 +4,26 @@ import {
   buildQuickCarePlanDefaults,
   calculateCarePlanReadiness,
   formatCareSchedule,
-  getCarePlanPrimaryAction,
   groupCarePresetsByArea,
 } from "./carePlanUi";
 
 describe("carePlanUi helpers", () => {
-  it("formats schedule summaries with recurrence and tolerance", () => {
+  it("formats schedule summaries with recurrence", () => {
     expect(formatCareSchedule({
       ...INITIAL_CARE_SCHEDULE,
       turno: "mañana",
       hora: "08:30",
-      tolerancia_min: 45,
-    })).toBe("Mañana · 08:30 · diario · ventana 45 min");
+    })).toBe("Mañana · 08:30 · diario");
 
     expect(formatCareSchedule({
       frecuencia: "semanal",
       turno: "tarde",
       hora: "15:00",
       dias_semana: [1, 3, 5],
-      tolerancia_min: 0,
-    })).toBe("Tarde · 15:00 · semanal (L, Mi, V) · sin margen");
+    })).toBe("Tarde · 15:00 · semanal (L, Mi, V)");
   });
 
-  it("calculates readiness from plan content, routines and family visibility", () => {
+  it("calculates readiness counts from plan content and routines", () => {
     const metrics = calculateCarePlanReadiness({
       plan: { objetivos: "Mantener confort", riesgo_caidas: "medio" },
       activities: [
@@ -38,34 +35,13 @@ describe("carePlanUi helpers", () => {
           horarios: [{ turno: "mañana", hora: "10:00", activo: true }],
         },
       ],
-      dayTasks: [{ estado: "pendiente" }, { estado: "reprogramada" }],
     });
 
-    expect(metrics).toMatchObject({
+    expect(metrics).toEqual({
       active: 1,
-      schedules: 1,
-      highPriority: 1,
-      followUp: 1,
       familyVisible: 1,
-      openToday: 2,
-      reprogrammed: 1,
       hasClinicalSummary: true,
-      score: 100,
     });
-  });
-
-  it("returns action guidance for incomplete plans", () => {
-    expect(getCarePlanPrimaryAction({
-      plan: null,
-      metrics: {},
-      canManage: true,
-    }).label).toBe("Crear plan rápido");
-
-    expect(getCarePlanPrimaryAction({
-      plan: { id: "p1" },
-      metrics: { active: 0 },
-      canManage: true,
-    }).label).toBe("Agregar rutina base");
   });
 
   it("builds quick start defaults with resident context", () => {

@@ -52,7 +52,7 @@ src/
 │   ├── vitalSigns/             # Formulario + lista + rangos clínicos
 │   ├── observations/           # 12 tipos de observaciones diarias
 │   ├── accreditation/          # Modelo v9: ámbitos, requisitos, evidencias, observaciones, auditoría
-│   ├── carePlans/              # Plan de cuidado: CarePlanTab (actividades + horarios), CareTasksPage (bandeja diaria cuidado + eMAR), carePlansService
+│   ├── carePlans/              # Plan de cuidado simplificado: CarePlanTab (definición — alta en 1 clic, rutinas por turno, info clínica colapsable), CarePlanActivityModal (rutina compacta: nombre/categoría/prioridad + horarios + visibilidad), CareTasksPage (bandeja diaria cuidado + eMAR), carePlanUi (helpers de UI), carePlansService
 │   │   └── carePlansService.js # Funciones compartidas: getSessionProfile(), todayIso(), currentTurno(), normalizeSchedule(), previousTurnos()
 │   ├── emar/                   # Kardex electrónico: EmarTurnPage (administración por turno), EmarResidentTab (historial por residente), emarService
 │   ├── clinicalAssessments/    # Escalas funcionales Barthel/Katz con reevaluación MINSAL: ClinicalAssessmentModal, Badge, History, Rules y Service

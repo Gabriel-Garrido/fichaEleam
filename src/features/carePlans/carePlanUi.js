@@ -1,4 +1,4 @@
-import { CARE_ACTIVITY_PRESETS, CARE_TURNOS, currentTurno, todayIso } from "./carePlansService";
+import { CARE_ACTIVITY_PRESETS, CARE_TURNOS } from "./carePlansService";
 import { PRIORITY_ORDER } from "./careTasksBoardUtils";
 
 export const INITIAL_CARE_PLAN = {
@@ -79,26 +79,24 @@ export function getActiveCareSchedules(activity) {
 export function formatCareSchedule(schedule = {}) {
   const turno = TURN_LABELS[schedule.turno] ?? schedule.turno ?? "Turno";
   const time = schedule.hora?.slice(0, 5) ?? "--:--";
-  const tolerance = Number(schedule.tolerancia_min ?? 60);
-  const windowText = tolerance > 0 ? `ventana ${tolerance} min` : "sin margen";
 
   if (schedule.frecuencia === "semanal") {
     const days = (schedule.dias_semana ?? [])
       .map((day) => WEEK_DAY_LABEL[day])
       .filter(Boolean)
       .join(", ");
-    return `${turno} · ${time} · semanal${days ? ` (${days})` : ""} · ${windowText}`;
+    return `${turno} · ${time} · semanal${days ? ` (${days})` : ""}`;
   }
 
   if (schedule.frecuencia === "mensual") {
-    return `${turno} · ${time} · mensual día ${schedule.dias_mes?.[0] ?? 1} · ${windowText}`;
+    return `${turno} · ${time} · mensual día ${schedule.dias_mes?.[0] ?? 1}`;
   }
 
   if (schedule.frecuencia === "una_vez") {
-    return `${turno} · ${time} · ${schedule.fecha_unica || "fecha única"} · ${windowText}`;
+    return `${turno} · ${time} · ${schedule.fecha_unica || "fecha única"}`;
   }
 
-  return `${turno} · ${time} · diario · ${windowText}`;
+  return `${turno} · ${time} · diario`;
 }
 
 export function carePresetKey(item = {}) {
@@ -140,14 +138,9 @@ export function buildCarePlanForm(plan) {
   } : INITIAL_CARE_PLAN;
 }
 
-export function calculateCarePlanReadiness({ plan, activities = [], dayTasks = [] } = {}) {
+export function calculateCarePlanReadiness({ plan, activities = [] } = {}) {
   const active = sortCareActivities(activities);
-  const schedules = active.reduce((acc, item) => acc + getActiveCareSchedules(item).length, 0);
-  const highPriority = active.filter((item) => ["alta", "urgente"].includes(item.prioridad)).length;
-  const followUp = active.filter((item) => item.requiere_observacion).length;
   const familyVisible = active.filter((item) => item.visible_familiar).length;
-  const openToday = dayTasks.filter((task) => ["pendiente", "reprogramada"].includes(task.estado)).length;
-  const reprogrammed = dayTasks.filter((task) => task.estado === "reprogramada").length;
   const hasClinicalSummary = Boolean(
     plan?.objetivos?.trim()
     || plan?.pauta_alimentacion?.trim()
@@ -157,44 +150,11 @@ export function calculateCarePlanReadiness({ plan, activities = [], dayTasks = [
     || plan?.riesgo_up
   );
 
-  let score = 0;
-  if (plan) score += 25;
-  if (active.length > 0) score += 25;
-  if (schedules > 0) score += 20;
-  if (hasClinicalSummary) score += 15;
-  if (familyVisible > 0) score += 10;
-  if (followUp > 0 || highPriority > 0) score += 5;
-
   return {
     active: active.length,
-    highPriority,
-    schedules,
-    followUp,
     familyVisible,
-    openToday,
-    reprogrammed,
     hasClinicalSummary,
-    score: Math.min(100, score),
   };
-}
-
-export function getCarePlanPrimaryAction({ plan, metrics, canManage }) {
-  if (!canManage) {
-    return { label: "Solo lectura", tone: "slate", reason: "Tu perfil no permite editar este plan." };
-  }
-  if (!plan) {
-    return { label: "Crear plan rápido", tone: "teal", reason: "Crea una pauta base con rutinas recomendadas." };
-  }
-  if ((metrics?.active ?? 0) === 0) {
-    return { label: "Agregar rutina base", tone: "teal", reason: "El plan existe, pero aún no genera tareas." };
-  }
-  if ((metrics?.schedules ?? 0) === 0) {
-    return { label: "Programar horarios", tone: "amber", reason: "Las actividades necesitan horario para llegar al turno." };
-  }
-  if (!metrics?.hasClinicalSummary) {
-    return { label: "Completar plan de cuidado", tone: "sky", reason: "Agrega alertas clínicas para orientar al equipo." };
-  }
-  return { label: "Optimizar rutinas", tone: "emerald", reason: "El plan está operativo; revisa solo excepciones o cambios." };
 }
 
 export function buildQuickCarePlanDefaults(resident = {}) {
@@ -207,22 +167,5 @@ export function buildQuickCarePlanDefaults(resident = {}) {
     objetivos: "Mantener seguridad, confort, hidratación, alimentación asistida y movilidad funcional según tolerancia diaria.",
     pauta_alimentacion: "Verificar dieta indicada y tolerancia en cada comida. Avisar rechazo, tos, dificultad para tragar o baja ingesta.",
     pauta_hidratacion: "Ofrecer líquidos según pauta y registrar rechazos o restricciones clínicas.",
-  };
-}
-
-export function nextCareTaskSummary(tasks = [], now = new Date()) {
-  const currentDate = todayIso();
-  const currentShift = currentTurno(now);
-  const open = tasks
-    .filter((task) => ["pendiente", "reprogramada"].includes(task.estado))
-    .sort((a, b) => `${a.fecha}T${a.hora ?? "00:00"}`.localeCompare(`${b.fecha}T${b.hora ?? "00:00"}`));
-
-  const current = open.find((task) => task.fecha === currentDate && task.turno === currentShift) ?? open[0];
-  if (!current) return null;
-
-  return {
-    title: current.actividad?.titulo ?? "Tarea de cuidado",
-    when: [TURN_LABELS[current.turno] ?? current.turno, current.hora?.slice(0, 5)].filter(Boolean).join(" · "),
-    state: current.estado,
   };
 }

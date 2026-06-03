@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Modal from "../../components/Modal";
 import useSessionFormDraft from "../../hooks/useSessionFormDraft";
 import {
@@ -71,7 +71,7 @@ export default function CarePlanActivityModal({ modal, saving, onClose, onSubmit
       isOpen={!!modal}
       onClose={handleClose}
       title={activity.id ? "Editar rutina" : "Nueva rutina"}
-      panelClassName="max-w-3xl p-4 sm:p-6"
+      panelClassName="max-w-2xl p-4 sm:p-6"
     >
       <form
         className="space-y-5"
@@ -83,14 +83,9 @@ export default function CarePlanActivityModal({ modal, saving, onClose, onSubmit
             });
         }}
       >
-        {dirty && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-            Borrador guardado en esta sesión.
-          </div>
-        )}
-
-        <WizardBlock number="1" title="Qué cuidado se hará">
-          <div className="grid gap-4 md:grid-cols-2">
+        <Section title="Qué cuidado se hará">
+          <Field label="Nombre de la rutina" value={activity.titulo} onChange={(value) => setActivity((prev) => ({ ...prev, titulo: value }))} disabled={saving} placeholder="Ej: Hidratación asistida" />
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium text-slate-700">
               Categoría
               <select
@@ -115,26 +110,29 @@ export default function CarePlanActivityModal({ modal, saving, onClose, onSubmit
               </select>
             </label>
           </div>
-          <Field label="Nombre de la rutina" value={activity.titulo} onChange={(value) => setActivity((prev) => ({ ...prev, titulo: value }))} disabled={saving} />
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextArea label="Resumen interno" value={activity.descripcion ?? ""} onChange={(value) => setActivity((prev) => ({ ...prev, descripcion: value }))} disabled={saving} rows={3} />
-            <TextArea label="Instrucciones al turno" value={activity.instrucciones ?? ""} onChange={(value) => setActivity((prev) => ({ ...prev, instrucciones: value }))} disabled={saving} rows={3} />
-          </div>
-        </WizardBlock>
+          <TextArea
+            label="Instrucciones para el turno"
+            optional
+            value={activity.instrucciones ?? ""}
+            onChange={(value) => setActivity((prev) => ({ ...prev, instrucciones: value }))}
+            disabled={saving}
+            rows={3}
+            placeholder="Cómo realizar el cuidado, qué observar y cuándo avisar."
+          />
+        </Section>
 
-        <WizardBlock number="2" title="Cuándo se debe ejecutar">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-500">
-              Agrega solo los horarios necesarios. Cada horario crea una tarea independiente.
-            </p>
+        <Section
+          title="Cuándo se debe ejecutar"
+          action={(
             <button
               type="button"
               onClick={addSchedule}
-              className="rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+              className="rounded-xl border border-teal-200 bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-50"
             >
               Agregar horario
             </button>
-          </div>
+          )}
+        >
           <div className="space-y-3">
             {schedules.map((schedule, index) => (
               <ScheduleEditor
@@ -148,11 +146,11 @@ export default function CarePlanActivityModal({ modal, saving, onClose, onSubmit
               />
             ))}
           </div>
-        </WizardBlock>
+        </Section>
 
-        <WizardBlock number="3" title="Qué verá el equipo y la familia">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <Section title="Visibilidad y continuidad">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={activity.requiere_observacion}
@@ -161,8 +159,8 @@ export default function CarePlanActivityModal({ modal, saving, onClose, onSubmit
               />
               <span>
                 Exigir seguimiento al cerrar
-                <span className="block text-xs text-amber-700">
-                  Útil si el turno debe dejar continuidad clínica.
+                <span className="block text-xs text-slate-500">
+                  El turno debe dejar continuidad clínica al completarla.
                 </span>
               </span>
             </label>
@@ -210,7 +208,7 @@ export default function CarePlanActivityModal({ modal, saving, onClose, onSubmit
               )}
             </div>
           )}
-        </WizardBlock>
+        </Section>
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button type="button" onClick={handleClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
@@ -226,6 +224,8 @@ export default function CarePlanActivityModal({ modal, saving, onClose, onSubmit
 }
 
 function ScheduleEditor({ index, schedule, canRemove, saving, onChange, onRemove }) {
+  const [advanced, setAdvanced] = useState(Number(schedule.tolerancia_min ?? 60) !== 60);
+
   const toggleDay = (day) => {
     const set = new Set(schedule.dias_semana ?? []);
     if (set.has(day)) set.delete(day);
@@ -247,20 +247,7 @@ function ScheduleEditor({ index, schedule, canRemove, saving, onChange, onRemove
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block text-sm font-medium text-slate-700">
-          Frecuencia
-          <select
-            value={schedule.frecuencia}
-            onChange={(e) => onChange({ frecuencia: e.target.value })}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-          >
-            <option value="diaria">Diaria</option>
-            <option value="semanal">Semanal</option>
-            <option value="mensual">Mensual</option>
-            <option value="una_vez">Una vez</option>
-          </select>
-        </label>
+      <div className="grid gap-3 sm:grid-cols-3">
         <label className="block text-sm font-medium text-slate-700">
           Turno
           <select
@@ -272,7 +259,19 @@ function ScheduleEditor({ index, schedule, canRemove, saving, onChange, onRemove
           </select>
         </label>
         <Field label="Hora" type="time" value={schedule.hora} onChange={(value) => onChange({ hora: value })} disabled={saving} />
-        <Field label="Ventana min." type="number" min="0" max="720" step="5" value={schedule.tolerancia_min} onChange={(value) => onChange({ tolerancia_min: Number(value) })} disabled={saving} />
+        <label className="block text-sm font-medium text-slate-700">
+          Repetir
+          <select
+            value={schedule.frecuencia}
+            onChange={(e) => onChange({ frecuencia: e.target.value })}
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+          >
+            <option value="diaria">Todos los días</option>
+            <option value="semanal">Días específicos</option>
+            <option value="mensual">Una vez al mes</option>
+            <option value="una_vez">Una sola vez</option>
+          </select>
+        </label>
       </div>
 
       {schedule.frecuencia === "semanal" && (
@@ -322,28 +321,62 @@ function ScheduleEditor({ index, schedule, canRemove, saving, onChange, onRemove
           />
         </label>
       )}
+
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <button
+          type="button"
+          onClick={() => setAdvanced((prev) => !prev)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700"
+        >
+          <Chevron open={advanced} />
+          Opciones avanzadas
+        </button>
+        {advanced && (
+          <div className="mt-3 max-w-xs">
+            <Field
+              label="Ventana de tolerancia (min)"
+              type="number"
+              min="0"
+              max="720"
+              step="5"
+              value={schedule.tolerancia_min}
+              onChange={(value) => onChange({ tolerancia_min: Number(value) })}
+              disabled={saving}
+            />
+            <p className="mt-1 text-xs text-slate-400">Minutos antes de marcar la tarea como vencida.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function WizardBlock({ number, title, children }) {
+function Section({ title, action, children }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-teal-700 text-xs font-bold text-white">
-          {number}
-        </span>
+      <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
+        {action}
       </div>
       <div className="space-y-4">{children}</div>
     </section>
   );
 }
 
-function Field({ label, value, onChange, disabled, type = "text", min, max, step }) {
+function Chevron({ open }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+      className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+    </svg>
+  );
+}
+
+function Field({ label, value, onChange, disabled, type = "text", min, max, step, placeholder, optional }) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
+      {optional && <span className="ml-1 text-xs font-normal text-slate-400">(opcional)</span>}
       <input
         type={type}
         value={value}
@@ -352,21 +385,24 @@ function Field({ label, value, onChange, disabled, type = "text", min, max, step
         min={min}
         max={max}
         step={step}
+        placeholder={placeholder}
         className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50"
       />
     </label>
   );
 }
 
-function TextArea({ label, value, onChange, disabled, rows = 3 }) {
+function TextArea({ label, value, onChange, disabled, rows = 3, placeholder, optional }) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
+      {optional && <span className="ml-1 text-xs font-normal text-slate-400">(opcional)</span>}
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         rows={rows}
+        placeholder={placeholder}
         className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50"
       />
     </label>

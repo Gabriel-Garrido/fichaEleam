@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
-import MetricCard from "../../components/MetricCard";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
 import useSessionFormDraft from "../../hooks/useSessionFormDraft";
@@ -9,17 +8,14 @@ import CarePlanActivityModal from "./CarePlanActivityModal";
 import {
   CARE_ACTIVITY_PRESETS,
   CARE_BASE_PRESET_IDS,
-  CARE_CATEGORIES,
   CARE_CATEGORY_LABEL,
   CARE_TURNOS,
   createCarePresetActivities,
   deactivateCareActivity,
   getResidentCarePlan,
-  listCareTasks,
   reactivateCareActivity,
   saveCareActivity,
   saveCarePlan,
-  todayIso,
 } from "./carePlansService";
 import {
   PRIORITY_BORDER,
@@ -28,19 +24,15 @@ import {
 } from "./careTasksBoardUtils";
 import {
   INITIAL_CARE_ACTIVITY,
-  INITIAL_CARE_PLAN,
   INITIAL_CARE_SCHEDULE,
   TURN_LABELS,
-  WEEK_DAYS,
   buildCarePlanForm,
   buildQuickCarePlanDefaults,
   calculateCarePlanReadiness,
   carePresetKey,
   formatCareSchedule,
   getActiveCareSchedules,
-  getCarePlanPrimaryAction,
   groupCarePresetsByArea,
-  nextCareTaskSummary,
   sortCareActivities,
 } from "./carePlanUi";
 
@@ -69,7 +61,6 @@ export default function CarePlanTab({ resident }) {
   const toast = useToast();
   const { can } = useAuth();
   const [plan, setPlan] = useState(null);
-  const [dayTasks, setDayTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [presetSaving, setPresetSaving] = useState(false);
@@ -89,20 +80,9 @@ export default function CarePlanTab({ resident }) {
   const load = async () => {
     setLoading(true);
     try {
-      const [data, tasks] = await Promise.all([
-        getResidentCarePlan(resident.id),
-        listCareTasks({
-          residenteId: resident.id,
-          fecha: todayIso(),
-          estado: null,
-          generate: false,
-          includeCarryOver: false,
-          limit: 200,
-        }).catch(() => []),
-      ]);
+      const data = await getResidentCarePlan(resident.id);
       setPlan(data);
-      setDayTasks(tasks ?? []);
-      setClinicalOpen(!data);
+      setClinicalOpen(false);
     } catch (err) {
       console.error(err);
       toast("No se pudo cargar el plan de cuidado.", "error");
@@ -127,15 +107,8 @@ export default function CarePlanTab({ resident }) {
   );
 
   const metrics = useMemo(
-    () => calculateCarePlanReadiness({ plan, activities: plan?.actividades ?? [], dayTasks }),
-    [plan, dayTasks]
-  );
-
-  const nextTask = useMemo(() => nextCareTaskSummary(dayTasks), [dayTasks]);
-
-  const primaryAction = useMemo(
-    () => getCarePlanPrimaryAction({ plan, metrics, canManage }),
-    [plan, metrics, canManage]
+    () => calculateCarePlanReadiness({ plan, activities: plan?.actividades ?? [] }),
+    [plan]
   );
 
   const existingPresetIds = useMemo(() => {
@@ -149,11 +122,11 @@ export default function CarePlanTab({ resident }) {
 
   const presetGroups = useMemo(() => groupCarePresetsByArea(), []);
 
-  const handleQuickStart = async ({ form: quickForm, includeBaseRoutine }) => {
+  const handleCreatePlan = async (includeBaseRoutine) => {
     if (!canCreate) return;
     setSaving(true);
     try {
-      const savedPlan = await saveCarePlan(resident.id, quickForm);
+      const savedPlan = await saveCarePlan(resident.id, buildQuickCarePlanDefaults(resident));
       if (includeBaseRoutine) {
         await createCarePresetActivities({
           plan: savedPlan,
@@ -163,11 +136,9 @@ export default function CarePlanTab({ resident }) {
       }
       toast(includeBaseRoutine ? "Plan creado con rutina base." : "Plan creado.", "success");
       await load();
-      return true;
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo crear el plan.", "error");
-      return false;
     } finally {
       setSaving(false);
     }
@@ -295,92 +266,66 @@ export default function CarePlanTab({ resident }) {
     });
   };
 
-  const handlePrimaryAction = () => {
-    if (!canManage) return;
-    if (!plan) {
-      const target = document.getElementById("care-plan-quick-start");
-      target?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    if (metrics.active === 0) {
-      handleAddBaseRoutine();
-      return;
-    }
-    if (metrics.schedules === 0 && activities[0]) {
-      openActivity(activities[0]);
-      return;
-    }
-    if (!metrics.hasClinicalSummary) {
-      setClinicalOpen(true);
-      return;
-    }
-    setActivityModal({ activity: INITIAL_CARE_ACTIVITY, schedules: [INITIAL_CARE_SCHEDULE] });
-  };
+  const openNewActivity = () => setActivityModal({ activity: INITIAL_CARE_ACTIVITY, schedules: [INITIAL_CARE_SCHEDULE] });
 
   if (loading) {
     return <div className="h-72 animate-pulse rounded-2xl bg-slate-100" />;
   }
 
+  if (!plan) {
+    return (
+      <CarePlanEmptyState
+        resident={resident}
+        canCreate={canCreate}
+        saving={saving}
+        onCreate={handleCreatePlan}
+      />
+    );
+  }
+
   return (
     <div className="space-y-5">
-      <CarePlanHero
+      <CarePlanHeader
         resident={resident}
         plan={plan}
         metrics={metrics}
-        nextTask={nextTask}
-        primaryAction={primaryAction}
-        canManage={canManage}
-        saving={saving || presetSaving}
-        onPrimaryAction={handlePrimaryAction}
+        onFamilyPreview={() => setFamilyPreview(true)}
       />
 
-      {!plan ? (
-        <QuickStartPanel
-          resident={resident}
-          canCreate={canCreate}
-          saving={saving}
-          onSubmit={handleQuickStart}
-        />
-      ) : (
-        <>
-          <ClinicalPlanPanel
-            form={form}
-            plan={plan}
-            metrics={metrics}
-            canManage={canManage}
-            saving={saving}
-            open={clinicalOpen}
-            dirty={planDirty}
-            onToggle={() => setClinicalOpen((prev) => !prev)}
-            onChange={setForm}
-            onSubmit={handleSavePlan}
-          />
+      <RoutineCockpit
+        activities={activities}
+        pausedActivities={pausedActivities}
+        canCreate={canCreate}
+        canEdit={canEdit}
+        saving={saving}
+        presetSaving={presetSaving}
+        showPaused={showPaused}
+        showTemplates={showTemplates}
+        presetGroups={presetGroups}
+        existingPresetIds={existingPresetIds}
+        onToggleTemplates={() => setShowTemplates((prev) => !prev)}
+        onAddBaseRoutine={handleAddBaseRoutine}
+        onNew={openNewActivity}
+        onOpenPreset={openPreset}
+        onEdit={openActivity}
+        onDuplicate={duplicateActivity}
+        onDeactivate={handleDeactivate}
+        onTogglePaused={() => setShowPaused((prev) => !prev)}
+        onReactivate={handleReactivate}
+      />
 
-          <RoutineCockpit
-            activities={activities}
-            pausedActivities={pausedActivities}
-            metrics={metrics}
-            canCreate={canCreate}
-            canEdit={canEdit}
-            saving={saving}
-            presetSaving={presetSaving}
-            showPaused={showPaused}
-            showTemplates={showTemplates}
-            presetGroups={presetGroups}
-            existingPresetIds={existingPresetIds}
-            onToggleTemplates={() => setShowTemplates((prev) => !prev)}
-            onFamilyPreview={() => setFamilyPreview(true)}
-            onAddBaseRoutine={handleAddBaseRoutine}
-            onNew={() => setActivityModal({ activity: INITIAL_CARE_ACTIVITY, schedules: [INITIAL_CARE_SCHEDULE] })}
-            onOpenPreset={openPreset}
-            onEdit={openActivity}
-            onDuplicate={duplicateActivity}
-            onDeactivate={handleDeactivate}
-            onTogglePaused={() => setShowPaused((prev) => !prev)}
-            onReactivate={handleReactivate}
-          />
-        </>
-      )}
+      <ClinicalPlanPanel
+        form={form}
+        plan={plan}
+        metrics={metrics}
+        canManage={canManage}
+        saving={saving}
+        open={clinicalOpen}
+        dirty={planDirty}
+        onToggle={() => setClinicalOpen((prev) => !prev)}
+        onChange={setForm}
+        onSubmit={handleSavePlan}
+      />
 
       <CarePlanActivityModal
         modal={activityModal}
@@ -400,318 +345,71 @@ export default function CarePlanTab({ resident }) {
   );
 }
 
-function CarePlanHero({ resident, plan, metrics, nextTask, primaryAction, canManage, saving, onPrimaryAction }) {
-  const pct = metrics.score;
-  const statusTone = pct >= 80
-    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-    : pct >= 45
-      ? "border-amber-200 bg-amber-50 text-amber-900"
-      : "border-slate-200 bg-white text-slate-900";
-
+function CarePlanHeader({ resident, plan, metrics, onFamilyPreview }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={plan ? "teal" : "amber"}>{plan ? "Plan activo" : "Sin plan activo"}</Badge>
-            {plan && <Badge>Versión {plan.version ?? 1}</Badge>}
-            {metrics.openToday > 0 && <Badge tone="amber">{metrics.openToday} pendiente{metrics.openToday === 1 ? "" : "s"} hoy</Badge>}
+            <Badge tone="teal">Plan activo</Badge>
+            <Badge>Versión {plan.version ?? 1}</Badge>
           </div>
           <h2 className="mt-3 text-xl font-semibold text-slate-950 sm:text-2xl">
-            {plan?.titulo || `Plan de cuidado de ${residentFullName(resident)}`}
+            {plan.titulo || `Plan de cuidado de ${residentFullName(resident)}`}
           </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Crea una pauta operativa clara para el equipo: rutinas por turno, alertas clínicas y visibilidad familiar controlada.
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            Define rutinas de cuidado por turno. El equipo verá cada rutina como una tarea accionable en su jornada.
           </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard size="sm" label="Rutinas activas" value={metrics.active} />
-            <MetricCard size="sm" label="Horarios" value={metrics.schedules} />
-            <MetricCard size="sm" label="Prioridad alta" value={metrics.highPriority} tone="amber" />
-            <MetricCard size="sm" label="Portal familia" value={metrics.familyVisible} tone="teal" />
-          </div>
+          <p className="mt-3 text-sm font-medium text-slate-500">
+            {metrics.active} rutina{metrics.active === 1 ? "" : "s"} activa{metrics.active === 1 ? "" : "s"}
+            {metrics.familyVisible > 0 && ` · ${metrics.familyVisible} visible${metrics.familyVisible === 1 ? "" : "s"} para la familia`}
+          </p>
         </div>
-
-        <div className={`rounded-2xl border p-4 ${statusTone}`}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase text-current opacity-60">Estado operativo</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums">{pct}%</p>
-            </div>
-            <button
-              type="button"
-              onClick={onPrimaryAction}
-              disabled={!canManage || saving}
-              className={`w-full rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto ${
-                primaryAction.tone === "amber"
-                  ? "bg-amber-600 hover:bg-amber-700"
-                  : primaryAction.tone === "sky"
-                    ? "bg-sky-700 hover:bg-sky-800"
-                    : "bg-teal-700 hover:bg-teal-800"
-              }`}
-            >
-              {saving ? "Procesando..." : primaryAction.label}
-            </button>
-          </div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/70">
-            <div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${pct}%` }} />
-          </div>
-          <p className="mt-3 text-sm leading-5 opacity-80">{primaryAction.reason}</p>
-          {nextTask && (
-            <div className="mt-3 rounded-xl border border-white/70 bg-white/70 px-3 py-2">
-              <p className="text-xs font-semibold uppercase opacity-60">Próxima tarea</p>
-              <p className="mt-0.5 text-sm font-semibold">{nextTask.title}</p>
-              <p className="text-xs opacity-70">{nextTask.when}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function QuickStartPanel({ resident, canCreate, saving, onSubmit }) {
-  const [includeBaseRoutine, setIncludeBaseRoutine] = useState(true);
-  const residentId = resident?.id;
-  const residentNombre = resident?.nombre;
-  const residentApellido = resident?.apellido;
-  const quickDraftKey = `fichaeleam_carePlanQuickStart_${residentId ?? "new"}`;
-  const quickInitial = useMemo(
-    () => buildQuickCarePlanDefaults({
-      id: residentId,
-      nombre: residentNombre,
-      apellido: residentApellido,
-    }),
-    [residentId, residentNombre, residentApellido]
-  );
-  const [quickForm, setQuickForm, resetQuickDraft, quickDirty] = useSessionFormDraft(quickDraftKey, quickInitial);
-
-  return (
-    <section id="care-plan-quick-start" className="rounded-2xl border border-teal-200 bg-teal-50 p-4 sm:p-5">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <form
-          className="rounded-2xl border border-white/70 bg-white p-4 shadow-sm"
-          onSubmit={(e) => {
-            e.preventDefault();
-            Promise.resolve(onSubmit({ form: quickForm, includeBaseRoutine }))
-              .then((ok) => {
-                if (ok) resetQuickDraft();
-              });
-          }}
+        <button
+          type="button"
+          onClick={onFamilyPreview}
+          className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
         >
-          <div className="mb-4">
-            <p className="text-xs font-semibold uppercase text-teal-700">Inicio guiado</p>
-            <h2 className="mt-1 text-lg font-semibold text-slate-950">Crear plan en menos de un minuto</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Parte con una pauta segura y ajusta después solo las excepciones.
-            </p>
-            {quickDirty && (
-              <p className="mt-2 text-xs font-semibold text-amber-700">
-                Borrador guardado en esta sesión.
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field
-              label="Título"
-              value={quickForm.titulo}
-              onChange={(value) => setQuickForm((prev) => ({ ...prev, titulo: value }))}
-              disabled={!canCreate || saving}
-            />
-            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-2">
-              <SelectField
-                label="Riesgo caídas"
-                value={quickForm.riesgo_caidas}
-                onChange={(value) => setQuickForm((prev) => ({ ...prev, riesgo_caidas: value }))}
-                disabled={!canCreate || saving}
-              />
-              <SelectField
-                label="Riesgo UPP"
-                value={quickForm.riesgo_up}
-                onChange={(value) => setQuickForm((prev) => ({ ...prev, riesgo_up: value }))}
-                disabled={!canCreate || saving}
-                tooltip={UPP_TOOLTIP}
-              />
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            <TextArea
-              label="Objetivo del cuidado"
-              value={quickForm.objetivos}
-              onChange={(value) => setQuickForm((prev) => ({ ...prev, objetivos: value }))}
-              disabled={!canCreate || saving}
-              rows={4}
-            />
-            <TextArea
-              label="Alimentación"
-              value={quickForm.pauta_alimentacion}
-              onChange={(value) => setQuickForm((prev) => ({ ...prev, pauta_alimentacion: value }))}
-              disabled={!canCreate || saving}
-              rows={4}
-            />
-            <TextArea
-              label="Hidratación"
-              value={quickForm.pauta_hidratacion}
-              onChange={(value) => setQuickForm((prev) => ({ ...prev, pauta_hidratacion: value }))}
-              disabled={!canCreate || saving}
-              rows={4}
-            />
-          </div>
-
-          <label className="mt-4 flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50 p-3 text-sm text-teal-950">
-            <input
-              type="checkbox"
-              checked={includeBaseRoutine}
-              onChange={(e) => setIncludeBaseRoutine(e.target.checked)}
-              disabled={!canCreate || saving}
-              className="mt-0.5 h-4 w-4 accent-teal-700"
-            />
-            <span>
-              Agregar rutina base recomendada
-              <span className="block text-xs text-teal-700">
-                Incluye alimentación, hidratación, higiene, movilidad, prevención y bienestar con horarios editables.
-              </span>
-            </span>
-          </label>
-
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-slate-500">
-              Podrás editar, pausar o duplicar cualquier rutina después de crear el plan.
-            </p>
-            <button
-              type="submit"
-              disabled={!canCreate || saving || !quickForm.titulo.trim()}
-              className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
-            >
-              {saving ? "Creando..." : "Crear plan operativo"}
-            </button>
-          </div>
-        </form>
-
-        <div className="space-y-3">
-          <GuideStep index={1} title="Pauta segura" text="Los campos vienen con textos base para orientar al turno." />
-          <GuideStep index={2} title="Rutinas listas" text="La rutina recomendada crea tareas recurrentes sin configuración manual inicial." />
-          <GuideStep index={3} title="Ajuste fino" text="Luego modifica horarios, prioridades o publicación familiar solo donde haga falta." />
-        </div>
+          Vista familiar
+        </button>
       </div>
     </section>
   );
 }
 
-function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty, onToggle, onChange, onSubmit }) {
+function CarePlanEmptyState({ resident, canCreate, saving, onCreate }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full flex-col gap-3 p-4 text-left sm:flex-row sm:items-center sm:justify-between sm:p-5"
-      >
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-950">Plan de cuidado y alertas</h2>
-            <Badge tone={metrics.hasClinicalSummary ? "emerald" : "amber"}>
-              {metrics.hasClinicalSummary ? "Completo" : "Pendiente"}
-            </Badge>
-            {dirty && <Badge tone="amber">Borrador</Badge>}
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Información clínica que orienta al equipo. No bloquea la operación diaria.
-          </p>
+    <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-10">
+      <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-teal-50">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-7 w-7 text-teal-600">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-slate-950">Crea el plan de cuidado de {residentFullName(resident)}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+        Parte con una rutina base lista (alimentación, hidratación, higiene, movilidad, prevención y bienestar) y ajústala después solo donde haga falta. Toma menos de un minuto.
+      </p>
+      {canCreate ? (
+        <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => onCreate(true)}
+            disabled={saving}
+            className="w-full rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
+          >
+            {saving ? "Creando..." : "Crear plan con rutina base"}
+          </button>
+          <button
+            type="button"
+            onClick={() => onCreate(false)}
+            disabled={saving}
+            className="w-full rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
+          >
+            Crear plan vacío
+          </button>
         </div>
-        <span className="inline-flex items-center gap-2 text-sm font-semibold text-teal-700">
-          {open ? "Ocultar" : "Editar"}
-          <Chevron open={open} />
-        </span>
-      </button>
-
-      {!open && (
-        <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4 sm:p-5">
-          <ClinicalSummaryItem label="Objetivo" value={plan.objetivos} fallback="Sin objetivo registrado" />
-          <ClinicalSummaryItem label="Alimentación" value={plan.pauta_alimentacion} fallback="Sin pauta específica" />
-          <ClinicalSummaryItem label="Hidratación" value={plan.pauta_hidratacion} fallback="Sin pauta específica" />
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-            <p className="text-xs font-semibold uppercase text-slate-400">Riesgos</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <RiskBadge label="Caídas" value={plan.riesgo_caidas} />
-              <RiskBadge label="UPP" value={plan.riesgo_up} tooltip={UPP_TOOLTIP} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {open && (
-        <form onSubmit={onSubmit} className="border-t border-slate-100 p-4 sm:p-5">
-          <div className="grid gap-5 xl:grid-cols-3">
-            <div className="space-y-4">
-              <Field
-                label="Título del plan"
-                value={form.titulo}
-                onChange={(value) => onChange((prev) => ({ ...prev, titulo: value }))}
-                disabled={!canManage || saving}
-              />
-              <TextArea
-                label="Objetivos clínico-operativos"
-                value={form.objetivos}
-                onChange={(value) => onChange((prev) => ({ ...prev, objetivos: value }))}
-                disabled={!canManage || saving}
-                rows={5}
-              />
-            </div>
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                <SelectField
-                  label="Riesgo de caídas"
-                  value={form.riesgo_caidas}
-                  onChange={(value) => onChange((prev) => ({ ...prev, riesgo_caidas: value }))}
-                  disabled={!canManage || saving}
-                />
-                <SelectField
-                  label="Riesgo UPP"
-                  value={form.riesgo_up}
-                  onChange={(value) => onChange((prev) => ({ ...prev, riesgo_up: value }))}
-                  disabled={!canManage || saving}
-                  tooltip={UPP_TOOLTIP}
-                />
-              </div>
-              <TextArea
-                label="Restricciones o alertas"
-                value={form.restricciones}
-                onChange={(value) => onChange((prev) => ({ ...prev, restricciones: value }))}
-                disabled={!canManage || saving}
-                rows={5}
-              />
-            </div>
-            <div className="space-y-4">
-              <TextArea
-                label="Pauta de alimentación"
-                value={form.pauta_alimentacion}
-                onChange={(value) => onChange((prev) => ({ ...prev, pauta_alimentacion: value }))}
-                disabled={!canManage || saving}
-                rows={4}
-              />
-              <TextArea
-                label="Pauta de hidratación"
-                value={form.pauta_hidratacion}
-                onChange={(value) => onChange((prev) => ({ ...prev, pauta_hidratacion: value }))}
-                disabled={!canManage || saving}
-                rows={4}
-              />
-            </div>
-          </div>
-
-          {canManage && (
-            <div className="mt-5 flex justify-end">
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
-              >
-                {saving ? "Guardando..." : "Guardar plan"}
-              </button>
-            </div>
-          )}
-        </form>
+      ) : (
+        <p className="mt-6 text-sm font-medium text-slate-400">Tu perfil no permite crear el plan de cuidado.</p>
       )}
     </section>
   );
@@ -720,7 +418,6 @@ function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty
 function RoutineCockpit({
   activities,
   pausedActivities,
-  metrics,
   canCreate,
   canEdit,
   saving,
@@ -730,7 +427,6 @@ function RoutineCockpit({
   presetGroups,
   existingPresetIds,
   onToggleTemplates,
-  onFamilyPreview,
   onAddBaseRoutine,
   onNew,
   onOpenPreset,
@@ -747,74 +443,58 @@ function RoutineCockpit({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-950">Rutinas activas</h2>
+            <h2 className="text-base font-semibold text-slate-950">Rutinas por turno</h2>
             <HelpTooltip label="Ayuda: rutinas de cuidado">
-              Cada rutina programada genera tareas por turno. La tolerancia define cuándo la tarea queda vencida.
+              Cada rutina programada genera tareas por turno para el equipo. Edita una rutina para cambiar su horario.
             </HelpTooltip>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Gestiona por turno. El equipo solo verá tareas accionables, con prioridad y ventana clara.
+            El equipo solo verá tareas accionables, con prioridad y horario claro.
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-          <button
-            type="button"
-            onClick={onFamilyPreview}
-            className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
-          >
-            Vista familiar
-          </button>
-          {canCreate && (
-            <>
-              <button
-                type="button"
-                onClick={onAddBaseRoutine}
-                disabled={presetSaving || saving}
-                className="w-full rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60 sm:w-auto"
-              >
-                {presetSaving ? "Agregando..." : "Rutina base"}
-              </button>
-              <button
-                type="button"
-                onClick={onNew}
-                className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:w-auto"
-              >
-                Nueva rutina
-              </button>
-            </>
-          )}
-        </div>
+        {canCreate && (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <button
+              type="button"
+              onClick={onToggleTemplates}
+              className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
+            >
+              Plantillas
+            </button>
+            <button
+              type="button"
+              onClick={onNew}
+              className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:w-auto"
+            >
+              Nueva rutina
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard size="sm" label="Con seguimiento" value={metrics.followUp} tone="amber" />
-        <MetricCard size="sm" label="Familia" value={metrics.familyVisible} tone="teal" />
-        <MetricCard size="sm" label="Pendientes hoy" value={metrics.openToday} tone="amber" />
-        <MetricCard size="sm" label="Reprogramadas" value={metrics.reprogrammed} tone="sky" />
-      </div>
-
-      {canCreate && (
-        <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-          <button
-            type="button"
-            onClick={onToggleTemplates}
-            className="flex w-full items-center justify-between gap-2 text-left"
-          >
-            <span>
-              <span className="block text-sm font-semibold text-slate-950">Plantillas recomendadas</span>
-              <span className="block text-xs text-slate-500">Agrega una rutina específica o edita una existente.</span>
-            </span>
-            <Chevron open={showTemplates} />
-          </button>
-          {showTemplates && (
-            <PresetPicker
-              groups={presetGroups}
-              existingPresetIds={existingPresetIds}
-              saving={saving || presetSaving}
-              canEdit={canEdit}
-              onOpen={onOpenPreset}
-            />
-          )}
+      {canCreate && showTemplates && (
+        <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-950">Plantillas recomendadas</p>
+              <p className="text-xs text-slate-500">Agrega una rutina específica o edita una existente.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onAddBaseRoutine}
+              disabled={presetSaving || saving}
+              className="w-full rounded-xl border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-60 sm:w-auto"
+            >
+              {presetSaving ? "Agregando..." : "Agregar rutina base completa"}
+            </button>
+          </div>
+          <PresetPicker
+            groups={presetGroups}
+            existingPresetIds={existingPresetIds}
+            saving={saving || presetSaving}
+            canEdit={canEdit}
+            onOpen={onOpenPreset}
+          />
         </div>
       )}
 
@@ -937,13 +617,10 @@ function ActivityRow({ activity, canEdit, canCreate, saving, onEdit, onDuplicate
           {PRIORITY_LABEL[activity.prioridad] ?? activity.prioridad}
         </span>
         {activity.requiere_observacion && <Badge tone="amber">Seguimiento</Badge>}
-        <Badge tone={activity.visible_familiar ? "emerald" : "slate"}>
-          {activity.visible_familiar ? "Familia" : "Interno"}
-        </Badge>
+        {activity.visible_familiar && <Badge tone="emerald">Familia</Badge>}
       </div>
 
       <h4 className="mt-2 text-sm font-semibold text-slate-950">{activity.titulo}</h4>
-      {activity.descripcion && <p className="mt-1 text-sm leading-5 text-slate-600">{activity.descripcion}</p>}
       {activity.instrucciones && <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{activity.instrucciones}</p>}
 
       <div className="mt-3 space-y-1.5">
@@ -985,7 +662,6 @@ function ActivityRow({ activity, canEdit, canCreate, saving, onEdit, onDuplicate
     </article>
   );
 }
-
 
 function FamilyPreviewModal({ isOpen, onClose, plan, activities, resident }) {
   const published = (activities ?? []).filter((activity) => activity.visible_familiar && activity.activo !== false);
@@ -1132,17 +808,121 @@ function EmptyActivities({ onAddBaseRoutine, saving }) {
   );
 }
 
-function GuideStep({ index, title, text }) {
+function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty, onToggle, onChange, onSubmit }) {
   return (
-    <div className="flex gap-3 rounded-2xl border border-teal-100 bg-white/80 p-3">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-teal-700 text-sm font-semibold text-white">
-        {index}
-      </span>
-      <div>
-        <p className="text-sm font-semibold text-slate-950">{title}</p>
-        <p className="mt-0.5 text-xs leading-5 text-slate-500">{text}</p>
-      </div>
-    </div>
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full flex-col gap-3 p-4 text-left sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      >
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-slate-950">Información clínica y alertas</h2>
+            <Badge tone={metrics.hasClinicalSummary ? "emerald" : "amber"}>
+              {metrics.hasClinicalSummary ? "Completo" : "Pendiente"}
+            </Badge>
+            {dirty && <Badge tone="amber">Borrador</Badge>}
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Contexto que orienta al equipo. Opcional: no bloquea la operación diaria.
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-teal-700">
+          {open ? "Ocultar" : "Editar"}
+          <Chevron open={open} />
+        </span>
+      </button>
+
+      {!open && (
+        <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4 sm:p-5">
+          <ClinicalSummaryItem label="Objetivo" value={plan.objetivos} fallback="Sin objetivo registrado" />
+          <ClinicalSummaryItem label="Alimentación" value={plan.pauta_alimentacion} fallback="Sin pauta específica" />
+          <ClinicalSummaryItem label="Hidratación" value={plan.pauta_hidratacion} fallback="Sin pauta específica" />
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase text-slate-400">Riesgos</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <RiskBadge label="Caídas" value={plan.riesgo_caidas} />
+              <RiskBadge label="UPP" value={plan.riesgo_up} tooltip={UPP_TOOLTIP} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {open && (
+        <form onSubmit={onSubmit} className="border-t border-slate-100 p-4 sm:p-5">
+          <div className="grid gap-5 xl:grid-cols-3">
+            <div className="space-y-4">
+              <Field
+                label="Título del plan"
+                value={form.titulo}
+                onChange={(value) => onChange((prev) => ({ ...prev, titulo: value }))}
+                disabled={!canManage || saving}
+              />
+              <TextArea
+                label="Objetivos clínico-operativos"
+                value={form.objetivos}
+                onChange={(value) => onChange((prev) => ({ ...prev, objetivos: value }))}
+                disabled={!canManage || saving}
+                rows={5}
+              />
+            </div>
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                <SelectField
+                  label="Riesgo de caídas"
+                  value={form.riesgo_caidas}
+                  onChange={(value) => onChange((prev) => ({ ...prev, riesgo_caidas: value }))}
+                  disabled={!canManage || saving}
+                />
+                <SelectField
+                  label="Riesgo UPP"
+                  value={form.riesgo_up}
+                  onChange={(value) => onChange((prev) => ({ ...prev, riesgo_up: value }))}
+                  disabled={!canManage || saving}
+                  tooltip={UPP_TOOLTIP}
+                />
+              </div>
+              <TextArea
+                label="Restricciones o alertas"
+                value={form.restricciones}
+                onChange={(value) => onChange((prev) => ({ ...prev, restricciones: value }))}
+                disabled={!canManage || saving}
+                rows={5}
+              />
+            </div>
+            <div className="space-y-4">
+              <TextArea
+                label="Pauta de alimentación"
+                value={form.pauta_alimentacion}
+                onChange={(value) => onChange((prev) => ({ ...prev, pauta_alimentacion: value }))}
+                disabled={!canManage || saving}
+                rows={4}
+              />
+              <TextArea
+                label="Pauta de hidratación"
+                value={form.pauta_hidratacion}
+                onChange={(value) => onChange((prev) => ({ ...prev, pauta_hidratacion: value }))}
+                disabled={!canManage || saving}
+                rows={4}
+              />
+            </div>
+          </div>
+
+          {canManage && (
+            <div className="mt-5 flex justify-end">
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
+              >
+                {saving ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          )}
+        </form>
+      )}
+    </section>
   );
 }
 
