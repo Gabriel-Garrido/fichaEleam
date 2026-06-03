@@ -12,10 +12,34 @@ const PUBLIC = join(ROOT, "public");
 const TEMPLATE_PATH = join(DIST, "index.html");
 const OG_PUBLIC = join(PUBLIC, "og-image.png");
 const OG_DIST = join(DIST, "og-image.png");
+const MARKETING_IMAGES = {
+  home: "/marketing/fichaeleam-hero-demo-soporte.png",
+  software: "/marketing/software-eleam-dashboard-signos-residente.png",
+  seremi: "/marketing/excel-papel-vs-fichaeleam-dashboard.png",
+  shift: "/marketing/entrega-turno-equipo-clinico-dashboard.png",
+  logo: "/marketing/fichaeleam-app-icon-color.png",
+};
 
 const BASE_TITLE = "FichaEleam · Software para ELEAM en Chile";
 const BASE_DESCRIPTION =
   "FichaEleam digitaliza la gestión clínica y documental de ELEAM en Chile: fichas, signos vitales, observaciones, Carpeta SEREMI DS 14/2017 y portal familiar.";
+
+function absoluteUrl(value = "") {
+  if (!value) return `${ORIGIN}${MARKETING_IMAGES.home}`;
+  return String(value).startsWith("http") ? String(value) : `${ORIGIN}${value}`;
+}
+
+function postImage(post) {
+  if (post?.cover_url) return absoluteUrl(post.cover_url);
+  const text = `${post?.titulo ?? ""} ${(post?.keywords ?? []).join(" ")}`.toLowerCase();
+  if (text.includes("seremi") || text.includes("ds 14") || text.includes("fiscal")) {
+    return absoluteUrl(MARKETING_IMAGES.seremi);
+  }
+  if (text.includes("signo") || text.includes("clin") || text.includes("residente")) {
+    return absoluteUrl(MARKETING_IMAGES.software);
+  }
+  return absoluteUrl(MARKETING_IMAGES.shift);
+}
 
 function escapeHtml(value = "") {
   return String(value)
@@ -173,6 +197,49 @@ function stripMarkdown(markdown = "") {
     .trim();
 }
 
+function countWords(markdown = "") {
+  const text = stripMarkdown(markdown);
+  return text ? text.split(/\s+/).filter(Boolean).length : 0;
+}
+
+const SECTION_RULES = [
+  [/(seremi|ds\s?14|fiscaliz|acredita|checklist)/i, "Acreditación SEREMI"],
+  [/(signo|cl[ií]nic|barthel|geri[áa]tr|enfermer)/i, "Clínica geriátrica"],
+  [/(medicament|kardex|psicotr|emar)/i, "Medicamentos"],
+  [/(dato|19\.?628|privacidad|protecci[óo]n de dato)/i, "Protección de datos"],
+  [/(famili|20\.?584|comunica)/i, "Familias y derechos"],
+  [/(turno|registro|trazabil|ca[íi]da|incidente)/i, "Operación diaria"],
+];
+
+function articleSection(post) {
+  const haystack = `${post.titulo} ${(post.keywords ?? []).join(" ")}`;
+  for (const [re, label] of SECTION_RULES) {
+    if (re.test(haystack)) return label;
+  }
+  return "Gestión de ELEAM";
+}
+
+function relatedPosts(post, posts, limit = 3) {
+  const keys = new Set((post.keywords ?? []).map((k) => k.toLowerCase()));
+  return posts
+    .filter((p) => p.slug !== post.slug)
+    .map((p) => ({
+      p,
+      shared: (p.keywords ?? []).filter((k) => keys.has(k.toLowerCase())).length,
+    }))
+    .sort((a, b) => b.shared - a.shared || new Date(b.p.publicado_en) - new Date(a.p.publicado_en))
+    .slice(0, limit)
+    .map((s) => s.p);
+}
+
+function formatLongDate(iso = "") {
+  try {
+    return new Date(iso).toLocaleDateString("es-CL", { day: "2-digit", month: "long", year: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
 function upsertTag(html, regex, tag) {
   if (regex.test(html)) return html.replace(regex, tag);
   return html.replace("</head>", `    ${tag}\n  </head>`);
@@ -197,20 +264,39 @@ function jsonLdScript(jsonLd) {
   return `<script type="application/ld+json" data-prerender-jsonld>${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>`;
 }
 
-function renderPage(template, { path, title, description, type = "website", jsonLd, rootHtml }) {
+function renderPage(template, { path, title, description, type = "website", jsonLd, rootHtml, image = MARKETING_IMAGES.home, imageAlt, article }) {
   const url = `${ORIGIN}${path === "/" ? "/" : path}`;
+  const ogImage = absoluteUrl(image);
   let html = template;
   html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(title)}</title>`);
   html = setMeta(html, "description", description);
+  html = setMeta(html, "robots", "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1");
   html = setCanonical(html, url);
   html = setProperty(html, "og:type", type);
+  html = setProperty(html, "og:site_name", "FichaEleam");
+  html = setProperty(html, "og:locale", "es_CL");
   html = setProperty(html, "og:url", url);
   html = setProperty(html, "og:title", title);
   html = setProperty(html, "og:description", description);
-  html = setProperty(html, "og:image", `${ORIGIN}/og-image.png`);
+  html = setProperty(html, "og:image", ogImage);
+  html = setProperty(html, "og:image:alt", imageAlt || description);
+  html = setProperty(html, "og:image:width", "1792");
+  html = setProperty(html, "og:image:height", "1024");
+  html = setMeta(html, "twitter:card", "summary_large_image");
   html = setMeta(html, "twitter:title", title);
   html = setMeta(html, "twitter:description", description);
-  html = setMeta(html, "twitter:image", `${ORIGIN}/og-image.png`);
+  html = setMeta(html, "twitter:image", ogImage);
+  html = setMeta(html, "twitter:image:alt", imageAlt || description);
+  if (article) {
+    if (article.published) html = setProperty(html, "article:published_time", article.published);
+    html = setProperty(html, "article:modified_time", article.modified ?? article.published);
+    if (article.section) html = setProperty(html, "article:section", article.section);
+    if (article.author) html = setProperty(html, "article:author", article.author);
+    const tagMeta = (article.tags ?? [])
+      .map((tag) => `<meta property="article:tag" content="${escapeHtml(tag)}" />`)
+      .join("\n    ");
+    if (tagMeta) html = html.replace("</head>", `    ${tagMeta}\n  </head>`);
+  }
   html = html.replace(
     "</head>",
     `    <style id="fichaeleam-prerender-style">.seo-prerender{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:980px;margin:0 auto;padding:40px 20px;color:#0f172a;line-height:1.65}.seo-prerender h1{font-size:clamp(2rem,5vw,4rem);line-height:1.05;margin:0 0 16px}.seo-prerender h2{margin-top:32px}.seo-prerender a{color:#0f766e}.seo-prerender .grid{display:grid;gap:16px}.seo-prerender .card{border:1px solid #e2e8f0;border-radius:14px;padding:18px;background:#fff}.seo-prerender img{max-width:100%;height:auto}</style>\n    ${jsonLdScript(jsonLd)}\n  </head>`,
@@ -235,6 +321,7 @@ function buildLandingHtml() {
   return `<main class="seo-prerender">
       <h1>FichaEleam &middot; Software para ELEAM en Chile</h1>
       <p class="article-summary">${escapeHtml(BASE_DESCRIPTION)}</p>
+      <img src="${MARKETING_IMAGES.home}" alt="Directora de ELEAM usando FichaEleam con dashboard y soporte por WhatsApp" loading="eager">
 
       <h2>Qu&eacute; resuelve FichaEleam</h2>
       <ul>
@@ -271,6 +358,7 @@ function buildPaymentHtml() {
   return `<main class="seo-prerender">
       <h1>Planes y precios de FichaEleam</h1>
       <p class="article-summary">Precios mensuales para ELEAM en Chile, netos (sin IVA), con pago por MercadoPago. Elige el plan seg&uacute;n el uso real de tu establecimiento: residentes activos u hospitalizados consumen cupo, mientras que egresados y fallecidos no. Las invitaciones pendientes de funcionarios tambi&eacute;n cuentan contra el cupo.</p>
+      <img src="${MARKETING_IMAGES.software}" alt="Dashboard de FichaEleam en computador y telefono" loading="eager">
       <div class="grid">${cards}<article class="card"><h2>Institucional</h2><p><strong>Cotizaci&oacute;n personalizada</strong></p><p>Para ELEAM con 35 o m&aacute;s residentes y cupos a medida. Cont&aacute;ctanos por WhatsApp al +56 9 5118 7764.</p></article></div>
 
       <h2>Qu&eacute; incluye cada plan</h2>
@@ -299,6 +387,7 @@ function buildAcreditacionHtml() {
       <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Acreditaci&oacute;n SEREMI</nav>
       <h1>Acreditaci&oacute;n SEREMI para tu ELEAM &middot; Gu&iacute;a DS 14/2017</h1>
       <p class="article-summary">Todo lo que un director o administrador de un Establecimiento de Larga Estad&iacute;a para Adultos Mayores debe saber sobre los 14 &aacute;mbitos, los 70+ requisitos, los plazos de vencimiento y c&oacute;mo llegar a la fiscalizaci&oacute;n con la carpeta al d&iacute;a.</p>
+      <img src="${MARKETING_IMAGES.seremi}" alt="Comparativa de carpetas fisicas y dashboard FichaEleam para SEREMI" loading="eager">
 
       <h2>&iquest;Qu&eacute; es la acreditaci&oacute;n SEREMI?</h2>
       <p>La Secretar&iacute;a Regional Ministerial de Salud (SEREMI) es la autoridad sanitaria que autoriza, supervisa y fiscaliza los ELEAM en Chile. Su marco normativo es el Decreto Supremo N&deg; 14 de 2017 del Ministerio de Salud.</p>
@@ -361,6 +450,7 @@ function buildSoftwareHtml() {
       <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Software para ELEAM</nav>
       <h1>Software para ELEAM en Chile</h1>
       <p class="article-summary">Ficha cl&iacute;nica digital, signos vitales con alertas, eMAR, plan de cuidado, observaciones de turno y carpeta SEREMI &mdash; en una sola plataforma construida exclusivamente para Establecimientos de Larga Estad&iacute;a para Adultos Mayores en Chile.</p>
+      <img src="${MARKETING_IMAGES.software}" alt="Dashboard clinico de FichaEleam con signos vitales y ficha de residente" loading="eager">
 
       <h2>Excel y papel vs FichaEleam</h2>
       <ul>
@@ -440,6 +530,7 @@ function buildFaqHtml() {
       <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Preguntas frecuentes</nav>
       <h1>Preguntas frecuentes sobre FichaEleam</h1>
       <p class="article-summary">Respuestas a las consultas m&aacute;s frecuentes de directores, administradores y equipos cl&iacute;nicos de ELEAM en Chile sobre FichaEleam: producto, precios, demo, implementaci&oacute;n, seguridad, equipo y soporte.</p>
+      <img src="${MARKETING_IMAGES.shift}" alt="Equipo clinico usando FichaEleam para entrega de turno" loading="eager">
       ${html}
       <p><a href="/contacto">&iquest;Otra pregunta? Escr&iacute;benos &rarr;</a></p>
     </main>`;
@@ -450,6 +541,7 @@ function buildContactoHtml() {
       <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Contacto</nav>
       <h1>Contacto FichaEleam</h1>
       <p class="article-summary">Cont&aacute;ctanos por correo, WhatsApp o solicita una demo gratuita para tu ELEAM en Chile. Respondemos en horario h&aacute;bil con prioridad a casos urgentes.</p>
+      <img src="${MARKETING_IMAGES.home}" alt="Contacto y demo de FichaEleam para ELEAM en Chile" loading="eager">
 
       <h2>Canales de contacto</h2>
       <ul>
@@ -475,23 +567,44 @@ function buildContactoHtml() {
 
 function buildBlogHtml(posts) {
   const items = posts.map((post) => (
-    `<article class="card"><h2><a href="/blog/${escapeHtml(post.slug)}">${escapeHtml(post.titulo)}</a></h2><p>${escapeHtml(post.resumen)}</p><p>${post.tiempo_lectura_min} min · ${escapeHtml(post.autor_nombre)}</p></article>`
+    `<article class="card"><p>${escapeHtml(articleSection(post))} &middot; <time datetime="${post.publicado_en}">${escapeHtml(formatLongDate(post.publicado_en))}</time></p><h2><a href="/blog/${escapeHtml(post.slug)}">${escapeHtml(post.titulo)}</a></h2><p>${escapeHtml(post.resumen)}</p><p>${post.tiempo_lectura_min} min de lectura &middot; ${escapeHtml(post.autor_nombre)}</p></article>`
   )).join("");
   return `<main class="seo-prerender">
-      <h1>Blog FichaEleam</h1>
-      <p>Recursos prácticos para directores y equipos de ELEAM en Chile: DS 14/2017, fiscalización SEREMI, fichas clínicas, trazabilidad y operación diaria.</p>
+      <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Blog</nav>
+      <h1>Blog FichaEleam &middot; Recursos para ELEAM en Chile</h1>
+      <p class="article-summary">Gu&iacute;as pr&aacute;cticas para directores y equipos de ELEAM en Chile: DS 14/2017, fiscalizaci&oacute;n SEREMI, fichas cl&iacute;nicas, signos vitales, medicamentos, trazabilidad, protecci&oacute;n de datos y operaci&oacute;n diaria.</p>
+      <img src="${MARKETING_IMAGES.shift}" alt="Blog de FichaEleam para gestion de ELEAM en Chile" loading="eager">
       <div class="grid">${items}</div>
+      <p><a href="/software-eleam">Software para ELEAM</a> &middot; <a href="/acreditacion-seremi">Acreditaci&oacute;n SEREMI</a> &middot; <a href="/preguntas-frecuentes">Preguntas frecuentes</a> &middot; <a href="/pago">Planes y precios</a> &middot; <a href="/">Solicitar demo gratuito</a></p>
     </main>`;
 }
 
-function buildPostHtml(post) {
+function buildPostHtml(post, posts = []) {
+  const tags = (post.keywords ?? [])
+    .slice(0, 6)
+    .map((tag) => `<li>${escapeHtml(tag)}</li>`)
+    .join("");
+  const related = relatedPosts(post, posts).map((item) => (
+    `<li><a href="/blog/${escapeHtml(item.slug)}">${escapeHtml(item.titulo)}</a> &mdash; ${escapeHtml(item.resumen)}</li>`
+  )).join("");
   return `<main class="seo-prerender">
+      <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; <a href="/blog">Blog</a> &middot; ${escapeHtml(articleSection(post))}</nav>
       <article>
-        <p>${post.tiempo_lectura_min} min · ${escapeHtml(post.autor_nombre)}</p>
+        <p><time datetime="${post.publicado_en}">${escapeHtml(formatLongDate(post.publicado_en))}</time> &middot; ${post.tiempo_lectura_min} min de lectura &middot; ${escapeHtml(post.autor_nombre)}</p>
         <h1>${escapeHtml(post.titulo)}</h1>
-        <p><strong>${escapeHtml(post.resumen)}</strong></p>
+        <p class="article-summary"><strong>${escapeHtml(post.resumen)}</strong></p>
+        <img src="${postImage(post)}" alt="${escapeHtml(post.cover_alt || post.titulo)}" loading="eager">
+        ${tags ? `<ul aria-label="Temas del artículo">${tags}</ul>` : ""}
         ${markdownToHtml(post.contenido_md)}
       </article>
+
+      <aside class="card" aria-label="Sobre FichaEleam">
+        <h2>FichaEleam &middot; Software para ELEAM en Chile</h2>
+        <p>Carpeta SEREMI DS 14/2017, fichas cl&iacute;nicas digitales, signos vitales con alertas, eMAR, plan de cuidado y portal familiar. Cuenta demo real con 30 d&iacute;as de prueba gratuita.</p>
+        <p><a href="/">Solicitar demo gratuito</a> &middot; <a href="/software-eleam">Ver software para ELEAM</a> &middot; <a href="/acreditacion-seremi">Gu&iacute;a SEREMI</a> &middot; <a href="/pago">Planes y precios</a> &middot; <a href="https://wa.me/56951187764">WhatsApp +56 9 5118 7764</a></p>
+      </aside>
+
+      ${related ? `<section aria-label="Art&iacute;culos relacionados"><h2>Sigue leyendo</h2><ul>${related}</ul></section>` : ""}
     </main>`;
 }
 
@@ -503,7 +616,16 @@ function softwareJsonLd() {
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
     url: `${ORIGIN}/`,
-    image: `${ORIGIN}/og-image.png`,
+    image: absoluteUrl(MARKETING_IMAGES.home),
+    screenshot: absoluteUrl(MARKETING_IMAGES.software),
+    publisher: {
+      "@type": "Organization",
+      name: "FichaEleam",
+      logo: {
+        "@type": "ImageObject",
+        url: absoluteUrl(MARKETING_IMAGES.logo),
+      },
+    },
     offers: {
       "@type": "AggregateOffer",
       priceCurrency: "CLP",
@@ -630,10 +752,12 @@ function blogListJsonLd(posts) {
     "@type": "Blog",
     name: "Blog FichaEleam",
     url: `${ORIGIN}/blog`,
+    image: absoluteUrl(MARKETING_IMAGES.shift),
     blogPost: posts.map((post) => ({
       "@type": "BlogPosting",
       headline: post.titulo,
       url: `${ORIGIN}/blog/${post.slug}`,
+      image: postImage(post),
       datePublished: post.publicado_en,
       author: { "@type": "Organization", name: post.autor_nombre },
     })),
@@ -641,19 +765,53 @@ function blogListJsonLd(posts) {
 }
 
 function postJsonLd(post) {
+  const pageUrl = `${ORIGIN}/blog/${post.slug}`;
   return {
     "@context": "https://schema.org",
-    "@type": "BlogPosting",
+    "@type": ["Article", "BlogPosting"],
+    "@id": pageUrl,
     headline: post.titulo,
     description: post.meta_description || post.resumen,
-    url: `${ORIGIN}/blog/${post.slug}`,
-    image: `${ORIGIN}/og-image.png`,
+    url: pageUrl,
+    image: {
+      "@type": "ImageObject",
+      url: postImage(post),
+      width: 1792,
+      height: 1024,
+    },
+    thumbnailUrl: postImage(post),
     datePublished: post.publicado_en,
     dateModified: post.publicado_en,
-    author: { "@type": "Organization", name: post.autor_nombre },
-    publisher: { "@type": "Organization", name: "FichaEleam", logo: { "@type": "ImageObject", url: `${ORIGIN}/og-image.png` } },
-    mainEntityOfPage: `${ORIGIN}/blog/${post.slug}`,
+    articleSection: articleSection(post),
+    wordCount: countWords(post.contenido_md),
+    timeRequired: `PT${post.tiempo_lectura_min}M`,
+    inLanguage: "es-CL",
+    author: {
+      "@type": "Organization",
+      name: post.autor_nombre || "FichaEleam",
+      url: ORIGIN,
+    },
+    publisher: {
+      "@type": "Organization",
+      "@id": `${ORIGIN}/#organization`,
+      name: "FichaEleam",
+      url: ORIGIN,
+      logo: { "@type": "ImageObject", url: absoluteUrl(MARKETING_IMAGES.logo) },
+    },
+    isPartOf: {
+      "@type": "Blog",
+      "@id": `${ORIGIN}/blog`,
+      name: "Blog FichaEleam",
+    },
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": pageUrl,
+    },
     keywords: post.keywords.join(", "),
+    speakable: {
+      "@type": "SpeakableSpecification",
+      cssSelector: ["h1", ".article-summary"],
+    },
   };
 }
 
@@ -672,6 +830,7 @@ Allow: /preguntas-frecuentes
 Allow: /contacto
 Allow: /og-image.png
 Allow: /favicon.svg
+Allow: /marketing/
 
 Disallow: /dashboard
 Disallow: /residents
@@ -766,27 +925,34 @@ Sitemap: ${ORIGIN}/sitemap.xml
 function buildSitemap(posts) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
-    { loc: "/", priority: "1.0", changefreq: "weekly", lastmod: today },
-    { loc: "/acreditacion-seremi", priority: "0.95", changefreq: "monthly", lastmod: today },
-    { loc: "/software-eleam", priority: "0.95", changefreq: "monthly", lastmod: today },
-    { loc: "/blog", priority: "0.9", changefreq: "daily", lastmod: today },
-    { loc: "/preguntas-frecuentes", priority: "0.85", changefreq: "monthly", lastmod: today },
-    { loc: "/pago", priority: "0.85", changefreq: "monthly", lastmod: today },
-    { loc: "/contacto", priority: "0.7", changefreq: "monthly", lastmod: today },
+    { loc: "/", priority: "1.0", changefreq: "weekly", lastmod: today, image: MARKETING_IMAGES.home, imageTitle: "Software FichaEleam para ELEAM en Chile" },
+    { loc: "/acreditacion-seremi", priority: "0.95", changefreq: "monthly", lastmod: today, image: MARKETING_IMAGES.seremi, imageTitle: "Carpeta SEREMI digital para ELEAM" },
+    { loc: "/software-eleam", priority: "0.95", changefreq: "monthly", lastmod: today, image: MARKETING_IMAGES.software, imageTitle: "Dashboard de FichaEleam para gestión clínica" },
+    { loc: "/blog", priority: "0.9", changefreq: "daily", lastmod: today, image: MARKETING_IMAGES.shift, imageTitle: "Blog FichaEleam para gestión de ELEAM" },
+    { loc: "/preguntas-frecuentes", priority: "0.85", changefreq: "monthly", lastmod: today, image: MARKETING_IMAGES.shift, imageTitle: "Preguntas frecuentes de FichaEleam" },
+    { loc: "/pago", priority: "0.85", changefreq: "monthly", lastmod: today, image: MARKETING_IMAGES.software, imageTitle: "Planes y precios de FichaEleam" },
+    { loc: "/contacto", priority: "0.7", changefreq: "monthly", lastmod: today, image: MARKETING_IMAGES.home, imageTitle: "Contacto FichaEleam" },
     ...posts.map((post) => ({
       loc: `/blog/${post.slug}`,
       priority: post.destacado ? "0.8" : "0.7",
       changefreq: "monthly",
       lastmod: post.publicado_en.slice(0, 10),
+      image: postImage(post),
+      imageTitle: post.titulo,
     })),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urls.map((url) => `  <url>
     <loc>${escapeXml(`${ORIGIN}${url.loc}`)}</loc>
     <lastmod>${url.lastmod}</lastmod>
     <changefreq>${url.changefreq}</changefreq>
     <priority>${url.priority}</priority>
+    <image:image>
+      <image:loc>${escapeXml(absoluteUrl(url.image))}</image:loc>
+      <image:title>${escapeXml(url.imageTitle)}</image:title>
+    </image:image>
   </url>`).join("\n")}
 </urlset>
 `;
@@ -797,7 +963,7 @@ function buildLlms(posts) {
     (plan) => `- ${plan.label}: ${formatPlanPrice(plan)} CLP + IVA al mes, hasta ${plan.max_residentes} residentes activos u hospitalizados y ${plan.max_funcionarios} funcionarios.`,
   ).join("\n");
   const postLines = posts.map((post) => (
-    `- [${post.titulo}](${ORIGIN}/blog/${post.slug}): ${post.resumen}`
+    `- [${post.titulo}](${ORIGIN}/blog/${post.slug}) — ${articleSection(post)}, ${post.tiempo_lectura_min} min: ${post.resumen}`
   )).join("\n");
   return `# FichaEleam
 
@@ -811,6 +977,14 @@ FichaEleam es el unico software disenado exclusivamente para ELEAM en Chile. Cub
 **Demo gratuito**: formulario en ${ORIGIN} (aprobacion en menos de 24 horas)
 **Email**: contacto@fichaeleam.cl
 **WhatsApp**: +56 9 5118 7764 (https://wa.me/56951187764)
+
+## Imagenes oficiales para buscadores y modelos
+
+- Hero producto: ${absoluteUrl(MARKETING_IMAGES.home)}
+- Dashboard clinico: ${absoluteUrl(MARKETING_IMAGES.software)}
+- Comparativa Excel/papel vs FichaEleam: ${absoluteUrl(MARKETING_IMAGES.seremi)}
+- Entrega de turno y equipo clinico: ${absoluteUrl(MARKETING_IMAGES.shift)}
+- Icono de marca: ${absoluteUrl(MARKETING_IMAGES.logo)}
 
 ## Planes comerciales
 
@@ -859,9 +1033,21 @@ ${postLines}
 - ELEAM: Establecimiento de Larga Estadia para Adultos Mayores.
 - SEREMI: Secretaria Regional Ministerial de Salud. Fiscaliza y acredita los ELEAM.
 - DS 14/2017: Decreto Supremo del MINSAL. Define los 14 ambitos de acreditacion.
+- Carpeta SEREMI: conjunto de documentos, registros y evidencias que exige la SEREMI para acreditar el cumplimiento del DS 14/2017.
+- Ficha clinica: registro digital de la historia clinica de cada residente (diagnosticos, medicamentos, signos vitales y observaciones).
 - Indice de Barthel: escala de valoracion funcional 0-100 del adulto mayor.
-- Kardex / eMAR: registro de administracion de medicamentos por residente.
+- Nivel de dependencia: clasificacion segun Barthel: leve (61-99), moderado (41-60), severo (21-40), total (0-20).
+- Kardex / eMAR: registro de administracion de medicamentos por residente; eMAR es la version electronica con historial inmutable.
+- PAI: Plan de Atencion Individualizado del residente.
+- HACCP: analisis de peligros y puntos criticos de control para la operacion de cocina.
 - Turno: manana, tarde o noche.
+
+## Como solicitar el demo gratuito
+
+1. Completa el formulario en ${ORIGIN} o escribe por WhatsApp al +56 9 5118 7764.
+2. El equipo de FichaEleam revisa cada solicitud y responde en menos de 24 horas.
+3. Recibes por correo un enlace de acceso a una cuenta real con 30 dias de prueba sin costo y sin tarjeta de credito.
+4. Despues de los 30 dias eliges el plan segun el numero de residentes y pagas con MercadoPago.
 `;
 }
 
@@ -889,7 +1075,7 @@ DirectoryIndex index.html
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
   Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
   Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy https://api.mercadopago.com; frame-src 'self' https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy; object-src 'none'; manifest-src 'self'"
-  SetEnvIf Request_URI "^/assets/" long_cache
+  SetEnvIf Request_URI "^/(assets|marketing)/" long_cache
   Header always set Cache-Control "max-age=31536000, immutable" env=long_cache
   <FilesMatch "^(index\\.html|robots\\.txt|sitemap\\.xml|llms\\.txt)$">
     Header always set Cache-Control "no-cache, no-store, must-revalidate"
@@ -918,6 +1104,8 @@ function main() {
     path: "/",
     title: BASE_TITLE,
     description: BASE_DESCRIPTION,
+    image: MARKETING_IMAGES.home,
+    imageAlt: "Directora de ELEAM usando FichaEleam con dashboard y soporte",
     jsonLd: softwareJsonLd(),
     rootHtml: buildLandingHtml(),
   }));
@@ -926,6 +1114,8 @@ function main() {
     path: "/pago",
     title: "Planes y precios FichaEleam",
     description: "Planes mensuales para ELEAM en Chile con cupos claros de residentes y funcionarios, pago por MercadoPago y opción institucional.",
+    image: MARKETING_IMAGES.software,
+    imageAlt: "Dashboard de FichaEleam para planes y precios de ELEAM",
     jsonLd: softwareJsonLd(),
     rootHtml: buildPaymentHtml(),
   }));
@@ -934,6 +1124,8 @@ function main() {
     path: "/acreditacion-seremi",
     title: "Acreditación SEREMI ELEAM · Guía DS 14/2017 actualizada",
     description: "Guía completa de acreditación SEREMI para ELEAM en Chile: los 14 ámbitos del DS 14/2017, requisitos, vencimientos y cómo preparar tu carpeta SEREMI sin sorpresas.",
+    image: MARKETING_IMAGES.seremi,
+    imageAlt: "Comparativa de carpeta SEREMI fisica y digital en FichaEleam",
     jsonLd: [
       breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Acreditación SEREMI", url: "/acreditacion-seremi" }]),
       faqPageJsonLd(SEREMI_FAQ),
@@ -951,6 +1143,8 @@ function main() {
     path: "/software-eleam",
     title: "Software para ELEAM en Chile · Gestión clínica y SEREMI",
     description: "Software web especializado para ELEAM en Chile: ficha clínica digital, signos vitales con alertas, eMAR, observaciones por turno, plan de cuidado y carpeta SEREMI DS 14/2017.",
+    image: MARKETING_IMAGES.software,
+    imageAlt: "Dashboard clinico de FichaEleam con signos vitales y ficha de residente",
     jsonLd: [
       breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Software para ELEAM", url: "/software-eleam" }]),
       faqPageJsonLd(SOFTWARE_FAQ),
@@ -963,6 +1157,8 @@ function main() {
     path: "/preguntas-frecuentes",
     title: "Preguntas frecuentes · FichaEleam",
     description: "Preguntas frecuentes sobre FichaEleam: precios, planes, demo gratuito, implementación, seguridad de datos, equipo y permisos, soporte. Software para ELEAM en Chile.",
+    image: MARKETING_IMAGES.shift,
+    imageAlt: "Equipo clinico usando FichaEleam en entrega de turno",
     jsonLd: [
       breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Preguntas frecuentes", url: "/preguntas-frecuentes" }]),
       faqPageJsonLd(ALL_FAQ),
@@ -974,6 +1170,8 @@ function main() {
     path: "/contacto",
     title: "Contacto · FichaEleam",
     description: "Contacto FichaEleam: correo contacto@fichaeleam.cl, WhatsApp +56 9 5118 7764 y solicitud de demo gratuito. Software para ELEAM en Chile.",
+    image: MARKETING_IMAGES.home,
+    imageAlt: "Contacto y demo de FichaEleam para ELEAM en Chile",
     jsonLd: [
       breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Contacto", url: "/contacto" }]),
       contactPageJsonLd(),
@@ -985,6 +1183,8 @@ function main() {
     path: "/blog",
     title: "Blog FichaEleam · Recursos para ELEAM en Chile",
     description: "Guías prácticas sobre DS 14/2017, fiscalización SEREMI, registros clínicos, trazabilidad y operación diaria de ELEAM en Chile.",
+    image: MARKETING_IMAGES.shift,
+    imageAlt: "Blog de FichaEleam para gestion de ELEAM en Chile",
     jsonLd: blogListJsonLd(posts),
     rootHtml: buildBlogHtml(posts),
   }));
@@ -996,8 +1196,24 @@ function main() {
       title: post.meta_title || `${post.titulo} · FichaEleam`,
       description,
       type: "article",
-      jsonLd: postJsonLd(post),
-      rootHtml: buildPostHtml(post),
+      image: postImage(post),
+      imageAlt: post.cover_alt || post.titulo,
+      article: {
+        published: post.publicado_en,
+        modified: post.publicado_en,
+        section: articleSection(post),
+        author: post.autor_nombre,
+        tags: post.keywords,
+      },
+      jsonLd: [
+        postJsonLd(post),
+        breadcrumbJsonLd([
+          { name: "Inicio", url: "/" },
+          { name: "Blog", url: "/blog" },
+          { name: post.titulo, url: `/blog/${post.slug}` },
+        ]),
+      ],
+      rootHtml: buildPostHtml(post, posts),
     }));
   }
 
