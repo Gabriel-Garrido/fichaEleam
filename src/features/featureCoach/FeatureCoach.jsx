@@ -93,39 +93,37 @@ export default function FeatureCoach({ featureId, controller, standalone = false
 
       <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
         {coach.description && (
-          <p className="text-sm leading-relaxed text-slate-700">{coach.description}</p>
+          <p className="text-sm leading-relaxed text-slate-600">{coach.description}</p>
         )}
 
         {Array.isArray(coach.steps) && coach.steps.length > 0 && (
-          <ol className="space-y-2.5">
+          <ol className="space-y-3">
             {coach.steps.map((step, index) => (
-              <li key={`${featureId}-step-${index}`} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-teal-700 text-xs font-bold text-white tabular-nums">
+              <li key={`${featureId}-step-${index}`} className="flex items-start gap-3">
+                <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-teal-100 text-xs font-bold text-teal-700 tabular-nums">
                   {index + 1}
                 </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">{step.title}</p>
-                  {step.text && (
-                    <p className="mt-0.5 text-xs leading-relaxed text-slate-600 sm:text-sm">{step.text}</p>
-                  )}
-                </div>
+                <p className="min-w-0 text-sm leading-relaxed text-slate-700">
+                  <span className="font-semibold text-slate-900">{step.title}.</span>
+                  {step.text && <span className="text-slate-600"> {step.text}</span>}
+                </p>
               </li>
             ))}
           </ol>
         )}
 
         {coach.benefit && (
-          <div className="rounded-xl bg-teal-50 px-4 py-3 ring-1 ring-teal-100">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-700">
-              Beneficio para tu equipo
-            </p>
-            <p className="mt-1 text-sm leading-relaxed text-teal-900">{coach.benefit}</p>
+          <div className="flex items-start gap-2.5 rounded-xl bg-teal-50 px-3.5 py-3 ring-1 ring-teal-100">
+            <svg className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            <p className="text-sm font-medium leading-relaxed text-teal-900">{coach.benefit}</p>
           </div>
         )}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] text-slate-500">
-            Puedes volver a abrir esta guía con el botón <span className="font-semibold text-slate-700">Guía</span> del encabezado.
+          <p className="text-[11px] text-slate-400">
+            Reábrela con el botón <span className="font-semibold text-slate-600">Guía</span> del encabezado.
           </p>
           <button
             ref={ctaRef}

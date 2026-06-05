@@ -1,13 +1,25 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Fraunces Variable", ui-serif, Georgia, "Times New Roman", serif;
+}
+
 :root {
   color: #1e293b;
   background: #f8fafc;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Display headings (Fraunces) — optical sizing handles weight by size automatically */
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.018em;
 }
 
 html {
@@ -138,6 +150,52 @@ a {
   animation: home-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+/* ── Welcome (bienvenida admin) ───────────────────────────── */
+@keyframes welcome-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-welcome-rise {
+  animation: welcome-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.welcome-sheen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: translateX(-150%);
+  animation: welcome-sheen 2.4s ease-in-out 0.3s infinite;
+  pointer-events: none;
+}
+@keyframes welcome-sheen {
+  0%   { transform: translateX(-150%); }
+  55%  { transform: translateX(320%); }
+  100% { transform: translateX(320%); }
+}
+
+.welcome-sparkle {
+  font-size: 0.9rem;
+  line-height: 1;
+  animation: welcome-sparkle 1.8s ease-in-out infinite;
+}
+@keyframes welcome-sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+  50%      { opacity: 1; transform: scale(1) rotate(20deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-welcome-rise,
+  .welcome-sheen,
+  .welcome-sparkle {
+    animation: none;
+  }
+  .animate-welcome-rise { opacity: 1; transform: none; }
+  .welcome-sheen { display: none; }
+}
+
 /* ── Mobile UX helpers ───────────────────────────────────── */
 .tap-highlight-none {
   -webkit-tap-highlight-color: transparent;
@@ -241,6 +299,100 @@ a {
 .tooltip-arrow-light.tooltip-arrow-above {
   border-bottom: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
+}
+
+/* ── Public site animations ─────────────────────────────── */
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee-scroll 40s linear infinite;
+}
+.animate-marquee-fast {
+  animation: marquee-scroll 28s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-marquee-fast {
+    animation: none;
+  }
+}
+
+@keyframes blob-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(20px, -25px) scale(1.05); }
+  66%      { transform: translate(-15px, 18px) scale(0.97); }
+}
+.animate-blob {
+  animation: blob-float 18s ease-in-out infinite;
+}
+.animate-blob-slow {
+  animation: blob-float 26s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob,
+  .animate-blob-slow {
+    animation: none;
+  }
+}
+
+@keyframes gradient-sweep {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.animate-gradient-sweep {
+  background-size: 200% 200%;
+  animation: gradient-sweep 8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient-sweep { animation: none; }
+}
+
+@keyframes float-card {
+  0%, 100% { transform: translateY(0) rotate(var(--card-rotate, 0deg)); }
+  50%      { transform: translateY(-6px) rotate(var(--card-rotate, 0deg)); }
+}
+.animate-float-card {
+  animation: float-card 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-card { animation: none; }
+}
+
+.public-grid-pattern {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.12) 1px, transparent 0);
+  background-size: 28px 28px;
+}
+.public-grid-pattern-light {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.08) 1px, transparent 0);
+  background-size: 26px 26px;
+}
+
+/* Soft conic spotlight for light editorial sections */
+.public-spotlight {
+  background:
+    radial-gradient(60% 50% at 50% 0%, rgba(13, 148, 136, 0.07), transparent 70%);
+}
+
+/* Tilted product showcase (perspective) — disabled under reduced motion */
+.showcase-tilt {
+  transform: perspective(1800px) rotateX(3deg) rotateY(-7deg) rotate(0.4deg);
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+.showcase-tilt:hover {
+  transform: perspective(1800px) rotateX(0deg) rotateY(0deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .showcase-tilt,
+  .showcase-tilt:hover {
+    transform: none;
+    transition: none;
+  }
 }
 
 /* Estilos para artículos del blog (renderMarkdown) */

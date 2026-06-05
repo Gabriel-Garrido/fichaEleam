@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import HelpTooltip from "../../components/HelpTooltip";
 import PageLayout from "../../layout/PageLayout";
+import { WelcomeModal, hasSeenWelcome, markWelcomeSeen } from "../welcome";
 import { loadDashboard } from "./dashboardService";
 import { recordOverallStatus } from "../vitalSigns/vitalRanges";
 import { getOpenAdverseEventsCount } from "../adverseEvents/eventosAdversosService";
@@ -18,12 +19,24 @@ import {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { profile, eleam, rol, can, canFeature } = useAuth();
+  const { profile, eleam, rol, can, canFeature, isAdminEleam } = useAuth();
 
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [adverseCount, setAdverseCount] = useState({ total: 0, gravesOCriticos: 0 });
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  useEffect(() => {
+    if (isAdminEleam && profile?.id && !hasSeenWelcome(profile.id)) {
+      setShowWelcome(true);
+    }
+  }, [isAdminEleam, profile?.id]);
+
+  const closeWelcome = () => {
+    if (profile?.id) markWelcomeSeen(profile.id);
+    setShowWelcome(false);
+  };
 
   useEffect(() => {
     setLoadError(false);
@@ -183,6 +196,13 @@ export default function AdminDashboard() {
       }
       className="space-y-6"
     >
+      <WelcomeModal
+        open={showWelcome}
+        onClose={closeWelcome}
+        adminName={profile?.nombre}
+        eleamName={eleam?.nombre}
+        isDemo={eleam?.plan === "demo"}
+      />
 
       {loadError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">

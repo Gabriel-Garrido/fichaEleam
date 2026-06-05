@@ -31,7 +31,7 @@ describe("coachCatalog", () => {
 
   it("getCoach merges roleOverrides when rol matches", () => {
     const adminCoach = getCoach("dashboard", "admin_eleam");
-    expect(adminCoach.title).toBe("El estado de tu ELEAM, claro");
+    expect(adminCoach.title).toBe("El pulso de tu ELEAM");
     expect(adminCoach).not.toHaveProperty("roleOverrides");
   });
 
