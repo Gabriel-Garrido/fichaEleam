@@ -29,6 +29,28 @@ function absoluteUrl(value = "") {
   return String(value).startsWith("http") ? String(value) : `${ORIGIN}${value}`;
 }
 
+// El host sirve cada ruta como directorio (dist/<ruta>/index.html), por lo que
+// la URL real lleva slash final. Canonical, og:url, sitemap, JSON-LD y enlaces
+// internos deben usar esa misma forma para no chocar con el redireccion 301 de
+// Apache (DirectorySlash) y evitar "Rastreada: actualmente sin indexar".
+function withTrailingSlash(path = "/") {
+  if (!path || path === "/") return "/";
+  return path.endsWith("/") ? path : `${path}/`;
+}
+
+function routeUrl(path = "/") {
+  return `${ORIGIN}${withTrailingSlash(path)}`;
+}
+
+function withInternalSlashes(html = "") {
+  return html.replace(/href="(\/[^"#?]*)"/g, (match, path) => {
+    if (path === "/" || path.endsWith("/")) return match;
+    if (path.startsWith("//")) return match;
+    if (/\.[a-z0-9]+$/i.test(path)) return match;
+    return `href="${path}/"`;
+  });
+}
+
 function postImage(post) {
   if (post?.cover_url) return absoluteUrl(post.cover_url);
   const text = `${post?.titulo ?? ""} ${(post?.keywords ?? []).join(" ")}`.toLowerCase();
@@ -265,7 +287,7 @@ function jsonLdScript(jsonLd) {
 }
 
 function renderPage(template, { path, title, description, type = "website", jsonLd, rootHtml, image = MARKETING_IMAGES.home, imageAlt, article }) {
-  const url = `${ORIGIN}${path === "/" ? "/" : path}`;
+  const url = routeUrl(path);
   const ogImage = absoluteUrl(image);
   let html = template;
   html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(title)}</title>`);
@@ -301,7 +323,7 @@ function renderPage(template, { path, title, description, type = "website", json
     "</head>",
     `    <style id="fichaeleam-prerender-style">.seo-prerender{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:980px;margin:0 auto;padding:40px 20px;color:#0f172a;line-height:1.65}.seo-prerender h1{font-size:clamp(2rem,5vw,4rem);line-height:1.05;margin:0 0 16px}.seo-prerender h2{margin-top:32px}.seo-prerender a{color:#0f766e}.seo-prerender .grid{display:grid;gap:16px}.seo-prerender .card{border:1px solid #e2e8f0;border-radius:14px;padding:18px;background:#fff}.seo-prerender img{max-width:100%;height:auto}</style>\n    ${jsonLdScript(jsonLd)}\n  </head>`,
   );
-  return html.replace('<div id="root"></div>', `<div id="root">\n${rootHtml}\n    </div>`);
+  return html.replace('<div id="root"></div>', `<div id="root">\n${withInternalSlashes(rootHtml)}\n    </div>`);
 }
 
 function writeRoute(routePath, html) {
@@ -346,6 +368,16 @@ function buildLandingHtml() {
 
       <h2>Marco regulatorio</h2>
       <p>FichaEleam cumple con el <strong>DS 14/2017</strong> del MINSAL, la <strong>Ley N&deg;20.584</strong> sobre derechos del paciente y la <strong>Ley N&deg;19.628</strong> sobre protecci&oacute;n de datos personales en Chile.</p>
+
+      <h2>Explora FichaEleam</h2>
+      <ul>
+        <li><a href="/software-eleam">Software para ELEAM</a>: m&oacute;dulos cl&iacute;nicos y operativos, comparativa con Excel/papel y cumplimiento normativo.</li>
+        <li><a href="/acreditacion-seremi">Acreditaci&oacute;n SEREMI</a>: gu&iacute;a del DS 14/2017 con los 14 &aacute;mbitos, vencimientos y preparaci&oacute;n de la carpeta.</li>
+        <li><a href="/preguntas-frecuentes">Preguntas frecuentes</a>: producto, precios, demo, implementaci&oacute;n, seguridad y soporte.</li>
+        <li><a href="/pago">Planes y precios</a>: tres planes mensuales y tier institucional para 35+ residentes.</li>
+        <li><a href="/blog">Blog FichaEleam</a>: recursos para directores y equipos de ELEAM en Chile.</li>
+        <li><a href="/contacto">Contacto</a>: correo, WhatsApp y solicitud de demo gratuito.</li>
+      </ul>
 
       <p><a href="/blog">Ver recursos para ELEAM en el blog</a> &middot; <a href="/pago">Ver planes y precios</a> &middot; <a href="https://wa.me/56951187764">Hablar por WhatsApp</a></p>
     </main>`;
@@ -659,7 +691,7 @@ function breadcrumbJsonLd(items) {
       "@type": "ListItem",
       position: i + 1,
       name: it.name,
-      item: `${ORIGIN}${it.url}`,
+      item: routeUrl(it.url),
     })),
   };
 }
@@ -751,12 +783,12 @@ function blogListJsonLd(posts) {
     "@context": "https://schema.org",
     "@type": "Blog",
     name: "Blog FichaEleam",
-    url: `${ORIGIN}/blog`,
+    url: routeUrl("/blog"),
     image: absoluteUrl(MARKETING_IMAGES.shift),
     blogPost: posts.map((post) => ({
       "@type": "BlogPosting",
       headline: post.titulo,
-      url: `${ORIGIN}/blog/${post.slug}`,
+      url: routeUrl(`/blog/${post.slug}`),
       image: postImage(post),
       datePublished: post.publicado_en,
       author: { "@type": "Organization", name: post.autor_nombre },
@@ -765,7 +797,7 @@ function blogListJsonLd(posts) {
 }
 
 function postJsonLd(post) {
-  const pageUrl = `${ORIGIN}/blog/${post.slug}`;
+  const pageUrl = routeUrl(`/blog/${post.slug}`);
   return {
     "@context": "https://schema.org",
     "@type": ["Article", "BlogPosting"],
@@ -800,7 +832,7 @@ function postJsonLd(post) {
     },
     isPartOf: {
       "@type": "Blog",
-      "@id": `${ORIGIN}/blog`,
+      "@id": routeUrl("/blog"),
       name: "Blog FichaEleam",
     },
     mainEntityOfPage: {
@@ -945,7 +977,7 @@ function buildSitemap(posts) {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urls.map((url) => `  <url>
-    <loc>${escapeXml(`${ORIGIN}${url.loc}`)}</loc>
+    <loc>${escapeXml(routeUrl(url.loc))}</loc>
     <lastmod>${url.lastmod}</lastmod>
     <changefreq>${url.changefreq}</changefreq>
     <priority>${url.priority}</priority>

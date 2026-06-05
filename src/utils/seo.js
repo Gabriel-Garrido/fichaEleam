@@ -6,6 +6,26 @@
 import { useEffect } from "react";
 
 const ORIGIN = "https://fichaeleam.cl";
+const DEFAULT_OG_IMAGE = "/marketing/fichaeleam-hero-demo-soporte.png";
+const DEFAULT_LOGO = "/marketing/fichaeleam-app-icon-color.png";
+
+function absoluteUrl(value) {
+  if (!value) return null;
+  return value.startsWith("http") ? value : `${ORIGIN}${value}`;
+}
+
+// El host sirve cada ruta pública como directorio (/<ruta>/), por lo que la URL
+// real lleva slash final. Canonical, og:url y los @id de JSON-LD deben usar esa
+// misma forma para coincidir con el prerender y el sitemap, y no quedar como
+// "URL alternativa con redirección" en Google.
+function withTrailingSlash(path = "/") {
+  if (!path || path === "/") return "/";
+  return path.endsWith("/") ? path : `${path}/`;
+}
+
+function routeUrl(path = "/") {
+  return `${ORIGIN}${withTrailingSlash(path)}`;
+}
 
 function setMeta(attr, name, content) {
   if (!content) return;
@@ -65,6 +85,7 @@ function setArticleMeta(prop, content) {
  *     description: "Plataforma chilena para ELEAM...",
  *     path: "/blog",                    // canonical = ORIGIN + path
  *     image: "/og-image.png",
+ *     imageAlt: "Vista previa de FichaEleam",
  *     type: "article" | "website",
  *     keywords: ["ELEAM", "SEREMI"],
  *     jsonLd: {...} | [{...}],
@@ -79,6 +100,7 @@ export function useSEO({
   description,
   path,
   image,
+  imageAlt,
   type = "website",
   keywords,
   jsonLd,
@@ -98,9 +120,9 @@ export function useSEO({
     if (Array.isArray(keywords) && keywords.length) {
       setMeta("name", "keywords", keywords.join(", "));
     }
-    setMeta("name", "robots", noIndex ? "noindex, nofollow" : "index, follow, max-image-preview:large, max-snippet:-1");
+    setMeta("name", "robots", noIndex ? "noindex, nofollow" : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1");
 
-    const canonical = path ? `${ORIGIN}${path}` : ORIGIN;
+    const canonical = path ? routeUrl(path) : ORIGIN;
     setLinkRel("canonical", canonical);
 
     // Open Graph — base
@@ -110,8 +132,13 @@ export function useSEO({
     setMeta("property", "og:description", description ?? "");
     setMeta("property", "og:locale", "es_CL");
     setMeta("property", "og:site_name", "FichaEleam");
-    const ogImage = image ? (image.startsWith("http") ? image : `${ORIGIN}${image}`) : null;
+    const ogImage = absoluteUrl(image || DEFAULT_OG_IMAGE);
     if (ogImage) setMeta("property", "og:image", ogImage);
+    if (ogImage) {
+      setMeta("property", "og:image:alt", imageAlt || description || fullTitle);
+      setMeta("property", "og:image:width", "1792");
+      setMeta("property", "og:image:height", "1024");
+    }
 
     // Open Graph — artículo (se limpian en cleanup para no contaminar otras rutas)
     cleanArticleMetas();
@@ -129,6 +156,7 @@ export function useSEO({
     setMeta("name", "twitter:title", fullTitle);
     setMeta("name", "twitter:description", description ?? "");
     if (ogImage) setMeta("name", "twitter:image", ogImage);
+    if (ogImage) setMeta("name", "twitter:image:alt", imageAlt || description || fullTitle);
 
     // JSON-LD por ruta. id "page" se reemplaza al volver a llamar.
     if (jsonLd) {
@@ -145,7 +173,7 @@ export function useSEO({
       cleanArticleMetas();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, description, path, image, type, JSON.stringify(keywords), JSON.stringify(jsonLd), noIndex, publishedTime, modifiedTime, author]);
+  }, [title, description, path, image, imageAlt, type, JSON.stringify(keywords), JSON.stringify(jsonLd), noIndex, publishedTime, modifiedTime, author]);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -156,16 +184,17 @@ export function articleJsonLd({ titulo, resumen, slug, image, publicadoEn, actua
   const obj = {
     "@context": "https://schema.org",
     "@type": ["Article", "BlogPosting"],
-    "@id": `${ORIGIN}/blog/${slug}`,
+    "@id": routeUrl(`/blog/${slug}`),
     "headline": titulo,
     "description": resumen,
-    "image": image ? (image.startsWith("http") ? image : `${ORIGIN}${image}`) : `${ORIGIN}/og-image.png`,
+    "image": absoluteUrl(image || DEFAULT_OG_IMAGE),
+    "thumbnailUrl": absoluteUrl(image || DEFAULT_OG_IMAGE),
     "datePublished": publicadoEn ?? undefined,
     "dateModified": actualizadoEn ?? publicadoEn ?? undefined,
     "author": {
       "@type": "Person",
       "name": autor ?? "Equipo FichaEleam",
-      "url": `${ORIGIN}/blog`,
+      "url": routeUrl("/blog"),
     },
     "publisher": {
       "@type": "Organization",
@@ -174,16 +203,16 @@ export function articleJsonLd({ titulo, resumen, slug, image, publicadoEn, actua
       "url": ORIGIN,
       "logo": {
         "@type": "ImageObject",
-        "url": `${ORIGIN}/og-image.png`,
+        "url": absoluteUrl(DEFAULT_LOGO),
       },
     },
     "mainEntityOfPage": {
       "@type": "WebPage",
-      "@id": `${ORIGIN}/blog/${slug}`,
+      "@id": routeUrl(`/blog/${slug}`),
     },
     "isPartOf": {
       "@type": "Blog",
-      "@id": `${ORIGIN}/blog`,
+      "@id": routeUrl("/blog"),
       "name": "Blog FichaEleam",
     },
     "keywords": keywords?.join(", "),
@@ -207,7 +236,7 @@ export function breadcrumbJsonLd(items) {
       "@type": "ListItem",
       "position": i + 1,
       "name": it.name,
-      "item": it.url.startsWith("http") ? it.url : `${ORIGIN}${it.url}`,
+      "item": it.url.startsWith("http") ? it.url : routeUrl(it.url),
     })),
   };
 }
@@ -250,6 +279,7 @@ export function organizationJsonLd() {
     "name": "FichaEleam",
     "url": ORIGIN,
     "logo": `${ORIGIN}/og-image.png`,
+    "image": absoluteUrl(DEFAULT_OG_IMAGE),
     "description": "Software de gestión clínica y acreditación SEREMI para ELEAM en Chile.",
     "areaServed": { "@type": "Country", "name": "Chile" },
     "contactPoint": [{
@@ -269,10 +299,10 @@ export function blogListJsonLd(posts = []) {
   const base = {
     "@context": "https://schema.org",
     "@type": "Blog",
-    "@id": `${ORIGIN}/blog`,
+    "@id": routeUrl("/blog"),
     "name": "Blog FichaEleam",
     "description": "Recursos para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile: gestión clínica, DS 14/2017, acreditación SEREMI y buenas prácticas.",
-    "url": `${ORIGIN}/blog`,
+    "url": routeUrl("/blog"),
     "inLanguage": "es-CL",
     "publisher": {
       "@type": "Organization",
@@ -284,12 +314,13 @@ export function blogListJsonLd(posts = []) {
   if (posts.length > 0) {
     base.blogPost = posts.map((p) => ({
       "@type": "BlogPosting",
-      "@id": `${ORIGIN}/blog/${p.slug}`,
+      "@id": routeUrl(`/blog/${p.slug}`),
       "headline": p.titulo,
       "description": p.resumen,
       "datePublished": p.publicado_en,
       ...(p.actualizado_en && { "dateModified": p.actualizado_en }),
-      "url": `${ORIGIN}/blog/${p.slug}`,
+      "url": routeUrl(`/blog/${p.slug}`),
+      "image": absoluteUrl(p.cover_url || DEFAULT_OG_IMAGE),
       "author": {
         "@type": "Person",
         "name": p.autor_nombre ?? "Equipo FichaEleam",
