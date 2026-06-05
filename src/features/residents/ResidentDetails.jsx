@@ -134,14 +134,14 @@ function ResidentDetails() {
   const allergies = getAllergySummary(resident.alergias);
 
   const tabs = [
-    { id: "info",          label: "Información" },
-    { id: "signos",        label: "Signos Vitales" },
-    { id: "observaciones", label: "Observaciones" },
-    canFeature("care-plans") && { id: "tareas",  label: "Tareas del turno" },
-    { id: "trazabilidad", label: "Trazabilidad" },
-    canFeature("care-plans") && { id: "care",    label: "Plan de cuidado" },
-    canFeature("emar")       && { id: "emar",    label: "Medicamentos" },
-    can("registrar_visitas") && { id: "visitas", label: "Visitas" },
+    { id: "info",          label: "Información",      icon: "info",          group: "Ficha" },
+    { id: "signos",        label: "Signos vitales",   icon: "signos",        group: "Clínico" },
+    { id: "observaciones", label: "Observaciones",    icon: "observaciones", group: "Clínico" },
+    canFeature("care-plans") && { id: "tareas",  label: "Tareas del turno", icon: "tareas", group: "Cuidado" },
+    canFeature("care-plans") && { id: "care",    label: "Plan de cuidado",  icon: "care",   group: "Cuidado" },
+    canFeature("emar")       && { id: "emar",    label: "Medicamentos",     icon: "emar",   group: "Cuidado" },
+    { id: "trazabilidad", label: "Trazabilidad", icon: "trazabilidad", group: "Ficha" },
+    can("registrar_visitas") && { id: "visitas", label: "Visitas", icon: "visitas", group: "Ficha" },
   ].filter(Boolean);
 
   return (
@@ -265,38 +265,114 @@ function ResidentDetails() {
         </div>
       </div>
 
-      {/* Tabs — scrollable on mobile with snap + fade hint */}
-      <div className="relative mb-5 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:mb-6">
-        <div className="snap-tabs scrollbar-none overflow-x-auto px-2 sm:px-0">
-          <div className="flex min-w-max items-end border-b border-slate-200">
-            {tabs.map((t) => (
-              <button
-                type="button"
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`tap-highlight-none snap-start whitespace-nowrap px-4 py-3 sm:py-2 text-sm font-medium border-b-2 transition-colors ${
-                  tab === t.id
-                    ? "border-teal-600 text-teal-700"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
-                }`}
-                aria-current={tab === t.id ? "page" : undefined}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-50 sm:hidden" aria-hidden="true" />
-      </div>
+      <ResidentTabBar tabs={tabs} active={tab} onChange={setTab} />
 
-      {tab === "info"          && <InfoTab resident={resident} familiar={familiar} />}
-      {tab === "signos"        && <SignosTab residenteId={id} navigate={navigate} />}
-      {tab === "observaciones" && <ObservacionesTab residenteId={id} navigate={navigate} />}
-      {tab === "tareas"        && <ResidentDailyTasksTab residenteId={id} />}
-      {tab === "trazabilidad"  && <ResidentTraceabilityTab residenteId={id} />}
-      {tab === "care"          && <CarePlanTab resident={resident} />}
-      {tab === "emar"          && <EmarResidentTab resident={resident} />}
-      {tab === "visitas"       && <VisitasTab residenteId={id} />}
+      <div key={tab} role="tabpanel" className="min-w-0 animate-fade-in">
+        {tab === "info"          && <InfoTab resident={resident} familiar={familiar} />}
+        {tab === "signos"        && <SignosTab residenteId={id} navigate={navigate} />}
+        {tab === "observaciones" && <ObservacionesTab residenteId={id} navigate={navigate} />}
+        {tab === "tareas"        && <ResidentDailyTasksTab residenteId={id} />}
+        {tab === "trazabilidad"  && <ResidentTraceabilityTab residenteId={id} />}
+        {tab === "care"          && <CarePlanTab resident={resident} />}
+        {tab === "emar"          && <EmarResidentTab resident={resident} />}
+        {tab === "visitas"       && <VisitasTab residenteId={id} />}
+      </div>
+    </div>
+  );
+}
+
+const TAB_ICON_PATHS = {
+  info: "M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0ZM10.5 13.5h-3a3 3 0 0 0-3 3v.75h9v-.75a3 3 0 0 0-3-3Z",
+  signos: "M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z",
+  observaciones: "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z",
+  tareas: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
+  care: "M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 15.75l1.5 1.5 3-3.75",
+  emar: "M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5",
+  trazabilidad: "M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
+  visitas: "M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z",
+};
+
+function TabIcon({ id, className }) {
+  const d = TAB_ICON_PATHS[id];
+  if (!d) return null;
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+    </svg>
+  );
+}
+
+function ResidentTabBar({ tabs, active, onChange }) {
+  const scrollerRef = useRef(null);
+  const activeRef = useRef(null);
+
+  useEffect(() => {
+    const btn = activeRef.current;
+    const scroller = scrollerRef.current;
+    if (!btn || !scroller) return;
+    const target = btn.offsetLeft - scroller.clientWidth / 2 + btn.clientWidth / 2;
+    scroller.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+    // Keep keyboard focus on the active tab only while navigating with the keyboard.
+    if (scroller.contains(document.activeElement) && document.activeElement !== btn) {
+      btn.focus({ preventScroll: true });
+    }
+  }, [active]);
+
+  const handleKeyDown = (event) => {
+    const idx = tabs.findIndex((t) => t.id === active);
+    if (idx < 0) return;
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      const dir = event.key === "ArrowRight" ? 1 : -1;
+      onChange(tabs[(idx + dir + tabs.length) % tabs.length].id);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      onChange(tabs[0].id);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      onChange(tabs[tabs.length - 1].id);
+    }
+  };
+
+  return (
+    <div className="sticky top-0 z-20 -mx-3 mb-5 bg-slate-50/90 px-3 pb-2 pt-1 backdrop-blur-sm sm:-mx-4 sm:mb-6 sm:px-4">
+      <div
+        ref={scrollerRef}
+        role="tablist"
+        aria-label="Secciones del residente"
+        onKeyDown={handleKeyDown}
+        className="snap-tabs scrollbar-none flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm"
+      >
+        {tabs.map((t, index) => {
+          const isActive = t.id === active;
+          const showDivider = index > 0 && tabs[index - 1].group !== t.group;
+          return (
+            <div key={t.id} className="flex shrink-0 items-center">
+              {showDivider && <span className="mx-1 h-5 w-px shrink-0 bg-slate-200" aria-hidden="true" />}
+              <button
+                ref={isActive ? activeRef : null}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => onChange(t.id)}
+                title={t.label}
+                className={`tap-highlight-none snap-start inline-flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 ${
+                  isActive
+                    ? "bg-teal-700 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                }`}
+              >
+                <TabIcon
+                  id={t.icon}
+                  className={`h-[18px] w-[18px] shrink-0 ${isActive ? "text-white" : "text-slate-400"}`}
+                />
+                <span className="whitespace-nowrap">{t.label}</span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
