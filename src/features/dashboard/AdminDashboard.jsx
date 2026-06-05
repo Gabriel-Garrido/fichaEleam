@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import HelpTooltip from "../../components/HelpTooltip";
 import PageLayout from "../../layout/PageLayout";
 import { WelcomeModal, hasSeenWelcome, markWelcomeSeen } from "../welcome";
+import OnboardingSteps from "./OnboardingSteps";
 import { loadDashboard } from "./dashboardService";
 import { recordOverallStatus } from "../vitalSigns/vitalRanges";
 import { getOpenAdverseEventsCount } from "../adverseEvents/eventosAdversosService";
@@ -172,9 +173,30 @@ export default function AdminDashboard() {
     rol !== "funcionario" && canUse("team") && { iconId: "team", label: "Gestionar equipo", route: "/equipo" },
   ].filter(Boolean);
 
+  const showOnboarding = isAdminEleam && !loading && !loadError && (stats?.total ?? 0) === 0;
+
+  if (showOnboarding) {
+    return (
+      <PageLayout
+        title={profile?.nombre ? `Hola, ${profile.nombre}` : "Inicio"}
+        eyebrow={`${todayDateLong()} · turno ${turno}`}
+        description={`${eleam?.nombre ? `${eleam.nombre}. ` : ""}Configura tu ELEAM en pocos pasos para empezar a gestionar el día.`}
+        className="space-y-6"
+      >
+        <WelcomeModal
+          open={showWelcome}
+          onClose={closeWelcome}
+          adminName={profile?.nombre}
+          eleamName={eleam?.nombre}
+          isDemo={eleam?.plan === "demo"}
+        />
+        <OnboardingSteps eleamName={eleam?.nombre} isDemo={eleam?.plan === "demo"} />
+      </PageLayout>
+    );
+  }
+
   return (
     <PageLayout
-      coachFeatureId="dashboard"
       title={profile?.nombre ? `Hola, ${profile.nombre}` : "Inicio"}
       eyebrow={`${todayDateLong()} · turno ${turno}`}
       description={`${eleam?.nombre ? `${eleam.nombre}. ` : ""}${loading ? "Cargando actividad del día..." : `${data?.signosHoy ?? 0} signos vitales y ${data?.observacionesHoy ?? 0} observaciones registradas hoy${cobertura ? ` · ${cobertura.pct}% de cobertura` : ""}.`}`}

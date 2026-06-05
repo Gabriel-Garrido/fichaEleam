@@ -67,6 +67,13 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
     );
   }, [sections]);
 
+  // Las acciones rápidas que llevan a la misma ruta que un ítem del menú son
+  // redundantes: se filtran para que cada destino aparezca una sola vez.
+  const dedupedQuickActions = useMemo(() => {
+    const navPaths = new Set(flatNav.map((item) => item.path));
+    return quickActions.filter((action) => !navPaths.has(action.path));
+  }, [flatNav, quickActions]);
+
   const normalizedQuery = query.trim().toLowerCase();
   const filteredNav = normalizedQuery
     ? flatNav.filter((item) => item.label?.toLowerCase().includes(normalizedQuery))
@@ -189,11 +196,11 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
           {/* ── Default view (no query) ───────────────────────── */}
           {!filteredNav && (
             <>
-              {quickActions.length > 0 && (
+              {dedupedQuickActions.length > 0 && (
                 <div className="mb-5">
                   <SectionLabel icon="⚡" label="Acciones rápidas" />
                   <div className="grid grid-cols-2 gap-2.5">
-                    {quickActions.map((item) => (
+                    {dedupedQuickActions.map((item) => (
                       <button
                         key={item.id}
                         type="button"

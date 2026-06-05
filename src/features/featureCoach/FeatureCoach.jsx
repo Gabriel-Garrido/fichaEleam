@@ -14,10 +14,12 @@ export default function FeatureCoach({ featureId, controller, standalone = false
 
   useEffect(() => {
     if (!isOpen) return undefined;
+    const panel = panelRef.current;
     const node = ctaRef.current;
-    if (node) {
-      window.requestAnimationFrame(() => node.focus({ preventScroll: true }));
-    }
+    window.requestAnimationFrame(() => {
+      panel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      node?.focus({ preventScroll: true });
+    });
     const handleKey = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();

@@ -270,7 +270,7 @@ export const QUICK_ACTIONS = [
   {
     id: "turno-nuevo",
     featureId: "turnos",
-    label: "Entrega de turno",
+    label: "Nueva entrega",
     description: "Preparar resumen del turno actual",
     icon: "shift",
     path: "/turnos/nueva",
@@ -305,7 +305,7 @@ export const QUICK_ACTIONS = [
   {
     id: "vital-new",
     featureId: "vital-signs",
-    label: "Signos vitales",
+    label: "Registrar signos",
     description: "Registrar control clínico",
     icon: "vitals",
     path: "/vital-signs/new",
@@ -341,7 +341,7 @@ export const QUICK_ACTIONS = [
   {
     id: "observation-new",
     featureId: "observations",
-    label: "Observación",
+    label: "Nueva observación",
     description: "Dejar novedad o seguimiento",
     icon: "observations",
     path: "/observations/new",
@@ -353,7 +353,7 @@ export const QUICK_ACTIONS = [
   {
     id: "adverse-event-new",
     featureId: "adverse-events",
-    label: "Evento adverso",
+    label: "Registrar evento",
     description: "Registrar caída, error o incidente serio",
     icon: "alert",
     path: "/eventos-adversos/nuevo",

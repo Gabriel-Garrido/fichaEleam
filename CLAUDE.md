@@ -46,7 +46,7 @@ src/
 │   ├── auth/                   # Login, RecuperarAcceso, ResetPassword, authService
 │   ├── landing/                # LandingPage, DemoRequestModal, WhatsAppLeadButton/Modal (FAB flotante), landingAnalytics. Sin auto-registro público
 │   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService (diseño consistente con landing: nav/footer dark slate-950)
-│   ├── dashboard/              # AdminDashboard (rol-aware: admin_eleam muestra gestión, funcionario muestra clínica). Monta WelcomeModal en el primer ingreso de admin_eleam
+│   ├── dashboard/              # AdminDashboard (rol-aware). Monta WelcomeModal en el primer ingreso de admin_eleam. Si el ELEAM del admin no tiene residentes, oculta el contenido y muestra OnboardingSteps (primeros pasos: residente, funcionario, Carpeta SEREMI). Sin coach 'dashboard' (lo cubren la bienvenida y el onboarding)
 │   ├── welcome/                # Bienvenida orientada a venta para admin_eleam (la ven prospectos del demo): WelcomeModal (3 pasos animados, responsive), welcomeContent (valor + features), welcomeStorage (flag por usuario en localStorage)
 │   ├── featureCoach/           # "Guía rápida" por sección: coachCatalog.js (copy breve/intuitivo por feature, con roleOverrides), useFeatureCoach (auto-abre 1 vez por feature/usuario), FeatureCoach + FeatureCoachTrigger; se monta vía coachFeatureId en PageLayout/FormKit
 │   ├── residents/              # CRUD residentes + detalles; residentUtils.js exporta ESTADO_CONFIG, ESTADO_BADGE, DEPENDENCIA_TONE, TIPO_LABEL, TIPO_BADGE, initials(), calcAge()
