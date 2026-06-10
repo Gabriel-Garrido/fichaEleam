@@ -112,19 +112,28 @@ export default function CalculadoraDotacionPage() {
   const [actualDiurno, setActualDiurno] = useState("");
   const [actualNocturno, setActualNocturno] = useState("");
 
+  // Marca una interacción real del usuario y limita los inputs a dígitos.
+  const interacted = useRef(false);
+  const onField = (setter) => (value) => {
+    interacted.current = true;
+    setter(value.replace(/[^\d]/g, ""));
+  };
+
   const resultado = useMemo(
     () => calcularDotacion({
       conDependencia,
       autovalentes,
-      actual: showActual ? { cuidadoresDiurno: actualDiurno, cuidadoresNocturno: actualNocturno } : {},
+      actual: showActual
+        ? { cuidadoresDiurno: actualDiurno || null, cuidadoresNocturno: actualNocturno || null }
+        : {},
     }),
     [conDependencia, autovalentes, showActual, actualDiurno, actualNocturno],
   );
 
-  // Registra el uso de la calculadora (debounce; deduplica por resumen).
+  // Registra el uso solo tras una interacción real (no con los valores precargados).
   const lastTracked = useRef(null);
   useEffect(() => {
-    if (resultado.totalResidentes <= 0) return undefined;
+    if (!interacted.current || resultado.totalResidentes <= 0) return undefined;
     const value = dotacionEventValue(resultado);
     const timer = setTimeout(() => {
       if (value && value !== lastTracked.current) {
@@ -212,14 +221,14 @@ export default function CalculadoraDotacionPage() {
                     label="Con dependencia"
                     hint="Dependencia funcional, cognitiva o mixta."
                     value={conDependencia}
-                    onChange={setConDependencia}
+                    onChange={onField(setConDependencia)}
                   />
                   <NumberField
                     id="autovalentes"
                     label="Autovalentes"
                     hint="Independientes o autovalentes."
                     value={autovalentes}
-                    onChange={setAutovalentes}
+                    onChange={onField(setAutovalentes)}
                     tone="sky"
                   />
                 </div>
@@ -234,8 +243,8 @@ export default function CalculadoraDotacionPage() {
 
                 {showActual && (
                   <div className="mt-3 grid gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 sm:grid-cols-2">
-                    <NumberField id="actual-diurno" label="Cuidadores diurno (actual)" value={actualDiurno} onChange={setActualDiurno} />
-                    <NumberField id="actual-nocturno" label="Cuidadores noche (actual)" value={actualNocturno} onChange={setActualNocturno} />
+                    <NumberField id="actual-diurno" label="Cuidadores diurno (actual)" value={actualDiurno} onChange={onField(setActualDiurno)} />
+                    <NumberField id="actual-nocturno" label="Cuidadores noche (actual)" value={actualNocturno} onChange={onField(setActualNocturno)} />
                   </div>
                 )}
 

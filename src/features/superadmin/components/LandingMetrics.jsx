@@ -361,18 +361,33 @@ export default function LandingMetrics({ metrics }) {
               label="Cálculos realizados"
               value={toolUsage.calculadoraUsos.toLocaleString("es-CL")}
               tone="border-teal-200 text-teal-700"
+              help={{
+                description: "Cálculos completados en la calculadora de dotación en los últimos 30 días. Se registra un evento por combinación distinta de residentes, solo tras una interacción real (no con los valores precargados).",
+                source: "landing_events: COUNT(*) WHERE tipo = 'tool_use' AND elemento = 'calculadora_dotacion'.",
+                action: "Un volumen creciente indica que la herramienta atrae tráfico calificado. Si es 0 pese a tener visitas en la página, revisar que el Edge Function 'track-landing-event' acepte el tipo 'tool_use'.",
+              }}
             />
             <KpiCard
               label="Con déficit detectado"
               value={toolUsage.calculadoraConDeficit.toLocaleString("es-CL")}
               tone="border-rose-200 text-rose-700"
               sub={toolUsage.calculadoraUsos > 0 ? `${pct(toolUsage.calculadoraConDeficit, toolUsage.calculadoraUsos)}% de los cálculos` : undefined}
+              help={{
+                description: "Cálculos cuyo resultado mostró déficit de personal frente al mínimo del Decreto N°20 (el usuario ingresó su dotación actual y quedó bajo lo requerido).",
+                source: "landing_events: eventos 'tool_use' cuyo 'valor' incluye 'def:1'.",
+                action: "Un % alto señala una audiencia con un dolor real de dotación: buen segmento para campañas de demo y contenido sobre cumplimiento.",
+              }}
             />
             <KpiCard
               label="Clics a demo"
               value={toolUsage.calculadoraDemoClicks.toLocaleString("es-CL")}
               tone="border-emerald-200 text-emerald-700"
               sub={toolUsage.calculadoraUsos > 0 ? `${pct(toolUsage.calculadoraDemoClicks, toolUsage.calculadoraUsos)}% de conversión a demo` : undefined}
+              help={{
+                description: "Clics en el botón de demo dentro de la calculadora durante los últimos 30 días. Es la conversión directa de la herramienta a solicitud de demo.",
+                source: "landing_events: COUNT(*) WHERE tipo = 'cta_click' AND elemento = 'calculadora_demo'.",
+                action: "Si hay muchos cálculos pero pocos clics, reforzar el CTA dentro de la herramienta o el copy del resultado.",
+              }}
             />
           </div>
         </section>

@@ -254,3 +254,31 @@ npx supabase functions deploy track-landing-event
 ```
 
 Mientras no se despliegue, la calculadora funciona pero su uso no se registra (el tracking falla en silencio por diseño).
+
+---
+
+## 16. Adenda 2 — Deploy de Edge Function + correcciones de calidad
+
+### Deploy ejecutado
+- ✅ `npx supabase functions deploy track-landing-event` → desplegada en el proyecto `gzvjqzilaxlnzmjkcrbw` (FichaEleam, linkeado). El evento `tool_use` ya está aceptado a nivel de función.
+
+### ⚠️ Prerrequisito de base de datos para `tool_use`
+El `index.ts` inserta cualquier tipo de `ALLOWED_EVENT_TYPES`, pero el insert choca con el CHECK `landing_events_tipo_contract` del **DB remoto** si aún no incluye `'tool_use'` (la función responde 500 y el tracking falla en silencio).
+
+- **DB fresco**: aplicar `supabase_schema.sql` ya cubre `tool_use` (la definición de tabla ya lo lista).
+- **DB existente** con la constraint vieja: re-aplicar el schema **no** la actualiza (el bloque `do $$ … if not exists` solo agrega cuando falta). Ejecutar una vez en el SQL Editor:
+
+```sql
+alter table public.landing_events drop constraint landing_events_tipo_contract;
+alter table public.landing_events add constraint landing_events_tipo_contract
+  check (char_length(tipo) <= 64 and tipo in
+    ('page_view','cta_click','nav_click','scroll_depth','section_view','form_view','form_submit','tool_use'));
+```
+
+### Correcciones de calidad aplicadas (auditoría)
+- **Calculadora — métrica precisa**: el evento `tool_use` ya no se dispara con los valores precargados; solo tras una interacción real del usuario (`interacted` ref). Evita inflar la métrica con cálculos que el usuario no inició.
+- **Calculadora — inputs saneados**: los campos solo aceptan dígitos (`replace(/[^\d]/g, "")`).
+- **Calculadora — brecha condicional**: al abrir "Comparar con mi dotación actual" sin escribir ya no aparece un falso déficit ("Tienes 0 · Faltan N"); la comparación se muestra solo cuando el usuario ingresa un valor.
+- **Superadmin — tooltips**: las tres KPI de la calculadora en `LandingMetrics` ahora tienen tooltips `MetricHelp` (qué miden, fuente y acción), coherentes con el resto del panel.
+- **Prerender — tabla prolija**: estilos de `<table>` añadidos al fallback estático `.seo-prerender` (vista sin JS de la calculadora).
+- Auditoría del diff (manual + `/code-review` extra-high): **0 defectos de correctitud**. QA verde: lint, 337 tests, build, `seo:check` (8 rutas, 16 URLs), contratos.
