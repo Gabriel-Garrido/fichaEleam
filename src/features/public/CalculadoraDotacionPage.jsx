@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import {
   useSEO,
   faqJsonLd,
@@ -8,7 +8,6 @@ import {
   webApplicationJsonLd,
 } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
-import PublicShell from "./PublicShell";
 import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "./publicDesignAssets";
 import {
   CheckList,
@@ -194,9 +193,9 @@ export default function CalculadoraDotacionPage() {
 
   const { requerido, brecha, deficitDiurno, deficitNocturno, tieneActual, totalResidentes } = resultado;
 
+  const { openDemo } = useOutletContext();
+
   return (
-    <PublicShell current="/calculadora-dotacion-eleam">
-      {({ openDemo }) => (
         <div className="bg-white">
           <section className="bg-slate-50 px-5 py-14 sm:py-20">
             <div className="mx-auto grid max-w-7xl items-start gap-10 lg:grid-cols-[0.95fr_1.05fr]">
@@ -413,7 +412,5 @@ export default function CalculadoraDotacionPage() {
             secondaryTo="/acreditacion-seremi"
           />
         </div>
-      )}
-    </PublicShell>
   );
 }

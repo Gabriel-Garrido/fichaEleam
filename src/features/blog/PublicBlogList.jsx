@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { useSEO, breadcrumbJsonLd, blogListJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
-import PublicShell from "../public/PublicShell";
 import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "../public/publicDesignAssets";
 import { BlogVisual, PublicBadge, PublicBreadcrumb, PublicIcon, Reveal } from "../public/PublicDesign";
 
@@ -67,9 +66,9 @@ export default function PublicBlogList() {
   const featured = posts[0];
   const rest = posts.slice(1);
 
+  const { openDemo } = useOutletContext();
+
   return (
-    <PublicShell current="/blog">
-      {({ openDemo }) => (
         <div className="bg-white">
           <section className="relative overflow-hidden bg-slate-950 px-5 py-16 text-white sm:py-20">
             <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
@@ -197,7 +196,5 @@ export default function PublicBlogList() {
             )}
           </div>
         </div>
-      )}
-    </PublicShell>
   );
 }

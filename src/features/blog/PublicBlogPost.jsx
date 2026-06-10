@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useOutletContext } from "react-router-dom";
 import { renderMarkdown, extractTOC } from "./utils/markdown";
 import { useSEO, articleJsonLd, breadcrumbJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
-import PublicShell from "../public/PublicShell";
 import { PUBLIC_BUTTON, getBlogFallbackAsset } from "../public/publicDesignAssets";
 import {
   BlogVisual,
@@ -123,10 +122,9 @@ export default function PublicBlogPost() {
     return () => { mounted = false; };
   }, [slug]);
 
-  return (
-    <PublicShell current="/blog">
-      {({ openDemo }) => {
-        if (loading) return <ArticleSkeleton />;
+  const { openDemo } = useOutletContext();
+
+  if (loading) return <ArticleSkeleton />;
 
         if (notFound || !post) {
           return (
@@ -269,7 +267,4 @@ export default function PublicBlogPost() {
             />
           </div>
         );
-      }}
-    </PublicShell>
-  );
 }

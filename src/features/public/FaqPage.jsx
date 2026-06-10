@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import { useSEO, faqJsonLd, breadcrumbJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
-import PublicShell from "./PublicShell";
 import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "./publicDesignAssets";
 import {
   FaqDisclosure,
@@ -202,9 +202,9 @@ export default function FaqPage() {
     ],
   });
 
+  const { openDemo } = useOutletContext();
+
   return (
-    <PublicShell current="/preguntas-frecuentes">
-      {({ openDemo }) => (
         <div className="bg-white">
           <section className="bg-slate-50 px-5 py-14 sm:py-20">
             <div className="mx-auto max-w-6xl">
@@ -275,7 +275,5 @@ export default function FaqPage() {
             secondaryTo="/contacto"
           />
         </div>
-      )}
-    </PublicShell>
   );
 }

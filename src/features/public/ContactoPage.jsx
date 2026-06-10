@@ -1,7 +1,6 @@
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { useSEO, breadcrumbJsonLd, organizationJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
-import PublicShell from "./PublicShell";
 import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "./publicDesignAssets";
 import {
   PublicBreadcrumb,
@@ -47,9 +46,9 @@ export default function ContactoPage() {
     ],
   });
 
+  const { openDemo, openWhatsApp } = useOutletContext();
+
   return (
-    <PublicShell current="/contacto">
-      {({ openDemo, openWhatsApp }) => (
         <div className="bg-white">
 
           {/* ── HERO DARK with mesh + creative pattern ── */}
@@ -102,7 +101,7 @@ export default function ContactoPage() {
               </h1>
 
               <p className="mt-7 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
-                Cuéntanos sobre tu residencia. Respondemos solicitudes de demo y consultas comerciales en horario hábil chileno, con prioridad a urgencias operativas.
+                Cuéntanos sobre tu residencia y te mostramos cómo FichaEleam ordena la ficha clínica, la entrega de turno y la Carpeta SEREMI. Respondemos solicitudes de demo y consultas comerciales en horario hábil de Chile.
               </p>
 
               <div className="mt-9 grid grid-cols-2 gap-6 border-t border-white/10 pt-8 sm:grid-cols-3 lg:gap-10">
@@ -236,7 +235,5 @@ export default function ContactoPage() {
             </div>
           </PublicSection>
         </div>
-      )}
-    </PublicShell>
   );
 }

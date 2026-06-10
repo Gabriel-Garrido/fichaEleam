@@ -47,11 +47,13 @@ npx supabase functions deploy
 
 Las rutas públicas SEO (`/`, `/software-eleam`, `/acreditacion-seremi`, `/calculadora-dotacion-eleam`, `/blog`, `/blog/:slug`, `/preguntas-frecuentes`, `/contacto`) se cargan desde `src/routes/AppRouter.jsx` sin montar `AuthProvider`. El árbol autenticado vive en `src/routes/AuthenticatedApp.jsx` y se carga de forma lazy solo al entrar a `/login`, `/pago`, `/dashboard`, `/superadmin`, `/familiar` u otra ruta interna.
 
-`PublicShell` centraliza la navegación pública. El navbar incluye `Recursos gratuitos` con Blog, Calculadora y Guía acreditación SEREMI; el footer replica esos enlaces. Los modales de demo/WhatsApp, el FAB y Supabase Analytics se cargan bajo demanda para que la primera vista pública no precargue Supabase ni formularios pesados.
+Las rutas SEO se montan bajo `PublicLayout` (`<Route element={<PublicLayout/>}>`), que renderiza `PublicShell` una sola vez con un `<Outlet/>`. Al navegar entre páginas públicas el navbar/footer/FAB **no se remontan** (sin parpadeo): solo cambia el cuerpo dentro de un `<Suspense>` contenido con `PublicRouteFallback`. Cada página obtiene `{openDemo, openWhatsApp}` con `useOutletContext()` y devuelve su contenido directamente; `PaymentPage` vive en `AuthenticatedApp` y mantiene su propio `PublicShell`.
+
+`PublicShell` centraliza la navegación pública. El navbar incluye `Recursos gratuitos` con Blog, Calculadora y Guía acreditación SEREMI; el footer replica esos enlaces. Los links precargan su chunk al hover/focus (`prefetchPublicRoute` desde `src/routes/publicRoutes.js`) para que la navegación sea instantánea. Los modales de demo/WhatsApp, el FAB y Supabase Analytics se cargan bajo demanda para que la primera vista pública no precargue Supabase ni formularios pesados.
 
 Checklist al cambiar páginas públicas:
 
-- Mantener links públicos en `PublicShell` y en `scripts/generate-public-seo.mjs` cuando corresponda.
+- Mantener links públicos en `PublicShell` y en `scripts/generate-public-seo.mjs` cuando corresponda; registrar nuevas rutas públicas en `src/routes/publicRoutes.js` para que el prefetch las cubra.
 - Usar `ScrollToTop`/anchors con `scroll-mt-public` para navegación interna y links desde footer.
 - Envolver tablas en `overflow-x-auto` con `min-w-*`.
 - Definir `width`, `height`, `decoding`, `fetchPriority` y `sizes` en imágenes públicas.

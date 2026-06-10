@@ -1,7 +1,6 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { useSEO, faqJsonLd, breadcrumbJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
-import PublicShell from "./PublicShell";
 import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "./publicDesignAssets";
 import {
   CheckList,
@@ -84,9 +83,9 @@ export default function SoftwareEleamPage() {
     ],
   });
 
+  const { openDemo } = useOutletContext();
+
   return (
-    <PublicShell current="/software-eleam">
-      {({ openDemo }) => (
         <div className="bg-white">
           <section className="bg-slate-50 px-5 py-14 sm:py-20">
             <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.88fr_1.12fr]">
@@ -218,7 +217,5 @@ export default function SoftwareEleamPage() {
             secondaryTo="/acreditacion-seremi"
           />
         </div>
-      )}
-    </PublicShell>
   );
 }

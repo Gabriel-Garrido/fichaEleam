@@ -286,9 +286,10 @@ Cuatro tiers públicos en la landing: `plan-14` ($50.000 + IVA, 14 residentes, 1
 
 ### Sitio público
 
-- `src/routes/AppRouter.jsx` sólo importa rutas públicas y carga `AuthenticatedApp` de forma lazy para login, pago y app interna.
+- `src/routes/AppRouter.jsx` sólo importa rutas públicas y carga `AuthenticatedApp` de forma lazy para login, pago y app interna. Las rutas SEO se anidan bajo `PublicLayout`.
 - `src/routes/AuthenticatedApp.jsx` monta `AuthProvider`; evita importarlo en la home pública.
-- `PublicShell` contiene el navbar, footer, CTA móvil y el dropdown `Recursos gratuitos` (Blog, Calculadora, Guía acreditación SEREMI).
+- `PublicLayout` monta `PublicShell` una sola vez con un `<Outlet/>` y reparte `{openDemo, openWhatsApp}` por `useOutletContext()`; al navegar entre páginas públicas no se remonta el shell (sin parpadeo del navbar/footer/FAB), solo cambia el cuerpo dentro de un `<Suspense fallback={<PublicRouteFallback/>}>`. Cada página consume el contexto y devuelve su contenido directamente; `PaymentPage` mantiene su propio `PublicShell`.
+- `PublicShell` contiene el navbar, footer, CTA móvil y el dropdown `Recursos gratuitos` (Blog, Calculadora, Guía acreditación SEREMI); precarga el chunk de cada destino al hover/focus con `prefetchPublicRoute` (`src/routes/publicRoutes.js`).
 - `DemoRequestModal`, `WhatsAppLeadModal`, `WhatsAppLeadButton`, analytics Supabase y `blogService` se cargan bajo demanda para reducir el bundle público inicial.
 - `ScrollToTop` lleva rutas sin hash al inicio y respeta anchors con `scroll-mt-public`.
 

@@ -1,9 +1,8 @@
 import { useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { useSEO, faqJsonLd, organizationJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView, useScrollDepth, useSectionView } from "./landingAnalytics";
 import { PUBLIC_PLAN_CATALOG, formatPlanPrice } from "../payment/planCatalog";
-import PublicShell from "../public/PublicShell";
 import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "../public/publicDesignAssets";
 import {
   CheckList,
@@ -189,9 +188,9 @@ export default function LandingPage() {
     ],
   });
 
+  const { openDemo, openWhatsApp } = useOutletContext();
+
   return (
-    <PublicShell current="/">
-      {({ openDemo, openWhatsApp }) => (
         <div className="bg-white">
 
           {/* ── HERO ── */}
@@ -552,7 +551,5 @@ export default function LandingPage() {
             secondaryTo="/acreditacion-seremi"
           />
         </div>
-      )}
-    </PublicShell>
   );
 }

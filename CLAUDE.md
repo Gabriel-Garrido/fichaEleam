@@ -45,7 +45,7 @@ src/
 ├── features/
 │   ├── auth/                   # Login, RecuperarAcceso, ResetPassword, authService
 │   ├── landing/                # LandingPage, DemoRequestModal, WhatsAppLeadButton/Modal (carga lazy desde PublicShell), landingAnalytics con Supabase diferido. Sin auto-registro público
-│   ├── public/                 # Páginas públicas SEO: PublicShell (nav/footer/CTA + Recursos gratuitos), PublicDesign, SoftwareEleamPage, AcreditacionSeremiPage, CalculadoraDotacionPage (calculadora de dotación DS20 con subnav), FaqPage, ContactoPage
+│   ├── public/                 # Páginas públicas SEO: PublicLayout (shell persistente con Outlet) + PublicShell (nav/footer/CTA + Recursos gratuitos) + PublicRouteFallback (loader del cuerpo), PublicDesign, SoftwareEleamPage, AcreditacionSeremiPage, CalculadoraDotacionPage (calculadora de dotación DS20 con subnav), FaqPage, ContactoPage
 │   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService cargado bajo demanda
 │   ├── dashboard/              # AdminDashboard (rol-aware). Monta WelcomeModal en el primer ingreso de admin_eleam. Si el ELEAM del admin no tiene residentes, oculta el contenido y muestra OnboardingSteps (primeros pasos: residente, funcionario, Carpeta SEREMI). Sin coach 'dashboard' (lo cubren la bienvenida y el onboarding)
 │   ├── welcome/                # Bienvenida orientada a venta para admin_eleam (la ven prospectos del demo): WelcomeModal (3 pasos animados, responsive), welcomeContent (valor + features), welcomeStorage (flag por usuario en localStorage)
@@ -70,7 +70,8 @@ src/
 ├── navigation/
 │   └── navigationConfig.js     # itemAllowed(): filtra nav por rol, featurePermissions y permisos granulares
 ├── routes/
-│   ├── AppRouter.jsx           # Router público delgado; no monta AuthProvider
+│   ├── AppRouter.jsx           # Router público delgado; rutas SEO anidadas bajo PublicLayout (shell persistente); no monta AuthProvider
+│   ├── publicRoutes.js         # Loaders de import dinámico compartidos por lazy() y el prefetch de PublicShell (prefetchPublicRoute)
 │   └── AuthenticatedApp.jsx    # AuthProvider + rutas internas/login/pago lazy
 ├── services/
 │   └── supabaseConfig.js       # Cliente Supabase singleton
@@ -546,7 +547,9 @@ Archivos: `src/features/landing/WhatsAppLeadButton.jsx` (FAB con callout y pulse
 
 `src/routes/AppRouter.jsx` es deliberadamente delgado: sólo declara rutas públicas SEO y carga `AuthenticatedApp` con `React.lazy` para login, pago y app interna. `AuthProvider` vive en `AuthenticatedApp.jsx`, por lo que la home, blog, calculadora, guía SEREMI, software, FAQ y contacto no deben precargar Supabase en el primer render.
 
-`PublicShell` contiene el navbar/footer públicos y el dropdown `Recursos gratuitos` con Blog, Calculadora y Guía acreditación SEREMI. Los formularios `DemoRequestModal`, `WhatsAppLeadModal`, el FAB de WhatsApp, `blogService` y analytics Supabase se cargan bajo demanda. `ScrollToTop` restaura la navegación al inicio de cada ruta pública sin hash y conserva anchors internos con `scroll-mt-public`.
+Las rutas SEO se montan bajo `PublicLayout` (`<Route element={<PublicLayout/>}>`), que renderiza `PublicShell` **una sola vez** con un `<Outlet/>` y pasa `{openDemo, openWhatsApp}` por `useOutletContext()`. Así el navbar/footer/FAB de WhatsApp **no se remontan** al navegar entre páginas públicas: solo cambia el cuerpo dentro de un `<Suspense fallback={<PublicRouteFallback/>}>` contenido (sin spinner de pantalla completa ni parpadeo). Cada página pública consume el contexto con `useOutletContext()` y devuelve su contenido directamente (sin envolver `PublicShell`). `PaymentPage` vive en `AuthenticatedApp` y conserva su propio `PublicShell`.
+
+`PublicShell` contiene el navbar/footer públicos y el dropdown `Recursos gratuitos` con Blog, Calculadora y Guía acreditación SEREMI; precarga el chunk de cada destino al hacer hover/focus sobre sus links (`prefetchPublicRoute` desde `src/routes/publicRoutes.js`), por lo que la navegación se siente instantánea. Los formularios `DemoRequestModal`, `WhatsAppLeadModal`, el FAB de WhatsApp, `blogService` y analytics Supabase se cargan bajo demanda. `ScrollToTop` restaura la navegación al inicio de cada ruta pública sin hash y conserva anchors internos con `scroll-mt-public`.
 
 Al cambiar UX pública, validar `npm run build && npm run seo:check` y revisar `dist/index.html`: la home no debe tener `vendor-supabase` como `modulepreload`.
 

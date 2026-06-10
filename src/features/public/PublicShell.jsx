@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { trackEvent } from "../landing/landingAnalytics";
+import { prefetchPublicRoute } from "../../routes/publicRoutes";
 import { PUBLIC_BUTTON } from "./publicDesignAssets";
 import { PublicIcon, Wordmark, WhatsAppGlyph } from "./PublicDesign";
 
@@ -52,6 +53,8 @@ function NavLink({ to, label, show, active, onClick }) {
     <Link
       to={to}
       onClick={onClick}
+      onMouseEnter={() => prefetchPublicRoute(to)}
+      onFocus={() => prefetchPublicRoute(to)}
       aria-current={active ? "page" : undefined}
       className={`${SHOW_CLASS[show] ?? "inline-flex"} rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
         active
@@ -141,6 +144,8 @@ function ResourceDropdown({ path }) {
                 key={item.to}
                 to={item.to}
                 role="menuitem"
+                onMouseEnter={() => prefetchPublicRoute(item.to)}
+                onFocus={() => prefetchPublicRoute(item.to)}
                 onClick={() => {
                   setOpen(false);
                   trackEvent("nav_click", item.to);
@@ -166,6 +171,8 @@ function FooterLink({ to, children, event }) {
   return (
     <Link
       to={to}
+      onMouseEnter={() => prefetchPublicRoute(to)}
+      onFocus={() => prefetchPublicRoute(to)}
       onClick={() => trackEvent("nav_click", event ?? to)}
       className="text-slate-400 transition-colors hover:text-white"
     >
@@ -274,6 +281,8 @@ export default function PublicShell({ children, current }) {
             ))}
             <button
               type="button"
+              onMouseEnter={() => prefetchPublicRoute("/login")}
+              onFocus={() => prefetchPublicRoute("/login")}
               onClick={() => { navigate("/login"); trackEvent("nav_click", "login"); }}
               className="hidden rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 sm:inline-flex"
             >
@@ -312,6 +321,8 @@ export default function PublicShell({ children, current }) {
                   <Link
                     key={item.to}
                     to={item.to}
+                    onMouseEnter={() => prefetchPublicRoute(item.to)}
+                    onFocus={() => prefetchPublicRoute(item.to)}
                     onClick={() => trackEvent("nav_click", item.to)}
                     aria-current={active ? "page" : undefined}
                     className={`rounded-xl px-3 py-2 text-sm font-semibold ${
