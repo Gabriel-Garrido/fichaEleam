@@ -37,6 +37,8 @@ const SECTION_LABELS = {
   faq:         "Preguntas frecuentes",
 };
 
+const PAGE_COLORS = ["bg-sky-500", "bg-teal-500", "bg-teal-400", "bg-violet-500", "bg-amber-500", "bg-emerald-500", "bg-sky-400", "bg-rose-400", "bg-slate-400"];
+
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function KpiCard({ label, value, tone, help, badge, sub }) {
@@ -168,14 +170,15 @@ export default function LandingMetrics({ metrics }) {
   const {
     totalVisits, totalLeads, conversionRate,
     totalCtaClicks, totalFormViews, totalFormSubmits,
-    topCtas, topSections, sources, pageBreakdown, dailyVisits,
+    topCtas, topSections, sources, pageBreakdown, toolUsage, dailyVisits,
   } = metrics;
 
   const maxVisits      = Math.max(...dailyVisits.map((d) => d.count), 1);
   const totalPageViews = dailyVisits.reduce((s, d) => s + d.count, 0);
   const avgPerDay      = dailyVisits.length > 0 ? Math.round(totalPageViews / dailyVisits.length) : 0;
   const convInterpret  = interpretConversion(conversionRate);
-  const totalPageViewsAll = (pageBreakdown.landing ?? 0) + (pageBreakdown.blog_list ?? 0) + (pageBreakdown.blog_post ?? 0) + (pageBreakdown.other ?? 0);
+  const pages          = Array.isArray(pageBreakdown) ? pageBreakdown : [];
+  const totalPageViewsAll = pages.reduce((s, p) => s + p.count, 0);
 
   return (
     <div className="space-y-6">
@@ -315,28 +318,62 @@ export default function LandingMetrics({ metrics }) {
         </p>
       </section>
 
-      {/* ── Page breakdown ─────────────────────────────────────── */}
+      {/* ── Page breakdown por página pública ──────────────────── */}
       {totalPageViewsAll > 0 && (
         <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-slate-800">Visitas por página</h3>
-              <p className="text-xs text-slate-500">Distribución de page_view entre landing y blog.</p>
+              <h3 className="text-sm font-semibold text-slate-800">Visitas por página pública</h3>
+              <p className="text-xs text-slate-500">Distribución de page_view entre todas las páginas públicas — 30 días.</p>
             </div>
             <MetricHelp
-              title="Visitas por página"
-              description="Distribución de los eventos page_view registrados según el tipo de página visitada en los últimos 30 días."
-              source="landing_events: campo 'elemento' con valores 'landing', 'blog_list', 'blog_post', registrados por usePageView() en cada componente."
-              action="Si el blog genera mucho tráfico pero pocos CTAs, añadir más llamadas a la acción en los posts."
+              title="Visitas por página pública"
+              description="Distribución de los eventos page_view por página: inicio, software, acreditación SEREMI, calculadora de dotación, FAQ, contacto, planes y blog (lista y artículo)."
+              source="landing_events: campo 'elemento' enviado por usePageView() en cada página, normalizado a etiquetas legibles. /pago solo cuenta visitas anónimas."
+              action="Compara qué páginas atraen más tráfico y cuáles generan CTAs/leads. Una página con muchas visitas y pocos CTAs es candidata a reforzar su llamado a la acción."
             />
           </div>
           <div className="space-y-2">
-            <PageBreakdownBar label="Landing" count={pageBreakdown.landing ?? 0} total={totalPageViewsAll} color="bg-sky-500" />
-            <PageBreakdownBar label="Blog (lista)" count={pageBreakdown.blog_list ?? 0} total={totalPageViewsAll} color="bg-teal-500" />
-            <PageBreakdownBar label="Blog (artículo)" count={pageBreakdown.blog_post ?? 0} total={totalPageViewsAll} color="bg-teal-300" />
-            {(pageBreakdown.other ?? 0) > 0 && (
-              <PageBreakdownBar label="Otras" count={pageBreakdown.other} total={totalPageViewsAll} color="bg-slate-400" />
-            )}
+            {pages.map((p, i) => (
+              <PageBreakdownBar key={p.key} label={p.label} count={p.count} total={totalPageViewsAll} color={PAGE_COLORS[i % PAGE_COLORS.length]} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Uso de la calculadora de dotación ──────────────────── */}
+      {toolUsage && (
+        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Calculadora de dotación</h3>
+              <p className="text-xs text-slate-500">Uso de la herramienta pública /calculadora-dotacion-eleam — 30 días.</p>
+            </div>
+            <MetricHelp
+              title="Calculadora de dotación"
+              description="Mide cuánta gente usa la calculadora de dotación de personal del Decreto N°20, cuántos cálculos arrojan déficit de personal y cuántos hacen clic en 'Solicitar demo' desde la herramienta."
+              source="landing_events: tipo 'tool_use' con elemento 'calculadora_dotacion' (un evento por combinación de inputs). Clics a demo: cta_click con elemento 'calculadora_demo'."
+              action="Muchos cálculos con déficit indican una audiencia con dolor real de dotación: un buen segmento para campañas. Si hay usos pero pocos clics a demo, reforzar el CTA dentro de la herramienta."
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <KpiCard
+              label="Cálculos realizados"
+              value={toolUsage.calculadoraUsos.toLocaleString("es-CL")}
+              tone="border-teal-200 text-teal-700"
+            />
+            <KpiCard
+              label="Con déficit detectado"
+              value={toolUsage.calculadoraConDeficit.toLocaleString("es-CL")}
+              tone="border-rose-200 text-rose-700"
+              sub={toolUsage.calculadoraUsos > 0 ? `${pct(toolUsage.calculadoraConDeficit, toolUsage.calculadoraUsos)}% de los cálculos` : undefined}
+            />
+            <KpiCard
+              label="Clics a demo"
+              value={toolUsage.calculadoraDemoClicks.toLocaleString("es-CL")}
+              tone="border-emerald-200 text-emerald-700"
+              sub={toolUsage.calculadoraUsos > 0 ? `${pct(toolUsage.calculadoraDemoClicks, toolUsage.calculadoraUsos)}% de conversión a demo` : undefined}
+            />
           </div>
         </section>
       )}

@@ -98,7 +98,7 @@ function getFirstDataCell(columnIndex) {
 }
 
 function isDateColumn(column) {
-  return column.key.startsWith("fecha_");
+  return column.type === "date" || column.key.startsWith("fecha_") || column.key.endsWith("_fecha");
 }
 
 function createColumnValidation(column, columnIndex) {

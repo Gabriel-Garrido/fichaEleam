@@ -57,6 +57,45 @@ const PROSPECT_TASK_SELECT = `
   creado_en, completado_en, actualizado_en
 `;
 
+const PROSPECT_WRITE_COLUMNS = new Set([
+  "list_id",
+  "demo_lead_id",
+  "eleam_id",
+  "eleam_nombre",
+  "comuna",
+  "telefono",
+  "email",
+  "facebook_url",
+  "instagram_url",
+  "tiktok_url",
+  "origen",
+  "canal_preferido",
+  "cargo_contacto",
+  "decision_maker_nombre",
+  "decision_maker_cargo",
+  "num_residentes",
+  "digitalizacion_estado",
+  "software_actual",
+  "dolor_principal",
+  "urgencia",
+  "fit_score",
+  "valor_estimado_clp",
+  "probabilidad_cierre",
+  "proxima_accion_fecha",
+  "motivo_perdida",
+  "competidor",
+  "estado",
+  "no_contactar",
+  "notas",
+  "ultimo_email_enviado_en",
+  "ultimo_contacto_en",
+  "creado_por",
+]);
+
+const PROSPECT_UUID_COLUMNS = new Set(["list_id", "demo_lead_id", "eleam_id", "creado_por"]);
+const PROSPECT_DATE_COLUMNS = new Set(["proxima_accion_fecha", "ultimo_email_enviado_en", "ultimo_contacto_en"]);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 // ─────────────────────────────────────────────────────────────
 // Listas de prospectos
 // ─────────────────────────────────────────────────────────────
@@ -163,7 +202,7 @@ export async function updateProspect(id, payload) {
   return data;
 }
 
-function normalizeProspectWrite(payload) {
+function applyProspectStateConsistency(payload) {
   if (!payload) return payload;
   if (payload.estado === "no_contactar") {
     return { ...payload, no_contactar: true };
@@ -172,6 +211,54 @@ function normalizeProspectWrite(payload) {
     return { ...payload, no_contactar: false };
   }
   return payload;
+}
+
+export function sanitizeProspectWritePayload(payload, { listId } = {}) {
+  if (!payload) return payload;
+  const source = payload.payload ?? payload;
+  const out = {};
+
+  for (const [key, value] of Object.entries(source)) {
+    if (!PROSPECT_WRITE_COLUMNS.has(key)) continue;
+    out[key] = sanitizeProspectValue(key, value);
+  }
+
+  if (listId !== undefined) {
+    out.list_id = sanitizeProspectValue("list_id", listId);
+  }
+
+  return applyProspectStateConsistency(out);
+}
+
+function sanitizeProspectValue(key, value) {
+  if (value === undefined || value === "") return null;
+
+  if (PROSPECT_UUID_COLUMNS.has(key)) {
+    const text = String(value ?? "").trim();
+    return UUID_RE.test(text) ? text : null;
+  }
+
+  if (PROSPECT_DATE_COLUMNS.has(key)) {
+    return normalizeProspectDate(value);
+  }
+
+  return value;
+}
+
+function normalizeProspectDate(value) {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+  }
+
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+}
+
+function normalizeProspectWrite(payload) {
+  return sanitizeProspectWritePayload(payload);
 }
 
 export async function deleteProspect(id) {
@@ -301,34 +388,76 @@ export async function bulkInsertProspects(listId, rows) {
   const inserted = [];
   const duplicates = [];
   const errors = [];
+  const normalizedRows = rows
+    .map((item, index) => ({
+      rowNumber: item?.rowNumber ?? index + 2,
+      label: item?.label,
+      payload: sanitizeProspectWritePayload(item?.payload ?? item, { listId }),
+    }))
+    .filter((row) => row.payload && Object.keys(row.payload).length > 0);
 
   // Insertar uno a uno permite detectar duplicado vs error real.
   // Para listas chicas (≤500) esto está bien; el costo es bajo.
-  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-    const chunk = rows.slice(i, i + INSERT_CHUNK).map((r) => ({ ...r, list_id: listId }));
+  for (let i = 0; i < normalizedRows.length; i += INSERT_CHUNK) {
+    const chunk = normalizedRows.slice(i, i + INSERT_CHUNK);
     for (const row of chunk) {
       try {
         const { data, error } = await supabase
           .from("crm_prospects")
-          .insert(row)
+          .insert(row.payload)
           .select("id, email")
           .single();
         if (error) {
           // 23505 = unique_violation (email duplicado)
           if (error.code === "23505") {
-            duplicates.push({ email: row.email, eleam_nombre: row.eleam_nombre });
+            duplicates.push({
+              rowNumber: row.rowNumber,
+              label: row.label,
+              email: row.payload.email,
+              eleam_nombre: row.payload.eleam_nombre,
+            });
           } else {
-            errors.push({ row, message: error.message });
+            errors.push({
+              rowNumber: row.rowNumber,
+              label: row.label,
+              row: row.payload,
+              message: humanizeProspectInsertError(error),
+            });
           }
         } else {
           inserted.push(data);
         }
       } catch (err) {
-        errors.push({ row, message: err?.message || String(err) });
+        errors.push({
+          rowNumber: row.rowNumber,
+          label: row.label,
+          row: row.payload,
+          message: humanizeProspectInsertError(err),
+        });
       }
     }
   }
   return { inserted: inserted.length, duplicates, errors };
+}
+
+function humanizeProspectInsertError(error) {
+  const message = error?.message || String(error);
+  const details = error?.details || "";
+  const code = error?.code || "";
+
+  if (code === "23505" || /duplicate key/i.test(message)) {
+    return "Ya existe un prospecto con ese correo en la base.";
+  }
+  if (code === "22P02" && /json/i.test(`${message} ${details}`)) {
+    return "La base de datos rechazó un valor como JSON. Ejecuta nuevamente supabase_schema.sql: el bloque CRM reconstruye crm_prospects con columnas de texto para notas, dolor, software y URLs.";
+  }
+  if (/violates check constraint/i.test(message)) {
+    return `Valor fuera del contrato de CRM: ${message}`;
+  }
+  if (/invalid input syntax/i.test(message)) {
+    return `Valor inválido para el tipo de dato de CRM: ${message}`;
+  }
+  return message;
 }
 
 // ─────────────────────────────────────────────────────────────

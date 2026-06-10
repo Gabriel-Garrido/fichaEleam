@@ -50,7 +50,7 @@ function AmbitoCard({ ambito, onClick }) {
       <div className="flex items-center gap-3 text-xs text-slate-500 mt-3 flex-wrap">
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 bg-emerald-500 rounded-full" />
-          {ambito.cumple ?? 0} ok
+          {ambito.vigente ?? 0} vigente{ambito.vigente === 1 ? "" : "s"}
         </span>
         {(ambito.pendiente ?? 0) > 0 && (
           <span className="flex items-center gap-1">
@@ -152,6 +152,8 @@ function AccreditationNextStep({ resumen, observaciones, navigate, onReload, bus
   const firstPending = [
     ...(resumen.sinEvidencia ?? []),
     ...(resumen.porEstadoList?.pendiente ?? []),
+    ...(resumen.porEstadoList?.en_revision ?? []),
+    ...(resumen.porEstadoList?.requiere_actualizacion ?? []),
     ...(resumen.porEstadoList?.observado ?? []),
     ...(resumen.porEstadoList?.no_cumple ?? []),
   ];
@@ -252,7 +254,7 @@ function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
             <p className="pb-2 text-sm text-slate-500">
               {resumen.total === 0
                 ? "0 requisitos provisionados"
-                : `${resumen.cumple} de ${evaluables} requisitos al día`}
+                : `${resumen.vigente} de ${evaluables} requisitos vigentes`}
             </p>
           </div>
           <div className="mt-4">
@@ -338,6 +340,8 @@ function ambitoPriorityScore(ambito) {
     (ambito.vencido ?? 0) * 100 +
     (ambito.observado ?? 0) * 40 +
     (ambito.no_cumple ?? 0) * 35 +
+    (ambito.requiere_actualizacion ?? 0) * 30 +
+    (ambito.en_revision ?? 0) * 16 +
     (ambito.sin_evidencia ?? 0) * 12 +
     (ambito.pendiente ?? 0) * 10 +
     Math.max(0, 100 - (ambito.porcentaje ?? 0))
@@ -618,7 +622,7 @@ export default function AccreditationDashboard() {
           <span className="hidden text-xs text-slate-500 group-open:inline">Ocultar</span>
         </summary>
         <div className="flex flex-wrap gap-2 border-t border-slate-200 px-4 py-3">
-          {["cumple", "pendiente", "observado", "vencido", "no_cumple", "no_aplica"].map((estado) => {
+          {["vigente", "pendiente", "en_revision", "requiere_actualizacion", "observado", "vencido", "no_cumple", "no_aplica"].map((estado) => {
             const m = estadoMeta(estado);
             return (
               <span key={estado} className={`text-xs font-semibold rounded-full px-3 py-1 border ${m.cls}`}>

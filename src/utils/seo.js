@@ -271,6 +271,34 @@ export function howToJsonLd({ name, description, totalTime, steps = [] }) {
   };
 }
 
+export function webApplicationJsonLd({ name, description, path, image, featureList }) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "@id": `${routeUrl(path)}#app`,
+    name,
+    description,
+    url: routeUrl(path),
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    inLanguage: "es-CL",
+    isAccessibleForFree: true,
+    image: absoluteUrl(image || DEFAULT_OG_IMAGE),
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "CLP",
+    },
+    ...(featureList?.length && { featureList }),
+    publisher: {
+      "@type": "Organization",
+      "@id": `${ORIGIN}/#organization`,
+      name: "FichaEleam",
+      url: ORIGIN,
+    },
+  };
+}
+
 export function organizationJsonLd() {
   return {
     "@context": "https://schema.org",
@@ -301,7 +329,7 @@ export function blogListJsonLd(posts = []) {
     "@type": "Blog",
     "@id": routeUrl("/blog"),
     "name": "Blog FichaEleam",
-    "description": "Recursos para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile: gestión clínica, DS 14/2017, acreditación SEREMI y buenas prácticas.",
+    "description": "Recursos para Establecimientos de Larga Estadía para Personas Mayores (ELEAM) en Chile: gestión clínica, Decreto N°20, acreditación SEREMI y buenas prácticas.",
     "url": routeUrl("/blog"),
     "inLanguage": "es-CL",
     "publisher": {

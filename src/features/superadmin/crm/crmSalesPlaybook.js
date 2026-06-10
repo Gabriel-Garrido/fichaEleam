@@ -195,7 +195,7 @@ const VARIABLE_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 export const DEFAULT_EMAIL_TEMPLATE =
   "Hola equipo de {{eleam_nombre}},\n\n" +
   "Les escribo porque muchos ELEAM siguen gestionando registros, turnos, medicamentos y carpeta SEREMI entre papel, planillas y WhatsApp. Eso consume horas del equipo y vuelve pesada cada fiscalización.\n\n" +
-  "FichaEleam reúne esos procesos en un sistema simple para residencias de adultos mayores. Si hoy están en {{digitalizacion_estado}}, podemos mostrarles cómo ordenar el trabajo sin frenar la operación.\n\n" +
+  "FichaEleam reúne esos procesos en un sistema simple para residencias de personas mayores. Si hoy están en {{digitalizacion_estado}}, podemos mostrarles cómo ordenar el trabajo sin frenar la operación.\n\n" +
   "¿Tiene sentido coordinar una demo corta esta semana?";
 
 export const DEFAULT_CALL_SCRIPT =

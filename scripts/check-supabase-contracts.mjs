@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+  DECRETO20_AMBITOS,
+  DECRETO20_META,
+  DECRETO20_REQUISITOS,
+} from "../src/content/decreto20Eleam.js";
+
 const root = process.cwd();
 const schemaPath = path.join(root, "supabase_schema.sql");
 const srcDir = path.join(root, "src");
@@ -78,6 +84,7 @@ const publicTables = collect(
 );
 
 const tableColumns = new Map();
+const tableBodies = new Map();
 for (const match of schemaNoComments.matchAll(/create\s+table\s+if\s+not\s+exists\s+public\.([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\n\);/gi)) {
   const [, table, body] = match;
   const columns = new Set();
@@ -89,6 +96,7 @@ for (const match of schemaNoComments.matchAll(/create\s+table\s+if\s+not\s+exist
     columns.add(columnMatch[1]);
   }
   tableColumns.set(table, columns);
+  tableBodies.set(table, body);
 }
 
 for (const match of schemaNoComments.matchAll(/alter\s+table\s+public\.([a-zA-Z0-9_]+)\s+add\s+column\s+if\s+not\s+exists\s+([a-zA-Z0-9_]+)/gi)) {
@@ -281,6 +289,150 @@ for (const column of ["frequency", "frequency_type"]) {
 for (const code of ["plan-14", "plan-24", "plan-34"]) {
   if (!new RegExp(`'${escapeRegExp(code)}'`, "i").test(schemaNoComments)) {
     fail(`supabase_schema.sql debe sembrar el plan comercial ${code}.`);
+  }
+}
+
+const accredCatalogColumns = {
+  acred_ambitos: ["norma_codigo", "articulo_ref", "fuente_url"],
+  acred_requisitos: [
+    "norma_codigo",
+    "articulo_ref",
+    "fuente_url",
+    "criticidad",
+    "tipo_evidencia",
+    "origen_evidencia",
+    "requisito_operacional",
+  ],
+};
+
+for (const [table, columns] of Object.entries(accredCatalogColumns)) {
+  for (const column of columns) {
+    if (!tableColumns.get(table)?.has(column)) {
+      fail(`public.${table} debe incluir la columna DS20 ${column}.`);
+    }
+  }
+}
+
+if (DECRETO20_META.normaCodigo !== "DS20") {
+  fail("src/content/decreto20Eleam.js debe exponer normaCodigo = DS20.");
+}
+
+const ds20AmbitoCodes = new Set(DECRETO20_AMBITOS.map((item) => item.codigo));
+const ds20RequirementCodes = new Set();
+
+for (const ambito of DECRETO20_AMBITOS) {
+  if (!new RegExp(`'${escapeRegExp(ambito.codigo)}'`, "i").test(schemaNoComments)) {
+    fail(`supabase_schema.sql debe sembrar el ámbito DS20 ${ambito.codigo}.`);
+  }
+}
+
+for (const requisito of DECRETO20_REQUISITOS) {
+  if (ds20RequirementCodes.has(requisito.codigo)) {
+    fail(`Código DS20 duplicado en catálogo frontend: ${requisito.codigo}.`);
+  }
+  ds20RequirementCodes.add(requisito.codigo);
+
+  if (!ds20AmbitoCodes.has(requisito.ambito_codigo)) {
+    fail(`Requisito ${requisito.codigo} referencia ámbito inexistente ${requisito.ambito_codigo}.`);
+  }
+  if (requisito.norma_codigo !== DECRETO20_META.normaCodigo) {
+    fail(`Requisito ${requisito.codigo} no declara norma_codigo ${DECRETO20_META.normaCodigo}.`);
+  }
+  if (!new RegExp(`'${escapeRegExp(requisito.codigo)}'`, "i").test(schemaNoComments)) {
+    fail(`supabase_schema.sql debe sembrar el requisito DS20 ${requisito.codigo}.`);
+  }
+}
+
+const ds20CodesInSchema = new Set(
+  [...schemaNoComments.matchAll(/'(DS20-A[0-9]{2,3}-[^']+)'/g)]
+    .map((match) => match[1])
+);
+
+if (ds20CodesInSchema.size !== ds20RequirementCodes.size) {
+  fail(
+    `El seed DS20 de supabase_schema.sql debe tener ${ds20RequirementCodes.size} requisitos; encontrados ${ds20CodesInSchema.size}.`,
+  );
+}
+
+for (const legacyPattern of [
+  new RegExp(["\\bDS\\s*", "14\\b"].join(""), "i"),
+  new RegExp(["\\b14", "\\/2017\\b"].join(""), "i"),
+  new RegExp(["\\bdecreto\\s+", "14\\b"].join(""), "i"),
+  new RegExp(["\\bds", "-14\\b"].join(""), "i"),
+]) {
+  if (legacyPattern.test(schemaNoComments)) {
+    fail("supabase_schema.sql contiene una referencia legacy a normativa antigua.");
+  }
+}
+
+function getColumnDefinition(table, column) {
+  const body = tableBodies.get(table);
+  if (!body) return null;
+  const regex = new RegExp(`^\\s*${escapeRegExp(column)}\\s+([^,\\n]+)`, "im");
+  return body.match(regex)?.[1]?.trim() ?? null;
+}
+
+const crmProspectImportTypes = {
+  list_id: "uuid",
+  eleam_nombre: "text",
+  comuna: "text",
+  telefono: "text",
+  email: "text",
+  facebook_url: "text",
+  instagram_url: "text",
+  tiktok_url: "text",
+  origen: "text",
+  canal_preferido: "text",
+  cargo_contacto: "text",
+  decision_maker_nombre: "text",
+  decision_maker_cargo: "text",
+  num_residentes: "integer",
+  digitalizacion_estado: "text",
+  software_actual: "text",
+  dolor_principal: "text",
+  urgencia: "text",
+  fit_score: "integer",
+  proxima_accion_fecha: "date",
+  notas: "text",
+};
+
+const crmRebuildOrder = [
+  "crm_email_sends",
+  "crm_campaign_members",
+  "crm_stage_history",
+  "crm_tasks",
+  "crm_interactions",
+  "crm_email_campaigns",
+  "crm_prospects",
+  "crm_prospect_lists",
+];
+let crmDropOffset = -1;
+for (const table of crmRebuildOrder) {
+  const dropPattern = new RegExp(`drop\\s+table\\s+if\\s+exists\\s+public\\.${escapeRegExp(table)}\\s+cascade\\s*;`, "i");
+  const match = schemaNoComments.match(dropPattern);
+  if (!match || match.index == null) {
+    fail(`supabase_schema.sql debe reconstruir public.${table} antes de crear el contrato CRM definitivo.`);
+    continue;
+  }
+  if (match.index <= crmDropOffset) {
+    fail(`El drop de public.${table} debe respetar el orden de dependencias CRM.`);
+  }
+  crmDropOffset = match.index;
+}
+
+for (const [column, expectedType] of Object.entries(crmProspectImportTypes)) {
+  const definition = getColumnDefinition("crm_prospects", column);
+  if (!definition) {
+    fail(`public.crm_prospects debe incluir la columna importable ${column}.`);
+    continue;
+  }
+
+  const actualType = definition.split(/\s+/)[0].toLowerCase();
+  if (actualType !== expectedType) {
+    fail(`public.crm_prospects.${column} debe ser ${expectedType}; encontrado: ${definition}.`);
+  }
+  if (/\bjsonb?\b/i.test(definition)) {
+    fail(`public.crm_prospects.${column} no debe ser json/jsonb; el importador Excel envía escalares.`);
   }
 }
 

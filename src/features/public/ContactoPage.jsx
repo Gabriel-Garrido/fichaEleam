@@ -2,6 +2,12 @@ import { Link } from "react-router-dom";
 import { useSEO, breadcrumbJsonLd, organizationJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
 import PublicShell from "./PublicShell";
+import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "./publicDesignAssets";
+import {
+  PublicBreadcrumb,
+  PublicIcon,
+  PublicSection,
+} from "./PublicDesign";
 
 const SITE = "https://fichaeleam.cl";
 
@@ -9,17 +15,15 @@ function contactPageJsonLd() {
   return {
     "@context": "https://schema.org",
     "@type": "ContactPage",
-    "name": "Contacto FichaEleam",
-    "url": `${SITE}/contacto`,
-    "description": "Contacta a FichaEleam por correo, WhatsApp o solicita una demo gratuita para tu ELEAM en Chile.",
-    "mainEntity": {
+    name: "Contacto FichaEleam",
+    url: `${SITE}/contacto`,
+    description: "Contacta a FichaEleam por WhatsApp o solicita una demo gratuita para tu ELEAM en Chile.",
+    mainEntity: {
       "@type": "Organization",
-      "name": "FichaEleam",
-      "email": "contacto@fichaeleam.cl",
-      "telephone": "+56-9-5118-7764",
-      "url": SITE,
-      "areaServed": { "@type": "Country", "name": "Chile" },
-      "availableLanguage": ["es-CL"],
+      name: "FichaEleam",
+      url: SITE,
+      areaServed: { "@type": "Country", name: "Chile" },
+      availableLanguage: ["es-CL"],
     },
   };
 }
@@ -29,8 +33,9 @@ export default function ContactoPage() {
 
   useSEO({
     title: "Contacto · FichaEleam",
-    description: "Contacto FichaEleam: correo contacto@fichaeleam.cl, WhatsApp +56 9 5118 7764 y solicitud de demo gratuito. Software para ELEAM en Chile.",
+    description: "Contacta FichaEleam por WhatsApp o solicita una demo gratuita. Software de gestión clínica y SEREMI para ELEAM en Chile.",
     path: "/contacto",
+    image: PUBLIC_ASSETS.hero.publicSrc,
     keywords: ["contacto FichaEleam", "demo software ELEAM", "WhatsApp FichaEleam"],
     jsonLd: [
       breadcrumbJsonLd([
@@ -44,160 +49,194 @@ export default function ContactoPage() {
 
   return (
     <PublicShell current="/contacto">
-      {({ openDemo }) => (
-        <>
-          <section className="bg-slate-950 text-white px-5 pt-20 pb-20">
-            <div className="max-w-4xl mx-auto">
-              <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-                <Link to="/" className="hover:text-teal-300">Inicio</Link>
-                <span className="mx-2">/</span>
-                <span className="text-slate-300">Contacto</span>
-              </nav>
-              <p className="text-xs font-bold text-teal-400 uppercase tracking-[0.2em] mb-4">Hablemos</p>
-              <h1 className="text-4xl sm:text-5xl font-black leading-tight tracking-tight mb-5">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-emerald-400">Contacto</span>
+      {({ openDemo, openWhatsApp }) => (
+        <div className="bg-white">
+
+          {/* ── HERO DARK with mesh + creative pattern ── */}
+          <section className="relative isolate overflow-hidden bg-slate-950 px-5 pb-20 pt-16 sm:pt-24">
+            <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+              <div className="absolute left-1/2 top-0 h-[460px] w-[760px] -translate-x-1/2 -translate-y-[40%] rounded-full bg-teal-500/12 blur-[110px] animate-blob-slow" />
+              <div className="absolute bottom-0 right-0 h-[300px] w-[480px] translate-x-1/4 translate-y-1/4 rounded-full bg-emerald-500/8 blur-[100px] animate-blob" />
+            </div>
+            <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 public-grid-pattern opacity-40" />
+
+            <div className="relative mx-auto max-w-6xl">
+              <PublicBreadcrumb current="Contacto" />
+
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-1.5 backdrop-blur-sm">
+                <span className="relative grid h-2 w-2 place-items-center">
+                  <span className="absolute h-2 w-2 animate-ping rounded-full bg-emerald-400/70" />
+                  <span className="relative h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-300">
+                  Respuesta en menos de 24 horas hábiles
+                </span>
+              </div>
+
+              <h1 className="mt-7 max-w-3xl text-[2.5rem] font-bold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl">
+                Hablemos sobre tu{" "}
+                <span className="relative inline-block whitespace-nowrap">
+                  <span className="bg-gradient-to-br from-teal-200 via-teal-400 to-emerald-400 bg-clip-text text-transparent animate-gradient-sweep">
+                    ELEAM
+                  </span>
+                  <svg
+                    className="absolute -bottom-2 left-0 h-[10px] w-full"
+                    viewBox="0 0 200 14"
+                    fill="none"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M2 8.5 C 60 2, 140 2, 198 8.5"
+                      stroke="url(#contact-underline)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <defs>
+                      <linearGradient id="contact-underline" x1="0" y1="0" x2="200" y2="0">
+                        <stop offset="0" stopColor="#5eead4" />
+                        <stop offset="1" stopColor="#34d399" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </span>
               </h1>
-              <p className="text-lg text-slate-300 leading-relaxed max-w-2xl">
-                Cuéntanos sobre tu ELEAM. Te respondemos en horario hábil con prioridad a casos urgentes y demos.
+
+              <p className="mt-7 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
+                Cuéntanos sobre tu residencia. Respondemos solicitudes de demo y consultas comerciales en horario hábil chileno, con prioridad a urgencias operativas.
               </p>
-            </div>
-          </section>
 
-          <section className="bg-white px-5 py-16">
-            <div className="max-w-5xl mx-auto grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {/* Demo */}
-              <article className="bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-100 rounded-2xl p-6 shadow-sm">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal-600 text-white mb-4">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h2 className="font-bold text-slate-900 text-lg mb-2">Demo gratuito</h2>
-                <p className="text-sm text-slate-700 leading-relaxed mb-4">
-                  Cuenta real con 30 días de prueba sin tarjeta de crédito. Aprobamos cada solicitud en menos de
-                  24 horas.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => openDemo("contacto_demo")}
-                  className="bg-teal-600 text-white font-semibold py-2.5 px-5 rounded-xl hover:bg-teal-700 text-sm w-full"
-                >
-                  Solicitar demo
-                </button>
-              </article>
-
-              {/* WhatsApp */}
-              <article className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500 text-white mb-4">
-                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-                  </svg>
-                </div>
-                <h2 className="font-bold text-slate-900 text-lg mb-2">WhatsApp</h2>
-                <p className="text-sm text-slate-600 leading-relaxed mb-4">
-                  La forma más rápida de hablar con nuestro equipo. Respuesta en minutos en horario hábil.
-                </p>
-                <a
-                  href="https://wa.me/56951187764?text=Hola%2C%20quiero%20información%20sobre%20FichaEleam%20para%20mi%20ELEAM."
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => trackEvent("cta_click", "contacto_whatsapp")}
-                  className="inline-block bg-emerald-500 text-white font-semibold py-2.5 px-5 rounded-xl hover:bg-emerald-600 text-sm w-full text-center"
-                >
-                  +56 9 5118 7764
-                </a>
-              </article>
-
-              {/* Email */}
-              <article className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-sky-600 text-white mb-4">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <h2 className="font-bold text-slate-900 text-lg mb-2">Correo electrónico</h2>
-                <p className="text-sm text-slate-600 leading-relaxed mb-4">
-                  Para temas comerciales, soporte o consultas sobre la plataforma. Respondemos en menos de 24
-                  horas.
-                </p>
-                <a
-                  href="mailto:contacto@fichaeleam.cl"
-                  onClick={() => trackEvent("cta_click", "contacto_email")}
-                  className="inline-block bg-sky-600 text-white font-semibold py-2.5 px-5 rounded-xl hover:bg-sky-700 text-sm w-full text-center break-all"
-                >
-                  contacto@fichaeleam.cl
-                </a>
-              </article>
-            </div>
-          </section>
-
-          <section className="bg-slate-50 px-5 py-16">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mb-8 text-center">
-                Información comercial
-              </h2>
-
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100">
+              <div className="mt-9 grid grid-cols-2 gap-6 border-t border-white/10 pt-8 sm:grid-cols-3 lg:gap-10">
                 {[
-                  ["Empresa", "FichaEleam"],
-                  ["Producto", "Software de gestión clínica y acreditación SEREMI para ELEAM en Chile"],
-                  ["Marco normativo", "DS 14/2017 (MINSAL), Ley N° 20.584, Ley N° 19.628"],
-                  ["Ubicación", "Santiago, Chile · 100% web"],
-                  ["Idioma de soporte", "Español"],
-                  ["Horario de atención", "Lunes a viernes, 9:00 a 19:00 (hora de Chile)"],
-                  ["Forma de pago", "MercadoPago (tarjeta de crédito o débito)"],
-                  ["Moneda", "Pesos chilenos (CLP), precios netos sin IVA"],
-                ].map(([label, value]) => (
-                  <div key={label} className="px-5 py-4 grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-2 sm:items-center">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{label}</p>
-                    <p className="text-sm text-slate-800">{value}</p>
+                  { v: "< 24 h", l: "respuesta a demo" },
+                  { v: "Chile", l: "soporte local" },
+                  { v: "30 días", l: "demo gratuito" },
+                ].map(({ v, l }) => (
+                  <div key={l}>
+                    <p className="text-2xl font-bold text-white sm:text-3xl">{v}</p>
+                    <p className="mt-1 text-xs text-slate-500">{l}</p>
                   </div>
                 ))}
               </div>
             </div>
           </section>
 
-          <section className="bg-white px-5 py-16">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mb-3 text-center">
-                Antes de contactarnos
-              </h2>
-              <p className="text-slate-500 text-center mb-10 max-w-2xl mx-auto">
-                Si tu pregunta es comercial o sobre el producto, estos recursos pueden ahorrarte tiempo:
-              </p>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Link
-                  to="/preguntas-frecuentes"
-                  className="block bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-teal-200 hover:bg-teal-50/40 transition-all"
+          {/* ── CANALES ── */}
+          <PublicSection eyebrow="Canales" title="Elige la forma más directa de avanzar">
+            <div className="grid gap-5 md:grid-cols-2">
+
+              {/* Demo */}
+              <article className="relative overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-white p-8 shadow-sm">
+                <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-teal-700">
+                  <PublicIcon name="document" className="h-6 w-6 text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-teal-950">Demo gratuito</h2>
+                <p className="mt-3 text-sm leading-6 text-teal-800">
+                  Solicita una cuenta real con 30 días de prueba. Revisamos tu caso y te enviamos el acceso en menos de 24 horas. Sin tarjeta de crédito.
+                </p>
+                <ul className="mt-4 space-y-2">
+                  {["30 días de acceso completo", "Todos los módulos habilitados", "Soporte para comenzar"].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-teal-800">
+                      <span className="grid h-4 w-4 place-items-center rounded-full bg-teal-100">
+                        <PublicIcon name="check" className="h-3 w-3 text-teal-700" strokeWidth={3} />
+                      </span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => openDemo("contacto_demo")}
+                  className={`${PUBLIC_BUTTON.primary} mt-6 w-full`}
                 >
-                  <p className="font-bold text-slate-900 text-sm mb-1">FAQ completa</p>
-                  <p className="text-xs text-slate-500">Producto, precios, demo, implementación, seguridad y soporte.</p>
-                </Link>
-                <Link
-                  to="/software-eleam"
-                  className="block bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-teal-200 hover:bg-teal-50/40 transition-all"
+                  Solicitar demo gratuito
+                </button>
+                <div aria-hidden className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-teal-400 opacity-10 blur-2xl" />
+              </article>
+
+              {/* WhatsApp */}
+              <article className="relative overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-8 shadow-sm">
+                <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-emerald-600">
+                  <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.549 4.12 1.511 5.855L.057 23.82a.5.5 0 0 0 .61.61l5.962-1.453A11.942 11.942 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75A9.75 9.75 0 1 1 12 2.25a9.75 9.75 0 0 1 0 19.5z"/>
+                  </svg>
+                </div>
+                <h2 className="text-xl font-bold text-emerald-950">WhatsApp</h2>
+                <p className="mt-3 text-sm leading-6 text-emerald-800">
+                  Para consultas rápidas de producto, planes, implementación o activación. Respondemos en horario hábil.
+                </p>
+                <ul className="mt-4 space-y-2">
+                  {["Consultas de producto y planes", "Coordinación de implementación", "Soporte comercial"].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-emerald-800">
+                      <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-100">
+                        <PublicIcon name="check" className="h-3 w-3 text-emerald-700" strokeWidth={3} />
+                      </span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => openWhatsApp("contacto")}
+                  className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
                 >
-                  <p className="font-bold text-slate-900 text-sm mb-1">Software ELEAM</p>
-                  <p className="text-xs text-slate-500">Módulos, comparativa vs Excel, cumplimiento normativo.</p>
-                </Link>
-                <Link
-                  to="/acreditacion-seremi"
-                  className="block bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-teal-200 hover:bg-teal-50/40 transition-all"
-                >
-                  <p className="font-bold text-slate-900 text-sm mb-1">Acreditación SEREMI</p>
-                  <p className="text-xs text-slate-500">Los 14 ámbitos del DS 14/2017 y cómo preparar la carpeta.</p>
-                </Link>
-                <Link
-                  to="/pago"
-                  className="block bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-teal-200 hover:bg-teal-50/40 transition-all"
-                >
-                  <p className="font-bold text-slate-900 text-sm mb-1">Planes y precios</p>
-                  <p className="text-xs text-slate-500">Tres planes mensuales en CLP y opción institucional.</p>
-                </Link>
+                  Consultar por WhatsApp
+                </button>
+                <div aria-hidden className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-emerald-400 opacity-10 blur-2xl" />
+              </article>
+            </div>
+          </PublicSection>
+
+          {/* ── INFO ── */}
+          <PublicSection tone="soft" eyebrow="Información comercial" title="Datos útiles antes de escribirnos">
+            <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]">
+              <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+                {[
+                  ["Empresa", "FichaEleam"],
+                  ["Producto", "Software de gestión clínica y acreditación SEREMI para ELEAM en Chile"],
+                  ["Marco normativo", "Decreto N°20, Ley 20.584, Ley 19.628"],
+                  ["Ubicación", "Santiago, Chile · 100% web"],
+                  ["Horario", "Lunes a viernes, 9:00 a 19:00 (hora de Chile)"],
+                  ["Pago", "MercadoPago, en pesos chilenos"],
+                ].map(([label, value]) => (
+                  <div key={label} className="grid gap-2 border-b border-slate-100 px-5 py-4 last:border-b-0 sm:grid-cols-[180px_1fr]">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">{label}</p>
+                    <p className="text-sm text-slate-700">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-4 content-start">
+                <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <div className="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-teal-50">
+                    <PublicIcon name="document" className="h-5 w-5 text-teal-700" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-950">Antes de contactar</h3>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">Revisa módulos, precios y FAQ para llegar con una pregunta más precisa.</p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Recursos útiles</p>
+                  <div className="grid gap-2.5">
+                    <Link to="/software-eleam" onClick={() => trackEvent("nav_click", "contacto_software")} className="text-sm font-medium text-teal-700 hover:underline">
+                      Ver software ELEAM →
+                    </Link>
+                    <Link to="/acreditacion-seremi" onClick={() => trackEvent("nav_click", "contacto_seremi")} className="text-sm font-medium text-teal-700 hover:underline">
+                      Guía acreditación SEREMI →
+                    </Link>
+                    <Link to="/preguntas-frecuentes" onClick={() => trackEvent("nav_click", "contacto_faq")} className="text-sm font-medium text-teal-700 hover:underline">
+                      Preguntas frecuentes →
+                    </Link>
+                    <Link to="/pago" onClick={() => trackEvent("nav_click", "contacto_precios")} className="text-sm font-medium text-teal-700 hover:underline">
+                      Planes y precios →
+                    </Link>
+                  </div>
+                </div>
               </div>
             </div>
-          </section>
-        </>
+          </PublicSection>
+        </div>
       )}
     </PublicShell>
   );

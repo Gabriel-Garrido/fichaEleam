@@ -9,6 +9,7 @@ export const ALLOWED_EVENT_TYPES = new Set([
   "section_view",
   "form_view",
   "form_submit",
+  "tool_use",
 ]);
 
 // Longitudes maximas por campo. La Edge Function sanea antes de insertar y

@@ -186,7 +186,7 @@ export function createOgImage(outputPath = resolve("public", "og-image.png")) {
 
   drawText("FICHAELEAM", 78, 118, 10, [246, 255, 253], 1);
   drawText("SOFTWARE ELEAM CHILE", 84, 250, 5, [163, 230, 221], 1);
-  drawText("DS 14/2017 - FICHAS - TURNOS - SEREMI", 84, 332, 4, [217, 245, 240], 0.95);
+  drawText("Decreto N°20 - FICHAS - TURNOS - SEREMI", 84, 332, 4, [217, 245, 240], 0.95);
 
   rect(84, 444, 360, 7, [20, 184, 166], 1);
   rect(84, 472, 250, 7, [94, 234, 212], 0.8);

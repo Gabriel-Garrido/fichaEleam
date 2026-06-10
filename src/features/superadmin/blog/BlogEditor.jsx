@@ -169,7 +169,7 @@ export default function BlogEditor() {
                 value={form.titulo}
                 onChange={(e) => set({ titulo: e.target.value })}
                 onBlur={handleSlugFromTitle}
-                placeholder="Ej. DS 14/2017 explicado: qué exige la SEREMI..."
+                placeholder="Ej. Decreto N°20 explicado: qué exige la SEREMI..."
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 text-base"
                 maxLength={200}
               />
@@ -182,7 +182,7 @@ export default function BlogEditor() {
                   type="text"
                   value={form.slug}
                   onChange={(e) => set({ slug: slugify(e.target.value) })}
-                  placeholder="ds-14-2017-fiscalizacion-seremi"
+                  placeholder="decreto-20-fiscalizacion-seremi"
                   className="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono"
                 />
               </div>
@@ -301,7 +301,7 @@ export default function BlogEditor() {
                     type="text"
                     value={form.keywords}
                     onChange={(e) => set({ keywords: e.target.value })}
-                    placeholder="ELEAM, DS 14/2017, fiscalización SEREMI"
+                    placeholder="ELEAM, Decreto N°20, fiscalización SEREMI"
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
                   />
                 </Section>

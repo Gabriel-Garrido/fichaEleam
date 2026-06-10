@@ -1141,6 +1141,9 @@ create table if not exists public.acred_ambitos (
   nombre       text not null,
   descripcion  text,
   icono        text,
+  norma_codigo text not null default 'DS20',
+  articulo_ref text,
+  fuente_url   text,
   orden        integer not null default 0
 );
 
@@ -1155,8 +1158,32 @@ create table if not exists public.acred_requisitos (
   permite_no_aplica        boolean not null default true,
   requiere_vencimiento     boolean not null default false,
   vigencia_dias_sugerida   integer,
+  norma_codigo             text not null default 'DS20',
+  articulo_ref             text,
+  fuente_url               text,
+  criticidad               text not null default 'media'
+                           check (criticidad in ('baja','media','alta','critica')),
+  tipo_evidencia           text not null default 'documento'
+                           check (tipo_evidencia in ('documento','registro','mixta')),
+  origen_evidencia         text not null default 'documental'
+                           check (origen_evidencia in ('documental','operacional','mixta')),
+  requisito_operacional    boolean not null default false,
   orden                    integer not null default 0
 );
+
+alter table public.acred_ambitos
+  add column if not exists norma_codigo text not null default 'DS20',
+  add column if not exists articulo_ref text,
+  add column if not exists fuente_url text;
+
+alter table public.acred_requisitos
+  add column if not exists norma_codigo text not null default 'DS20',
+  add column if not exists articulo_ref text,
+  add column if not exists fuente_url text,
+  add column if not exists criticidad text not null default 'media',
+  add column if not exists tipo_evidencia text not null default 'documento',
+  add column if not exists origen_evidencia text not null default 'documental',
+  add column if not exists requisito_operacional boolean not null default false;
 
 create index if not exists idx_acred_requisitos_ambito on public.acred_requisitos(ambito_id, orden);
 
@@ -1165,7 +1192,10 @@ create table if not exists public.acred_requisitos_eleam (
   eleam_id             uuid not null references public.eleams(id) on delete cascade,
   requisito_id         uuid not null references public.acred_requisitos(id) on delete cascade,
   estado               text not null default 'pendiente'
-                       check (estado in ('pendiente','cumple','no_cumple','no_aplica','vencido','observado')),
+                       check (estado in (
+                         'pendiente','en_revision','vigente','observado',
+                         'vencido','no_cumple','no_aplica','requiere_actualizacion'
+                       )),
   fecha_vencimiento    date,
   no_aplica_motivo     text,
   responsable_id       uuid references public.profiles(id) on delete set null,
@@ -1298,6 +1328,17 @@ create unique index if not exists demo_leads_active_email_unique
   on public.demo_leads(lower(email))
   where estado in ('nuevo','contactado','demo_activo')
     and demo_user_id is null;
+
+-- CRM se define sin compatibilidad ni migraciones: si estas tablas existen,
+-- se reconstruyen para evitar contratos vacios con tipos anteriores.
+drop table if exists public.crm_email_sends cascade;
+drop table if exists public.crm_campaign_members cascade;
+drop table if exists public.crm_stage_history cascade;
+drop table if exists public.crm_tasks cascade;
+drop table if exists public.crm_interactions cascade;
+drop table if exists public.crm_email_campaigns cascade;
+drop table if exists public.crm_prospects cascade;
+drop table if exists public.crm_prospect_lists cascade;
 
 create table if not exists public.crm_prospect_lists (
   id              uuid primary key default gen_random_uuid(),
@@ -1563,7 +1604,7 @@ create table if not exists public.landing_events (
     constraint landing_events_tipo_contract
     check (
       char_length(tipo) <= 64
-      and tipo in ('page_view','cta_click','nav_click','scroll_depth','section_view','form_view','form_submit')
+      and tipo in ('page_view','cta_click','nav_click','scroll_depth','section_view','form_view','form_submit','tool_use')
     ),
   pagina       text constraint landing_events_pagina_contract check (pagina is null or char_length(pagina) <= 256),
   elemento     text constraint landing_events_elemento_contract check (elemento is null or char_length(elemento) <= 128),
@@ -1582,7 +1623,7 @@ begin
     alter table public.landing_events add constraint landing_events_tipo_contract
       check (
         char_length(tipo) <= 64
-        and tipo in ('page_view','cta_click','nav_click','scroll_depth','section_view','form_view','form_submit')
+        and tipo in ('page_view','cta_click','nav_click','scroll_depth','section_view','form_view','form_submit','tool_use')
       );
   end if;
   if not exists (select 1 from pg_constraint where conname = 'landing_events_pagina_contract') then
@@ -3461,7 +3502,7 @@ begin
   update public.acred_requisitos_eleam
   set estado = 'vencido'
   where eleam_id = p_eleam_id
-    and estado = 'cumple'
+    and estado = 'vigente'
     and fecha_vencimiento is not null
     and fecha_vencimiento < current_date;
 
@@ -8074,119 +8115,122 @@ on conflict (codigo) do update set
   destacado = excluded.destacado,
   activo = true;
 
-insert into public.acred_ambitos (codigo, nombre, descripcion, icono, orden) values
-  ('A01','Antecedentes legales del ELEAM','Documentos que acreditan la existencia legal y vigencia de la entidad sostenedora.','📄',1),
-  ('A02','Autorizacion sanitaria','Resolucion sanitaria, autorizacion de funcionamiento y permisos municipales.','✅',2),
-  ('A03','Infraestructura y condiciones sanitarias','Estado del inmueble, instalaciones electricas, gas, agua, ascensores, calderas.','🏗️',3),
-  ('A04','Seguridad, incendios y evacuacion','Plan de emergencia, extintores, simulacros, señaletica y luces de emergencia.','🚨',4),
-  ('A05','Direccion tecnica','Profesional responsable, contrato y carta de aceptacion SEREMI.','👨‍⚕️',5),
-  ('A06','Personal, dotacion y turnos','Nomina, contratos, titulos, salud y capacitaciones del personal.','👥',6),
-  ('A07','Protocolos obligatorios','Protocolos clinicos y operativos (PCI, lavado de manos, medicamentos, etc.).','📋',7),
-  ('A08','Residentes y carpetas personales','Fichas clinicas, evaluaciones funcionales y planes de cuidado individual.','📁',8),
-  ('A09','Contratos, consentimientos y derechos','Contrato de residencia, consentimientos y carta de derechos de los residentes.','✍️',9),
-  ('A10','Medicamentos y registros','Botiquin, kardex, prescripciones, control de psicotropicos y QF asesor.','💊',10),
-  ('A11','Alimentacion y manipulacion','Minutas, manipuladores, control HACCP y dietas especiales.','🍽️',11),
-  ('A12','Aseo, lavanderia, residuos y plagas','Programas y registros de aseo, lavanderia, residuos y control de plagas.','🧼',12),
-  ('A13','Reclamos, sugerencias y comunicacion','Libro de reclamos, sugerencias y comunicacion con familias.','📣',13),
-  ('A14','Fiscalizaciones y subsanaciones','Actas, observaciones de fiscalizacion y planes de subsanacion.','🔍',14)
+insert into public.acred_ambitos (
+  codigo, nombre, descripcion, icono, norma_codigo, articulo_ref, fuente_url, orden
+) values
+  ('DS20-A05','Autorización sanitaria','Antecedentes de solicitud, autorización de instalación y funcionamiento, documentos del establecimiento y programa integral.','📄','DS20','Art. 5','https://www.bcn.cl/leychile/navegar?idNorma=1182129',1),
+  ('DS20-A06','Vigencia, observaciones y cierre','Resolución sanitaria, vigencia de tres años, observaciones SEREMI, subsanaciones y avisos de cierre.','🗓️','DS20','Art. 6','https://www.bcn.cl/leychile/navegar?idNorma=1182129',2),
+  ('DS20-A07','Modificaciones ante SEREMI','Cambios de propietario, planta física, dirección técnica, personal, turnos o dotación.','🔁','DS20','Art. 7','https://www.bcn.cl/leychile/navegar?idNorma=1182129',3),
+  ('DS20-A08','Infraestructura y ubicación','Condiciones sanitarias, accesibilidad, aseo, ubicación segura y evidencia física del establecimiento.','🏠','DS20','Arts. 8-9','https://www.bcn.cl/leychile/navegar?idNorma=1182129',4),
+  ('DS20-A10','Instalaciones, equipamiento y seguridad','Letrero, habitaciones, baños, evacuación, incendios, cocina, sala de salud, medicamentos, lavandería y residuos.','🧯','DS20','Art. 10','https://www.bcn.cl/leychile/navegar?idNorma=1182129',5),
+  ('DS20-A12','Dirección técnica y administrativa','Director técnico, director administrativo, jornada, reemplazo, validaciones y responsabilidades sanitarias.','🩺','DS20','Arts. 11-13','https://www.bcn.cl/leychile/navegar?idNorma=1182129',6),
+  ('DS20-A15','Personal, competencias y dotación','Personal competente, técnicos, cuidadores, manipuladores, aseo, capacitaciones y cálculo de dotación por dependencia.','👥','DS20','Arts. 14-21','https://www.bcn.cl/leychile/navegar?idNorma=1182129',7),
+  ('DS20-A23','Ingreso y carpeta personal','Consentimiento voluntario, condición de salud grave, historial social y de salud, evaluaciones y documentos del residente.','🧓','DS20','Arts. 22-24','https://www.bcn.cl/leychile/navegar?idNorma=1182129',8),
+  ('DS20-A25','Protocolos y programa integral','Protocolos obligatorios, plan de capacitación anual, programa de atención integral usuaria e integración sociocomunitaria.','📋','DS20','Art. 25','https://www.bcn.cl/leychile/navegar?idNorma=1182129',9),
+  ('DS20-A26','Red de salud y derivaciones','Controles de salud, APS o red privada, derivaciones, servicios externos y acceso de funcionarios de salud.','🏥','DS20','Art. 26','https://www.bcn.cl/leychile/navegar?idNorma=1182129',10),
+  ('DS20-A27','Reglamento, contrato y registros','Reglamento interno, contrato, inventario, derechos y deberes, reclamos y registros específicos.','📝','DS20','Arts. 27-30','https://www.bcn.cl/leychile/navegar?idNorma=1182129',11),
+  ('DS20-A31','Fiscalización, SENAMA y transitorios','Modo fiscalización, pauta MINSAL, reporte SENAMA, brechas críticas y plazos transitorios.','🔍','DS20','Arts. 3, 31-32 y transitorios','https://www.bcn.cl/leychile/navegar?idNorma=1182129',12)
 on conflict (codigo) do update set
   nombre = excluded.nombre,
   descripcion = excluded.descripcion,
   icono = excluded.icono,
+  norma_codigo = excluded.norma_codigo,
+  articulo_ref = excluded.articulo_ref,
+  fuente_url = excluded.fuente_url,
   orden = excluded.orden;
 
-with vals(codigo, nombre, descripcion, medio_verificador, req_venc, vigencia, orden) as (values
-  ('A01-R01','Escritura de constitucion de la sociedad/entidad','Documento legal que constituye la persona juridica que opera el ELEAM.','Copia escritura inscrita en el Registro de Comercio',false,null,1),
-  ('A01-R02','Certificado de vigencia de la persona juridica','Acredita que la sociedad sigue vigente.','Certificado emitido por el Registro de Comercio',true,180,2),
-  ('A01-R03','RUT y rol unico tributario de la entidad','Identificacion tributaria de la entidad sostenedora.','Cedula RUT o e-RUT del SII',false,null,3),
-  ('A01-R04','Iniciacion de actividades en el SII','Declaracion de inicio de actividades ante el SII.','Formulario 4415 o e-RUT con giro',false,null,4),
-  ('A01-R05','Identificacion del representante legal','Documento que acredita quien representa legalmente al ELEAM.','Cedula identidad y poder vigente',false,null,5),
-  ('A02-R01','Resolucion sanitaria de funcionamiento vigente','Resolucion de la SEREMI que autoriza operar como ELEAM.','Resolucion firmada por SEREMI',true,365,1),
-  ('A02-R02','Solicitud y antecedentes de autorizacion','Carpeta presentada a SEREMI con planos, dotacion y documentos.','Copia del expediente presentado',false,null,2),
-  ('A02-R03','Certificado de Informaciones Previas municipal','Certificado municipal que confirma uso de suelo permitido.','CIP emitido por la Direccion de Obras',true,365,3),
-  ('A02-R04','Permiso de edificacion municipal','Permiso que acredita construccion autorizada.','Permiso DOM',false,null,4),
-  ('A02-R05','Recepcion final de obra municipal','Acredita que la obra fue recibida conforme.','Certificado DOM',false,null,5),
-  ('A03-R01','Planos del establecimiento actualizados','Planos arquitectonicos vigentes con la distribucion actual.','Planos firmados por arquitecto/a',false,null,1),
-  ('A03-R02','Certificado de instalacion electrica (SEC)','Documento TE-1 emitido por instalador autorizado.','Formulario TE-1 SEC vigente',true,1095,2),
-  ('A03-R03','Certificado de instalacion de gas (SEC)','Documento TC-6/TC-7 si el establecimiento usa gas.','Certificado SEC vigente',true,730,3),
-  ('A03-R04','Informe de potabilidad del agua','Analisis fisico-quimico del agua de consumo.','Informe laboratorio acreditado',true,365,4),
-  ('A03-R05','Certificado de fumigacion y desratizacion','Tratamiento de control de plagas vigente.','Certificado de empresa autorizada',true,180,5),
-  ('A03-R06','Certificado de ascensor (si aplica)','Mantencion y certificacion periodica del ascensor.','Certificado empresa de mantencion',true,365,6),
-  ('A03-R07','Certificado de calderas (si aplica)','Documento de mantencion de calderas/calefones.','Certificado SEC vigente',true,365,7),
-  ('A04-R01','Plan de emergencia y evacuacion aprobado','Documento que define como evacuar ante un siniestro.','Plan firmado por responsable',false,null,1),
-  ('A04-R02','Certificado de extintores vigente','Mantencion y recarga anual de extintores.','Certificado empresa autorizada',true,365,2),
-  ('A04-R03','Señaletica de emergencia instalada','Vias de evacuacion, salidas y zonas seguras señalizadas.','Foto inventario y check de inspeccion',false,null,3),
-  ('A04-R04','Registro de simulacros (minimo 2/año)','Bitacora de simulacros de evacuacion realizados.','Acta de simulacro firmada',true,180,4),
-  ('A04-R05','Luces de emergencia operativas','Luces que funcionan ante corte electrico.','Bitacora de inspeccion mensual',true,90,5),
-  ('A04-R06','Protocolo de busqueda y rescate','Procedimiento para ubicar residentes en emergencia.','Protocolo escrito',false,null,6),
-  ('A05-R01','Credencial vigente del director tecnico','Identifica al profesional responsable del ELEAM.','Credencial emitida por SEREMI',true,365,1),
-  ('A05-R02','Titulo profesional del director tecnico','Acredita su formacion profesional.','Copia legalizada del titulo',false,null,2),
-  ('A05-R03','Contrato de prestacion del director tecnico','Contrato laboral o de servicios.','Contrato firmado',false,null,3),
-  ('A05-R04','Carta de aceptacion SEREMI','SEREMI acepta a la direccion tecnica del ELEAM.','Resolucion o aceptacion SEREMI',false,null,4),
-  ('A06-R01','Nomina actualizada del personal','Listado del personal vigente con cargos y horarios.','Excel/PDF con nomina vigente',true,180,1),
-  ('A06-R02','Contratos de trabajo del personal','Contratos firmados de cada trabajador.','Copias de contratos',false,null,2),
-  ('A06-R03','Titulos y certificados profesionales','Acredita formacion de TENS, enfermeras, medicos, etc.','Copias de titulos por funcionario',false,null,3),
-  ('A06-R04','Certificados de salud del personal','Aptitud medica para trabajar con adultos mayores.','Certificado de salud vigente',true,365,4),
-  ('A06-R05','Registro de capacitaciones del personal','Bitacora con cursos y capacitaciones realizadas.','Bitacora y certificados',false,null,5),
-  ('A06-R06','Convenios con prestadores de salud','Acuerdos con clinicas, ambulancias o servicios externos.','Convenios firmados vigentes',false,null,6),
-  ('A06-R07','Protocolo de turnos y guardia nocturna','Define dotacion minima por turno y guardia nocturna.','Protocolo escrito',false,null,7),
-  ('A07-R01','Programa PCI','Documento maestro de prevencion y control de infecciones.','Programa PCI escrito',false,null,1),
-  ('A07-R02','Protocolo de lavado de manos','Procedimiento estandarizado de higiene de manos.','Protocolo escrito y difusion',false,null,2),
-  ('A07-R03','Protocolo de aislamiento de contacto y gotitas','Acciones ante residente con sospecha infecciosa.','Protocolo escrito',false,null,3),
-  ('A07-R04','Protocolo de manejo de residuos hospitalarios','Manejo seguro de residuos generados (REAS).','Protocolo y bitacora retiro',false,null,4),
-  ('A07-R05','Protocolo de manejo de medicamentos','Almacenamiento, administracion y registro de medicamentos.','Protocolo escrito',false,null,5),
-  ('A07-R06','Protocolo de alimentacion y deglucion','Manejo de pacientes con disfagia y dietas especiales.','Protocolo escrito',false,null,6),
-  ('A07-R07','Protocolo de emergencias clinicas','Accion ante caida, paro, ahogo, hipoglicemia, etc.','Protocolo escrito',false,null,7),
-  ('A08-R01','Ficha clinica completa por residente','Informacion personal, clinica, social y de contacto al dia.','Sistema FichaEleam',false,null,1),
-  ('A08-R02','Evaluacion funcional (Indice de Barthel)','Evaluacion periodica de independencia para AVD.','Registro en ficha del residente',true,180,2),
-  ('A08-R03','Evaluacion cognitiva (MMSE / Test del reloj)','Estado cognitivo registrado periodicamente.','Registro en ficha del residente',true,180,3),
-  ('A08-R04','Evaluacion nutricional individual','Evaluacion inicial y seguimiento por nutricionista.','Registro firmado por nutricionista',true,180,4),
-  ('A08-R05','Plan de cuidados individualizado (PAI)','Plan con objetivos, intervenciones y responsable.','PAI firmado',true,180,5),
-  ('A08-R06','Consentimiento informado firmado','Autorizacion del residente o representante para cuidados.','Consentimiento escrito',false,null,6),
-  ('A08-R07','Evaluacion de riesgo de caidas (Morse)','Identifica residentes con alto riesgo de caer.','Registro en ficha',true,180,7),
-  ('A09-R01','Contrato de residencia firmado','Acuerdo formal entre residente/familia y ELEAM.','Contrato firmado por las partes',false,null,1),
-  ('A09-R02','Carta de derechos del residente entregada','Documento entregado al ingreso con derechos del residente.','Acta de entrega firmada',false,null,2),
-  ('A09-R03','Reglamento interno del ELEAM','Reglas de convivencia y operacion del establecimiento.','Reglamento publicado',false,null,3),
-  ('A09-R04','Carta de tarifas vigente','Tarifa actual de cuidados y servicios adicionales.','Carta firmada',true,365,4),
-  ('A10-R01','Inventario de botiquin','Listado actualizado de medicamentos disponibles.','Inventario escrito y ubicacion',true,90,1),
-  ('A10-R02','Kardex de administracion por residente','Registro de cada administracion de medicamento.','Sistema FichaEleam',false,null,2),
-  ('A10-R03','Prescripciones medicas vigentes','Indicaciones medicas firmadas por residente.','Receta medica vigente',true,180,3),
-  ('A10-R04','Control de psicotropicos y estupefacientes','Libro foliado con ingreso, salida y stock.','Libro foliado SEREMI',false,null,4),
-  ('A10-R05','Convenio con quimico farmaceutico asesor','Profesional asesor para manejo de medicamentos.','Convenio firmado',false,null,5),
-  ('A11-R01','Minuta alimentaria mensual','Plan de alimentacion visado por nutricionista.','Minuta firmada',true,30,1),
-  ('A11-R02','Certificados de manipulacion de alimentos','Formacion del personal de cocina.','Certificados vigentes',true,1095,2),
-  ('A11-R03','Control de temperaturas (HACCP)','Bitacora diaria de temperaturas.','Bitacora HACCP',true,30,3),
-  ('A11-R04','Protocolo de dietas especiales y deglucion','Procedimiento para disfagia, diabetes u otras dietas.','Protocolo escrito',false,null,4),
-  ('A11-R05','Encuesta de satisfaccion alimentaria','Opinion de residentes sobre alimentacion.','Encuesta aplicada',true,180,5),
-  ('A12-R01','Programa de aseo y desinfeccion','Cronograma y procedimientos de aseo por area.','Programa escrito',false,null,1),
-  ('A12-R02','Bitacora de aseo','Registro diario de aseo realizado.','Bitacora firmada',true,30,2),
-  ('A12-R03','Manejo de lavanderia y ropa de cama','Procedimiento para evitar contaminacion cruzada.','Protocolo escrito',false,null,3),
-  ('A12-R04','Manejo de residuos peligrosos (REAS)','Convenio con empresa autorizada de retiro.','Convenio y bitacora de retiros',true,365,4),
-  ('A12-R05','Certificado de control de plagas','Control periodico de plagas.','Certificado vigente',true,180,5),
-  ('A13-R01','Libro de reclamos disponible','Libro fisico foliado o sistema digital equivalente.','Libro foliado',false,null,1),
-  ('A13-R02','Procedimiento de respuesta a reclamos','Define plazos y responsables para responder.','Procedimiento escrito',false,null,2),
-  ('A13-R03','Buzon de sugerencias','Mecanismo de retroalimentacion para residentes y familias.','Foto y bitacora de revision',false,null,3),
-  ('A13-R04','Registro de comunicaciones con familias','Avisos enviados y recibidos.','Bitacora de comunicaciones',false,null,4),
-  ('A13-R05','Reuniones periodicas con familias','Actas de reuniones con familias.','Actas firmadas',true,180,5),
-  ('A14-R01','Acta de la ultima fiscalizacion','Documento entregado por SEREMI/Municipalidad.','Acta firmada',false,null,1),
-  ('A14-R02','Plan de subsanacion de observaciones','Compromisos de mejora con plazo y responsable.','Plan escrito',false,null,2),
-  ('A14-R03','Bitacora de seguimiento de subsanaciones','Avance en compromisos adquiridos.','Bitacora interna',true,90,3),
-  ('A14-R04','Comunicaciones con SEREMI','Cartas, oficios e informes enviados a autoridad.','Archivo de oficios',false,null,4)
+with vals(
+  ambito_codigo, codigo, nombre, descripcion, medio_verificador,
+  obligatorio, permite_no_aplica, requiere_vencimiento, vigencia_dias_sugerida,
+  norma_codigo, articulo_ref, fuente_url, criticidad, tipo_evidencia,
+  origen_evidencia, requisito_operacional, orden
+) as (values
+  ('DS20-A05','DS20-A05-SOLICITUD-AUTORIZACION','Solicitud de autorización sanitaria completa','Individualización del solicitante, establecimiento, director técnico, personal, cupos, residentes por sexo/género y nivel de dependencia.','Formulario o expediente SEREMI con identificación del titular, establecimiento, director técnico, personal y cupos.',true,true,false,null,'DS20','Art. 5','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,1),
+  ('DS20-A05','DS20-A05-INMUEBLE-DOMINIO','Dominio o derecho de uso del inmueble','Documento que acredita dominio, arriendo, comodato u otro derecho de uso y goce.','Escritura, contrato, certificado de dominio vigente u otro documento legal.',true,true,false,null,'DS20','Art. 5 letra c','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','documento','documental',false,2),
+  ('DS20-A05','DS20-A05-PLANO-CROQUIS','Plano o croquis a escala','Debe identificar áreas, dormitorios, distribución de camas e instalaciones sanitarias de la zona de alimentos.','Plano o croquis a escala del establecimiento.',true,true,false,null,'DS20','Art. 5 letra d','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','documento','documental',false,3),
+  ('DS20-A05','DS20-A05-RECEPCION-FINAL','Certificado de recepción final','Certificado emitido por la Dirección de Obras Municipales correspondiente.','Certificado DOM de recepción final.',true,true,true,1095,'DS20','Art. 5 letra e','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','documento','documental',false,4),
+  ('DS20-A05','DS20-A05-AGUA-ALCANTARILLADO','Agua potable, alcantarillado o sistemas particulares autorizados','Certificación o autorización sanitaria de agua potable, alcantarillado o sistemas particulares.','Certificados de servicios sanitarios o autorización sanitaria vigente.',true,true,true,365,'DS20','Art. 5 letra f','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,5),
+  ('DS20-A05','DS20-A05-PREVENCION-INCENDIOS','Certificación de prevención y protección contra incendios','Certificado de experto en prevención de riesgos o Bomberos según normativa vigente.','Informe de experto o certificado de Bomberos.',true,true,true,365,'DS20','Art. 5 letra g','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,6),
+  ('DS20-A05','DS20-A05-ELECTRICIDAD-GAS','Instalaciones eléctricas y de gas certificadas','Certificación de condiciones emitida por instalador autorizado u organismo competente.','Certificados SEC o equivalentes vigentes.',true,true,true,1095,'DS20','Art. 5 letra h','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,7),
+  ('DS20-A05','DS20-A05-DIRECTOR-TECNICO-ANTECEDENTES','Antecedentes del director técnico','Certificado de título, carta de aceptación y distribución de jornada.','Título, carta de aceptación, contrato o anexo de jornada.',true,true,false,null,'DS20','Art. 5 letra i','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,8),
+  ('DS20-A05','DS20-A05-PLANTA-PERSONAL-TURNOS','Planta de personal, jornadas y sistema de turnos','Nómina y distribución de jornada del personal que funcionará en el establecimiento.','Nómina, contratos/anexos y cuadratura de turnos.',true,true,false,null,'DS20','Art. 5 letra j','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','mixta',true,9),
+  ('DS20-A05','DS20-A05-DERECHOS-DEBERES','Carta de derechos y deberes visible','Carta elaborada por SENAMA en colaboración con MINSAL, visible y de uso común.','Archivo vigente y evidencia de publicación visible.',true,true,false,null,'DS20','Art. 5 letra t','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','documento','documental',false,10),
+  ('DS20-A06','DS20-A06-RESOLUCION-SANITARIA','Resolución sanitaria de instalación y funcionamiento','Autorización SEREMI con vigencia de tres años y renovación automática mientras no sea dejada sin efecto.','Resolución sanitaria con número, fecha de otorgamiento y vigencia calculada.',true,true,true,1095,'DS20','Art. 6','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,1),
+  ('DS20-A06','DS20-A06-OBSERVACIONES-SEREMI','Observaciones SEREMI y subsanaciones dentro de plazo','Registro de observaciones, plazo de siete días y acciones de subsanación.','Acta u oficio SEREMI, plan de subsanación y evidencia de cierre.',true,true,false,null,'DS20','Art. 6','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','mixta',true,2),
+  ('DS20-A06','DS20-A06-CIERRE-TRANSITORIO-DEFINITIVO','Aviso de cierre transitorio o definitivo','Cuando corresponda, el titular debe avisar a SEREMI para suspensión o término de autorización.','Comunicación formal enviada a SEREMI y respuesta si existe.',false,true,false,null,'DS20','Art. 6','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','documento','documental',false,3),
+  ('DS20-A07','DS20-A07-MODIFICACION-PROPIETARIO-PLANTA','Solicitud por cambio de propietario o planta física','Debe presentarse dentro de 20 días hábiles desde el cambio.','Solicitud SEREMI, antecedentes de respaldo y resolución.',false,true,false,null,'DS20','Art. 7 letra a','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,1),
+  ('DS20-A07','DS20-A07-CAMBIO-DIRECTOR-TECNICO','Solicitud por cambio de director técnico','Debe presentarse dentro de 5 días hábiles desde el cambio.','Solicitud, título, carta de aceptación y jornada del nuevo director técnico.',false,true,false,null,'DS20','Art. 7 letra b','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,2),
+  ('DS20-A07','DS20-A07-CAMBIO-PERSONAL-TURNOS','Solicitud por cambio de personal, jornada, turnos o dotación','Debe presentarse dentro de 5 días hábiles cuando afecta personal o proporción con residentes.','Solicitud SEREMI y nueva planta de personal con turnos.',false,true,false,null,'DS20','Art. 7 letra c','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','mixta',true,3),
+  ('DS20-A08','DS20-A08-INFRAESTRUCTURA-SEGURA','Infraestructura libre de riesgo estructural y sanitario','Muros, pisos, instalaciones sanitarias, iluminación, climatización y superficies en buen estado.','Checklist de infraestructura, fotografías y mantenciones.',true,true,false,null,'DS20','Art. 8','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','mixta',true,1),
+  ('DS20-A08','DS20-A08-ASEO-DESINFECCION','Rutina de aseo y desinfección','Procedimiento de aseo y limpieza con desinfectantes según protocolos MINSAL.','Procedimiento vigente y bitácoras de aseo.',true,true,false,null,'DS20','Art. 8 letra g','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','registro','operacional',true,2),
+  ('DS20-A08','DS20-A08-UBICACION-SEGURA','Ubicación alejada de fuentes de riesgo sanitario','Al menos 500 metros de residuos, aguas residuales, ruidos, gases u otras emanaciones de riesgo.','Declaración, mapa, informe municipal o respaldo territorial.',true,true,false,null,'DS20','Art. 9','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,3),
+  ('DS20-A10','DS20-A10-LETRERO-AUTORIZACION','Letrero de autorización en frontis','Mínimo 40 x 40 cm, letras de al menos 2 cm, número y fecha de resolución sanitaria.','Fotografía del frontis y datos de resolución.',true,true,false,null,'DS20','Art. 10 letra a','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','documento','documental',false,1),
+  ('DS20-A10','DS20-A10-HABITACIONES-CAMAS','Habitaciones y camas según estándar DS 20','Máximo 4 camas por habitación, circulación mínima, guardado individual, mesa de noche y sistema de llamado.','Plano/croquis, registro de habitaciones/camas y checklist de equipamiento.',true,true,false,null,'DS20','Art. 10 letra j','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','mixta',true,2),
+  ('DS20-A10','DS20-A10-EVACUACION-INCENDIOS','Seguridad contra incendios y vías de evacuación','Cumplimiento de normativa de incendios, salidas expeditas, iluminación autónoma, señalética y plano de evacuación.','Certificados, plan de evacuación, señalética y evidencia fotográfica.',true,true,true,365,'DS20','Art. 10 letras k-m','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,3),
+  ('DS20-A10','DS20-A10-BANOS-ACCESIBLES','Servicios higiénicos accesibles y suficientes','Al menos 1 baño por cada 5 residentes, con ducha teléfono, barras, alerta, agua fría/caliente y baño asistido.','Checklist por baño, fotografías y relación baños/residentes.',true,true,false,null,'DS20','Art. 10 letra n','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','mixta',false,4),
+  ('DS20-A10','DS20-A10-COCINA-ALIMENTOS','Cocina o zona de alimentos autorizada','Debe cumplir DS N°977/1996 y estar incorporada en autorización del establecimiento.','Autorización sanitaria, checklist de cocina y certificados de manipuladores.',true,true,false,null,'DS20','Art. 10 letra o','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,5),
+  ('DS20-A10','DS20-A10-SALA-SALUD-EQUIPO-MOVIL','Sala de salud o equipo móvil con insumos mínimos','Esfigmomanómetro, fonendoscopio, termómetro, glicemia, saturómetro, primeros auxilios y estantería de carpetas.','Inventario de equipamiento, fotografías y revisión periódica.',true,true,false,null,'DS20','Art. 10 letra p','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','mixta',false,6),
+  ('DS20-A10','DS20-A10-MEDICAMENTOS-ALMACENAMIENTO','Almacenamiento seguro de medicamentos','Acceso restringido, temperatura menor a 25 °C, gavetas individualizadas, cadena de frío y controlados bajo llave.','Registro de almacenamiento, temperatura, gavetas, lote, vencimiento y responsable.',true,true,false,null,'DS20','Art. 10 letra q','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','registro','operacional',true,7),
+  ('DS20-A10','DS20-A10-LAVANDERIA-RESIDUOS','Aseo, lavandería y residuos domiciliarios','Espacios e insumos para aseo, flujo de ropa sucia/limpia y retiro de residuos al menos diario o al 3/4 de capacidad.','Procedimientos, bitácoras y evidencia de espacios diferenciados.',true,true,false,null,'DS20','Art. 10 letras r-t','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','registro','operacional',true,8),
+  ('DS20-A12','DS20-A12-DIRECTOR-CALIFICACION','Director técnico con calificación exigida','Título profesional salud/social de 8 o más semestres, habilitación y postítulo/experiencia en geriatría, gerontología o ELEAM.','Título, habilitación, diplomado/postítulo o certificado de experiencia.',true,true,false,null,'DS20','Art. 12','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,1),
+  ('DS20-A12','DS20-A12-JORNADA-REEMPLAZO','Permanencia, reemplazante y disponibilidad del director técnico','4 horas semanales hasta 15 residentes, 5 horas si mayor capacidad, reemplazante y disponibilidad telefónica.','Contrato/anexo de jornada, registro de asistencia, reemplazante designado.',true,true,false,null,'DS20','Art. 13','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','mixta',true,2),
+  ('DS20-A12','DS20-A12-VALIDACIONES-DIRECCION-TECNICA','Validaciones clínicas y sociales por dirección técnica','Dependencia funcional, cognitiva y nutricional al ingreso, programa integral, red de salud, medicamentos y eventos críticos.','Registros firmados/validados, evaluaciones y reportes de seguimiento.',true,true,false,null,'DS20','Art. 12','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','registro','operacional',true,3),
+  ('DS20-A12','DS20-A12-REPORTE-SENAMA','Reporte trimestral a SENAMA','Información administrativa, residentes y trabajadores reportada al menos trimestralmente.','Reporte trimestral SENAMA, PDF/Excel/CSV y comprobante de envío.',true,true,true,90,'DS20','Art. 12 N°24','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','mixta',true,4),
+  ('DS20-A15','DS20-A15-CALCULADORA-DOTACION-DEPENDENCIA','Dotación calculada por dependencia y turno','Cuidadores diurnos/nocturnos según dependencia, autovalencia y mínimo nocturno de dos cuidadores.','Cálculo de dotación, nómina por turno y residentes por dependencia.',true,true,false,null,'DS20','Arts. 15-17','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','registro','operacional',true,1),
+  ('DS20-A15','DS20-A15-TENS-AUXILIAR','Auxiliar o técnico de enfermería disponible según norma','12 horas diurnas y llamada nocturna para residentes con dependencia; llamada 24 horas para autovalentes.','Turnos, contratos, certificados y registros de llamada.',true,true,false,null,'DS20','Art. 18','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','operacional',true,2),
+  ('DS20-A15','DS20-A15-COMPETENCIAS-CUIDADORES','Competencias y capacitaciones de cuidadores/TENS','Medicamentos, signos vitales, alimentación por sonda, insulina/heparina, soporte vital básico y actividades de vida diaria.','Certificados, plan de capacitación anual y matriz de competencias.',true,true,true,365,'DS20','Arts. 18-19','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','mixta',true,3),
+  ('DS20-A15','DS20-A15-MANIPULADORES-ALIMENTOS','Manipuladores de alimentos o servicio externalizado','Personal o servicio que cumple DS N°977/1996, con plan de contingencia si corresponde.','Nómina, certificados, contrato de servicio externo y plan de contingencia.',true,true,true,365,'DS20','Art. 20','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','documento','documental',false,4),
+  ('DS20-A23','DS20-A23-CONSENTIMIENTO-INGRESO','Consentimiento voluntario de ingreso','La voluntad libre y expresa debe constar por escrito; puede firmar representante legal si corresponde.','Consentimiento firmado y registro de representante legal cuando aplique.',true,true,false,null,'DS20','Art. 23','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,1),
+  ('DS20-A23','DS20-A23-CONDICION-SALUD-GRAVE','Evaluación de condición de salud grave al ingreso','No pueden ingresar personas con condición que requiera asistencia médica continua o permanente.','Declaración/evaluación de ingreso, informe de salud y validación técnica.',true,true,false,null,'DS20','Art. 23','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','registro','operacional',true,2),
+  ('DS20-A23','DS20-A23-EVALUACIONES-GERIATRICAS','Evaluaciones funcional, cognitiva y nutricional','Determinación del nivel de dependencia mediante instrumentos de valoración geriátrica integral.','Evaluaciones registradas, puntajes, instrumentos usados y fecha de próxima evaluación.',true,true,false,null,'DS20','Arts. 12 y 23','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','registro','operacional',true,3),
+  ('DS20-A23','DS20-A23-CARPETA-PERSONAL-ACTUALIZADA','Carpeta personal digital actualizada','Sistema de salud, historial de salud, historial social, medicamentos, registros diarios y acceso restringido.','Carpeta digital por residente con auditoría, documentos y registros recientes.',true,true,false,null,'DS20','Art. 29','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','registro','operacional',true,4),
+  ('DS20-A23','DS20-A24-EVENTOS-AGUDOS-DERIVACION','Registro de eventos agudos, indicación médica y derivación','Continuidad excepcional con indicación médica escrita o traslado a establecimiento resolutivo/urgencia.','Evento crítico, signos vitales, indicación médica, consentimiento informado y derivación.',true,true,false,null,'DS20','Art. 24','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','operacional',true,5),
+  ('DS20-A25','DS20-A25-PROTOCOLO-INGRESO-EGRESO','Protocolo de ingreso y egreso','Incluye dependencia, evaluación de ingreso, consentimiento, inducción y situaciones de egreso.','Protocolo vigente, versión, responsable y evidencia de aplicación.',true,true,true,365,'DS20','Art. 25 N°1','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','documento','documental',false,1),
+  ('DS20-A25','DS20-A25-CAPACITACION-ANUAL-22H','Plan de inducción y capacitación anual de 22 horas','Objetivos, contenidos, evaluación y duración mínima de 22 horas.','Plan anual, asistencia, evaluaciones y certificados emitidos.',true,true,true,365,'DS20','Art. 25 N°2','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','mixta',true,2),
+  ('DS20-A25','DS20-A25-PLAN-EMERGENCIAS','Plan de emergencias y desastres','Incendios, sismos, cortes de agua/luz, robos y otros eventos, con responsables y herramientas.','Plan vigente, simulacros, responsables y evidencias de socialización.',true,true,true,365,'DS20','Art. 25 N°3','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,3),
+  ('DS20-A25','DS20-A25-URGENCIAS-FALLECIMIENTO','Protocolos de urgencias médicas y fallecimiento','Protocolos actualizados, socializados y aplicables por el equipo.','Protocolos, versiones, responsables y evidencia de capacitación.',true,true,true,365,'DS20','Art. 25 N°4-5','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,4),
+  ('DS20-A25','DS20-A25-PROGRAMA-INTEGRAL-USUARIA','Programa de atención integral usuaria vigente','Intervenciones biopsicosociales de prevención, mantención, promoción, necesidades básicas, autonomía y bienestar.','Programa individual vigente, intervenciones, frecuencia, responsable y validación técnica.',true,true,false,null,'DS20','Art. 25 N°6','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','registro','operacional',true,5),
+  ('DS20-A25','DS20-A25-INTEGRACION-SOCIOCOMUNITARIA','Plan de integración sociocomunitaria','Redes socioafectivas, persona significativa, inclusión comunitaria, voluntariado y actividades intergeneracionales.','Plan, actividades, participantes, calendario y registros de ejecución.',true,true,false,null,'DS20','Art. 25 N°7','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','registro','mixta',true,6),
+  ('DS20-A26','DS20-A26-RED-SALUD-APS-PRIVADA','Vinculación con red de salud','Control de salud mediante APS o centro privado y acceso de funcionarios de salud al ELEAM.','Centro de salud por residente, controles, derivaciones y contactos de red.',true,true,false,null,'DS20','Art. 26','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','operacional',true,1),
+  ('DS20-A26','DS20-A26-SERVICIOS-PRIVADOS','Servicios privados cuando no hay acceso oportuno','Preferentemente geriatra, neurólogo o médico de familia cuando corresponda.','Contratos, órdenes, informes y registros de atención.',false,true,false,null,'DS20','Art. 26','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','registro','mixta',true,2),
+  ('DS20-A27','DS20-A27-REGLAMENTO-INTERNO','Reglamento interno visible, entregado y explicado','Debe declarar derechos, autonomía, reclamos, uso de lugares comunes, orden, higiene y seguridad.','Reglamento vigente, evidencia visible, entrega y explicación al ingreso.',true,true,true,365,'DS20','Art. 27','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,1),
+  ('DS20-A27','DS20-A28-CONTRATO-RESIDENCIA','Contrato de residencia sin cláusulas prohibidas','Derechos/deberes, causales de exclusión, rendición de gastos si aplica e inventario.','Contrato firmado por residente o representante y revisión documental.',true,true,false,null,'DS20','Art. 28','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','documento','documental',false,2),
+  ('DS20-A27','DS20-A28-INVENTARIO-BIENES','Inventario de bienes al ingreso, anual y egreso','Inventario simple de bienes personales al ingreso, al menos anual y al término del contrato.','Inventario firmado, revisión anual y registro de egreso.',true,true,true,365,'DS20','Art. 28','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','registro','operacional',true,3),
+  ('DS20-A27','DS20-A29-REGISTRO-RECLAMOS','Registro de sugerencias o reclamos visible y codificado','Libro foliado o digitalizado, con codificación y fácil consulta para residentes, familiares o persona significativa.','Registro digital/foliado, códigos, estados, respuestas y cierres.',true,true,false,null,'DS20','Art. 29 N°2','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','operacional',true,4),
+  ('DS20-A27','DS20-A29-DERECHOS-ENTREGADOS','Carta de derechos y deberes entregada al ingreso','Entrega por escrito al ingreso y consignación en consentimiento.','Registro de entrega, firma o confirmación digital.',true,true,false,null,'DS20','Art. 29 N°4','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','documento','documental',false,5),
+  ('DS20-A27','DS20-A30-DATOS-SENSIBLES','Reserva y control de datos personales sensibles','El personal con acceso a datos sensibles debe guardar reserva conforme a Ley N°19.628 y normativa aplicable.','Roles, permisos, auditoría de acceso y compromisos de confidencialidad.',true,true,false,null,'DS20','Art. 30','https://www.bcn.cl/leychile/navegar?idNorma=1182129','critica','registro','operacional',true,6),
+  ('DS20-A31','DS20-A31-MODO-FISCALIZACION','Modo fiscalización SEREMI con evidencia descargable','SEREMI fiscaliza cumplimiento del reglamento y MINSAL proporciona pauta de fiscalización publicada y actualizada.','Carpeta exportable, matriz de brechas, documentos y registros por artículo.',true,true,false,null,'DS20','Art. 31','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','mixta',true,1),
+  ('DS20-A31','DS20-A31-PLAZOS-TRANSITORIOS','Control de plazos transitorios DS 20','Obligación general cumplidos 3 años desde vigencia y 5 años para seguridad contra incendios.','Matriz de cumplimiento transitorio y plan de adecuación.',true,true,false,null,'DS20','Art. 1 transitorio','https://www.bcn.cl/leychile/navegar?idNorma=1182129','alta','registro','mixta',true,2),
+  ('DS20-A31','DS20-A31-REPORTES-SENAMA-SEREMI','Reportes y antecedentes para SENAMA/SEREMI','Capacidad de conservar y generar información administrativa, residentes, trabajadores, brechas y subsanaciones.','Reportes PDF/Excel/CSV, historial de envíos y respaldo de comunicaciones.',true,true,false,null,'DS20','Arts. 3 y 31','https://www.bcn.cl/leychile/navegar?idNorma=1182129','media','registro','operacional',true,3)
 )
 insert into public.acred_requisitos (
   ambito_id, codigo, nombre, descripcion, medio_verificador,
-  obligatorio, permite_no_aplica, requiere_vencimiento, vigencia_dias_sugerida, orden
+  obligatorio, permite_no_aplica, requiere_vencimiento, vigencia_dias_sugerida,
+  norma_codigo, articulo_ref, fuente_url, criticidad, tipo_evidencia,
+  origen_evidencia, requisito_operacional, orden
 )
-select a.id, v.codigo, v.nombre, v.descripcion, v.medio_verificador,
-       true, true, v.req_venc, v.vigencia, v.orden
+select
+  a.id, v.codigo, v.nombre, v.descripcion, v.medio_verificador,
+  v.obligatorio, v.permite_no_aplica, v.requiere_vencimiento, v.vigencia_dias_sugerida,
+  v.norma_codigo, v.articulo_ref, v.fuente_url, v.criticidad, v.tipo_evidencia,
+  v.origen_evidencia, v.requisito_operacional, v.orden
 from vals v
-join public.acred_ambitos a on a.codigo = split_part(v.codigo, '-', 1)
+join public.acred_ambitos a on a.codigo = v.ambito_codigo
 on conflict (codigo) do update set
   nombre = excluded.nombre,
   descripcion = excluded.descripcion,
   medio_verificador = excluded.medio_verificador,
+  obligatorio = excluded.obligatorio,
+  permite_no_aplica = excluded.permite_no_aplica,
   requiere_vencimiento = excluded.requiere_vencimiento,
   vigencia_dias_sugerida = excluded.vigencia_dias_sugerida,
+  norma_codigo = excluded.norma_codigo,
+  articulo_ref = excluded.articulo_ref,
+  fuente_url = excluded.fuente_url,
+  criticidad = excluded.criticidad,
+  tipo_evidencia = excluded.tipo_evidencia,
+  origen_evidencia = excluded.origen_evidencia,
+  requisito_operacional = excluded.requisito_operacional,
   orden = excluded.orden;
 
 do $$

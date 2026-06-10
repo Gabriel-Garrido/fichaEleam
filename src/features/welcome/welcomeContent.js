@@ -8,7 +8,7 @@ export const WELCOME_PILLARS = [
   {
     icon: "accreditation",
     title: "Listo para fiscalización",
-    text: "La carpeta SEREMI del DS 14/2017 siempre al día.",
+    text: "La carpeta SEREMI del Decreto N°20 siempre al día.",
   },
   {
     icon: "shift",
@@ -29,7 +29,7 @@ export const WELCOME_HIGHLIGHTS = [
   { icon: "tasks", title: "Plan de cuidado", value: "Rutinas por turno convertidas en tareas." },
   { icon: "observations", title: "Observaciones", value: "Novedades y seguimientos que no se pierden." },
   { icon: "beds", title: "Camas y ocupación", value: "Disponibilidad en tiempo real, sin planillas." },
-  { icon: "accreditation", title: "Carpeta SEREMI", value: "Los 14 ámbitos del DS 14/2017, listos." },
+  { icon: "accreditation", title: "Carpeta SEREMI", value: "La matriz DS 20 por artículos del Decreto N°20, listos." },
   { icon: "familiar", title: "Portal familiar", value: "Tranquilidad para las familias, a distancia." },
   { icon: "team", title: "Equipo y permisos", value: "Cada persona accede solo a lo suyo." },
 ];

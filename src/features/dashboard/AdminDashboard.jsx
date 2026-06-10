@@ -64,11 +64,11 @@ export default function AdminDashboard() {
 
   const acreditacion = useMemo(() => {
     const s = data?.acreditacionSummary;
-    if (!s) return { porcentaje: 0, total: 0, cumple: 0, pendientes: 0, vencidos: 0, observacionesAbiertas: 0, ambitos: [] };
+    if (!s) return { porcentaje: 0, total: 0, vigente: 0, pendientes: 0, vencidos: 0, observacionesAbiertas: 0, ambitos: [] };
     return {
       porcentaje:            s.porcentaje ?? 0,
       total:                 s.total ?? 0,
-      cumple:                s.cumple ?? 0,
+      vigente:               s.vigente ?? 0,
       pendientes:            s.pendientes ?? 0,
       vencidos:              (s.vencidos ?? []).length,
       porVencer:             (s.porVencer ?? []).length,
@@ -305,10 +305,10 @@ export default function AdminDashboard() {
                 onClick={() => navigate("/camas")}
               />
               <KpiCard
-                title="Cumplimiento SEREMI"
-                help="Avance de requisitos de acreditación marcados como cumple."
+                title="Carpeta SEREMI DS 20"
+                help="Avance de requisitos con evidencia vigente, sin contar los que no aplican."
                 value={loading ? "…" : `${acreditacion.porcentaje}%`}
-                sub={`${acreditacion.cumple} de ${acreditacion.total} requisitos${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
+                sub={`${acreditacion.vigente} de ${acreditacion.total} requisitos vigentes${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
                 icon="accreditation"
                 tone={acreditacion.porcentaje >= 80 ? "emerald" : acreditacion.porcentaje >= 40 ? "amber" : "rose"}
                 onClick={() => navigate("/accreditation")}
@@ -353,10 +353,10 @@ export default function AdminDashboard() {
                 onClick={() => navigate("/vital-signs/new")}
               />
               <KpiCard
-                title="Cumplimiento SEREMI"
-                help="Avance de requisitos de acreditación marcados como cumple, sin contar los que no aplican."
+                title="Carpeta SEREMI DS 20"
+                help="Avance de requisitos con evidencia vigente, sin contar los que no aplican."
                 value={loading ? "…" : `${acreditacion.porcentaje}%`}
-                sub={`${acreditacion.cumple} de ${acreditacion.total} requisitos al día${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
+                sub={`${acreditacion.vigente} de ${acreditacion.total} requisitos vigentes${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
                 icon="accreditation"
                 tone={acreditacion.porcentaje >= 80 ? "emerald" : acreditacion.porcentaje >= 40 ? "amber" : "rose"}
                 onClick={() => navigate("/accreditation")}

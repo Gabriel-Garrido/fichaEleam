@@ -2,7 +2,7 @@
 
 ## Propósito
 
-Aplicación web SPA para digitalización de registros clínicos, administrativos y documentales de **ELEAM** (Establecimientos de Larga Estadía para Adultos Mayores) en Chile. Incluye suscripción vía MercadoPago, carpeta SEREMI (acreditación v9), blog público y panel CRM para operador.
+Aplicación web SPA para digitalización de registros clínicos, administrativos y documentales de **ELEAM** (Establecimientos de Larga Estadía para Personas Mayores) en Chile. Incluye suscripción vía MercadoPago, carpeta SEREMI (acreditación v9), blog público y panel CRM para operador.
 
 ---
 
@@ -45,6 +45,7 @@ src/
 ├── features/
 │   ├── auth/                   # Login, RecuperarAcceso, ResetPassword, authService
 │   ├── landing/                # LandingPage, DemoRequestModal, WhatsAppLeadButton/Modal (FAB flotante), landingAnalytics. Sin auto-registro público
+│   ├── public/                 # Páginas públicas SEO: PublicShell (nav/footer/CTA), PublicDesign (design system público), SoftwareEleamPage, AcreditacionSeremiPage, CalculadoraDotacionPage (calculadora de dotación DS20, lead-magnet), FaqPage, ContactoPage
 │   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService (diseño consistente con landing: nav/footer dark slate-950)
 │   ├── dashboard/              # AdminDashboard (rol-aware). Monta WelcomeModal en el primer ingreso de admin_eleam. Si el ELEAM del admin no tiene residentes, oculta el contenido y muestra OnboardingSteps (primeros pasos: residente, funcionario, Carpeta SEREMI). Sin coach 'dashboard' (lo cubren la bienvenida y el onboarding)
 │   ├── welcome/                # Bienvenida orientada a venta para admin_eleam (la ven prospectos del demo): WelcomeModal (3 pasos animados, responsive), welcomeContent (valor + features), welcomeStorage (flag por usuario en localStorage)
@@ -271,9 +272,9 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 #### Tablas de acreditación (modelo v9)
 
-**`acred_ambitos`** — 14 ámbitos fijos DS 14/2017 (A01-A14)
+**`acred_ambitos`** — matriz DS 20: 12 ámbitos por artículos del Decreto N°20 (códigos `DS20-A05`..`DS20-A31`, que cubren los Arts. 3-32 y transitorios). Fuente de verdad en `src/content/decreto20Eleam.js`; el seed SQL se regenera con `scripts/sync-decreto20-acred-seed.mjs`
 
-**`acred_requisitos`** — Catálogo maestro (~70 requisitos): medio verificador, vigencia sugerida, codelength
+**`acred_requisitos`** — Catálogo maestro (controles DS 20): medio verificador, vigencia sugerida, codelength
 
 **`acred_requisitos_eleam`** — Estado por ELEAM/requisito: `pendiente | cumple | no_cumple | no_aplica | vencido | observado`
 
@@ -311,7 +312,7 @@ Redirige a `homePath` si no cumple; bloquea acceso a `/cambiar-clave` hasta comp
 
 **`demo_leads`** — Leads del formulario de landing: nombre, cargo, eleam_nombre, email, telefono, num_residentes, UTM/referrer, estado (nuevo|contactado|demo_activo|descartado|convertido), demo_user_id (uuid FK auth.users; vincula al usuario real cuando superadmin aprueba demo), demo_access_granted_at, demo_expires_at.
 
-**`landing_events`** — Eventos anónimos de landing: tipo, página, elemento, valor, session_id, UTM/referrer, creado_en. Solo anon/authenticated insertan; superadmin lee.
+**`landing_events`** — Eventos anónimos de landing: tipo (`page_view | cta_click | nav_click | scroll_depth | section_view | form_view | form_submit | tool_use`), página, elemento, valor, session_id, UTM/referrer, creado_en. Inserción solo vía Edge Function `track-landing-event` (service role; allowlist en `eventValidation.ts` + CHECK en schema deben mantenerse en sync). Solo superadmin lee. `tool_use`/`elemento='calculadora_dotacion'` registra el uso de la calculadora de dotación pública; `getLandingMetrics()` agrega visitas por página pública y uso de la calculadora para `LandingMetrics` (vista superadmin).
 
 ### RLS (Row Level Security)
 
@@ -387,7 +388,7 @@ URLs firmadas TTL 1 hora (se regeneran al click "Ver").
 
 ## Rangos Clínicos (Signos Vitales)
 
-`src/features/vitalSigns/vitalRanges.js` centraliza los rangos para adultos mayores. Cuatro estados:
+`src/features/vitalSigns/vitalRanges.js` centraliza los rangos para personas mayores. Cuatro estados:
 - **normal** (verde): dentro del rango seguro.
 - **warning** (ámbar): fuera del rango pero no crítico.
 - **critical** (rojo): fuera del rango + riesgo elevado.
@@ -414,7 +415,7 @@ Componentes: `VitalCard.jsx` (tarjeta individual), `VitalSignsList.jsx` (lista/t
 
 ## Acreditación (Carpeta SEREMI)
 
-Modelo v9 con 14 ámbitos DS 14/2017, requisitos en catálogo maestro, estados, evidencias versionadas, observaciones de auditoría y trazabilidad completa.
+Modelo v9 con matriz DS 20 por artículos Decreto N°20, requisitos en catálogo maestro, estados, evidencias versionadas, observaciones de auditoría y trazabilidad completa.
 
 ### Estados de requisito
 
@@ -435,7 +436,7 @@ Internas (admin levanta) o de fiscalización (SEREMI detecta). Flujo: `abierta` 
 
 ### Componentes
 
-- `AccreditationDashboard.jsx`: KPI global, alertas (vencidos, <30d, observaciones abiertas), grilla de 14 ámbitos con barra de cumplimiento.
+- `AccreditationDashboard.jsx`: KPI global, alertas (vencidos, <30d, observaciones abiertas), grilla de matriz DS 20 por artículos con barra de cumplimiento.
 - `AccreditationAmbito.jsx`: Lista requisitos filtrable por estado + búsqueda.
 - `AccreditationRequisito.jsx`: Detalle 360: evidencias (versiones), observaciones, auditoría, cambio de estado, carga/reemplazo de archivos.
 - `AccreditationObservaciones.jsx`: Observaciones globales con filtros.

@@ -25,7 +25,7 @@ async function getAccreditationSummary() {
     pendientes:     resumen.pendientes,
     vencidos:       resumen.vencidos,
     porVencer:      resumen.porVencer,
-    cumple:         resumen.cumple,
+    vigente:        resumen.vigente,
     noAplica:       resumen.noAplica,
     observaciones:  obs ?? [],
   };

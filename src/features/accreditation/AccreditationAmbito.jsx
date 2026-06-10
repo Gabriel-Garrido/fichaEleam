@@ -15,7 +15,9 @@ import { FeatureCoach } from "../featureCoach";
 const FILTROS = [
   { key: "all",       label: "Todos" },
   { key: "pendiente", label: "Pendientes" },
-  { key: "cumple",    label: "Cumple" },
+  { key: "vigente",   label: "Vigentes" },
+  { key: "en_revision", label: "En revisión" },
+  { key: "requiere_actualizacion", label: "Por actualizar" },
   { key: "observado", label: "Observados" },
   { key: "vencido",   label: "Vencidos" },
   { key: "no_aplica", label: "No aplica" },
@@ -88,8 +90,10 @@ function requisitoPriorityScore(re) {
     vencido: 100,
     observado: 70,
     no_cumple: 65,
+    requiere_actualizacion: 55,
     pendiente: 40,
-    cumple: 0,
+    en_revision: 30,
+    vigente: 0,
     no_aplica: 0,
   }[re.estado] ?? 0;
   const d = diasHasta(re.fecha_vencimiento);
@@ -234,6 +238,18 @@ export default function AccreditationAmbito() {
             {ambito.descripcion && (
               <p className="text-sm text-slate-500 mt-1">{ambito.descripcion}</p>
             )}
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+              {ambito.norma_codigo && (
+                <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">
+                  {ambito.norma_codigo}
+                </span>
+              )}
+              {ambito.articulo_ref && (
+                <span className="rounded-full bg-teal-50 px-2 py-1 font-semibold text-teal-700">
+                  {ambito.articulo_ref}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </header>

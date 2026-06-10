@@ -1,27 +1,73 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Sitemap base de FichaEleam. El build de producción lo reemplaza con
-  sitemap completo de landing, pago y blog prerenderizado.
+  sitemap completo de landing, páginas públicas, pago y blog prerenderizado.
 -->
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+>
   <url>
     <loc>https://fichaeleam.cl/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://fichaeleam.cl/marketing/fichaeleam-hero-demo-soporte.png</image:loc>
+      <image:title>FichaEleam software de gestión para ELEAM</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://fichaeleam.cl/software-eleam</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://fichaeleam.cl/marketing/software-eleam-dashboard-signos-residente.png</image:loc>
+      <image:title>Dashboard clínico de FichaEleam para ELEAM</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://fichaeleam.cl/acreditacion-seremi</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://fichaeleam.cl/marketing/excel-papel-vs-fichaeleam-dashboard.png</image:loc>
+      <image:title>Carpeta SEREMI digital para ELEAM</image:title>
+    </image:image>
   </url>
   <url>
     <loc>https://fichaeleam.cl/blog</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://fichaeleam.cl/marketing/entrega-turno-equipo-clinico-dashboard.png</image:loc>
+      <image:title>Blog FichaEleam para gestión y fiscalización ELEAM</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://fichaeleam.cl/preguntas-frecuentes</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://fichaeleam.cl/marketing/fichaeleam-hero-demo-soporte.png</image:loc>
+      <image:title>Preguntas frecuentes sobre FichaEleam</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://fichaeleam.cl/contacto</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://fichaeleam.cl/marketing/fichaeleam-logo-horizontal-color.png</image:loc>
+      <image:title>Contacto comercial de FichaEleam</image:title>
+    </image:image>
   </url>
   <url>
     <loc>https://fichaeleam.cl/pago</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://fichaeleam.cl/login</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
+    <image:image>
+      <image:loc>https://fichaeleam.cl/marketing/software-eleam-dashboard-signos-residente.png</image:loc>
+      <image:title>Planes y precios de FichaEleam</image:title>
+    </image:image>
   </url>
 </urlset>

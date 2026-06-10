@@ -70,7 +70,7 @@ export default function WhatsAppLeadButton({ onOpen }) {
               ¿Tienes preguntas sobre tu ELEAM?
             </p>
             <p className="text-xs text-slate-600 mt-0.5 leading-snug">
-              Chatea con nosotros, respondemos en menos de 1 hora hábil.
+              Chatea con nosotros en horario hábil.
             </p>
             <div className="absolute -bottom-2 right-7 w-3 h-3 bg-white border-r border-b border-slate-200 rotate-45" aria-hidden="true" />
           </div>

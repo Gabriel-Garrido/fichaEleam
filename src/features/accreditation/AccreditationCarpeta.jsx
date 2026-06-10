@@ -90,7 +90,7 @@ export default function AccreditationCarpeta() {
         {/* Portada */}
         <div className="text-center border-b border-slate-300 pb-4">
           <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold">
-            Carpeta SEREMI · DS 14/2017
+            Carpeta SEREMI · Decreto N°20 MINSAL
           </p>
           <h1 className="text-3xl font-black mt-1">{eleam?.nombre ?? "ELEAM"}</h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -143,7 +143,7 @@ export default function AccreditationCarpeta() {
                 <th className="py-2 pr-3">Código</th>
                 <th>Ámbito</th>
                 <th className="text-center px-2">Requisitos</th>
-                <th className="text-center px-2">Cumple</th>
+                <th className="text-center px-2">Vigentes</th>
                 <th className="text-center px-2">Pendientes</th>
                 <th className="text-center px-2">%</th>
               </tr>
@@ -154,8 +154,8 @@ export default function AccreditationCarpeta() {
                   <td className="py-2 pr-3 font-mono text-xs">{a.codigo}</td>
                   <td className="py-2">{a.nombre}</td>
                   <td className="text-center px-2">{a.total}</td>
-                  <td className="text-center px-2 text-emerald-700">{a.cumple ?? 0}</td>
-                  <td className="text-center px-2 text-amber-700">{(a.pendiente ?? 0) + (a.observado ?? 0) + (a.no_cumple ?? 0) + (a.vencido ?? 0)}</td>
+                  <td className="text-center px-2 text-emerald-700">{a.vigente ?? 0}</td>
+                  <td className="text-center px-2 text-amber-700">{(a.pendiente ?? 0) + (a.en_revision ?? 0) + (a.requiere_actualizacion ?? 0) + (a.observado ?? 0) + (a.no_cumple ?? 0) + (a.vencido ?? 0)}</td>
                   <td className="text-center px-2 font-semibold">{a.porcentaje}%</td>
                 </tr>
               ))}
@@ -220,6 +220,9 @@ export default function AccreditationCarpeta() {
                           <p className="font-semibold">{re.requisito.nombre}</p>
                           {re.requisito.medio_verificador && (
                             <p className="text-slate-500 text-[10px]">Verificador: {re.requisito.medio_verificador}</p>
+                          )}
+                          {re.requisito.articulo_ref && (
+                            <p className="text-slate-500 text-[10px]">Referencia: {re.requisito.articulo_ref}</p>
                           )}
                           {re.no_aplica_motivo && (
                             <p className="text-slate-500 italic text-[10px]">No aplica: {re.no_aplica_motivo}</p>

@@ -24,7 +24,7 @@ const STEP_CANDIDATES = [
     feature: "accreditation",
     icon: "accreditation",
     title: "Prepara tu Carpeta SEREMI",
-    text: "Sube tus documentos del DS 14/2017 y te avisamos 30 días antes de cada vencimiento.",
+    text: "Sube tus documentos del Decreto N°20 y te avisamos 30 días antes de cada vencimiento.",
     cta: "Abrir Carpeta SEREMI",
     route: "/accreditation",
   },

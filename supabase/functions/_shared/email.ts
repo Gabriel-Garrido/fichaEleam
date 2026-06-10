@@ -597,7 +597,7 @@ export function buildCrmProspectingEmail(params: {
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#fff;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden">
         <tr><td style="background:#0d9488;padding:28px 36px">
           <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.01em">FichaEleam</h1>
-          <p style="color:#99f6e4;margin:4px 0 0;font-size:13px">Software para Establecimientos de Larga Estadía para Adultos Mayores</p>
+          <p style="color:#99f6e4;margin:4px 0 0;font-size:13px">Software para Establecimientos de Larga Estadía para Personas Mayores</p>
         </td></tr>
         <tr><td style="padding:32px 36px 8px">
           <p style="color:#1e293b;font-size:16px;margin:0 0 16px">Estimado equipo de <strong>${safeEleam}</strong>,</p>

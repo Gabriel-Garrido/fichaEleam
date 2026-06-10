@@ -17,7 +17,7 @@ import {
   archiveDocumento,
   setRequisitoEstado,
   marcarNoAplica,
-  marcarCumple,
+  marcarVigente,
   asignarResponsable,
   crearObservacion,
   cerrarObservacion,
@@ -41,9 +41,19 @@ function StatePill({ estado }) {
 
 const STATUS_OPTIONS = [
   {
-    value: "cumple",
-    label: "Cumple",
+    value: "vigente",
+    label: "Vigente",
     description: "La evidencia vigente está cargada y el requisito queda al día.",
+  },
+  {
+    value: "en_revision",
+    label: "En revisión",
+    description: "La evidencia o el registro está cargado y falta validación interna.",
+  },
+  {
+    value: "requiere_actualizacion",
+    label: "Requiere actualización",
+    description: "El requisito sigue aplicando, pero debe actualizarse por vigencia, cambio operativo o nueva evidencia.",
   },
   {
     value: "pendiente",
@@ -120,7 +130,7 @@ function StateActions({ re, onChange, canEdit }) {
     option.value !== re.estado && (option.value !== "no_aplica" || canUseNoAplica)
   ));
   const selectedOption = STATUS_OPTIONS.find((option) => option.value === selected);
-  const needsFechaVencimiento = selected === "cumple" && re.requisito?.requiere_vencimiento;
+  const needsFechaVencimiento = selected === "vigente" && re.requisito?.requiere_vencimiento;
   const submitDisabled =
     busy ||
     !selected ||
@@ -134,8 +144,8 @@ function StateActions({ re, onChange, canEdit }) {
       if (selected === "no_aplica") {
         await onChange({ noAplica: naMotivo.trim() });
         setNaMotivo("");
-      } else if (selected === "cumple") {
-        await onChange({ cumple: fechaVenc || null });
+      } else if (selected === "vigente") {
+        await onChange({ vigente: fechaVenc || null });
       } else if (selected === "pendiente") {
         await onChange({ estado: selected, fecha_vencimiento: null, no_aplica_motivo: null });
       } else {
@@ -221,7 +231,7 @@ function StateActions({ re, onChange, canEdit }) {
             })}
           </div>
 
-          {selected === "cumple" && (
+          {selected === "vigente" && (
             <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
               <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-emerald-700">
                 Fecha de vencimiento {needsFechaVencimiento ? "*" : "(opcional)"}
@@ -250,7 +260,7 @@ function StateActions({ re, onChange, canEdit }) {
             </div>
           )}
 
-          {selectedOption && selected !== "cumple" && selected !== "no_aplica" && (
+          {selectedOption && selected !== "vigente" && selected !== "no_aplica" && (
             <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
               {selectedOption.description}
             </div>
@@ -832,12 +842,12 @@ export default function AccreditationRequisito() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const handleStateChange = async ({ estado, noAplica, cumple, ...payload }) => {
+  const handleStateChange = async ({ estado, noAplica, vigente, ...payload }) => {
     try {
       if (noAplica !== undefined) {
         await marcarNoAplica(id, noAplica);
-      } else if (cumple !== undefined) {
-        await marcarCumple(id, cumple);
+      } else if (vigente !== undefined) {
+        await marcarVigente(id, vigente);
       } else {
         await setRequisitoEstado(id, { estado, ...payload });
       }
@@ -937,6 +947,16 @@ export default function AccreditationRequisito() {
           <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             {a.nombre}
           </span>
+          {r.articulo_ref && (
+            <span className="text-[10px] font-bold uppercase tracking-wide text-teal-700">
+              {r.articulo_ref}
+            </span>
+          )}
+          {r.criticidad && (
+            <span className="text-[10px] font-bold uppercase tracking-wide text-rose-700">
+              Criticidad {r.criticidad}
+            </span>
+          )}
         </div>
         <h1 className="text-2xl font-black text-slate-800 mb-2">{r.nombre}</h1>
         {r.descripcion && (
@@ -995,6 +1015,20 @@ export default function AccreditationRequisito() {
             <p className="text-sm text-teal-900">{r.medio_verificador}</p>
           </div>
         )}
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <DetailTile label="Norma">
+            <p className="font-semibold">{r.norma_codigo ?? "DS20"}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{r.articulo_ref ?? "Sin artículo asociado"}</p>
+          </DetailTile>
+          <DetailTile label="Evidencia DS 20">
+            <p className="font-semibold">{r.tipo_evidencia ?? "documento"}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{r.origen_evidencia ?? "documental"}</p>
+          </DetailTile>
+          <DetailTile label="Operacional">
+            <p>{r.requisito_operacional ? "Se alimenta con registros vivos de la app." : "Se resuelve con evidencia documental."}</p>
+          </DetailTile>
+        </div>
       </header>
 
       {/* Tabs */}

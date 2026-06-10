@@ -20,15 +20,22 @@ export default function ProspectImportModal({
 
   const handleImport = async (validRows, onProgress) => {
     onProgress?.(0, validRows.length);
-    const payloads = validRows.map((row) => row.payload).filter(Boolean);
+    const payloads = validRows
+      .filter((row) => row.payload)
+      .map((row) => ({
+        rowNumber: row.rowNumber,
+        label: row.label,
+        payload: row.payload,
+      }));
     const { inserted, duplicates, errors } = await bulkInsertProspects(listId, payloads);
+    const duplicateRows = new Set(duplicates.map((d) => d.rowNumber));
+    const errorByRow = new Map(errors.map((e) => [e.rowNumber, e]));
 
     const results = validRows.map((row) => {
-      const dup = duplicates.find((d) => d.email && d.email === row.payload?.email);
-      if (dup) {
+      if (duplicateRows.has(row.rowNumber)) {
         return { rowNumber: row.rowNumber, label: row.label, ok: false, error: "Ya existe un prospecto con ese correo en la base." };
       }
-      const err = errors.find((e) => e.row?.eleam_nombre === row.payload?.eleam_nombre && e.row?.email === row.payload?.email);
+      const err = errorByRow.get(row.rowNumber);
       if (err) {
         return { rowNumber: row.rowNumber, label: row.label, ok: false, error: err.message };
       }

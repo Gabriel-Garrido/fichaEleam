@@ -618,7 +618,7 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-400 font-medium">Carpeta SEREMI</p>
           <p className="text-sm text-slate-600">
-            {acreditacion.cumple} de {acreditacion.total} requisitos al día
+            {acreditacion.vigente} de {acreditacion.total} requisitos vigentes
             {acreditacion.observacionesAbiertas ? ` · ${acreditacion.observacionesAbiertas} observación${acreditacion.observacionesAbiertas === 1 ? "" : "es"} abierta${acreditacion.observacionesAbiertas === 1 ? "" : "s"}` : ""}
           </p>
         </div>

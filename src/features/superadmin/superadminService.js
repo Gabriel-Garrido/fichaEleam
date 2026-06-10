@@ -47,6 +47,24 @@ const DEMO_LEAD_SELECT = `
   demo_user_id, creado_en
 `;
 
+// Fuentes de actividad para el monitoreo de uso por ELEAM.
+// `scope` indica cómo se acota la consulta: por eleam_id directo, o por
+// residente_id (tablas clínicas que no tienen columna eleam_id).
+const ELEAM_USAGE_SOURCES = [
+  { table: "signos_vitales",                who: "registrado_por",  ts: "creado_en",       scope: "residente" },
+  { table: "observaciones_diarias",         who: "registrado_por",  ts: "creado_en",       scope: "residente" },
+  { table: "visitas_familiar",              who: "registrado_por",  ts: "creado_en",       scope: "residente" },
+  { table: "medicamentos_administraciones", who: "administrado_por", ts: "administrado_en", scope: "eleam" },
+  { table: "tareas_cuidado",                who: "cumplida_por",    ts: "cumplida_en",     scope: "eleam" },
+  { table: "turno_entregas",                who: "creado_por",      ts: "creado_en",       scope: "eleam" },
+  { table: "residentes",                    who: "creado_por",      ts: "creado_en",       scope: "eleam" },
+  { table: "eventos_adversos",              who: "registrado_por",  ts: "creado_en",       scope: "eleam" },
+  { table: "camas_audit",                   who: "realizado_por",   ts: "realizado_en",    scope: "eleam" },
+  { table: "acred_documentos",              who: "subido_por",      ts: "creado_en",       scope: "eleam" },
+];
+
+const USAGE_ROLES = ["admin_eleam", "funcionario", "familiar"];
+
 // ─────────────────────────────────────────────────────────────
 // Métricas
 // ─────────────────────────────────────────────────────────────
@@ -353,6 +371,21 @@ export async function grantDemoAccess(leadId) {
   };
 }
 
+// Etiquetas amigables por página pública. La clave es el valor `elemento` que
+// cada página envía vía usePageView(). Lo que no esté aquí cae en "Otras".
+const PAGE_VIEW_LABELS = {
+  landing: "Inicio (landing)",
+  "/": "Inicio (landing)",
+  "/software-eleam": "Software ELEAM",
+  "/acreditacion-seremi": "Acreditación SEREMI",
+  "/calculadora-dotacion-eleam": "Calculadora dotación",
+  "/preguntas-frecuentes": "Preguntas frecuentes",
+  "/contacto": "Contacto",
+  "/pago": "Planes y precios",
+  "/blog": "Blog (lista)",
+  blog_post: "Blog (artículo)",
+};
+
 export async function getLandingMetrics(days = 30) {
   const since = new Date(Date.now() - days * 86400000).toISOString();
 
@@ -412,15 +445,23 @@ export async function getLandingMetrics(days = 30) {
   }
   const sources = Object.entries(sourceMap).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([src, count]) => ({ src, count }));
 
-  // ── Page breakdown (landing vs blog) ─────────────────────────
-  const pageBreakdown = { landing: 0, blog_list: 0, blog_post: 0, other: 0 };
+  // ── Desglose por página pública (rankeado) ───────────────────
+  const pageCounts = {};
   for (const e of pageViews) {
-    const name = e.elemento ?? "other";
-    if (name === "landing") pageBreakdown.landing++;
-    else if (name === "blog_list") pageBreakdown.blog_list++;
-    else if (name === "blog_post") pageBreakdown.blog_post++;
-    else pageBreakdown.other++;
+    const key = e.elemento && PAGE_VIEW_LABELS[e.elemento] ? e.elemento : "other";
+    pageCounts[key] = (pageCounts[key] ?? 0) + 1;
   }
+  const pageBreakdown = Object.entries(pageCounts)
+    .map(([key, count]) => ({ key, label: PAGE_VIEW_LABELS[key] ?? "Otras", count }))
+    .sort((a, b) => b.count - a.count);
+
+  // ── Uso de la calculadora de dotación (evento tool_use) ──────
+  const calcUses = events.filter((e) => e.tipo === "tool_use" && e.elemento === "calculadora_dotacion");
+  const toolUsage = {
+    calculadoraUsos: calcUses.length,
+    calculadoraConDeficit: calcUses.filter((e) => (e.valor ?? "").includes("def:1")).length,
+    calculadoraDemoClicks: ctaEvents.filter((e) => e.elemento === "calculadora_demo").length,
+  };
 
   // ── Daily page_view counts (last 14 days) ────────────────────
   const last14 = Array.from({ length: 14 }, (_, i) => {
@@ -448,6 +489,7 @@ export async function getLandingMetrics(days = 30) {
     topSections,
     sources,
     pageBreakdown,
+    toolUsage,
     dailyVisits,
   };
 }
@@ -481,4 +523,100 @@ export async function createEleamInteraction(payload) {
     await supabase.from("eleams").update({ ultimo_contacto: ahora }).eq("id", payload.eleam_id);
   }
   return data;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Uso de la app por ELEAM (monitoreo)
+// ─────────────────────────────────────────────────────────────
+// Económico: solo se consulta a demanda (al abrir la sección de una ficha).
+// La "actividad" se deriva del trabajo registrado (quién creó/editó cada
+// registro y cuándo), NO de inicios de sesión: auth.users no está expuesto y
+// profiles no tiene último acceso. Consultas acotadas por eleam_id/residente_id
+// + ventana + columnas proyectadas + limit, en una sola tanda allSettled.
+export async function getEleamUsage(eleamId, { days = 30 } = {}) {
+  if (!eleamId) return { users: [], summary: null, days };
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+
+  // Usuarios del ELEAM (incluye los que nunca ingresaron: must_reset_password).
+  const usersRes = await supabase
+    .from("profiles")
+    .select("id, nombre, email, rol, telefono, must_reset_password, creado_en")
+    .eq("eleam_id", eleamId)
+    .in("rol", USAGE_ROLES);
+  if (usersRes.error) throw usersRes.error;
+  const users = usersRes.data ?? [];
+
+  // IDs de residentes (para acotar las tablas clínicas sin eleam_id).
+  const residentesRes = await supabase
+    .from("residentes")
+    .select("id")
+    .eq("eleam_id", eleamId);
+  const residentIds = (residentesRes.data ?? []).map((r) => r.id);
+
+  const queries = ELEAM_USAGE_SOURCES
+    .filter((s) => s.scope === "eleam" || residentIds.length > 0)
+    .map((s) => {
+      let q = supabase
+        .from(s.table)
+        .select(`${s.who}, ${s.ts}`)
+        .gte(s.ts, since)
+        .order(s.ts, { ascending: false })
+        .limit(2000);
+      q = s.scope === "eleam" ? q.eq("eleam_id", eleamId) : q.in("residente_id", residentIds);
+      return q.then((res) => ({ res, who: s.who, ts: s.ts }));
+    });
+
+  const results = await Promise.allSettled(queries);
+
+  const agg = new Map(); // userId -> { registros, ultimaActividad }
+  let totalRegistros = 0;
+  let registrosSinActor = 0;
+  let ultimaActividadEleam = null;
+  let fuentesConError = 0;
+
+  for (const settled of results) {
+    if (settled.status !== "fulfilled" || settled.value.res.error) {
+      fuentesConError += 1;
+      continue;
+    }
+    const { res, who, ts } = settled.value;
+    for (const row of res.data ?? []) {
+      const uid = row[who];
+      const when = row[ts];
+      // Cuenta como actividad del ELEAM aunque el registro no tenga autor
+      // (datos importados, seeds o inserts directos sin auth.uid()).
+      totalRegistros += 1;
+      if (when && (!ultimaActividadEleam || when > ultimaActividadEleam)) ultimaActividadEleam = when;
+      if (!uid) { registrosSinActor += 1; continue; }
+      const cur = agg.get(uid) ?? { registros: 0, ultimaActividad: null };
+      cur.registros += 1;
+      if (when && (!cur.ultimaActividad || when > cur.ultimaActividad)) cur.ultimaActividad = when;
+      agg.set(uid, cur);
+    }
+  }
+
+  const mergedUsers = users.map((u) => {
+    const a = agg.get(u.id) ?? { registros: 0, ultimaActividad: null };
+    return { ...u, registros: a.registros, ultimaActividad: a.ultimaActividad };
+  });
+
+  // Más activos primero; los que nunca registraron, al final.
+  mergedUsers.sort((a, b) => {
+    if (a.ultimaActividad && b.ultimaActividad) return b.ultimaActividad.localeCompare(a.ultimaActividad);
+    if (a.ultimaActividad) return -1;
+    if (b.ultimaActividad) return 1;
+    return b.registros - a.registros;
+  });
+
+  const summary = {
+    usuariosTotales:     users.length,
+    usuariosActivos:     mergedUsers.filter((u) => u.registros > 0).length,
+    sinPrimerIngreso:    users.filter((u) => u.must_reset_password).length,
+    totalRegistros,
+    registrosSinActor,
+    ultimaActividadEleam,
+    fuentesConError,
+  };
+
+  return { users: mergedUsers, summary, days };
 }

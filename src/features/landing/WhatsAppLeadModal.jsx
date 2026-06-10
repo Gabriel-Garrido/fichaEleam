@@ -73,7 +73,7 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
       trackEvent("form_submit", "whatsapp_lead_modal", source);
     } catch {
       // Si falla guardar el lead, igual abrimos WhatsApp para no perder el contacto.
-      setErrorMsg("Guardamos tu mensaje pero no pudimos registrar el contacto. Continuamos a WhatsApp.");
+      setErrorMsg("No pudimos registrar el contacto en este momento, pero abriremos WhatsApp para continuar.");
     }
 
     const url = buildWhatsAppUrl(form, undefined, source);
@@ -104,11 +104,11 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
                 <WhatsAppIcon className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h2 id="whatsapp-modal-title" className="text-lg font-bold leading-tight">
+                <h2 id="whatsapp-modal-title" className="font-display text-xl font-semibold leading-tight tracking-tight">
                   Chatea con nuestro equipo
                 </h2>
                 <p className="text-emerald-50 text-xs mt-0.5">
-                  Te respondemos en menos de 1 hora hábil
+                  Te respondemos en horario hábil
                 </p>
               </div>
             </div>

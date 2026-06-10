@@ -12,6 +12,7 @@ const ResetPassword = lazy(() => import("../features/auth/ResetPassword"));
 const LandingPage = lazy(() => import("../features/landing/LandingPage"));
 const AcreditacionSeremiPage = lazy(() => import("../features/public/AcreditacionSeremiPage"));
 const SoftwareEleamPage = lazy(() => import("../features/public/SoftwareEleamPage"));
+const CalculadoraDotacionPage = lazy(() => import("../features/public/CalculadoraDotacionPage"));
 const FaqPage = lazy(() => import("../features/public/FaqPage"));
 const ContactoPage = lazy(() => import("../features/public/ContactoPage"));
 const PaymentPage = lazy(() => import("../features/payment/PaymentPage"));
@@ -86,6 +87,7 @@ function AppRouter() {
         <Route path="/blog/:slug"  element={<PublicBlogPost />} />
         <Route path="/acreditacion-seremi" element={<AcreditacionSeremiPage />} />
         <Route path="/software-eleam"     element={<SoftwareEleamPage />} />
+        <Route path="/calculadora-dotacion-eleam" element={<CalculadoraDotacionPage />} />
         <Route path="/preguntas-frecuentes" element={<FaqPage />} />
         <Route path="/contacto"           element={<ContactoPage />} />
 

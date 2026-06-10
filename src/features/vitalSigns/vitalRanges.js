@@ -1,4 +1,4 @@
-// Rangos clínicos de referencia para adultos mayores en ELEAM.
+// Rangos clínicos de referencia para personas mayores en ELEAM.
 // Devuelve un "status" por parámetro que dirige el color y el icono en la UI.
 //
 // Niveles:

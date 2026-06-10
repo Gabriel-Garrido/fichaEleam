@@ -4,6 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  test: {
+    environment: 'node',
+    pool: 'forks',
+  },
   server: {
     // Dev-server headers — production headers are in public/_headers (Netlify/Cloudflare)
     // and must also be configured at the web server / CDN level for other hosts.

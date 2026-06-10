@@ -1,105 +1,109 @@
 # FichaEleam
 
-> Software de gestión clínica y acreditación SEREMI para ELEAM (Establecimientos de Larga Estadía para Adultos Mayores) en Chile.
+> Software de gestion clinica, documental y operativa para ELEAM (Establecimientos de Larga Estadia para Personas Mayores) en Chile.
 
-FichaEleam es el único software diseñado exclusivamente para ELEAM en Chile. Cubre los 14 ámbitos del DS 14/2017 con fichas clínicas digitales, registro de signos vitales con alertas clínicas para adultos mayores, observaciones de turno con 12 categorías, carpeta SEREMI lista para fiscalización, gestión de habitaciones y camas, eMAR (kardex electrónico de medicamentos) y portal de acceso para familias de residentes.
+FichaEleam esta disenado para apoyar la gestion y evidencia documental exigida por el Decreto Supremo N°20 MINSAL. La matriz SEREMI DS 20 se organiza por articulos, criticidad, tipo de evidencia, origen documental u operacional y estados fiscalizables: pendiente, en revision, vigente, observado, vencido, no cumple, no aplica y requiere actualizacion.
 
 **Web**: https://fichaeleam.cl
 **Blog**: https://fichaeleam.cl/blog
 **Planes y precios**: https://fichaeleam.cl/pago
-**Demo gratuito**: formulario en https://fichaeleam.cl (aprobación en menos de 24 horas)
+**Demo gratuito**: formulario en https://fichaeleam.cl (aprobacion en menos de 24 horas)
 **Email**: contacto@fichaeleam.cl
 **WhatsApp**: +56 9 5118 7764 (https://wa.me/56951187764)
+**Fuente oficial DS 20**: https://www.bcn.cl/leychile/navegar?idNorma=1182129
+**Vigencia DS 20**: 2025-10-01
 
----
+## Imagenes oficiales para buscadores y modelos
 
-## Producto
+- Hero producto: https://fichaeleam.cl/marketing/fichaeleam-hero-demo-soporte.png
+- Dashboard clinico: https://fichaeleam.cl/marketing/software-eleam-dashboard-signos-residente.png
+- Comparativa Excel/papel vs FichaEleam: https://fichaeleam.cl/marketing/excel-papel-vs-fichaeleam-dashboard.png
+- Entrega de turno y equipo clinico: https://fichaeleam.cl/marketing/entrega-turno-equipo-clinico-dashboard.png
+- Icono de marca: https://fichaeleam.cl/marketing/fichaeleam-app-icon-color.png
 
-- [Inicio](https://fichaeleam.cl/): landing page con producto, planes y formulario para solicitar demo gratuito.
-- [Planes y precios](https://fichaeleam.cl/pago): tres planes mensuales con cupos definidos + tier institucional para 35+ residentes vía WhatsApp.
+## Planes comerciales
 
-### Planes comerciales
+- Hasta 14 residentes: $50.000 CLP + IVA al mes, hasta 14 residentes activos u hospitalizados y 10 funcionarios.
+- 15 a 24 residentes: $80.000 CLP + IVA al mes, hasta 24 residentes activos u hospitalizados y 20 funcionarios.
+- 25 a 34 residentes: $120.000 CLP + IVA al mes, hasta 34 residentes activos u hospitalizados y 30 funcionarios.
+- Institucional (35+ residentes): cotizacion personalizada por WhatsApp, cupos a medida.
 
-- **Plan hasta 14 residentes**: $50.000 CLP + IVA al mes, hasta 14 residentes activos u hospitalizados y 10 funcionarios. Ideal para residencias pequeñas.
-- **Plan hasta 24 residentes** (el más elegido): $80.000 CLP + IVA al mes, hasta 24 residentes activos u hospitalizados y 20 funcionarios.
-- **Plan hasta 34 residentes**: $120.000 CLP + IVA al mes, hasta 34 residentes activos u hospitalizados y 30 funcionarios.
-- **Institucional (35+ residentes)**: cotización personalizada por WhatsApp, cupos a medida.
+Los residentes activos y hospitalizados consumen cupo. Residentes egresados o fallecidos no consumen cupo. Los funcionarios creados y las invitaciones pendientes de funcionarios consumen cupo; familiares no consumen cupo de funcionarios. Pago mensual con MercadoPago.
 
-Los residentes activos y hospitalizados consumen cupo del plan. Los residentes egresados o fallecidos no consumen cupo. Los funcionarios creados y las invitaciones pendientes consumen cupo de funcionarios; los familiares no consumen cupo de funcionarios. Pago mensual con MercadoPago.
+## Funcionalidades principales
 
-### Funcionalidades principales
+- Ficha clinica digital de residentes (diagnosticos, alergias, medicamentos, indice de Barthel, dependencia)
+- Signos vitales por turno con rangos clinicos para personas mayores y alertas criticas
+- Observaciones de turno con seguimiento obligatorio
+- Carpeta SEREMI DS 20 por articulos, evidencia, criticidad, vigencias y modo fiscalizacion
+- Programa de atencion integral usuaria con tareas por turno
+- Gestion de habitaciones y camas con historial de ocupacion
+- eMAR (kardex electronico), stock, receta, frio, temperatura, gaveta, eliminacion y control
+- Eventos adversos y eventos criticos con seguimiento
+- Portal para familias del residente con visitas y signos recientes
+- Gestion de equipo con permisos granulares por funcionario
+- Importacion masiva via Excel con validadores nativos
+- Cuenta demo real con 30 dias de prueba gratuita
 
-- **Ficha clínica digital**: diagnósticos, alergias, medicamentos, índice de Barthel, nivel de dependencia y contactos de emergencia por residente.
-- **Signos vitales**: registro por turno con rangos clínicos validados para adultos mayores; alertas automáticas de valores críticos.
-- **Observaciones de turno**: 12 categorías (alimentación, higiene, comportamiento, caídas, medicamentos, etc.) con seguimiento obligatorio.
-- **Carpeta SEREMI DS 14/2017**: 14 ámbitos y +70 requisitos pre-cargados, subida de evidencias con vencimiento, alertas 30 días antes y export imprimible.
-- **Gestión de habitaciones y camas**: inventario, ocupación, asignación, transferencia y liberación con historial.
-- **eMAR (Kardex electrónico)**: administración de medicamentos por turno con historial inmutable y control de stock.
-- **Plan de cuidado**: tareas por turno con seguimiento.
-- **Portal para familias**: acceso restringido al residente vinculado con últimos signos vitales y registro de visitas.
-- **Gestión de equipo**: creación de cuentas para funcionarios con permisos granulares y familiares vinculados a residentes activos.
-- **Importación masiva Excel**: plantillas con validadores nativos para residentes y funcionarios.
-- **Cuenta demo real**: 30 días de prueba gratuita con datos reales.
+## Matriz DS 20
 
----
+- Art. 5: Autorización sanitaria
+- Art. 6: Vigencia, observaciones y cierre
+- Art. 7: Modificaciones ante SEREMI
+- Arts. 8-9: Infraestructura y ubicación
+- Art. 10: Instalaciones, equipamiento y seguridad
+- Arts. 11-13: Dirección técnica y administrativa
+- Arts. 14-21: Personal, competencias y dotación
+- Arts. 22-24: Ingreso y carpeta personal
+- Art. 25: Protocolos y programa integral
+- Art. 26: Red de salud y derivaciones
+- Arts. 27-30: Reglamento, contrato y registros
+- Arts. 3, 31-32 y transitorios: Fiscalización, SENAMA y transitorios
 
-## Blog — Recursos para ELEAM en Chile
+## Rutas publicas
 
-Artículos prácticos para directores y personal de Establecimientos de Larga Estadía para Adultos Mayores:
+- https://fichaeleam.cl/
+- https://fichaeleam.cl/software-eleam/
+- https://fichaeleam.cl/acreditacion-seremi/
+- https://fichaeleam.cl/preguntas-frecuentes/
+- https://fichaeleam.cl/contacto/
+- https://fichaeleam.cl/pago/
+- https://fichaeleam.cl/blog/
 
-- [Blog FichaEleam](https://fichaeleam.cl/blog): índice completo de artículos.
+## Articulos publicados
 
-### Artículos publicados
-
-- [DS 14/2017 explicado: qué exige la SEREMI a un ELEAM en Chile](https://fichaeleam.cl/blog/ds-14-2017-fiscalizacion-seremi-eleam): guía 2026 del decreto, los 14 ámbitos y las 5 observaciones más comunes.
-- [Checklist completo de fiscalización SEREMI para tu ELEAM](https://fichaeleam.cl/blog/checklist-fiscalizacion-seremi-eleam): documentos, protocolos y registros por ámbito del DS 14/2017.
-- [Cómo digitalizar la ficha clínica de un ELEAM en 30 días](https://fichaeleam.cl/blog/digitalizar-ficha-clinica-eleam): plan semana por semana para residentes, signos vitales, observaciones y carpeta SEREMI.
-- [Signos vitales en adultos mayores: rangos normales y alertas críticas](https://fichaeleam.cl/blog/signos-vitales-adulto-mayor-rangos-criticos): tabla completa con cuándo escalar al médico de turno.
-- [Comunicación con familias en ELEAM: protocolo y formato](https://fichaeleam.cl/blog/comunicacion-familias-eleam-protocolo): cómo informar sin saturar y reducir reclamos.
-- [Cómo preparar un ELEAM pequeño para la fiscalización SEREMI](https://fichaeleam.cl/blog/preparar-eleam-pequeno-fiscalizacion-seremi): guía paso a paso para directores con equipos reducidos.
-- [Checklist de documentos básicos que todo ELEAM debe tener al día](https://fichaeleam.cl/blog/checklist-documentos-basicos-eleam): documentos administrativos, clínicos, personal y operativos por categoría.
-- [Errores comunes en los registros diarios de un ELEAM](https://fichaeleam.cl/blog/errores-registros-diarios-eleam): observaciones vagas, sin firma o sin seguimiento y cómo corregirlos.
-- [Kardex de medicamentos en ELEAM pequeños](https://fichaeleam.cl/blog/kardex-medicamentos-eleam-pequeno): qué es, qué exige la normativa y el libro de psicotrópicos.
-- [Cómo registrar caídas, incidentes y eventos relevantes](https://fichaeleam.cl/blog/registro-caidas-incidentes-eleam): datos mínimos, protocolo de notificación y seguimiento.
-- [Comunicación con familias en ELEAM: derechos del residente](https://fichaeleam.cl/blog/comunicacion-familias-eleam-derechos): qué dice la Ley 20.584 sobre el derecho a la información.
-- [Papel, Excel o sistema digital: qué conviene en un ELEAM pequeño](https://fichaeleam.cl/blog/papel-excel-sistema-digital-eleam): comparativa honesta de las tres opciones de gestión.
-- [Protección de datos personales en ELEAM: Ley 19.628](https://fichaeleam.cl/blog/proteccion-datos-personales-eleam): datos sensibles, control de acceso por rol y riesgos del WhatsApp.
-- [Organización de tareas por turno en ELEAM](https://fichaeleam.cl/blog/organizacion-tareas-turno-eleam): qué registrar en cada turno y cómo hacer el traspaso.
-- [Trazabilidad en ELEAM: qué es y cómo construirla](https://fichaeleam.cl/blog/trazabilidad-eleam-guia-directores): cuatro preguntas que define la trazabilidad y cómo implementarla.
-
----
+- [Decreto N°20: qué exige la SEREMI a un ELEAM en Chile](https://fichaeleam.cl/blog/decreto-20-fiscalizacion-seremi-eleam) — Acreditación SEREMI, 9 min: Guía práctica para entender el Decreto N°20 aplicado a ELEAM: autorización sanitaria, dirección técnica, dotación, registros vivos, derechos y fiscalización.
+- [Checklist de fiscalización SEREMI DS 20 para ELEAM](https://fichaeleam.cl/blog/checklist-fiscalizacion-seremi-ds20-eleam) — Acreditación SEREMI, 8 min: Checklist actualizado para preparar una fiscalización SEREMI bajo Decreto N°20: documentos, registros, vigencias, transitorios y evidencia operacional.
+- [Programa de atención integral usuaria en ELEAM: cómo llevarlo a la práctica](https://fichaeleam.cl/blog/programa-atencion-integral-usuaria-eleam) — Gestión de ELEAM, 7 min: El Decreto N°20 refuerza una gestión centrada en la persona mayor. Esta guía explica cómo convertir el programa integral en rutinas, tareas y evidencia.
+- [Medicamentos en ELEAM bajo DS 20: receta, stock, frío y controlados](https://fichaeleam.cl/blog/medicamentos-eleam-ds20-receta-stock-controlados) — Acreditación SEREMI, 7 min: Guía práctica para ordenar medicamentos en ELEAM: prescripción vigente, administración, control de stock, temperatura, gaveta, eliminación y psicotrópicos.
+- [Eventos críticos en ELEAM: registro, seguimiento y notificación](https://fichaeleam.cl/blog/eventos-criticos-eleam-ds20-registro-seguimiento) — Acreditación SEREMI, 6 min: Cómo documentar caídas, errores de medicación, infecciones, fugas, agresiones y otros eventos críticos con trazabilidad útil para SEREMI y familias.
+- [Cómo preparar un ELEAM pequeño para una fiscalización SEREMI DS 20](https://fichaeleam.cl/blog/preparar-eleam-pequeno-fiscalizacion-seremi) — Acreditación SEREMI, 8 min: Plan de cuatro semanas para ELEAM pequeños: evidencia DS 20, responsables, vigencias, registros clínicos y operación diaria sin sobrecargar al equipo.
+- [Cómo digitalizar la ficha clínica de un ELEAM en 30 días](https://fichaeleam.cl/blog/digitalizar-ficha-clinica-eleam) — Acreditación SEREMI, 8 min: Plan paso a paso para llevar fichas clínicas, signos vitales, observaciones, medicamentos y Carpeta SEREMI DS 20 a un sistema digital.
+- [Comunicación con familias en ELEAM: protocolo y evidencia](https://fichaeleam.cl/blog/comunicacion-familias-eleam-protocolo) — Clínica geriátrica, 6 min: Cómo informar a familias de personas mayores de forma clara, trazable y segura, con portal familiar, visitas y notificación de eventos.
 
 ## Marco regulatorio (Chile)
 
-FichaEleam está diseñado en conformidad con el marco regulatorio chileno para ELEAM:
-
-- **DS 14/2017** (Decreto Supremo del Ministerio de Salud): reglamento de Establecimientos de Larga Estadía para Adultos Mayores. Define los 14 ámbitos de acreditación y los requisitos documentales para la fiscalización SEREMI. FichaEleam tiene todos los ámbitos y +70 requisitos pre-cargados.
-- **Ley N°20.584**: regula los derechos y deberes de los pacientes en establecimientos de salud, incluyendo ELEAM. Incluye derecho a la información, privacidad y acceso a registros clínicos.
-- **Ley N°19.628**: protección de datos personales. Aplica al tratamiento de información de residentes, diagnósticos y datos de salud en ELEAM.
-- **SENAMA** (Servicio Nacional del Adulto Mayor): organismo que promueve la calidad de vida del adulto mayor y supervisa los establecimientos.
-- **SEREMI de Salud**: Secretaría Regional Ministerial que fiscaliza y acredita los ELEAM en cada región de Chile.
-
----
+- Decreto N 20 MINSAL: reglamento vigente para ELEAM, con enfoque de derechos, autorizacion sanitaria, direccion tecnica, dotacion, infraestructura, protocolos, programa integral, registros, fiscalizacion y transitorios.
+- Ley N 20.584: derechos y deberes de los pacientes, incluyendo derecho a la informacion y acceso al historial clinico.
+- Ley N 19.628: proteccion de datos personales. Aplica al tratamiento de datos sensibles de salud de residentes.
+- SENAMA y SEREMI de Salud: organismos relacionados con supervision, reportes y fiscalizacion de ELEAM.
 
 ## Glosario
 
-- **ELEAM**: Establecimiento de Larga Estadía para Adultos Mayores. Residencia con atención 24/7 para personas mayores que requieren cuidados continuos.
-- **SEREMI**: Secretaría Regional Ministerial de Salud. Fiscaliza y acredita los ELEAM.
-- **DS 14/2017**: Decreto Supremo N°14/2017 del Ministerio de Salud. Define los 14 ámbitos de acreditación para ELEAM y sus requisitos documentales.
-- **Carpeta SEREMI**: conjunto de documentos, registros y evidencias exigidos por la SEREMI para acreditar el cumplimiento del DS 14/2017.
-- **Ficha clínica**: registro digital de la historia clínica de cada residente: diagnósticos, medicamentos, signos vitales y observaciones de turno.
-- **Índice de Barthel**: escala de valoración funcional de 0 a 100 puntos que mide la independencia del adulto mayor en actividades de la vida diaria.
-- **Nivel de dependencia**: clasificación según índice de Barthel: leve (61-99), moderado (41-60), severo (21-40), total (0-20).
-- **Turno**: jornada de trabajo del personal clínico (mañana, tarde, noche). Los registros de signos vitales y observaciones se asocian al turno correspondiente.
-- **Kardex / eMAR**: registro de administración de medicamentos por residente, exigido por la SEREMI. eMAR es la versión electrónica con historial inmutable.
-- **PAI**: Plan de Atención Individualizado del residente.
-- **HACCP**: Análisis de peligros y puntos críticos de control para la operación de cocina.
+- ELEAM: Establecimiento de Larga Estadia para Personas Mayores.
+- SEREMI: Secretaria Regional Ministerial de Salud. Autoriza, supervisa y fiscaliza ELEAM.
+- Carpeta SEREMI DS 20: conjunto de documentos, registros operativos y evidencias exigibles por articulo.
+- Ficha clinica: registro digital de la historia clinica de cada residente (diagnosticos, medicamentos, signos vitales y observaciones).
+- Indice de Barthel: escala de valoracion funcional 0-100 para personas mayores.
+- Nivel de dependencia: clasificacion segun Barthel: leve (61-99), moderado (41-60), severo (21-40), total (0-20).
+- Kardex / eMAR: registro de administracion de medicamentos por residente; eMAR es la version electronica con historial inmutable.
+- Programa de atencion integral usuaria: plan operativo vivo que ordena objetivos, cuidados, actividades y seguimiento.
+- HACCP: analisis de peligros y puntos criticos de control para la operacion de cocina.
+- Turno: manana, tarde o noche.
 
----
+## Como solicitar el demo gratuito
 
-## Cómo solicitar el demo gratuito
-
-1. Completa el formulario en https://fichaeleam.cl o escríbenos por WhatsApp al +56 9 5118 7764.
-2. Nuestro equipo revisa cada solicitud y responde en menos de 24 horas.
-3. Recibes por correo un enlace de acceso a una cuenta real con 30 días de prueba sin costo y sin tarjeta de crédito.
-4. Después de los 30 días, eliges el plan según el número de residentes y pagas con MercadoPago.
+1. Completa el formulario en https://fichaeleam.cl o escribe por WhatsApp al +56 9 5118 7764.
+2. El equipo de FichaEleam revisa cada solicitud y responde en menos de 24 horas.
+3. Recibes por correo un enlace de acceso a una cuenta real con 30 dias de prueba sin costo y sin tarjeta de credito.
+4. Despues de los 30 dias eliges el plan segun el numero de residentes y pagas con MercadoPago.

@@ -15,7 +15,7 @@ Esta es una guía rápida de referencias. Para arquitectura, BD, seguridad y flu
 **Features principales**:
 - CRUD residentes + signos vitales + observaciones
 - Gestión de camas, planes de cuidado, eMAR y visitas familiares
-- Acreditación v9 (14 ámbitos, ~70 requisitos, evidencias versionadas)
+- Acreditación v9 (matriz DS 20 por artículos, controles DS 20, evidencias versionadas)
 - Suscripción MercadoPago
 - Blog público + CRM superadmin
 - Permisos granulares funcionario y permisos por feature
@@ -189,7 +189,7 @@ Cada parámetro devuelve estado: `normal`, `warning`, `critical`, `unknown`.
 
 ## Acreditación (SEREMI)
 
-Modelo v9 con 14 ámbitos DS 14/2017. Requisitos en catálogo maestro, estados por ELEAM, evidencias versionadas, observaciones de auditoría.
+Modelo v9 con matriz DS 20 por artículos Decreto N°20. Requisitos en catálogo maestro, estados por ELEAM, evidencias versionadas, observaciones de auditoría.
 
 ### Estados
 

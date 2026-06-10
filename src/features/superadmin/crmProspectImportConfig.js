@@ -28,18 +28,18 @@ export const crmProspectImportConfig = {
     { key: "comuna", header: "Comuna", width: 18 },
     { key: "telefono", header: "Teléfono", aliases: ["telefono"], width: 18, note: "Acepta formato chileno: +56 9 1234 5678" },
     { key: "email", header: "Correo electrónico de contacto", aliases: ["correo", "email"], width: 32 },
-    { key: "origen", header: "Origen", aliases: ["fuente"], width: 18, note: "outbound, landing, whatsapp, referido, manual, campana, import_excel, otro" },
-    { key: "canal_preferido", header: "Canal preferido", aliases: ["canal"], width: 20, note: "telefono, email, whatsapp, redes, presencial, desconocido" },
+    { key: "origen", header: "Origen", aliases: ["fuente"], width: 18, validationList: ORIGIN_OPTIONS.map(([value]) => value), note: "outbound, landing, whatsapp, referido, manual, campana, import_excel, otro" },
+    { key: "canal_preferido", header: "Canal preferido", aliases: ["canal"], width: 20, validationList: CHANNEL_OPTIONS.map(([value]) => value), note: "telefono, email, whatsapp, redes, presencial, desconocido" },
     { key: "cargo_contacto", header: "Cargo contacto", aliases: ["cargo"], width: 24 },
     { key: "decision_maker_nombre", header: "Nombre decisor", aliases: ["decisor"], width: 28 },
     { key: "decision_maker_cargo", header: "Cargo decisor", aliases: ["cargo decisor"], width: 24 },
     { key: "num_residentes", header: "N° residentes", aliases: ["residentes", "num residentes"], width: 16 },
-    { key: "digitalizacion_estado", header: "Estado digital", aliases: ["digitalizacion", "digitalización"], width: 28, note: "desconocido, papel_excel_whatsapp, software_generico, software_eleam, mixto" },
+    { key: "digitalizacion_estado", header: "Estado digital", aliases: ["digitalizacion", "digitalización"], width: 28, validationList: DIGITALIZATION_OPTIONS.map(([value]) => value), note: "desconocido, papel_excel_whatsapp, software_generico, software_eleam, mixto" },
     { key: "software_actual", header: "Software actual", aliases: ["sistema actual", "competidor"], width: 28 },
     { key: "dolor_principal", header: "Dolor principal", aliases: ["dolor", "pain"], width: 42 },
-    { key: "urgencia", header: "Urgencia", width: 16, note: "baja, media, alta, desconocida" },
+    { key: "urgencia", header: "Urgencia", width: 16, validationList: URGENCY_OPTIONS.map(([value]) => value), note: "baja, media, alta, desconocida" },
     { key: "fit_score", header: "Fit score 0-100", aliases: ["fit"], width: 16 },
-    { key: "proxima_accion_fecha", header: "Próxima acción fecha", aliases: ["proxima accion", "próxima acción"], width: 20 },
+    { key: "proxima_accion_fecha", header: "Próxima acción fecha", aliases: ["proxima accion", "próxima acción"], width: 20, type: "date" },
     { key: "facebook_url", header: "link facebook", aliases: ["facebook", "link facebook"], width: 28 },
     { key: "instagram_url", header: "link instagram", aliases: ["instagram", "link instagram"], width: 28 },
     { key: "tiktok_url", header: "link tiktok", aliases: ["tiktok", "link tiktok"], width: 28 },
@@ -201,6 +201,15 @@ function normalizeInteger(value, label, { min = null, max = null } = {}, errors)
 
 function normalizeDate(value, label, errors) {
   if (isBlank(value)) return null;
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      errors.push(`${label} debe ser una fecha válida.`);
+      return null;
+    }
+    return value.toISOString().slice(0, 10);
+  }
+
   const text = cleanOptional(value).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
     errors.push(`${label} debe tener formato AAAA-MM-DD.`);

@@ -1,8 +1,15 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import { useSEO, faqJsonLd, breadcrumbJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
 import PublicShell from "./PublicShell";
+import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "./publicDesignAssets";
+import {
+  FaqDisclosure,
+  PublicBadge,
+  PublicBreadcrumb,
+  PublicCtaBand,
+  PublicSection,
+} from "./PublicDesign";
 
 const CATEGORIES = [
   {
@@ -11,11 +18,11 @@ const CATEGORIES = [
     qa: [
       {
         q: "¿Qué es FichaEleam?",
-        a: "FichaEleam es un software web especializado para Establecimientos de Larga Estadía para Adultos Mayores (ELEAM) en Chile. Centraliza ficha clínica, signos vitales, observaciones por turno, plan de cuidado, administración de medicamentos, gestión de habitaciones, portal familiar y carpeta SEREMI DS 14/2017 en una sola plataforma.",
+        a: "FichaEleam es un software web especializado para Establecimientos de Larga Estadía para Personas Mayores (ELEAM) en Chile. Centraliza ficha clínica, signos vitales, observaciones por turno, plan de cuidado, administración de medicamentos, gestión de habitaciones, portal familiar y carpeta SEREMI Decreto N°20 en una sola plataforma.",
       },
       {
         q: "¿En qué se diferencia de un software clínico genérico?",
-        a: "Está diseñado exclusivamente para ELEAM en Chile: trae los 14 ámbitos del DS 14/2017 pre-cargados, aplica rangos clínicos para adulto mayor, contempla turnos mañana/tarde/noche, maneja medicamentos controlados con doble validación y entiende los flujos de fiscalización SEREMI.",
+        a: "Está diseñado para ELEAM en Chile: organiza la matriz DS 20 por artículos del Decreto N°20, aplica rangos clínicos para persona mayor, contempla turnos mañana/tarde/noche, maneja medicamentos controlados con doble validación y entiende los flujos de fiscalización SEREMI.",
       },
       {
         q: "¿Es una aplicación de escritorio o web?",
@@ -40,7 +47,7 @@ const CATEGORIES = [
         a: "Por MercadoPago con tarjeta de crédito o débito chilena. El cobro es mensual automático. Puedes cancelar cuando quieras desde el panel de administrador.",
       },
       {
-        q: "¿Hay costo de implementación o setup?",
+        q: "¿Hay costo de implementación?",
         a: "No. La activación es inmediata: una vez aprobado el demo, recibes tu cuenta lista para usar. No hay fee por configuración, instalación ni capacitación.",
       },
       {
@@ -107,15 +114,15 @@ const CATEGORIES = [
     qa: [
       {
         q: "¿Dónde se almacenan los datos?",
-        a: "En infraestructura cloud sobre Supabase (basado en Postgres). Los datos están encriptados en tránsito (TLS) y en reposo. Backups automáticos diarios.",
+        a: "En infraestructura segura en la nube. Los datos viajan cifrados y se respaldan periódicamente para proteger la continuidad operativa.",
       },
       {
         q: "¿Otro ELEAM puede ver mis datos?",
-        a: "Imposible. Implementamos aislamiento estricto con Row Level Security a nivel de base de datos: cada consulta filtra por el ELEAM del usuario que la ejecuta. Aunque un atacante intentara forzar acceso desde el cliente, el motor de base de datos lo rechaza.",
+        a: "No. Cada establecimiento trabaja en un espacio separado y los permisos impiden que usuarios de otro ELEAM vean información que no corresponde.",
       },
       {
-        q: "¿Cumple con la ley chilena de protección de datos?",
-        a: "Sí. Operamos bajo la Ley N° 19.628 sobre protección de datos personales y la Ley N° 20.584 sobre derechos del paciente. El responsable del tratamiento de datos es tu ELEAM; nosotros somos el encargado.",
+        q: "¿Cómo resguarda la ley chilena de protección de datos?",
+        a: "FichaEleam opera con controles técnicos y organizacionales alineados con la Ley N° 19.628 sobre protección de datos personales y la Ley N° 20.584 sobre derechos del paciente. El responsable del tratamiento de datos es tu ELEAM; nosotros actuamos como encargado.",
       },
       {
         q: "¿Qué pasa si alguien intenta acceder sin autorización?",
@@ -151,7 +158,7 @@ const CATEGORIES = [
     qa: [
       {
         q: "¿Cómo recibo soporte?",
-        a: "Por correo a contacto@fichaeleam.cl y por WhatsApp al +56 9 5118 7764. Respondemos en horario hábil con prioridad a urgencias operativas.",
+        a: "Por WhatsApp o formulario de demo desde nuestra página de contacto. Respondemos en horario hábil, con prioridad a urgencias operativas.",
       },
       {
         q: "¿Cómo cancelo la suscripción?",
@@ -170,7 +177,6 @@ const CATEGORIES = [
 ];
 
 export default function FaqPage() {
-  const navigate = useNavigate();
   usePageView("/preguntas-frecuentes");
   const [activeCategory, setActiveCategory] = useState(CATEGORIES[0].id);
 
@@ -180,6 +186,7 @@ export default function FaqPage() {
     title: "Preguntas frecuentes · FichaEleam",
     description: "Preguntas frecuentes sobre FichaEleam: precios, planes, demo gratuito, implementación, seguridad de datos, equipo y permisos, soporte. Software para ELEAM en Chile.",
     path: "/preguntas-frecuentes",
+    image: PUBLIC_ASSETS.shift.publicSrc,
     keywords: [
       "FichaEleam preguntas frecuentes",
       "precios software ELEAM",
@@ -198,30 +205,24 @@ export default function FaqPage() {
   return (
     <PublicShell current="/preguntas-frecuentes">
       {({ openDemo }) => (
-        <>
-          <section className="bg-slate-950 text-white px-5 pt-20 pb-20">
-            <div className="max-w-4xl mx-auto">
-              <nav className="text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-                <Link to="/" className="hover:text-teal-300">Inicio</Link>
-                <span className="mx-2">/</span>
-                <span className="text-slate-300">Preguntas frecuentes</span>
-              </nav>
-              <p className="text-xs font-bold text-teal-400 uppercase tracking-[0.2em] mb-4">Respuestas claras</p>
-              <h1 className="text-4xl sm:text-5xl font-black leading-tight tracking-tight mb-5">
-                Preguntas <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-emerald-400">frecuentes</span>
+        <div className="bg-white">
+          <section className="bg-slate-50 px-5 py-14 sm:py-20">
+            <div className="mx-auto max-w-6xl">
+              <PublicBreadcrumb current="Preguntas frecuentes" />
+              <PublicBadge>Respuestas claras</PublicBadge>
+              <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
+                Preguntas frecuentes sobre FichaEleam
               </h1>
-              <p className="text-lg text-slate-300 leading-relaxed max-w-2xl">
-                Todo lo que un director, administrador o equipo clínico de un ELEAM suele preguntar antes de
-                contratar FichaEleam. Si tu duda no está aquí, escríbenos.
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
+                Producto, precios, demo, implementación, seguridad, permisos y soporte para ELEAM en Chile.
               </p>
             </div>
           </section>
 
-          <section className="bg-white px-5 py-16">
-            <div className="max-w-5xl mx-auto grid lg:grid-cols-[260px_1fr] gap-10">
-              {/* Sidebar nav */}
+          <PublicSection>
+            <div className="grid gap-10 lg:grid-cols-[260px_1fr]">
               <aside className="lg:sticky lg:top-24 lg:self-start">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Categorías</p>
+                <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Categorías</p>
                 <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
                   {CATEGORIES.map((c) => (
                     <button
@@ -242,59 +243,38 @@ export default function FaqPage() {
                     </button>
                   ))}
                 </nav>
+                <div className="mt-6 hidden rounded-2xl border border-slate-100 bg-slate-50 p-4 lg:block">
+                  <p className="text-sm font-semibold text-slate-950">¿Evaluando FichaEleam?</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">La demo permite revisar el flujo completo antes de contratar.</p>
+                  <button type="button" onClick={() => openDemo("faq_sidebar")} className={`${PUBLIC_BUTTON.primary} mt-4 w-full py-2`}>
+                    Solicitar demo
+                  </button>
+                </div>
               </aside>
 
-              {/* Q&A */}
               <div className="space-y-12">
                 {CATEGORIES.map((c) => (
                   <section key={c.id} id={`cat-${c.id}`} aria-labelledby={`h-${c.id}`}>
-                    <h2 id={`h-${c.id}`} className="text-2xl font-black text-slate-900 mb-4">{c.label}</h2>
+                    <h2 id={`h-${c.id}`} className="mb-4 text-2xl font-semibold text-slate-950">{c.label}</h2>
                     <div className="space-y-3">
-                      {c.qa.map((qa) => (
-                        <details key={qa.q} className="group bg-slate-50 rounded-2xl border border-slate-100">
-                          <summary className="cursor-pointer list-none p-5 flex items-start justify-between gap-3">
-                            <span className="font-semibold text-slate-900 text-sm leading-snug">{qa.q}</span>
-                            <svg className="w-5 h-5 text-slate-400 shrink-0 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                            </svg>
-                          </summary>
-                          <p className="px-5 pb-5 text-sm text-slate-600 leading-relaxed">{qa.a}</p>
-                        </details>
-                      ))}
+                      {c.qa.map((qa) => <FaqDisclosure key={qa.q} q={qa.q} a={qa.a} />)}
                     </div>
                   </section>
                 ))}
               </div>
             </div>
-          </section>
+          </PublicSection>
 
-          <section className="bg-slate-50 px-5 py-20">
-            <div className="max-w-3xl mx-auto text-center">
-              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mb-4">
-                ¿Tu duda no está aquí?
-              </h2>
-              <p className="text-slate-500 mb-8 max-w-xl mx-auto">
-                Escríbenos por correo o WhatsApp. Respondemos cada consulta en horario hábil.
-              </p>
-              <div className="flex flex-wrap gap-3 justify-center">
-                <button
-                  type="button"
-                  onClick={() => openDemo("faq_footer")}
-                  className="bg-teal-600 text-white font-bold py-3 px-7 rounded-xl hover:bg-teal-700 shadow-sm"
-                >
-                  Solicitar demo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { navigate("/contacto"); trackEvent("cta_click", "faq_contacto"); }}
-                  className="border border-slate-200 text-slate-700 font-semibold py-3 px-7 rounded-xl hover:bg-white"
-                >
-                  Ir a contacto
-                </button>
-              </div>
-            </div>
-          </section>
-        </>
+          <PublicCtaBand
+            title="¿Tu duda no está aquí?"
+            text="Escríbenos por correo o WhatsApp, o solicita una demo para revisar el caso de tu ELEAM."
+            primaryLabel="Solicitar demo"
+            onPrimary={openDemo}
+            source="faq_footer"
+            secondaryLabel="Ir a contacto"
+            secondaryTo="/contacto"
+          />
+        </div>
       )}
     </PublicShell>
   );

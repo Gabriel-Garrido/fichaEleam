@@ -5,7 +5,12 @@
 User-agent: *
 Allow: /
 Allow: /blog
+Allow: /software-eleam
+Allow: /acreditacion-seremi
+Allow: /preguntas-frecuentes
+Allow: /contacto
 Allow: /pago
+Allow: /marketing/
 Allow: /og-image.png
 Allow: /favicon.svg
 

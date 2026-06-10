@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import HelpTooltip from "../../components/HelpTooltip";
 import PublicShell from "../public/PublicShell";
+import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "../public/publicDesignAssets";
+import {
+  ProductImage,
+  PublicBadge,
+  PublicMetric,
+} from "../public/PublicDesign";
 import { friendlyError } from "../../utils/errorMessages";
 import { useSEO } from "../../utils/seo";
 import {
@@ -20,6 +26,7 @@ import { getEffectivePlanLimits, planLimitError, PUBLIC_PLAN_CATALOG } from "./p
 import { isMercadoPagoCheckoutUrl } from "./mercadoPagoUrls";
 import { FeatureCoach } from "../featureCoach";
 import { buildWhatsAppUrl } from "../landing/whatsAppLeadUtils";
+import { trackEvent } from "../landing/landingAnalytics";
 
 function daysUntil(iso) {
   if (!iso) return null;
@@ -35,7 +42,7 @@ const INCLUYE = [
   "Fichas clínicas digitales para todos tus residentes",
   "Registro diario de signos vitales por turno",
   "Observaciones de turno con 12 categorías",
-  "Sistema de documentación SEREMI (DS 14/2017)",
+  "Sistema de documentación SEREMI (Decreto N°20)",
   "Funcionarios incluidos según el cupo del plan",
   "Soporte por correo electrónico",
 ];
@@ -153,16 +160,26 @@ export default function PaymentPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const {
-    user, profile, eleam, pagoActivo, subscriptionStatus, isAdminEleam, rol, refetchProfile,
+    user, profile, eleam, pagoActivo, subscriptionStatus, isAdminEleam, rol, refetchProfile, authLoading,
   } = useAuth();
   const sinAcceso = params.get("sinAcceso") === "1";
   const blockedNonAdmin = Boolean(user && !isAdminEleam && sinAcceso);
+
+  // Solo cuenta la visita pública a /pago (no la de un admin autenticado), para
+  // mantener limpio el desglose de páginas públicas en superadmin.
+  const trackedView = useRef(false);
+  useEffect(() => {
+    if (authLoading || trackedView.current) return;
+    trackedView.current = true;
+    if (!user) trackEvent("page_view", "/pago");
+  }, [authLoading, user]);
 
   useSEO({
     title: "Planes y precios · activa tu ELEAM",
     description:
       "Planes mensuales en CLP para tu ELEAM en Chile. Pago con MercadoPago, cupos claros para residentes y funcionarios, y familias incluidas. Cancela cuando quieras.",
     path: "/pago",
+    image: PUBLIC_ASSETS.software.publicSrc,
     keywords: ["precio software ELEAM", "planes ELEAM Chile", "FichaEleam precio"],
   });
   const accountEmail = profile?.email || user?.email || "";
@@ -575,7 +592,7 @@ export default function PaymentPage() {
                 : "Activa tu ELEAM"}
             {!blockedNonAdmin && (
               <HelpTooltip className="ml-2" label="Ayuda sobre activación">
-                Elige el plan según residentes activos. El pago lo procesa MercadoPago y el acceso se habilita automáticamente cuando el webhook confirma el cobro.
+                Elige el plan según residentes activos. El pago se procesa con MercadoPago y el acceso se habilita cuando se confirma el cobro.
               </HelpTooltip>
             )}
           </h1>
@@ -745,5 +762,38 @@ export default function PaymentPage() {
   );
 
   if (!showPublicNav) return body;
-  return <PublicShell current="/pago">{body}</PublicShell>;
+  return (
+    <PublicShell current="/pago">
+      {({ openDemo }) => (
+        <div className="bg-white">
+          <section className="bg-slate-50 px-5 py-14 sm:py-20">
+            <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
+              <div>
+                <PublicBadge>Planes y precios</PublicBadge>
+                <h1 className="mt-6 font-display text-4xl font-semibold tracking-tight text-balance text-slate-950 sm:text-5xl">
+                  Precios claros para digitalizar tu ELEAM
+                </h1>
+                <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
+                  Elige según residentes activos u hospitalizados. Todos los planes incluyen ficha clínica, signos vitales, Carpeta SEREMI y portal familiar.
+                </p>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <button type="button" onClick={() => openDemo("payment_public_hero")} className={PUBLIC_BUTTON.primary}>
+                    Solicitar demo gratis
+                  </button>
+                  <a href="#planes" className={PUBLIC_BUTTON.secondary}>Ver planes</a>
+                </div>
+                <div className="mt-8 grid grid-cols-3 gap-3">
+                  <PublicMetric value="$50k" label="Desde + IVA" tone="teal" />
+                  <PublicMetric value="30d" label="Demo gratis" tone="emerald" />
+                  <PublicMetric value="Pago" label="MercadoPago" tone="sky" />
+                </div>
+              </div>
+              <ProductImage asset={PUBLIC_ASSETS.software} priority />
+            </div>
+          </section>
+          <div id="planes">{body}</div>
+        </div>
+      )}
+    </PublicShell>
+  );
 }

@@ -39,7 +39,7 @@ export const OBSERVATION_TYPE_GROUPS = [
   {
     id: "psicosocial",
     label: "Psicosocial",
-    description: "Actividades, bienestar y contacto familiar.",
+    description: "Actividades, bienestar y vínculo con la familia o persona significativa.",
     types: ["actividad"],
   },
   {

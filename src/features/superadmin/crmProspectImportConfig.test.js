@@ -39,6 +39,16 @@ describe("crmProspectImportConfig", () => {
     const required = crmProspectImportConfig.columns.filter((c) => c.required);
     expect(required.map((c) => c.key)).toEqual(["eleam_nombre"]);
   });
+
+  it("declares native Excel validations for commercial enums and dates", () => {
+    const byKey = Object.fromEntries(crmProspectImportConfig.columns.map((c) => [c.key, c]));
+
+    expect(byKey.origen.validationList).toContain("import_excel");
+    expect(byKey.canal_preferido.validationList).toContain("telefono");
+    expect(byKey.digitalizacion_estado.validationList).toContain("papel_excel_whatsapp");
+    expect(byKey.urgencia.validationList).toContain("alta");
+    expect(byKey.proxima_accion_fecha.type).toBe("date");
+  });
 });
 
 describe("normalizeProspectRows", () => {
@@ -115,6 +125,15 @@ describe("normalizeProspectRows", () => {
     expect(result[0].payload).not.toHaveProperty("script_llamada_sugerido");
   });
 
+  it("keeps free text notes as scalar text", () => {
+    const result = normalizeProspectRows([
+      row(2, { eleam_nombre: "A", notas: "Prospecto en investigación por fiscalización cercana." }),
+    ]);
+
+    expect(result[0].errors).toEqual([]);
+    expect(result[0].payload.notas).toBe("Prospecto en investigación por fiscalización cercana.");
+  });
+
   it("ignores empty phone but validates when present", () => {
     const result = normalizeProspectRows([
       row(2, { eleam_nombre: "A", telefono: "" }),
@@ -185,5 +204,17 @@ describe("normalizeProspectRows", () => {
       fit_score: 91,
       proxima_accion_fecha: "2026-06-04",
     });
+  });
+
+  it("accepts real Excel dates and text dates", () => {
+    const result = normalizeProspectRows([
+      row(2, { eleam_nombre: "A", proxima_accion_fecha: new Date(Date.UTC(2026, 5, 4)) }),
+      row(3, { eleam_nombre: "B", proxima_accion_fecha: "2026-06-05" }),
+    ]);
+
+    expect(result[0].errors).toEqual([]);
+    expect(result[0].payload.proxima_accion_fecha).toBe("2026-06-04");
+    expect(result[1].errors).toEqual([]);
+    expect(result[1].payload.proxima_accion_fecha).toBe("2026-06-05");
   });
 });

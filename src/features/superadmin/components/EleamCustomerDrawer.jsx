@@ -6,6 +6,7 @@ import Modal from "../../../components/Modal";
 import CustomerHealthBadge from "./CustomerHealthBadge";
 import InteractionTimeline from "./InteractionTimeline";
 import CrmTasksPanel from "./CrmTasksPanel";
+import EleamUsagePanel from "./EleamUsagePanel";
 import HelpTooltip from "../../../components/HelpTooltip";
 
 // Tooltips: solo en campos no obvios. Cada texto especifica la columna
@@ -255,6 +256,11 @@ export default function EleamCustomerDrawer({
                   value={formatDate(eleam.creado_en)}
                 />
               </SectionBlock>
+            </section>
+
+            {/* Uso de la app */}
+            <section className="bg-white border border-slate-100 rounded-xl p-4">
+              <EleamUsagePanel eleamId={eleam.id} />
             </section>
 
             {/* CRM */}

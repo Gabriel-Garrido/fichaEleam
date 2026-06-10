@@ -201,7 +201,7 @@ export const COACHES = {
       { title: "Prioriza por severidad", text: "Leve, moderado, grave o crítico." },
       { title: "Cierra con conclusiones", text: "Solo personal autorizado." },
     ],
-    benefit: "Cumples la trazabilidad reglamentaria con historial inmutable.",
+    benefit: "Mantienes trazabilidad reglamentaria con historial inmutable.",
   },
 
   "adverse-events-new": {
@@ -243,10 +243,10 @@ export const COACHES = {
   accreditation: {
     icon: "accreditation",
     eyebrow: "Carpeta SEREMI",
-    title: "Acreditación siempre al día",
-    description: "Los 14 ámbitos del DS 14/2017 con alertas de vencimiento.",
+    title: "Carpeta SEREMI DS 20 al día",
+    description: "La matriz DS 20 por artículos del Decreto N°20 con alertas de vencimiento.",
     steps: [
-      { title: "Mira el cumplimiento", text: "Porcentaje y pendientes por ámbito." },
+      { title: "Mira la evidencia vigente", text: "Porcentaje y pendientes por ámbito." },
       { title: "Entra a un ámbito", text: "Revisa requisitos y sube documentos." },
     ],
     benefit: "Tu carpeta lista el día de la fiscalización, sin folders perdidos.",
@@ -256,9 +256,9 @@ export const COACHES = {
     icon: "accreditation",
     eyebrow: "Ámbito SEREMI",
     title: "Requisitos del ámbito",
-    description: "Estado, vencimientos y filtros de cumplimiento del ámbito.",
+    description: "Estado, vencimientos y filtros fiscalizables del ámbito.",
     steps: [
-      { title: "Filtra por estado", text: "Pendiente, cumple, no cumple o vencido." },
+      { title: "Filtra por estado", text: "Pendiente, vigente, no cumple o vencido." },
       { title: "Entra al requisito", text: "Para ver evidencias y subir documentos." },
     ],
     benefit: "Priorizas de un vistazo qué necesita acción inmediata.",
@@ -271,7 +271,7 @@ export const COACHES = {
     description: "Evidencias versionadas, observaciones, auditoría y estados.",
     steps: [
       { title: "Sube el documento", text: "PDF, imagen o Word; se versiona solo." },
-      { title: "Cambia el estado", text: "Cumple, no aplica o pendiente, con justificación." },
+      { title: "Cambia el estado", text: "Vigente, no aplica o pendiente, con justificación." },
     ],
     benefit: "Cada requisito queda trazado: quién subió qué y cuándo cambió.",
   },
@@ -292,7 +292,7 @@ export const COACHES = {
     icon: "accreditation",
     eyebrow: "Carpeta imprimible",
     title: "Exporta tu carpeta SEREMI",
-    description: "Vista imprimible con portada, cumplimiento y detalle (Ctrl+P).",
+    description: "Vista imprimible con portada, evidencia vigente y detalle (Ctrl+P).",
     steps: [
       { title: "Revisa el resumen", text: "Datos del ELEAM y porcentaje global." },
       { title: "Guarda como PDF", text: "Ctrl+P para tener tu copia digital." },

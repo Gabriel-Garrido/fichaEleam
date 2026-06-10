@@ -88,7 +88,7 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 rounded-t-2xl p-6 text-white">
           <div className="flex justify-between items-start">
             <div>
-              <h2 id="modal-title" className="text-xl font-bold">Solicitar Demo Gratuito</h2>
+              <h2 id="modal-title" className="font-display text-2xl font-semibold tracking-tight">Solicitar demo gratis</h2>
               <p className="text-teal-100 text-sm mt-1">
                 Revisaremos tu solicitud y te avisaremos cuando el acceso esté habilitado.
               </p>
@@ -282,11 +282,11 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
               disabled={status === "submitting"}
               className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl text-sm transition-colors"
             >
-              {status === "submitting" ? "Enviando..." : "Solicitar Demo Gratuito"}
+              {status === "submitting" ? "Enviando..." : "Solicitar demo gratis"}
             </button>
 
             <p className="text-center text-xs text-slate-400">
-              Sin compromiso · Aprobación manual por el equipo FichaEleam
+              Sin compromiso · Te responderemos desde el equipo FichaEleam
             </p>
           </form>
         )}
