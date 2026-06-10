@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
 import { authErrorMessage, getDemoRequestStatus, isPendingDemoError, login, loginWithGoogle } from "./authService";
-import { useAuth, useLoading } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
+import { useLoading } from "../../context/LoadingContext";
 import { isSupabaseConfigured, supabaseConfigError } from "../../services/supabaseConfig";
 import Loading from "../../components/Loading";
 import Input from "../../components/Input";

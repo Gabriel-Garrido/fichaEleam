@@ -58,7 +58,7 @@ src/
 │   ├── team/       # Funcionarios/familiares y permisos
 │   ├── familiar/   # Portal familiar
 │   └── superadmin/ # CRM, blog editor
-├── routes/         # AppRouter
+├── routes/         # AppRouter público + AuthenticatedApp lazy
 ├── services/       # Supabase client
 └── utils/          # Validators, formValidation, dateUtils, SEO
 ```
@@ -87,6 +87,10 @@ npx supabase functions deploy  # Deploy Edge Functions
 | `/login` | — | Auth (público) |
 | `/pago`, `/pago/return` | — | MercadoPago |
 | `/blog`, `/blog/:slug` | — | Blog público |
+| `/software-eleam` | — | Producto público |
+| `/acreditacion-seremi` | — | Guía SEREMI pública |
+| `/calculadora-dotacion-eleam` | — | Calculadora DS20 pública |
+| `/preguntas-frecuentes`, `/contacto` | — | FAQ y contacto |
 | `/dashboard` | STAFF | AdminDashboard |
 | `/residents*` | STAFF | Residents CRUD |
 | `/vital-signs*` | STAFF | Vital signs |
@@ -280,6 +284,14 @@ Cuatro tiers públicos en la landing: `plan-14` ($50.000 + IVA, 14 residentes, 1
 
 ## Blog y SEO
 
+### Sitio público
+
+- `src/routes/AppRouter.jsx` sólo importa rutas públicas y carga `AuthenticatedApp` de forma lazy para login, pago y app interna.
+- `src/routes/AuthenticatedApp.jsx` monta `AuthProvider`; evita importarlo en la home pública.
+- `PublicShell` contiene el navbar, footer, CTA móvil y el dropdown `Recursos gratuitos` (Blog, Calculadora, Guía acreditación SEREMI).
+- `DemoRequestModal`, `WhatsAppLeadModal`, `WhatsAppLeadButton`, analytics Supabase y `blogService` se cargan bajo demanda para reducir el bundle público inicial.
+- `ScrollToTop` lleva rutas sin hash al inicio y respeta anchors con `scroll-mt-public`.
+
 ### Blog
 
 - `/blog` — Listado público
@@ -301,6 +313,8 @@ Cuatro tiers públicos en la landing: `plan-14` ($50.000 + IVA, 14 residentes, 1
 - `.htaccess` — generado para HostGator/cPanel con fallback SPA y headers de seguridad
 - `useSEO()` hook — Meta tags + JSON-LD por ruta
 - Open Graph + Twitter cards
+
+Validación recomendada en cambios públicos: `npm run lint`, `npm run test:run`, `npm run test:contracts`, `npm run build`, `npm run seo:check`, y revisar que `dist/index.html` no precargue `vendor-supabase` para la home.
 
 ---
 

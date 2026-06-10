@@ -43,6 +43,22 @@ npx supabase functions deploy
 
 ---
 
+## Sitio Público Y Rendimiento
+
+Las rutas públicas SEO (`/`, `/software-eleam`, `/acreditacion-seremi`, `/calculadora-dotacion-eleam`, `/blog`, `/blog/:slug`, `/preguntas-frecuentes`, `/contacto`) se cargan desde `src/routes/AppRouter.jsx` sin montar `AuthProvider`. El árbol autenticado vive en `src/routes/AuthenticatedApp.jsx` y se carga de forma lazy solo al entrar a `/login`, `/pago`, `/dashboard`, `/superadmin`, `/familiar` u otra ruta interna.
+
+`PublicShell` centraliza la navegación pública. El navbar incluye `Recursos gratuitos` con Blog, Calculadora y Guía acreditación SEREMI; el footer replica esos enlaces. Los modales de demo/WhatsApp, el FAB y Supabase Analytics se cargan bajo demanda para que la primera vista pública no precargue Supabase ni formularios pesados.
+
+Checklist al cambiar páginas públicas:
+
+- Mantener links públicos en `PublicShell` y en `scripts/generate-public-seo.mjs` cuando corresponda.
+- Usar `ScrollToTop`/anchors con `scroll-mt-public` para navegación interna y links desde footer.
+- Envolver tablas en `overflow-x-auto` con `min-w-*`.
+- Definir `width`, `height`, `decoding`, `fetchPriority` y `sizes` en imágenes públicas.
+- Ejecutar `npm run build` y confirmar que `dist/index.html` no precarga `vendor-supabase` para la home pública.
+
+---
+
 ## Estándar De Formularios
 
 Los formularios nuevos o modificados deben usar la infraestructura compartida de `src/components/forms/FormKit.jsx`:
@@ -342,6 +358,11 @@ Para cambiar el número de contacto institucional, edita `WHATSAPP_PHONE` en `wh
 | Ruta | Descripción |
 |------|-------------|
 | `/` | Landing pública con formulario de demo. |
+| `/software-eleam` | Página pública de producto. |
+| `/acreditacion-seremi` | Guía pública de acreditación SEREMI / Decreto N°20. |
+| `/calculadora-dotacion-eleam` | Calculadora pública de dotación DS20 con navegación interna. |
+| `/preguntas-frecuentes` | FAQ pública. |
+| `/contacto` | Contacto comercial público. |
 | `/login` | Inicio de sesión. |
 | `/recuperar-acceso` | Solicitar recuperación de contraseña. |
 | `/reset-password` | Definir nueva contraseña desde link de Supabase. |
@@ -362,7 +383,7 @@ Para cambiar el número de contacto institucional, edita `WHATSAPP_PHONE` en `wh
 | `/superadmin/tareas` | Tareas CRM. |
 | `/superadmin/permisos` | Features por ELEAM y rol. |
 | `/superadmin/blog*` | Gestión de blog. |
-| `/blog*` | Blog público. |
+| `/blog*` | Blog público dentro de Recursos gratuitos. |
 
 ---
 
@@ -514,3 +535,5 @@ Smoke manual recomendado para demo/login:
 6. Entrar con demo vencido o ELEAM sin acceso y verificar mensaje diferenciado en `/pago?sinAcceso=1`.
 
 Si `npm run build` vuelve a mostrar un chunk grande, revisa primero `src/routes/AppRouter.jsx`: las pantallas pesadas deben seguir cargándose con `React.lazy`.
+
+Para cambios de rendimiento público, además revisa `dist/index.html`: la home no debe incluir `vendor-supabase` como `modulepreload`; Supabase debe cargarse por interacción, analítica o rutas autenticadas.

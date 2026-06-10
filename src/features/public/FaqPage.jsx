@@ -30,7 +30,7 @@ const CATEGORIES = [
       },
       {
         q: "¿Funciona sin internet?",
-        a: "Requiere conexión a internet para sincronizar. Si tu ELEAM tiene cortes ocasionales, el equipo puede consultar la información cacheada en cada dispositivo y sincronizar cuando vuelva la conexión, pero los registros nuevos requieren internet.",
+        a: "Requiere conexión a internet para consultar y registrar información. Si tu ELEAM tiene cortes frecuentes, recomendamos revisar conectividad de respaldo antes de operar turnos críticos en la plataforma.",
       },
     ],
   },
@@ -184,7 +184,7 @@ export default function FaqPage() {
 
   useSEO({
     title: "Preguntas frecuentes · FichaEleam",
-    description: "Preguntas frecuentes sobre FichaEleam: precios, planes, demo gratuito, implementación, seguridad de datos, equipo y permisos, soporte. Software para ELEAM en Chile.",
+    description: "Preguntas frecuentes sobre FichaEleam: precios, planes, demo gratis, implementación, seguridad de datos, equipo y permisos, soporte. Software para ELEAM en Chile.",
     path: "/preguntas-frecuentes",
     image: PUBLIC_ASSETS.shift.publicSrc,
     keywords: [

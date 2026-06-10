@@ -233,8 +233,8 @@ export function renderMarkdown(md) {
         i++;
       }
       out.push(
-        <div key={KEY()} className="overflow-x-auto my-4">
-          <table className="min-w-full text-sm border border-slate-200 rounded-xl">
+        <div key={KEY()} className="my-4 overflow-x-auto rounded-xl border border-slate-200">
+          <table className="min-w-[640px] w-full text-sm">
             <thead className="bg-slate-50 text-slate-700">
               <tr>{headers.map((h, idx) => <th key={idx} className="px-3 py-2 text-left font-semibold border-b border-slate-200">{renderInline(h)}</th>)}</tr>
             </thead>

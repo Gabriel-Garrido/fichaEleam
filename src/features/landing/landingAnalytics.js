@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { supabase } from "../../services/supabaseConfig";
 import { getLandingContext, getLandingSessionId } from "./landingContext";
 
 export async function trackEvent(tipo, elemento = null, valor = null) {
   try {
+    const { supabase } = await import("../../services/supabaseConfig");
     if (!supabase) return;
     const context = getLandingContext();
     // El insert directo del cliente fue retirado: la Edge Function
@@ -28,8 +28,10 @@ export async function trackEvent(tipo, elemento = null, valor = null) {
 
 export function useScrollDepth(thresholds = [25, 50, 75, 90]) {
   const fired = useRef(new Set());
+  const frame = useRef(null);
   useEffect(() => {
     const check = () => {
+      frame.current = null;
       const scrolled = window.scrollY + window.innerHeight;
       const total    = document.documentElement.scrollHeight;
       const pct      = Math.floor((scrolled / total) * 100);
@@ -40,8 +42,15 @@ export function useScrollDepth(thresholds = [25, 50, 75, 90]) {
         }
       }
     };
-    window.addEventListener("scroll", check, { passive: true });
-    return () => window.removeEventListener("scroll", check);
+    const onScroll = () => {
+      if (frame.current) return;
+      frame.current = window.requestAnimationFrame(check);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame.current) window.cancelAnimationFrame(frame.current);
+    };
   }, [thresholds]);
 }
 

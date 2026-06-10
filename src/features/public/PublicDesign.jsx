@@ -50,7 +50,17 @@ export function WhatsAppGlyph({ className = "h-4 w-4" }) {
 
 export function Wordmark({ variant = "light", className = "h-9" }) {
   const logo = variant === "dark" ? LOGOS.horizontalTeal : LOGOS.horizontal;
-  return <img src={logo.src} alt="FichaEleam" className={`${className} w-auto object-contain`} draggable="false" />;
+  return (
+    <img
+      src={logo.src}
+      alt="FichaEleam"
+      width={logo.width ?? 512}
+      height={logo.height ?? 140}
+      decoding="async"
+      className={`${className} w-auto object-contain`}
+      draggable="false"
+    />
+  );
 }
 
 export function Reveal({ children, delay = 0, className = "" }) {
@@ -131,7 +141,7 @@ export function PublicSection({
   };
   const dark = tone === "dark";
   return (
-    <section id={id} className={`${tones[tone] ?? tones.white} px-5 py-20 sm:py-24 ${className}`}>
+    <section id={id} className={`public-section-contained scroll-mt-public ${tones[tone] ?? tones.white} px-5 py-20 sm:py-24 ${className}`}>
       <div className="mx-auto w-full max-w-6xl">
         {(eyebrow || title || description) && (
           <Reveal className={`${center ? "mx-auto items-center text-center" : ""} mb-12 flex max-w-3xl flex-col`}>
@@ -158,20 +168,25 @@ export function PublicSection({
   );
 }
 
-export function PublicBreadcrumb({ items = [], current }) {
+export function PublicBreadcrumb({ items = [], current, dark = false }) {
+  const linkClass = dark
+    ? "font-medium text-slate-300 hover:text-white"
+    : "font-medium text-slate-500 hover:text-teal-700";
+  const slashClass = dark ? "text-slate-600" : "text-slate-300";
+  const currentClass = dark ? "line-clamp-1 text-white" : "line-clamp-1 text-slate-800";
   return (
-    <nav className="mb-6 flex flex-wrap items-center gap-2 text-xs text-slate-500" aria-label="Breadcrumb">
-      <Link to="/" className="font-medium text-slate-500 hover:text-teal-700">Inicio</Link>
+    <nav className={`mb-6 flex flex-wrap items-center gap-2 text-xs ${dark ? "text-slate-300" : "text-slate-500"}`} aria-label="Breadcrumb">
+      <Link to="/" className={linkClass}>Inicio</Link>
       {items.map((item) => (
         <span key={item.to} className="inline-flex items-center gap-2">
-          <span className="text-slate-300">/</span>
-          <Link to={item.to} className="font-medium text-slate-500 hover:text-teal-700">{item.label}</Link>
+          <span className={slashClass}>/</span>
+          <Link to={item.to} className={linkClass}>{item.label}</Link>
         </span>
       ))}
       {current && (
         <span className="inline-flex min-w-0 items-center gap-2">
-          <span className="text-slate-300">/</span>
-          <span className="line-clamp-1 text-slate-800">{current}</span>
+          <span className={slashClass}>/</span>
+          <span className={currentClass}>{current}</span>
         </span>
       )}
     </nav>
@@ -241,7 +256,7 @@ export function PublicFeatureCard({ icon = "check", title, text, metric, tone = 
   );
 }
 
-export function ProductImage({ asset, priority = false, className = "", caption }) {
+export function ProductImage({ asset, priority = false, className = "", caption, sizes = "(min-width: 1024px) 50vw, 100vw" }) {
   return (
     <figure className={`overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 ${className}`}>
       <img
@@ -252,6 +267,7 @@ export function ProductImage({ asset, priority = false, className = "", caption 
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
         decoding="async"
+        sizes={sizes}
         className="h-full w-full object-cover"
       />
       {caption && (
@@ -266,7 +282,7 @@ export function ProductImage({ asset, priority = false, className = "", caption 
 // Premium framed product photo (our assets are lifestyle/device mockups, not bare
 // screenshots, so no browser chrome). Optional perspective tilt, soft glow and
 // floating callout cards. `annotations` items: { className, icon, label, value, tone, badge, rotate }.
-export function ProductShowcase({ asset, priority = false, tilt = false, annotations = [], className = "", glow = true, rounded = "rounded-3xl" }) {
+export function ProductShowcase({ asset, priority = false, tilt = false, annotations = [], className = "", glow = true, rounded = "rounded-3xl", sizes = "(min-width: 1024px) 50vw, 100vw" }) {
   const toneText = {
     teal: "text-teal-300 bg-teal-500/15",
     rose: "text-rose-300 bg-rose-500/15",
@@ -288,6 +304,7 @@ export function ProductShowcase({ asset, priority = false, tilt = false, annotat
           loading={priority ? "eager" : "lazy"}
           fetchPriority={priority ? "high" : "auto"}
           decoding="async"
+          sizes={sizes}
           className="h-full w-full object-cover"
         />
       </figure>
@@ -367,7 +384,12 @@ export function BlogVisual({ post, featured = false, className = "" }) {
       <img
         src={post.cover_url}
         alt={post.cover_alt ?? post.titulo}
+        width={1200}
+        height={630}
         loading={featured ? "eager" : "lazy"}
+        fetchPriority={featured ? "high" : "auto"}
+        decoding="async"
+        sizes={featured ? "(min-width: 1024px) 760px, 100vw" : "(min-width: 640px) 50vw, 100vw"}
         className={`w-full object-cover ${featured ? "h-64" : "h-44"} ${className}`}
       />
     );
@@ -377,7 +399,12 @@ export function BlogVisual({ post, featured = false, className = "" }) {
     <img
       src={asset.src}
       alt={post?.titulo ? `Imagen editorial de FichaEleam para ${post.titulo}` : asset.alt}
+      width={asset.width}
+      height={asset.height}
       loading={featured ? "eager" : "lazy"}
+      fetchPriority={featured ? "high" : "auto"}
+      decoding="async"
+      sizes={featured ? "(min-width: 1024px) 760px, 100vw" : "(min-width: 640px) 50vw, 100vw"}
       className={`w-full object-cover ${featured ? "h-64" : "h-44"} ${className}`}
     />
   );

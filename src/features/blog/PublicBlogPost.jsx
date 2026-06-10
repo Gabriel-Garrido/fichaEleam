@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getPostBySlug, getRelatedPosts, incrementViews } from "./blogService";
 import { renderMarkdown, extractTOC } from "./utils/markdown";
 import { useSEO, articleJsonLd, breadcrumbJsonLd } from "../../utils/seo";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
@@ -102,20 +101,25 @@ export default function PublicBlogPost() {
     let mounted = true;
     setLoading(true);
     setNotFound(false);
-    getPostBySlug(slug)
-      .then((item) => {
-        if (!mounted) return null;
+    (async () => {
+      try {
+        const { getPostBySlug, getRelatedPosts, incrementViews } = await import("./blogService");
+        const item = await getPostBySlug(slug);
+        if (!mounted) return;
         if (!item || item.estado !== "publicado") {
           setNotFound(true);
-          return null;
+          return;
         }
         setPost(item);
         incrementViews(item.slug);
-        return getRelatedPosts(item.slug, item.keywords ?? []);
-      })
-      .then((items) => mounted && items && setRelated(items.slice(0, 3)))
-      .catch(() => mounted && setNotFound(true))
-      .finally(() => mounted && setLoading(false));
+        const items = await getRelatedPosts(item.slug, item.keywords ?? []);
+        if (mounted && items) setRelated(items.slice(0, 3));
+      } catch {
+        if (mounted) setNotFound(true);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
     return () => { mounted = false; };
   }, [slug]);
 
@@ -202,7 +206,7 @@ export default function PublicBlogPost() {
                     </p>
                     <div className="mt-5 flex flex-wrap gap-3">
                       <button type="button" onClick={() => openDemo("blog_post_article_demo")} className={PUBLIC_BUTTON.primary}>
-                        Solicitar demo gratuito
+                        Solicitar demo gratis
                       </button>
                       <Link to="/software-eleam" onClick={() => trackEvent("cta_click", "blog_post_software")} className={PUBLIC_BUTTON.dark}>
                         Ver software ELEAM
@@ -257,7 +261,7 @@ export default function PublicBlogPost() {
             <PublicCtaBand
               title="Convierte esta guía en operación diaria"
               text="FichaEleam lleva la gestión clínica y documental a una cuenta real, con módulos preparados para ELEAM en Chile."
-              primaryLabel="Solicitar demo gratuito"
+              primaryLabel="Solicitar demo gratis"
               onPrimary={openDemo}
               source="blog_post_bottom_demo"
               secondaryLabel="Ver guía SEREMI"

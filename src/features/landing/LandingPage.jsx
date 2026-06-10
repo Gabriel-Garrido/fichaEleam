@@ -27,13 +27,13 @@ const BENTO_FEATURES = [
     icon: "document",
     metric: "matriz DS 20 por artículos · controles DS 20",
     title: "Carpeta SEREMI lista para fiscalización",
-    text: "La matriz DS 20 por artículos del Decreto N°20 ya vienen cargados. Subes cada documento, recibes un aviso antes de que venza e imprimes la carpeta completa cuando llega la SEREMI. Sin archivadores.",
+    text: "La matriz DS 20 por artículos del Decreto N°20 ya viene cargada. Subes cada documento, recibes un aviso antes de que venza e imprimes la carpeta completa cuando llega la SEREMI. Sin archivadores.",
     tone: "teal",
   },
   {
     col: "",
     icon: "pulse",
-    metric: "Pensado para el persona mayor",
+    metric: "Pensado para la persona mayor",
     title: "Signos vitales con alertas",
     text: "Presión, temperatura, saturación y glucosa avisan cuando un valor se sale de lo normal, para actuar a tiempo.",
     tone: "rose",
@@ -197,9 +197,8 @@ export default function LandingPage() {
           {/* ── HERO ── */}
           <section className="relative isolate overflow-hidden bg-slate-950 px-5 pb-24 pt-20 sm:pt-24 lg:pb-28">
             <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-              <div className="absolute left-1/2 top-0 h-[640px] w-[960px] -translate-x-1/2 -translate-y-[35%] rounded-full bg-teal-500/15 blur-[120px] animate-blob-slow" />
-              <div className="absolute right-0 top-1/3 h-[420px] w-[640px] translate-x-1/3 rounded-full bg-emerald-500/10 blur-[110px] animate-blob" />
-              <div className="absolute bottom-0 left-0 h-[380px] w-[520px] -translate-x-1/4 translate-y-1/4 rounded-full bg-sky-500/8 blur-[100px] animate-blob-slow" />
+              <div className="absolute left-1/2 top-0 h-[520px] w-[820px] -translate-x-1/2 -translate-y-[35%] rounded-full bg-teal-500/12 blur-[100px]" />
+              <div className="absolute right-0 top-1/3 h-[340px] w-[520px] translate-x-1/3 rounded-full bg-emerald-500/8 blur-[90px]" />
             </div>
             <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 public-grid-pattern opacity-50" />
             <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-32 bg-gradient-to-b from-slate-950 to-transparent" />

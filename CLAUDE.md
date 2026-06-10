@@ -44,9 +44,9 @@ src/
 │   └── AuthContext.jsx         # useAuth() + useLoading()
 ├── features/
 │   ├── auth/                   # Login, RecuperarAcceso, ResetPassword, authService
-│   ├── landing/                # LandingPage, DemoRequestModal, WhatsAppLeadButton/Modal (FAB flotante), landingAnalytics. Sin auto-registro público
-│   ├── public/                 # Páginas públicas SEO: PublicShell (nav/footer/CTA), PublicDesign (design system público), SoftwareEleamPage, AcreditacionSeremiPage, CalculadoraDotacionPage (calculadora de dotación DS20, lead-magnet), FaqPage, ContactoPage
-│   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService (diseño consistente con landing: nav/footer dark slate-950)
+│   ├── landing/                # LandingPage, DemoRequestModal, WhatsAppLeadButton/Modal (carga lazy desde PublicShell), landingAnalytics con Supabase diferido. Sin auto-registro público
+│   ├── public/                 # Páginas públicas SEO: PublicShell (nav/footer/CTA + Recursos gratuitos), PublicDesign, SoftwareEleamPage, AcreditacionSeremiPage, CalculadoraDotacionPage (calculadora de dotación DS20 con subnav), FaqPage, ContactoPage
+│   ├── blog/                   # PublicBlogList, PublicBlogPost, blogService cargado bajo demanda
 │   ├── dashboard/              # AdminDashboard (rol-aware). Monta WelcomeModal en el primer ingreso de admin_eleam. Si el ELEAM del admin no tiene residentes, oculta el contenido y muestra OnboardingSteps (primeros pasos: residente, funcionario, Carpeta SEREMI). Sin coach 'dashboard' (lo cubren la bienvenida y el onboarding)
 │   ├── welcome/                # Bienvenida orientada a venta para admin_eleam (la ven prospectos del demo): WelcomeModal (3 pasos animados, responsive), welcomeContent (valor + features), welcomeStorage (flag por usuario en localStorage)
 │   ├── featureCoach/           # "Guía rápida" por sección: coachCatalog.js (copy breve/intuitivo por feature, con roleOverrides), useFeatureCoach (auto-abre 1 vez por feature/usuario), FeatureCoach + FeatureCoachTrigger; se monta vía coachFeatureId en PageLayout/FormKit
@@ -70,7 +70,8 @@ src/
 ├── navigation/
 │   └── navigationConfig.js     # itemAllowed(): filtra nav por rol, featurePermissions y permisos granulares
 ├── routes/
-│   └── AppRouter.jsx           # Rutas con guards
+│   ├── AppRouter.jsx           # Router público delgado; no monta AuthProvider
+│   └── AuthenticatedApp.jsx    # AuthProvider + rutas internas/login/pago lazy
 ├── services/
 │   └── supabaseConfig.js       # Cliente Supabase singleton
 └── utils/
@@ -540,6 +541,14 @@ Archivos: `src/features/landing/WhatsAppLeadButton.jsx` (FAB con callout y pulse
 ---
 
 ## Blog Público
+
+### Arquitectura pública y performance
+
+`src/routes/AppRouter.jsx` es deliberadamente delgado: sólo declara rutas públicas SEO y carga `AuthenticatedApp` con `React.lazy` para login, pago y app interna. `AuthProvider` vive en `AuthenticatedApp.jsx`, por lo que la home, blog, calculadora, guía SEREMI, software, FAQ y contacto no deben precargar Supabase en el primer render.
+
+`PublicShell` contiene el navbar/footer públicos y el dropdown `Recursos gratuitos` con Blog, Calculadora y Guía acreditación SEREMI. Los formularios `DemoRequestModal`, `WhatsAppLeadModal`, el FAB de WhatsApp, `blogService` y analytics Supabase se cargan bajo demanda. `ScrollToTop` restaura la navegación al inicio de cada ruta pública sin hash y conserva anchors internos con `scroll-mt-public`.
+
+Al cambiar UX pública, validar `npm run build && npm run seo:check` y revisar `dist/index.html`: la home no debe tener `vendor-supabase` como `modulepreload`.
 
 **Rutas**: `/blog` (lista), `/blog/:slug` (post).
 

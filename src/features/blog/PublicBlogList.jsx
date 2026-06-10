@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSEO, breadcrumbJsonLd, blogListJsonLd } from "../../utils/seo";
-import { getPublishedPosts } from "./blogService";
 import { trackEvent, usePageView } from "../landing/landingAnalytics";
 import PublicShell from "../public/PublicShell";
 import { PUBLIC_ASSETS, PUBLIC_BUTTON } from "../public/publicDesignAssets";
@@ -34,7 +33,7 @@ export default function PublicBlogList() {
   usePageView("/blog");
 
   useSEO({
-    title: "Blog · gestión de ELEAM, Decreto N°20 y cuidado del persona mayor",
+    title: "Blog · gestión de ELEAM, Decreto N°20 y cuidado de la persona mayor",
     description:
       "Guías prácticas para administradores y personal de ELEAM en Chile: Decreto N°20, fiscalización SEREMI, ficha clínica digital, signos vitales y comunicación con familias.",
     path: "/blog",
@@ -53,6 +52,7 @@ export default function PublicBlogList() {
     let active = true;
     (async () => {
       try {
+        const { getPublishedPosts } = await import("./blogService");
         const data = await getPublishedPosts({ limit: 50 });
         if (active) setPosts(data ?? []);
       } catch {
@@ -77,7 +77,7 @@ export default function PublicBlogList() {
             </div>
             <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 public-grid-pattern opacity-40" />
             <div className="mx-auto max-w-5xl">
-              <PublicBreadcrumb current="Blog" />
+              <PublicBreadcrumb current="Blog" dark />
               <PublicBadge tone="dark">Recursos para ELEAM en Chile</PublicBadge>
               <h1 className="mt-6 font-display text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
                 Guías para gestionar mejor tu ELEAM

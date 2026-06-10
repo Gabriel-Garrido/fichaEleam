@@ -101,7 +101,7 @@ export default function SoftwareEleamPage() {
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <button type="button" onClick={() => openDemo("software_hero")} className={PUBLIC_BUTTON.primary}>
-                    Solicitar demo gratuito
+                    Solicitar demo gratis
                   </button>
                   <button
                     type="button"
@@ -129,24 +129,26 @@ export default function SoftwareEleamPage() {
             <div className="grid items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
               <ProductImage asset={PUBLIC_ASSETS.comparison} />
               <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-slate-600">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Aspecto</th>
-                      <th className="px-4 py-3 font-semibold">Excel / papel</th>
-                      <th className="px-4 py-3 font-semibold text-teal-800">FichaEleam</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {COMPARISON.map(([aspect, manual, digital]) => (
-                      <tr key={aspect} className="align-top">
-                        <td className="px-4 py-4 font-semibold text-slate-950">{aspect}</td>
-                        <td className="px-4 py-4 text-slate-500">{manual}</td>
-                        <td className="px-4 py-4 text-slate-700">{digital}</td>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[680px] w-full text-sm">
+                    <thead className="bg-slate-50 text-left text-slate-600">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Aspecto</th>
+                        <th className="px-4 py-3 font-semibold">Excel / papel</th>
+                        <th className="px-4 py-3 font-semibold text-teal-800">FichaEleam</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {COMPARISON.map(([aspect, manual, digital]) => (
+                        <tr key={aspect} className="align-top">
+                          <td className="px-4 py-4 font-semibold text-slate-950">{aspect}</td>
+                          <td className="px-4 py-4 text-slate-500">{manual}</td>
+                          <td className="px-4 py-4 text-slate-700">{digital}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </PublicSection>
@@ -209,7 +211,7 @@ export default function SoftwareEleamPage() {
           <PublicCtaBand
             title="Ve FichaEleam funcionando con tu caso"
             text="Solicita una cuenta real de prueba. Revisamos el tamaño del ELEAM, el flujo documental y el plan recomendado."
-            primaryLabel="Solicitar demo gratuito"
+            primaryLabel="Solicitar demo gratis"
             onPrimary={openDemo}
             source="software_footer"
             secondaryLabel="Ver acreditación SEREMI"

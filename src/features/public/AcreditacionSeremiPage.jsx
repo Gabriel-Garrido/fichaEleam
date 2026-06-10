@@ -121,7 +121,7 @@ export default function AcreditacionSeremiPage() {
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <button type="button" onClick={() => openDemo("seremi_hero")} className={PUBLIC_BUTTON.primary}>
-                    Solicitar demo gratuito
+                    Solicitar demo gratis
                   </button>
                   <button
                     type="button"
@@ -208,26 +208,28 @@ export default function AcreditacionSeremiPage() {
             description="El catálogo distingue documentos periódicos, registros vivos y controles críticos que conviene revisar antes de una fiscalización."
           >
             <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-left text-slate-600">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Documento</th>
-                    <th className="px-4 py-3 font-semibold">Vigencia</th>
-                    <th className="px-4 py-3 font-semibold">Referencia</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {VENCIMIENTOS.map(([doc, vigencia, ambito]) => (
-                    <tr key={doc}>
-                      <td className="px-4 py-3 text-slate-800">{doc}</td>
-                      <td className="px-4 py-3 font-semibold text-slate-700">{vigencia}</td>
-                      <td className="px-4 py-3">
-                        <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{ambito}</code>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="min-w-[680px] w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-600">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Documento</th>
+                      <th className="px-4 py-3 font-semibold">Vigencia</th>
+                      <th className="px-4 py-3 font-semibold">Referencia</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {VENCIMIENTOS.map(([doc, vigencia, ambito]) => (
+                      <tr key={doc}>
+                        <td className="px-4 py-3 text-slate-800">{doc}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-700">{vigencia}</td>
+                        <td className="px-4 py-3">
+                          <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{ambito}</code>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </PublicSection>
 
@@ -258,7 +260,7 @@ export default function AcreditacionSeremiPage() {
           <PublicCtaBand
             title="Llega a la próxima fiscalización con más control"
             text="FichaEleam ordena evidencias, vencimientos y observaciones SEREMI junto con la operación clínica del ELEAM."
-            primaryLabel="Solicitar demo gratuito"
+            primaryLabel="Solicitar demo gratis"
             onPrimary={openDemo}
             source="seremi_footer"
             secondaryLabel="Ver software para ELEAM"

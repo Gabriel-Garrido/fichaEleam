@@ -62,6 +62,13 @@ const STEPS = [
 ];
 
 const GROUPS = [...new Set(DOTACION_REGLAS.map((r) => r.grupo))];
+const INTERNAL_NAV = [
+  { href: "#calculadora", label: "Calculadora" },
+  { href: "#marco-normativo", label: "Marco normativo" },
+  { href: "#como-usar", label: "Cómo usarla" },
+  { href: "#operacion", label: "Operación" },
+  { href: "#faq", label: "FAQ" },
+];
 
 function NumberField({ id, label, hint, value, onChange, tone = "teal" }) {
   const ring = tone === "teal" ? "focus:border-teal-500 focus:ring-teal-100" : "focus:border-sky-500 focus:ring-sky-100";
@@ -200,7 +207,7 @@ export default function CalculadoraDotacionPage() {
                   Calculadora de dotación de personal para ELEAM
                 </h1>
                 <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-                  Estima los cuidadores y el apoyo técnico de enfermería mínimos de tu residencia de personas mayores según los artículos 15, 16 y 17 del Decreto N°20 del MINSAL. Compara con tu dotación actual y detecta brechas antes de una fiscalización SEREMI.
+                  Proyecta cuidadores y apoyo técnico de enfermería para tu residencia según los artículos 15, 16 y 17 del Decreto N°20 del MINSAL. Compara con tu dotación actual y detecta brechas antes de planificar turnos o enfrentar una fiscalización.
                 </p>
                 <div className="mt-8 grid grid-cols-3 gap-3">
                   <PublicMetric value="DS20" label="Arts. 15-17" tone="teal" />
@@ -210,10 +217,22 @@ export default function CalculadoraDotacionPage() {
                 <p className="mt-6 max-w-xl text-xs leading-5 text-slate-500">
                   Cálculo referencial para planificar tu dotación. La validación final depende del texto oficial vigente, la pauta del MINSAL y el criterio de la SEREMI de Salud.
                 </p>
+                <nav className="mt-7 flex flex-wrap gap-2" aria-label="Navegación de la calculadora">
+                  {INTERNAL_NAV.map((item) => (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => trackEvent("nav_click", `calculadora_${item.href.slice(1)}`)}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800"
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </nav>
               </div>
 
               {/* Calculadora interactiva */}
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
+              <div id="calculadora" className="scroll-mt-public rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
                 <h2 className="text-lg font-semibold text-slate-950">Ingresa tus residentes</h2>
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <NumberField
@@ -280,7 +299,7 @@ export default function CalculadoraDotacionPage() {
 
                   {requerido.minNocturnoAplicado && (
                     <p className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                      <span aria-hidden>⚠️</span>
+                      <span aria-hidden className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-amber-200 text-[10px] font-bold text-amber-900">!</span>
                       <span>Se aplicó el mínimo de 2 cuidadores nocturnos del artículo 17, por sobre el cálculo por residentes.</span>
                     </p>
                   )}
@@ -296,7 +315,7 @@ export default function CalculadoraDotacionPage() {
                     onClick={() => openDemo("calculadora_demo")}
                     className={`${PUBLIC_BUTTON.primary} mt-5 w-full`}
                   >
-                    Gestiona tus turnos con FichaEleam
+                    Convertir esta brecha en turnos gestionables
                   </button>
                 </div>
               </div>
@@ -304,33 +323,36 @@ export default function CalculadoraDotacionPage() {
           </section>
 
           <PublicSection
+            id="marco-normativo"
             eyebrow="Marco normativo"
             title="Cómo se calcula la dotación según el Decreto N°20"
             description={`${DOTACION_META.norma}, ${DOTACION_META.articulos}. El cálculo suma el personal requerido para residentes con dependencia y para autovalentes, y respeta el mínimo nocturno.`}
           >
             <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-left text-slate-600">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Grupo</th>
-                    <th className="px-4 py-3 font-semibold">Turno / rol</th>
-                    <th className="px-4 py-3 font-semibold">Regla</th>
-                    <th className="px-4 py-3 font-semibold">Art.</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {DOTACION_REGLAS.map((regla) => (
-                    <tr key={`${regla.grupo}-${regla.turno}`}>
-                      <td className="px-4 py-3 text-slate-800">{regla.grupo}</td>
-                      <td className="px-4 py-3 font-medium text-slate-700">{regla.turno}</td>
-                      <td className="px-4 py-3 text-slate-600">{regla.regla}</td>
-                      <td className="px-4 py-3">
-                        <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{regla.articulo}</code>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="min-w-[720px] w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-600">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Grupo</th>
+                      <th className="px-4 py-3 font-semibold">Turno / rol</th>
+                      <th className="px-4 py-3 font-semibold">Regla</th>
+                      <th className="px-4 py-3 font-semibold">Art.</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {DOTACION_REGLAS.map((regla) => (
+                      <tr key={`${regla.grupo}-${regla.turno}`}>
+                        <td className="px-4 py-3 text-slate-800">{regla.grupo}</td>
+                        <td className="px-4 py-3 font-medium text-slate-700">{regla.turno}</td>
+                        <td className="px-4 py-3 text-slate-600">{regla.regla}</td>
+                        <td className="px-4 py-3">
+                          <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{regla.articulo}</code>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             <p className="mt-4 text-xs leading-5 text-slate-500">
               {GROUPS.length} grupos de residentes considerados. Fuente oficial:{" "}
@@ -338,7 +360,7 @@ export default function CalculadoraDotacionPage() {
             </p>
           </PublicSection>
 
-          <PublicSection tone="soft" eyebrow="Paso a paso" title="Cómo usar la calculadora">
+          <PublicSection id="como-usar" tone="soft" eyebrow="Paso a paso" title="Cómo usar la calculadora">
             <ol className="grid gap-4 md:grid-cols-3">
               {STEPS.map((step, index) => (
                 <li key={step.name} className="flex gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
@@ -354,7 +376,7 @@ export default function CalculadoraDotacionPage() {
             </ol>
           </PublicSection>
 
-          <PublicSection eyebrow="En la operación" title="De la dotación al turno real, en FichaEleam">
+          <PublicSection id="operacion" eyebrow="En la operación" title="De la dotación al turno real, en FichaEleam">
             <div className="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
               <ProductImage asset={PUBLIC_ASSETS.shift} />
               <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
@@ -372,7 +394,7 @@ export default function CalculadoraDotacionPage() {
             </div>
           </PublicSection>
 
-          <PublicSection tone="soft" eyebrow="FAQ" title="Preguntas frecuentes sobre dotación de personal" center>
+          <PublicSection id="faq" tone="soft" eyebrow="FAQ" title="Preguntas frecuentes sobre dotación de personal" center>
             <div className="mx-auto grid max-w-4xl gap-3">
               {FAQ.map((item) => <FaqDisclosure key={item.q} q={item.q} a={item.a} />)}
             </div>
@@ -384,7 +406,7 @@ export default function CalculadoraDotacionPage() {
           <PublicCtaBand
             title="Lleva tu dotación y tus turnos a un solo lugar"
             text="FichaEleam ordena residentes por dependencia, entrega de turno y la Carpeta SEREMI DS 20 para que la dotación sea evidencia, no una planilla suelta."
-            primaryLabel="Solicitar demo gratuito"
+            primaryLabel="Solicitar demo gratis"
             onPrimary={openDemo}
             source="calculadora_footer"
             secondaryLabel="Ver acreditación SEREMI"

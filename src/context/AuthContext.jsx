@@ -4,7 +4,6 @@ import Loading from "../components/Loading";
 import { computeCanFeature } from "./featureAccess";
 
 const AuthContext = createContext();
-const LoadingContext = createContext();
 
 // Permisos que deben negar acceso por defecto cuando no hay row en funcionario_permisos.
 // Coincide con los campos que tienen DEFAULT FALSE en BD.
@@ -372,16 +371,6 @@ export function AuthProvider({ children }) {
   );
 }
 
-export function LoadingProvider({ children }) {
-  const [loading, setLoading] = useState(false);
-  return (
-    <LoadingContext.Provider value={{ loading, setLoading }}>
-      {loading && <Loading message="Cargando..." />}
-      {children}
-    </LoadingContext.Provider>
-  );
-}
-
 export const useAuth    = () => useContext(AuthContext);
-export const useLoading = () => useContext(LoadingContext);
-export { AuthContext, LoadingContext };
+export { AuthContext };
+export { LoadingProvider, useLoading, LoadingContext } from "./LoadingContext";

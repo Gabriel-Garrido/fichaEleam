@@ -1,23 +1,35 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import DemoRequestModal from "../landing/DemoRequestModal";
-import WhatsAppLeadButton from "../landing/WhatsAppLeadButton";
-import WhatsAppLeadModal from "../landing/WhatsAppLeadModal";
 import { trackEvent } from "../landing/landingAnalytics";
 import { PUBLIC_BUTTON } from "./publicDesignAssets";
 import { PublicIcon, Wordmark, WhatsAppGlyph } from "./PublicDesign";
 
-const PRIMARY_NAV = [
+const loadDemoRequestModal = () => import("../landing/DemoRequestModal");
+const loadWhatsAppLeadModal = () => import("../landing/WhatsAppLeadModal");
+const loadWhatsAppLeadButton = () => import("../landing/WhatsAppLeadButton");
+
+const DemoRequestModal = lazy(loadDemoRequestModal);
+const WhatsAppLeadModal = lazy(loadWhatsAppLeadModal);
+const WhatsAppLeadButton = lazy(loadWhatsAppLeadButton);
+
+const PRODUCT_NAV = [
   { to: "/software-eleam", label: "Producto", show: "md" },
-  { to: "/acreditacion-seremi", label: "SEREMI", show: "md" },
   { to: "/pago", label: "Precios", show: "sm" },
-  { to: "/blog", label: "Blog", show: "md" },
   { to: "/preguntas-frecuentes", label: "FAQ", show: "lg" },
+  { to: "/contacto", label: "Contacto", show: "lg" },
 ];
 
-const ALL_NAV = [
-  ...PRIMARY_NAV,
-  { to: "/contacto", label: "Contacto", show: "always" },
+const RESOURCE_NAV = [
+  { to: "/blog", label: "Blog", description: "Guías prácticas para operar y fiscalizar mejor." },
+  { to: "/calculadora-dotacion-eleam", label: "Calculadora", description: "Dotación referencial según Decreto N°20." },
+  { to: "/acreditacion-seremi", label: "Guía acreditación SEREMI", description: "Requisitos DS 20 ordenados por ámbito." },
+];
+
+const MOBILE_PRIMARY_NAV = [
+  { to: "/software-eleam", label: "Producto" },
+  { to: "/pago", label: "Precios" },
+  { to: "/preguntas-frecuentes", label: "Preguntas frecuentes" },
+  { to: "/contacto", label: "Contacto" },
 ];
 
 const SHOW_CLASS = {
@@ -29,6 +41,10 @@ const SHOW_CLASS = {
 
 function activeFor(path, to) {
   return path === to || (to === "/blog" && path.startsWith("/blog"));
+}
+
+function resourcesActive(path) {
+  return RESOURCE_NAV.some((item) => activeFor(path, item.to));
 }
 
 function NavLink({ to, label, show, active, onClick }) {
@@ -61,6 +77,103 @@ function Brand({ onClick, dark = false }) {
   );
 }
 
+function ResourceDropdown({ path }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const active = resourcesActive(path);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [path]);
+
+  const closeOnEscape = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="relative hidden md:inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onKeyDown={closeOnEscape}
+    >
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls="public-resource-menu"
+        onClick={() => setOpen((value) => !value)}
+        onFocus={() => setOpen(true)}
+        className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+          active
+            ? "bg-teal-50 text-teal-800"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+        }`}
+      >
+        Recursos gratuitos
+        <svg className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          id="public-resource-menu"
+          role="menu"
+          className="absolute right-0 top-full mt-2 w-[320px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10"
+        >
+          {RESOURCE_NAV.map((item) => {
+            const itemActive = activeFor(path, item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  trackEvent("nav_click", item.to);
+                }}
+                className={`block rounded-xl px-3 py-3 transition-colors ${
+                  itemActive ? "bg-teal-50" : "hover:bg-slate-50"
+                }`}
+              >
+                <span className={`block text-sm font-semibold ${itemActive ? "text-teal-800" : "text-slate-950"}`}>
+                  {item.label}
+                </span>
+                <span className="mt-0.5 block text-xs leading-5 text-slate-500">{item.description}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FooterLink({ to, children, event }) {
+  return (
+    <Link
+      to={to}
+      onClick={() => trackEvent("nav_click", event ?? to)}
+      className="text-slate-400 transition-colors hover:text-white"
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function PublicShell({ children, current }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,6 +184,7 @@ export default function PublicShell({ children, current }) {
   const [whatsAppSource, setWhatsAppSource] = useState("floating");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [floatingWhatsAppReady, setFloatingWhatsAppReady] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -79,19 +193,44 @@ export default function PublicShell({ children, current }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => { setMobileOpen(false); }, [path]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [path]);
 
-  const openDemo = (cta = "page_demo") => {
+  useEffect(() => {
+    const start = () => {
+      setFloatingWhatsAppReady(true);
+      loadWhatsAppLeadButton();
+    };
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(start, { timeout: 2800 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(start, 1800);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const preloadDemo = useCallback(() => {
+    loadDemoRequestModal();
+  }, []);
+
+  const preloadWhatsApp = useCallback(() => {
+    loadWhatsAppLeadModal();
+  }, []);
+
+  const openDemo = useCallback((cta = "page_demo") => {
+    preloadDemo();
     setDemoCta(cta);
     setDemoOpen(true);
     trackEvent("cta_click", cta);
-  };
+  }, [preloadDemo]);
 
-  const openWhatsApp = (source) => {
+  const openWhatsApp = useCallback((source) => {
+    preloadWhatsApp();
     setWhatsAppSource(source);
     setWhatsAppOpen(true);
     trackEvent("cta_click", `whatsapp_${source}`);
-  };
+  }, [preloadWhatsApp]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -112,7 +251,18 @@ export default function PublicShell({ children, current }) {
           <Brand onClick={() => trackEvent("nav_click", "logo")} />
 
           <div className="flex items-center gap-1">
-            {PRIMARY_NAV.map((item) => (
+            {PRODUCT_NAV.slice(0, 2).map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                label={item.label}
+                show={item.show}
+                active={activeFor(path, item.to)}
+                onClick={() => trackEvent("nav_click", item.to)}
+              />
+            ))}
+            <ResourceDropdown path={path} />
+            {PRODUCT_NAV.slice(2).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -131,6 +281,8 @@ export default function PublicShell({ children, current }) {
             </button>
             <button
               type="button"
+              onMouseEnter={preloadDemo}
+              onFocus={preloadDemo}
               onClick={() => openDemo("nav_demo")}
               className={`${PUBLIC_BUTTON.primary} hidden px-4 py-2 sm:inline-flex`}
             >
@@ -154,7 +306,7 @@ export default function PublicShell({ children, current }) {
         {mobileOpen && (
           <div id="public-mobile-nav" className="border-t border-slate-200 bg-white px-4 py-4 sm:hidden">
             <div className="grid gap-1">
-              {ALL_NAV.map((item) => {
+              {MOBILE_PRIMARY_NAV.map((item) => {
                 const active = activeFor(path, item.to);
                 return (
                   <Link
@@ -171,6 +323,31 @@ export default function PublicShell({ children, current }) {
                 );
               })}
             </div>
+
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <p className="px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                Recursos gratuitos
+              </p>
+              <div className="mt-2 grid gap-1">
+                {RESOURCE_NAV.map((item) => {
+                  const active = activeFor(path, item.to);
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => trackEvent("nav_click", item.to)}
+                      aria-current={active ? "page" : undefined}
+                      className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                        active ? "bg-teal-50 text-teal-800" : "text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4">
               <button
                 type="button"
@@ -181,6 +358,8 @@ export default function PublicShell({ children, current }) {
               </button>
               <button
                 type="button"
+                onMouseEnter={preloadDemo}
+                onFocus={preloadDemo}
                 onClick={() => openDemo("nav_demo_mobile")}
                 className={PUBLIC_BUTTON.primary}
               >
@@ -196,18 +375,10 @@ export default function PublicShell({ children, current }) {
       </main>
 
       <footer className="relative isolate overflow-hidden bg-slate-950 px-5 pb-24 pt-20 text-slate-400 sm:pb-10">
-        {/* Mesh background */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute -top-32 left-1/2 h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-teal-600/10 blur-[120px]" />
-          <div className="absolute bottom-0 right-0 h-[320px] w-[460px] translate-x-1/4 translate-y-1/4 rounded-full bg-emerald-600/8 blur-[100px]" />
-        </div>
-        {/* Dot pattern */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 public-grid-pattern opacity-30" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 public-grid-pattern opacity-25" />
 
         <div className="relative mx-auto max-w-7xl">
-
-          {/* ── Big CTA panel ── */}
-          <div className="mb-16 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/70 via-slate-900/40 to-slate-950/40 p-8 backdrop-blur-sm sm:p-10 lg:p-12">
+          <div className="mb-16 overflow-hidden rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-slate-950/20 sm:p-10 lg:p-12">
             <div className="grid items-center gap-8 lg:grid-cols-[1.5fr_1fr]">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-teal-400/20 bg-teal-400/[0.06] px-3 py-1.5">
@@ -220,33 +391,32 @@ export default function PublicShell({ children, current }) {
                   </span>
                 </div>
                 <h2 className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                  30 días para ver tu ELEAM<br className="hidden sm:block" /> digitalizado al 100%
+                  30 días para ver tu ELEAM digitalizado
                 </h2>
                 <p className="mt-4 max-w-xl text-sm leading-6 text-slate-400">
-                  Cuenta real con todos los módulos activos. Recibe acceso en menos de 24 horas. Sin tarjeta de crédito, sin compromisos.
+                  Cuenta real con todos los módulos activos. Recibe acceso en menos de 24 horas. Sin tarjeta de crédito.
                 </p>
               </div>
               <div className="flex flex-col gap-3">
                 <button
                   type="button"
+                  onMouseEnter={preloadDemo}
+                  onFocus={preloadDemo}
                   onClick={() => openDemo("footer_demo")}
                   className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-teal-400 px-5 py-3.5 text-sm font-bold text-slate-950 shadow-lg shadow-teal-500/20 transition-all hover:bg-teal-300"
                 >
                   <span aria-hidden className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-                  <span className="relative">Solicitar demo gratuito</span>
-                  <svg className="relative h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                  </svg>
+                  <span className="relative">Solicitar demo gratis</span>
+                  <PublicIcon name="arrow" className="relative h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </button>
                 <button
                   type="button"
+                  onMouseEnter={preloadWhatsApp}
+                  onFocus={preloadWhatsApp}
                   onClick={() => openWhatsApp("footer")}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3.5 text-sm font-semibold text-slate-300 backdrop-blur-sm transition-colors hover:border-white/20 hover:text-white"
                 >
-                  <svg className="h-4 w-4 text-emerald-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.549 4.12 1.511 5.855L.057 23.82a.5.5 0 0 0 .61.61l5.962-1.453A11.942 11.942 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75A9.75 9.75 0 1 1 12 2.25a9.75 9.75 0 0 1 0 19.5z"/>
-                  </svg>
+                  <WhatsAppGlyph className="h-4 w-4 text-emerald-400" />
                   Consultar por WhatsApp
                 </button>
                 <p className="text-center text-[11px] text-slate-500">
@@ -256,7 +426,6 @@ export default function PublicShell({ children, current }) {
             </div>
           </div>
 
-          {/* ── Navigation ── */}
           <div className="grid gap-10 text-sm sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
             <div>
               <Brand dark onClick={() => trackEvent("nav_click", "footer_logo")} />
@@ -264,11 +433,7 @@ export default function PublicShell({ children, current }) {
                 Software web de gestión clínica, administrativa y de acreditación SEREMI para Establecimientos de Larga Estadía para Personas Mayores en Chile.
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
-                {[
-                  "Decreto N°20",
-                  "Ley 20.584",
-                  "Ley 19.628",
-                ].map((item) => (
+                {["Decreto N°20", "Ley 20.584", "Ley 19.628"].map((item) => (
                   <span key={item} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1 text-[11px] font-semibold text-slate-300">
                     <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
                     {item}
@@ -280,20 +445,20 @@ export default function PublicShell({ children, current }) {
             <nav aria-label="Producto">
               <h4 className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-white">Producto</h4>
               <ul className="space-y-3">
-                <li><Link to="/software-eleam" className="text-slate-400 transition-colors hover:text-white">Software ELEAM</Link></li>
-                <li><Link to="/pago" className="text-slate-400 transition-colors hover:text-white">Planes y precios</Link></li>
-                <li><Link to="/preguntas-frecuentes" className="text-slate-400 transition-colors hover:text-white">Preguntas frecuentes</Link></li>
-                <li><Link to="/login" className="text-slate-400 transition-colors hover:text-white">Iniciar sesión</Link></li>
+                <li><FooterLink to="/software-eleam">Software ELEAM</FooterLink></li>
+                <li><FooterLink to="/pago">Planes y precios</FooterLink></li>
+                <li><FooterLink to="/preguntas-frecuentes">Preguntas frecuentes</FooterLink></li>
+                <li><FooterLink to="/login">Iniciar sesión</FooterLink></li>
               </ul>
             </nav>
 
-            <nav aria-label="Recursos">
-              <h4 className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-white">Recursos</h4>
+            <nav aria-label="Recursos gratuitos">
+              <h4 className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-white">Recursos gratuitos</h4>
               <ul className="space-y-3">
-                <li><Link to="/acreditacion-seremi" className="text-slate-400 transition-colors hover:text-white">Acreditación SEREMI</Link></li>
-                <li><Link to="/calculadora-dotacion-eleam" className="text-slate-400 transition-colors hover:text-white">Calculadora de dotación</Link></li>
-                <li><Link to="/blog" className="text-slate-400 transition-colors hover:text-white">Blog ELEAM</Link></li>
-                <li><Link to="/contacto" className="text-slate-400 transition-colors hover:text-white">Contacto</Link></li>
+                <li><FooterLink to="/blog" event="footer_blog">Blog</FooterLink></li>
+                <li><FooterLink to="/calculadora-dotacion-eleam" event="footer_calculadora">Calculadora de dotación</FooterLink></li>
+                <li><FooterLink to="/acreditacion-seremi" event="footer_seremi">Guía acreditación SEREMI</FooterLink></li>
+                <li><FooterLink to="/contacto">Contacto</FooterLink></li>
               </ul>
             </nav>
 
@@ -316,7 +481,6 @@ export default function PublicShell({ children, current }) {
             </div>
           </div>
 
-          {/* ── SEO tag cloud ── */}
           <div className="mt-16 border-t border-white/5 pt-10">
             <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
               También buscado como
@@ -353,7 +517,6 @@ export default function PublicShell({ children, current }) {
             </div>
           </div>
 
-          {/* ── Bottom row ── */}
           <div className="mt-12 flex flex-col gap-3 border-t border-white/5 pt-6 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
             <p>© {new Date().getFullYear()} FichaEleam. Todos los derechos reservados.</p>
             <p className="flex items-center gap-2">
@@ -365,7 +528,6 @@ export default function PublicShell({ children, current }) {
         </div>
       </footer>
 
-      {/* Mobile sticky CTA bar — keeps the primary action in reach on small screens */}
       <div
         className={`fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pt-3 backdrop-blur-xl transition-transform duration-300 sm:hidden ${
           scrolled ? "translate-y-0" : "translate-y-full"
@@ -375,6 +537,8 @@ export default function PublicShell({ children, current }) {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onMouseEnter={preloadDemo}
+            onFocus={preloadDemo}
             onClick={() => openDemo("mobile_bar_demo")}
             className={`${PUBLIC_BUTTON.primary} flex-1`}
           >
@@ -382,6 +546,8 @@ export default function PublicShell({ children, current }) {
           </button>
           <button
             type="button"
+            onMouseEnter={preloadWhatsApp}
+            onFocus={preloadWhatsApp}
             onClick={() => openWhatsApp("mobile_bar")}
             aria-label="Consultar por WhatsApp"
             className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white transition-colors hover:bg-emerald-700"
@@ -391,15 +557,27 @@ export default function PublicShell({ children, current }) {
         </div>
       </div>
 
-      <DemoRequestModal isOpen={demoOpen} onClose={() => setDemoOpen(false)} defaultCta={demoCta} />
-      <div className="hidden sm:block">
-        <WhatsAppLeadButton onOpen={openWhatsApp} />
-      </div>
-      <WhatsAppLeadModal
-        isOpen={whatsAppOpen}
-        onClose={() => setWhatsAppOpen(false)}
-        source={whatsAppSource}
-      />
+      <Suspense fallback={null}>
+        {demoOpen && (
+          <DemoRequestModal
+            isOpen={demoOpen}
+            onClose={() => setDemoOpen(false)}
+            defaultCta={demoCta}
+          />
+        )}
+        {whatsAppOpen && (
+          <WhatsAppLeadModal
+            isOpen={whatsAppOpen}
+            onClose={() => setWhatsAppOpen(false)}
+            source={whatsAppSource}
+          />
+        )}
+        {floatingWhatsAppReady && (
+          <div className="hidden sm:block">
+            <WhatsAppLeadButton onOpen={openWhatsApp} />
+          </div>
+        )}
+      </Suspense>
     </div>
   );
 }

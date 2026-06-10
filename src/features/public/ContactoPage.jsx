@@ -17,7 +17,7 @@ function contactPageJsonLd() {
     "@type": "ContactPage",
     name: "Contacto FichaEleam",
     url: `${SITE}/contacto`,
-    description: "Contacta a FichaEleam por WhatsApp o solicita una demo gratuita para tu ELEAM en Chile.",
+    description: "Contacta a FichaEleam por WhatsApp o solicita una demo gratis para tu ELEAM en Chile.",
     mainEntity: {
       "@type": "Organization",
       name: "FichaEleam",
@@ -33,7 +33,7 @@ export default function ContactoPage() {
 
   useSEO({
     title: "Contacto · FichaEleam",
-    description: "Contacta FichaEleam por WhatsApp o solicita una demo gratuita. Software de gestión clínica y SEREMI para ELEAM en Chile.",
+    description: "Contacta FichaEleam por WhatsApp o solicita una demo gratis. Software de gestión clínica y SEREMI para ELEAM en Chile.",
     path: "/contacto",
     image: PUBLIC_ASSETS.hero.publicSrc,
     keywords: ["contacto FichaEleam", "demo software ELEAM", "WhatsApp FichaEleam"],
@@ -55,13 +55,12 @@ export default function ContactoPage() {
           {/* ── HERO DARK with mesh + creative pattern ── */}
           <section className="relative isolate overflow-hidden bg-slate-950 px-5 pb-20 pt-16 sm:pt-24">
             <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-              <div className="absolute left-1/2 top-0 h-[460px] w-[760px] -translate-x-1/2 -translate-y-[40%] rounded-full bg-teal-500/12 blur-[110px] animate-blob-slow" />
-              <div className="absolute bottom-0 right-0 h-[300px] w-[480px] translate-x-1/4 translate-y-1/4 rounded-full bg-emerald-500/8 blur-[100px] animate-blob" />
+              <div className="absolute left-1/2 top-0 h-[380px] w-[640px] -translate-x-1/2 -translate-y-[40%] rounded-full bg-teal-500/10 blur-[90px]" />
             </div>
             <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 public-grid-pattern opacity-40" />
 
             <div className="relative mx-auto max-w-6xl">
-              <PublicBreadcrumb current="Contacto" />
+              <PublicBreadcrumb current="Contacto" dark />
 
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-1.5 backdrop-blur-sm">
                 <span className="relative grid h-2 w-2 place-items-center">
@@ -110,7 +109,7 @@ export default function ContactoPage() {
                 {[
                   { v: "< 24 h", l: "respuesta a demo" },
                   { v: "Chile", l: "soporte local" },
-                  { v: "30 días", l: "demo gratuito" },
+                  { v: "30 días", l: "demo gratis" },
                 ].map(({ v, l }) => (
                   <div key={l}>
                     <p className="text-2xl font-bold text-white sm:text-3xl">{v}</p>
@@ -130,7 +129,7 @@ export default function ContactoPage() {
                 <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-teal-700">
                   <PublicIcon name="document" className="h-6 w-6 text-white" />
                 </div>
-                <h2 className="text-xl font-bold text-teal-950">Demo gratuito</h2>
+                <h2 className="text-xl font-bold text-teal-950">Demo gratis</h2>
                 <p className="mt-3 text-sm leading-6 text-teal-800">
                   Solicita una cuenta real con 30 días de prueba. Revisamos tu caso y te enviamos el acceso en menos de 24 horas. Sin tarjeta de crédito.
                 </p>
@@ -149,7 +148,7 @@ export default function ContactoPage() {
                   onClick={() => openDemo("contacto_demo")}
                   className={`${PUBLIC_BUTTON.primary} mt-6 w-full`}
                 >
-                  Solicitar demo gratuito
+                  Solicitar demo gratis
                 </button>
                 <div aria-hidden className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-teal-400 opacity-10 blur-2xl" />
               </article>

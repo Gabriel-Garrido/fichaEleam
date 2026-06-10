@@ -49,8 +49,7 @@ export default function WhatsAppLeadButton({ onOpen }) {
   };
 
   return (
-    <>
-      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end gap-2 print:hidden">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end gap-2 print:hidden">
         {showCallout && (
           <div
             role="status"
@@ -102,27 +101,6 @@ export default function WhatsAppLeadButton({ onOpen }) {
             <span className="absolute top-1/2 -translate-y-1/2 -right-1 w-2 h-2 bg-slate-900 rotate-45" aria-hidden="true" />
           </span>
         </div>
-      </div>
-
-      <style>{`
-        @keyframes ping-slow {
-          0% { transform: scale(1); opacity: 0.6; }
-          75%, 100% { transform: scale(1.6); opacity: 0; }
-        }
-        .animate-ping-slow {
-          animation: ping-slow 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
-        }
-        @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in-up {
-          animation: fade-in-up 0.3s ease-out both;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .animate-ping-slow, .animate-fade-in-up { animation: none; }
-        }
-      `}</style>
-    </>
+    </div>
   );
 }
