@@ -7,6 +7,7 @@ import { formatDateOnly, todayIso } from "../../utils/dateUtils";
 import {
   COMPETENCY_CATALOG,
   TIPO_DOTACION_LABEL,
+  createStaffMember,
   listCompetenciesAndTraining,
   listStaffMembers,
   saveCompetency,
@@ -58,6 +59,7 @@ export default function StaffCompetenciesTab() {
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [newMember, setNewMember] = useState({ nombre: "", cargo: "", tipo_dotacion: "cuidador" });
   const [memberDraft, setMemberDraft] = useState({ cargo: "", tipo_dotacion: "cuidador", activo: true });
   const [competencyDraft, setCompetencyDraft] = useState({
     competencia: COMPETENCY_CATALOG[0],
@@ -132,6 +134,23 @@ export default function StaffCompetenciesTab() {
     }
   };
 
+  const addMember = async (event) => {
+    event.preventDefault();
+    if (!newMember.nombre.trim()) return;
+    setSaving(true);
+    try {
+      const saved = await createStaffMember(newMember);
+      setStaff((current) => [...current, saved]);
+      setSelectedId(saved.id);
+      setNewMember({ nombre: "", cargo: "", tipo_dotacion: "cuidador" });
+      toast("Persona agregada a la planta.", "success");
+    } catch (error) {
+      toast(error.message || "No se pudo agregar la persona.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveCompetencyDraft = async () => {
     if (!selected) return;
     if (!isAdminEleam) {
@@ -181,6 +200,19 @@ export default function StaffCompetenciesTab() {
           <h2 className="font-bold text-slate-900">Personal DS20</h2>
           <p className="mt-1 text-xs text-slate-500">Usuarios del ELEAM sincronizados para competencias y dotación.</p>
         </div>
+        {isAdminEleam && (
+          <details className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-teal-800">Agregar persona sin acceso al sistema</summary>
+            <form onSubmit={addMember} className="mt-3 space-y-2">
+              <input aria-label="Nombre de la persona" required className={inputClass} value={newMember.nombre} onChange={(event) => setNewMember((current) => ({ ...current, nombre: event.target.value }))} placeholder="Nombre completo" />
+              <input aria-label="Cargo de la persona" className={inputClass} value={newMember.cargo} onChange={(event) => setNewMember((current) => ({ ...current, cargo: event.target.value }))} placeholder="Cargo (opcional)" />
+              <select aria-label="Tipo de dotación" className={inputClass} value={newMember.tipo_dotacion} onChange={(event) => setNewMember((current) => ({ ...current, tipo_dotacion: event.target.value }))}>
+                {Object.entries(TIPO_DOTACION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <Button type="submit" disabled={saving || !newMember.nombre.trim()} className="w-full bg-teal-700 text-white">Agregar a planta</Button>
+            </form>
+          </details>
+        )}
         {staff.length === 0 ? (
           <p className="text-sm text-slate-500">Sin personal registrado.</p>
         ) : (

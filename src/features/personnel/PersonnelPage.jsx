@@ -15,28 +15,34 @@ export default function PersonnelPage() {
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <AreaCard
-          eyebrow="Nómina y competencias"
-          title="Equipo del ELEAM"
-          description={canManageUsers ? "Crea funcionarios y mantiene sus antecedentes y competencias." : "Consulta antecedentes y competencias del equipo."}
+          eyebrow="Paso 1"
+          title="Equipo y accesos"
+          description={canManageUsers ? "Invita personas y revisa quién puede ingresar al sistema." : "Consulta quién integra el equipo."}
           path="/personal/equipo"
           icon="team"
-          disabled={!canManageUsers}
         />
         <AreaCard
-          eyebrow="Artículos 14 al 19"
-          title="Turnos y dotación"
-          description="Programa jornadas y revisa automáticamente las brechas de personal según dependencia."
+          eyebrow="Paso 2 · DS 20"
+          title="Antecedentes SEREMI"
+          description="Registra cargo, función, competencias y avance de las 22 horas anuales."
+          path="/personal/antecedentes"
+          icon="compliance"
+          tone="amber"
+        />
+        <AreaCard
+          eyebrow="Paso 3 · Artículos 15 al 17"
+          title="Planificar dotación"
+          description="Asigna el equipo de cada día y detecta automáticamente si faltan cuidadores."
           path="/personal/dotacion"
           icon="staffing"
           tone="violet"
         />
         <AreaCard
-          eyebrow="Artículo 25"
-          title="Capacitación y protocolos"
-          description="Revisa el plan anual, certificados y protocolos vinculados al personal."
-          path="/cumplimiento/obligaciones"
-          icon="compliance"
-          tone="amber"
+          eyebrow="Uso diario"
+          title="Entregar turno"
+          description="Deja al siguiente equipo sólo alertas, novedades y pendientes importantes."
+          path="/operacion/turnos"
+          icon="shift"
         />
       </div>
     </PageLayout>

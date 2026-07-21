@@ -12,6 +12,7 @@ const ResetPassword = lazy(() => import("../features/auth/ResetPassword"));
 const PaymentPage = lazy(() => import("../features/payment/PaymentPage"));
 const PaymentReturn = lazy(() => import("../features/payment/PaymentReturn"));
 const StaffDirectory = lazy(() => import("../features/team/StaffDirectory"));
+const StaffRecordsPage = lazy(() => import("../features/personnel/StaffRecordsPage"));
 const ChangePasswordPage = lazy(() => import("../features/team/ChangePasswordPage"));
 const EstablishmentPage = lazy(() => import("../features/establishment/EstablishmentPage"));
 const PersonnelPage = lazy(() => import("../features/personnel/PersonnelPage"));
@@ -100,6 +101,9 @@ function AuthenticatedRoutes() {
           } />
           <Route path="/personal/equipo" element={
             <ProtectedRoute allowedRoles={ADMIN} requiredFeature="personnel"><StaffDirectory /></ProtectedRoute>
+          } />
+          <Route path="/personal/antecedentes" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="personnel"><StaffRecordsPage /></ProtectedRoute>
           } />
           <Route path="/personal/dotacion" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="personnel"><StaffingPage /></ProtectedRoute>

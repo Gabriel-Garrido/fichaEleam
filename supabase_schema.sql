@@ -4579,6 +4579,7 @@ begin
     (
       coalesce(a.cuidadores, 0) < case when s.turno = 'noche' then r.nocturno else r.diurno end
       or (s.turno = 'noche' and r.total > 0 and coalesce(a.cuidadores, 0) < 2)
+      or (r.total > 0 and coalesce(a.tens, 0) < 1)
       or r.sin_clasificar > 0
     ) as incumple,
     array_remove(array[
@@ -4590,6 +4591,14 @@ begin
       case
         when s.turno = 'noche' and r.total > 0 and coalesce(a.cuidadores, 0) < 2
           then 'Mínimo nocturno DS20: 2 cuidadores'
+        else null
+      end,
+      case
+        when r.total > 0 and coalesce(a.tens, 0) < 1
+          then case when s.turno = 'noche'
+            then 'Falta TENS o auxiliar de llamada'
+            else 'Falta cobertura TENS o auxiliar'
+          end
         else null
       end,
       case

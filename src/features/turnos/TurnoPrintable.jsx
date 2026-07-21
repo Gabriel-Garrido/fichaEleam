@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import PageLayout from "../../layout/PageLayout";
 import { getTurnoEntrega, turnoLabel } from "./turnosService";
+import PersonnelNav from "../personnel/PersonnelNav";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -60,6 +61,7 @@ export default function TurnoPrintable() {
         </div>
       }
     >
+      <PersonnelNav />
       {loading ? (
         <div className="h-80 animate-pulse rounded-2xl bg-slate-100" />
       ) : error || !item ? (

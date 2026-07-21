@@ -70,6 +70,13 @@ export function addDaysIso(value, days) {
   return dateToIsoLocal(date);
 }
 
+export function shiftRoleForStaff(staffType) {
+  if (staffType === "cuidador") return "cuidador";
+  if (staffType === "tens") return "tens";
+  if (staffType === "profesional") return "responsable";
+  return "apoyo";
+}
+
 export async function syncStaffMembersFromProfiles() {
   const sb = ensureSupabase();
   const { eleamId } = await getMyEleamContext();
@@ -117,6 +124,26 @@ export async function listStaffMembers() {
     .order("nombre", { ascending: true });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function createStaffMember(payload) {
+  const sb = ensureSupabase();
+  const { eleamId } = await getMyEleamContext();
+  const { data, error } = await sb
+    .from("staff_members")
+    .insert({
+      eleam_id: eleamId,
+      nombre: payload.nombre.trim(),
+      email: payload.email?.trim().toLowerCase() || null,
+      telefono: payload.telefono?.trim() || null,
+      cargo: payload.cargo?.trim() || null,
+      tipo_dotacion: payload.tipo_dotacion || "cuidador",
+      activo: true,
+    })
+    .select(STAFF_SELECT)
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function updateStaffMember(id, payload) {
@@ -252,16 +279,24 @@ export async function copyPreviousWeek({ weekStart }) {
   const previousStart = addDaysIso(currentStart, -7);
   const previousEnd = addDaysIso(previousStart, 6);
   const previous = await listShiftAssignments({ from: previousStart, to: previousEnd });
-  const copied = [];
-  for (const item of previous) {
-    copied.push(await saveShiftAssignment({
+  if (previous.length === 0) return [];
+  const sb = ensureSupabase();
+  const { userId, eleamId } = await getMyEleamContext();
+  const rows = previous.map((item) => ({
+      eleam_id: eleamId,
       staff_member_id: item.staff_member_id,
       fecha: addDaysIso(item.fecha, 7),
       turno: item.turno,
       rol_turno: item.rol_turno,
       estado: item.estado === "cancelado" ? "programado" : item.estado,
       notas: item.notas,
-    }));
-  }
-  return copied;
+      creado_por: userId,
+      actualizado_en: new Date().toISOString(),
+  }));
+  const { data, error } = await sb
+    .from("staff_shift_assignments")
+    .upsert(rows, { onConflict: "staff_member_id,fecha,turno" })
+    .select(SHIFT_SELECT);
+  if (error) throw error;
+  return data ?? [];
 }

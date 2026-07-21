@@ -9,11 +9,13 @@ import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { createStaffUser, deleteStaffUser, getPendingInvitations, getTeamMembers, revokeInvitation } from "./teamService";
 import { formatDateTime } from "../../utils/dateUtils";
+import PersonnelNav from "../personnel/PersonnelNav";
 
 const EMPTY_FORM = { nombre: "", email: "", telefono: "" };
 
 export default function StaffDirectory() {
-  const { eleam, profile } = useAuth();
+  const { eleam, profile, isAdminEleam, isSuperadmin } = useAuth();
+  const canManage = isAdminEleam || isSuperadmin;
   const toast = useToast();
   const confirm = useConfirm();
   const [members, setMembers] = useState([]);
@@ -106,8 +108,9 @@ export default function StaffDirectory() {
       eyebrow="Personal"
       title="Equipo del ELEAM"
       description="Crea accesos para funcionarios. Los permisos clínicos se asignan con un perfil seguro predeterminado."
-      actions={<Button onClick={() => setShowCreate(true)} className="bg-teal-700 text-white hover:bg-teal-800">Agregar funcionario</Button>}
+      actions={canManage ? <Button onClick={() => setShowCreate(true)} className="bg-teal-700 text-white hover:bg-teal-800">Agregar persona</Button> : null}
     >
+      <PersonnelNav />
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <Stat label="Administradores" value={members.filter((member) => member.rol === "admin_eleam").length} />
         <Stat label="Funcionarios" value={staff.length} />
@@ -135,7 +138,7 @@ export default function StaffDirectory() {
                       </div>
                       <p className="mt-1 truncate text-sm text-slate-500">{member.email}{member.telefono ? ` · ${member.telefono}` : ""}</p>
                     </div>
-                    {member.rol === "funcionario" && member.id !== profile?.id && (
+                    {canManage && member.rol === "funcionario" && member.id !== profile?.id && (
                       <button type="button" onClick={() => removeMember(member)} className="self-start text-sm font-semibold text-rose-600 hover:text-rose-700 sm:self-auto">Eliminar acceso</button>
                     )}
                   </div>
@@ -160,7 +163,7 @@ export default function StaffDirectory() {
         </div>
       )}
 
-      <Modal isOpen={showCreate} onClose={() => !saving && setShowCreate(false)} title="Agregar funcionario">
+      <Modal isOpen={canManage && showCreate} onClose={() => !saving && setShowCreate(false)} title="Agregar persona">
         <form onSubmit={submit} className="space-y-4">
           <Field label="Nombre completo" value={form.nombre} onChange={(value) => setForm((current) => ({ ...current, nombre: value }))} required />
           <Field label="Correo" type="email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} required />

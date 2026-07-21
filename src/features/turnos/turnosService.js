@@ -1,5 +1,4 @@
 import { supabase } from "../../services/supabaseConfig";
-import { getRequisitosEleam, getObservaciones, buildResumen } from "../accreditation/accreditationService";
 import { recordOverallStatus, recordOverallLabel, VITAL_DEFS } from "../vitalSigns/vitalRanges";
 import { CARE_OPEN_STATUSES, isCareTaskOverdue, listCareTasks, getSessionProfile, todayIso, currentTurno } from "../carePlans/carePlansService";
 import { listMedicationAdministrations } from "../emar/emarService";
@@ -142,24 +141,6 @@ async function loadObservations(fecha, turno) {
   };
 }
 
-async function loadSeremiAlerts() {
-  try {
-    const [requisitos, observaciones] = await Promise.all([
-      getRequisitosEleam(),
-      getObservaciones({ soloAbiertas: true }),
-    ]);
-    const resumen = buildResumen(requisitos);
-    return {
-      vencidos: (resumen.vencidos ?? []).slice(0, 6),
-      porVencer: (resumen.porVencer ?? []).slice(0, 6),
-      observaciones: (observaciones ?? []).slice(0, 6),
-    };
-  } catch (error) {
-    console.warn("No se pudo cargar resumen SEREMI para entrega de turno:", error);
-    return { vencidos: [], porVencer: [], observaciones: [], error: true };
-  }
-}
-
 function summarizeRows(rows, statusKeys) {
   return rows.reduce((acc, row) => {
     acc.total += 1;
@@ -275,11 +256,10 @@ async function loadEmarTurno(fecha, turno) {
 }
 
 export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTurno() } = {}) {
-  const [residentes, signos, obs, seremi, careTurno, emarTurno] = await Promise.all([
+  const [residentes, signos, obs, careTurno, emarTurno] = await Promise.all([
     loadActiveResidents(),
     loadVitals(fecha),
     loadObservations(fecha, turno),
-    loadSeremiAlerts(),
     loadCareTurno(fecha, turno),
     loadEmarTurno(fecha, turno),
   ]);
@@ -350,7 +330,6 @@ export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTur
       fecha_hora: item.fecha_hora,
       residente: residentMeta(item.residentes),
     })),
-    seremi,
     tareas_cuidado: careTurno,
     emar: emarTurno,
     actividad_turno: actividadTurno,

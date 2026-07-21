@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "../../layout/PageLayout";
 import { listTurnoEntregas, turnoLabel } from "./turnosService";
+import PersonnelNav from "../personnel/PersonnelNav";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -65,6 +66,7 @@ export default function TurnosDashboard() {
         </button>
       }
     >
+      <PersonnelNav />
       {error && (
         <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {error}
@@ -121,7 +123,7 @@ export default function TurnosDashboard() {
                       {item.pendientes || item.notas || "Sin notas manuales."}
                     </p>
                   </div>
-                  <div className="grid grid-cols-5 gap-2 text-center text-xs text-slate-500">
+                  <div className="grid grid-cols-2 gap-2 text-center text-xs text-slate-500 sm:grid-cols-5">
                     <Metric label="Medicamentos" value={summaryNested(item.resumen_json, "emar", "pendiente") + summaryNested(item.resumen_json, "emar", "pendiente_validacion")} />
                     <Metric label="Tareas" value={carePending(item.resumen_json)} />
                     <Metric label="Sin signos" value={summaryCount(item.resumen_json, "sin_signos_hoy")} />

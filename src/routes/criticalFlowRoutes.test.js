@@ -18,6 +18,7 @@ const CRITICAL_ROUTES = [
   "/residents/new",
   "/personal",
   "/personal/dotacion",
+  "/personal/antecedentes",
   "/operacion/turnos/nuevo",
   "/operacion/cuidados",
   "/operacion/medicamentos",

@@ -9,6 +9,7 @@ import {
   todayIso,
   turnoLabel,
 } from "./turnosService";
+import PersonnelNav from "../personnel/PersonnelNav";
 
 export default function TurnoBuilder() {
   const [fecha, setFecha] = useState(todayIso());
@@ -90,6 +91,7 @@ export default function TurnoBuilder() {
         </button>
       }
     >
+      <PersonnelNav />
       <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_160px_160px]">
         <div className="rounded-2xl bg-teal-50 p-4">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Siguiente foco</div>
@@ -169,20 +171,6 @@ export default function TurnoBuilder() {
               ))}
             </SummarySection>
 
-            <SummarySection title="Carpeta SEREMI" empty="Sin vencimientos u observaciones abiertas cargadas en el resumen.">
-              {[...(summary.seremi?.vencidos ?? []), ...(summary.seremi?.porVencer ?? [])].slice(0, 8).map((item) => (
-                <div key={item.id} className="rounded-2xl border border-slate-200 p-3">
-                  <div className="text-sm font-semibold text-slate-950">{item.requisito?.nombre ?? item.nombre ?? "Requisito"}</div>
-                  <div className="mt-1 text-xs text-slate-500">Vence: {item.fecha_vencimiento || "sin fecha"}</div>
-                </div>
-              ))}
-              {(summary.seremi?.observaciones ?? []).slice(0, 4).map((item) => (
-                <div key={item.id} className="rounded-2xl border border-orange-200 bg-orange-50 p-3">
-                  <div className="text-sm font-semibold text-orange-950">Observación abierta</div>
-                  <p className="mt-1 text-sm leading-6 text-orange-800">{item.descripcion}</p>
-                </div>
-              ))}
-            </SummarySection>
           </section>
 
           <aside className="space-y-4">
@@ -237,15 +225,14 @@ function LoadingSummary() {
   );
 }
 
-function SummarySection({ title, children, empty }) {
+function SummarySection({ title, children }) {
   const hasContent = Array.isArray(children) ? children.some(Boolean) : Boolean(children);
+  if (!hasContent) return null;
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="text-base font-semibold text-slate-950">{title}</h2>
       <div className="mt-3 space-y-2">
-        {hasContent ? children : (
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">{empty}</div>
-        )}
+        {children}
       </div>
     </div>
   );
