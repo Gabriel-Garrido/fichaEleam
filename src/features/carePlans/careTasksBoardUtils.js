@@ -26,13 +26,6 @@ export const PRIORITY_BORDER = {
 };
 export const PRIORITY_ORDER = { urgente: 0, alta: 1, media: 2, baja: 3 };
 
-export const FILTER_LABEL = {
-  pendientes: "Pendientes",
-  vencidas: "Vencidas",
-  cerradas: "Cerradas",
-  todas: "Todas",
-};
-
 const CLOSED_STATES = ["cumplida", "omitida", "cancelada", "administrado", "validado", "omitido", "cancelado"];
 const SOURCE_ORDER = { seguimiento: 0, med: 1, care: 2, vitals: 3 };
 
@@ -175,13 +168,16 @@ export function matchesFilter(item, filter) {
   return true;
 }
 
-export function matchesType(item, type) {
-  if (type === "todos") return true;
-  if (type === "cuidado") return item.source === "care";
-  if (type === "medicamentos") return item.source === "med";
-  if (type === "signos") return item.source === "vitals";
-  if (type === "seguimientos") return item.source === "seguimiento";
-  return true;
+export function normalizeTaskView(value) {
+  if (value === "cerradas" || value === "todas") return value;
+  return "pendientes";
+}
+
+export function getTaskProgress(metrics = {}) {
+  const total = Math.max(0, Number(metrics.total) || 0);
+  const pending = Math.min(total, Math.max(0, Number(metrics.pendientes) || 0));
+  const completed = total - pending;
+  return { total, completed, pct: total ? Math.round((completed / total) * 100) : 0 };
 }
 
 export function buildTaskMetrics(items = []) {

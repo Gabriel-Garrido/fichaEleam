@@ -3,10 +3,7 @@ import { useFilterParams } from "../../hooks/useFilterParams";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import PageLayout from "../../layout/PageLayout";
 import Modal from "../../components/Modal";
-import HelpTooltip from "../../components/HelpTooltip";
-import MetricCard from "../../components/MetricCard";
 import EmptyState from "../../components/EmptyState";
-import ChipGroup from "../../components/ChipGroup";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useAuth } from "../../context/AuthContext";
@@ -29,15 +26,15 @@ import {
 } from "../emar/emarService";
 import { getStockLotStatus } from "../emar/emarUi";
 import {
-  FILTER_LABEL,
   PRIORITY_LABEL,
   PRIORITY_TONE,
   SEGUIMIENTO_TIPO_LABEL,
   VITALS_TURN_HOUR,
   buildTaskMetrics,
   getTurnFocus,
+  getTaskProgress,
   matchesFilter,
-  matchesType,
+  normalizeTaskView,
   normalizeCareTask,
   normalizeMedication,
   normalizeSeguimiento,
@@ -87,28 +84,11 @@ const FOCUS_TONE = {
   sky: "border-sky-200 bg-sky-50 text-sky-900",
 };
 
-const TYPE_FILTER_LABEL = {
-  todos: "Todo",
-  cuidado: "Cuidado",
-  medicamentos: "Medicamentos",
-  signos: "Signos",
-  seguimientos: "Seguimientos",
-};
-
-const TYPE_FILTER_TOOLTIPS = {
-  todos: "Muestra cuidado, medicamentos, signos vitales y controles del turno en una sola lista.",
-  cuidado: "Rutinas y actividades del plan de cuidado (alimentación, higiene, movilidad, etc.).",
-  medicamentos: "Dosis programadas del turno: pendientes, vencidas, por validar y administradas.",
-  signos: "Control de presión, frecuencia, temperatura, saturación y dolor por residente.",
-  seguimientos: "Controles pendientes del equipo (caídas, reacciones, heridas) que requieren cierre en este turno.",
-};
-
-const FILTER_TOOLTIPS = {
-  pendientes: "Tareas sin cerrar todavía (incluye vencidas).",
-  vencidas: "Tareas que pasaron su hora o ventana de ejecución.",
-  cerradas: "Tareas ya completadas, validadas u omitidas.",
-  todas: "Muestra todas las tareas del turno sin filtrar por estado.",
-};
+const TASK_VIEWS = [
+  ["pendientes", "Por hacer"],
+  ["cerradas", "Hechas"],
+  ["todas", "Todas"],
+];
 
 function residentName(residente) {
   return [residente?.apellido, residente?.nombre].filter(Boolean).join(", ") || "Residente";
@@ -117,26 +97,23 @@ function residentName(residente) {
 export default function CareTasksPage() {
   const toast = useToast();
   const { can, profile } = useAuth();
-  const [pageFilters, setPageFilter, clearPageFilters] = useFilterParams({
-    schema: { fecha: "date", turno: "string", filter: "string", type: "string", q: "string" },
-    defaults: { fecha: todayIso(), turno: currentTurno(), filter: "pendientes", type: "todos", q: "" },
+  const [pageFilters, setPageFilter] = useFilterParams({
+    schema: { fecha: "date", turno: "string", view: "string", filter: "string", q: "string" },
+    defaults: { fecha: todayIso(), turno: currentTurno(), view: "pendientes", filter: "", q: "" },
   });
   const fecha = pageFilters.fecha || todayIso();
   const turno = pageFilters.turno || currentTurno();
-  const filter = pageFilters.filter || "pendientes";
-  const type = pageFilters.type || "todos";
+  const view = normalizeTaskView(pageFilters.view || pageFilters.filter);
   const searchQuery = pageFilters.q ?? "";
   const debouncedQuery = useDebouncedValue(searchQuery, 200);
   const setFecha = (value) => setPageFilter("fecha", value);
   const setTurno = (value) => setPageFilter("turno", value);
-  const setFilter = (value) => setPageFilter("filter", value);
-  const setType = (value) => setPageFilter("type", value);
+  const setView = (value) => setPageFilter("view", value);
   const [allItems, setAllItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [lastLoaded, setLastLoaded] = useState(null);
-  const [showMetricDetails, setShowMetricDetails] = useState(false);
   const [careModal, setCareModal] = useState(null);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [medModal, setMedModal] = useState(null);
@@ -196,11 +173,10 @@ export default function CareTasksPage() {
       : () => true;
     return sortWorkItemsByUrgency(
       allItems
-        .filter((item) => matchesType(item, type))
-        .filter((item) => matchesFilter(item, filter))
+        .filter((item) => matchesFilter(item, view))
         .filter(matchesQuery)
     );
-  }, [allItems, filter, type, debouncedQuery]);
+  }, [allItems, view, debouncedQuery]);
 
   const metrics = useMemo(() => buildTaskMetrics(allItems), [allItems]);
   const focus = useMemo(() => getTurnFocus(metrics), [metrics]);
@@ -371,12 +347,7 @@ export default function CareTasksPage() {
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className={`rounded-2xl border p-4 ${FOCUS_TONE[focus.tone] ?? FOCUS_TONE.teal}`}>
-            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-current opacity-70">
-              Foco del turno
-              <HelpTooltip label="Ayuda: tareas diarias">
-                Al abrir esta vista se generan tareas de cuidado y medicamentos del turno. Reintentar no duplica registros.
-              </HelpTooltip>
-            </div>
+            <div className="text-xs font-semibold uppercase text-current opacity-70">Siguiente prioridad</div>
             <div className="mt-1 text-lg font-semibold">{focus.title}</div>
             <p className="mt-1 text-sm leading-5 opacity-80">{focus.detail}</p>
           </div>
@@ -388,7 +359,7 @@ export default function CareTasksPage() {
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-base outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
               />
             </label>
             <label className="text-sm font-medium text-slate-700">
@@ -396,7 +367,7 @@ export default function CareTasksPage() {
               <select
                 value={turno}
                 onChange={(e) => setTurno(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm capitalize outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-base capitalize outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
               >
                 {CARE_TURNOS.map((item) => <option key={item} value={item} className="capitalize">{item}</option>)}
               </select>
@@ -436,55 +407,32 @@ export default function CareTasksPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          <SegmentedFilter
-            label="Estado"
-            value={filter}
-            options={FILTER_LABEL}
-            onChange={setFilter}
-            tooltips={FILTER_TOOLTIPS}
-          />
-          <SegmentedFilter
-            label="Tipo"
-            value={type}
-            options={TYPE_FILTER_LABEL}
-            onChange={setType}
-            tooltips={TYPE_FILTER_TOOLTIPS}
-          />
+        <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Vista de tareas">
+          {TASK_VIEWS.map(([value, label]) => (
+            <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => setView(value)} className={`min-h-11 rounded-lg px-2 py-2 text-sm font-semibold ${view === value ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:text-slate-950"}`}>
+              {label}
+            </button>
+          ))}
         </div>
 
-        {(filter !== "pendientes" || type !== "todos" || searchQuery) && (
+        {(view !== "pendientes" || searchQuery) && (
           <div className="mt-3 flex items-center justify-end">
             <button
               type="button"
-              onClick={clearPageFilters}
+              onClick={() => { setView("pendientes"); setPageFilter("q", ""); }}
               className="text-xs font-semibold text-slate-500 hover:text-slate-800 hover:underline"
             >
-              Limpiar filtros y búsqueda
+              Volver a “Por hacer”
             </button>
           </div>
         )}
       </section>
 
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 xl:grid-cols-9">
-        <MetricCard label="Pendientes" value={metrics.pendientes} tone="amber" tooltip="Tareas del turno aún sin cerrar." />
-        <MetricCard label="Vencidas" value={metrics.vencidas} tone="rose" tooltip="Tareas que pasaron su hora o ventana de ejecución." />
-        <MetricCard label="Por validar" value={metrics.porValidar} tone="sky" tooltip="Medicamentos administrados que esperan confirmación de un segundo usuario." />
-        <MetricCard label="Total" value={metrics.total} tooltip="Total de tareas del turno (cuidado, medicamentos, signos y controles)." />
-        <MetricCard label="Reprogramadas" value={metrics.reprogramadas} tone="sky" tooltip="Tareas movidas a otra hora o turno." className={showMetricDetails ? "" : "hidden xl:block"} />
-        <MetricCard label="Cuidado" value={metrics.cuidado} tone="teal" tooltip="Rutinas y actividades del plan de cuidado (alimentación, higiene, movilidad, etc.)." className={showMetricDetails ? "" : "hidden xl:block"} />
-        <MetricCard label="Medicamentos" value={metrics.medicamentos} tone="sky" tooltip="Dosis programadas del turno." className={showMetricDetails ? "" : "hidden xl:block"} />
-        <MetricCard label="Signos" value={metrics.signos} tone="violet" tooltip="Control de presión, frecuencia, temperatura, saturación y dolor." className={showMetricDetails ? "" : "hidden xl:block"} />
-        <MetricCard label="Seguimiento" value={metrics.seguimientos} tone="amber" tooltip="Controles pendientes del equipo (caídas, reacciones, heridas) que requieren cierre." className={showMetricDetails ? "" : "hidden xl:block"} />
+      <section className="grid grid-cols-3 gap-2 sm:gap-3">
+        <TaskMetric label="Por hacer" value={metrics.pendientes} tone="amber" />
+        <TaskMetric label="Atrasadas" value={metrics.vencidas} tone="rose" />
+        <TaskMetric label="Progreso" value={`${getTaskProgress(metrics).completed}/${getTaskProgress(metrics).total}`} tone="teal" />
       </section>
-
-      <button
-        type="button"
-        onClick={() => setShowMetricDetails((prev) => !prev)}
-        className="text-xs font-semibold text-teal-700 hover:underline xl:hidden"
-      >
-        {showMetricDetails ? "Ocultar desglose por categoría" : "Ver desglose por categoría"}
-      </button>
 
       <TurnProgressStrip metrics={metrics} />
 
@@ -511,10 +459,10 @@ export default function CareTasksPage() {
         ) : items.length === 0 ? (
           <div className="p-4 sm:p-6">
             <EmptyState
-              tone={filter === "pendientes" && metrics.total > 0 ? "emerald" : "teal"}
-              title={filter === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
+              tone={view === "pendientes" && metrics.total > 0 ? "emerald" : "teal"}
+              title={view === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
               description={
-                filter === "pendientes" && metrics.total > 0
+                view === "pendientes" && metrics.total > 0
                   ? "No quedan pendientes ni vencidas para este turno."
                   : metrics.total > 0
                     ? "El turno tiene tareas cargadas, pero ninguna coincide con el filtro seleccionado."
@@ -526,8 +474,8 @@ export default function CareTasksPage() {
                 </svg>
               }
               action={
-                metrics.total > 0 && filter !== "pendientes"
-                  ? { label: "Ver tareas pendientes", onClick: () => { setFilter("pendientes"); setType("todos"); } }
+                metrics.total > 0 && view !== "pendientes"
+                  ? { label: "Ver tareas por hacer", onClick: () => setView("pendientes") }
                   : null
               }
             />
@@ -591,8 +539,7 @@ export default function CareTasksPage() {
 
 function TurnProgressStrip({ metrics }) {
   if (metrics.total === 0) return null;
-  const completed = Math.max(0, metrics.total - metrics.pendientes - metrics.reprogramadas);
-  const pct = Math.round(completed / metrics.total * 100);
+  const { completed, pct } = getTaskProgress(metrics);
   const tone =
     pct >= 80 ? { bar: "bg-emerald-500", pill: "bg-emerald-100 text-emerald-700" } :
     pct >= 40 ? { bar: "bg-amber-400",   pill: "bg-amber-100 text-amber-800"    } :
@@ -620,19 +567,13 @@ function TurnProgressStrip({ metrics }) {
   );
 }
 
-function SegmentedFilter({ label, value, options, onChange, tooltips = {} }) {
-  const items = Object.entries(options).map(([optionValue, optionLabel]) => ({
-    value: optionValue,
-    label: optionLabel,
-    title: tooltips[optionValue],
-    tone: "primary",
-  }));
-  return (
-    <div>
-      <p className="mb-2 text-xs font-semibold uppercase text-slate-400">{label}</p>
-      <ChipGroup ariaLabel={label} value={value} onChange={onChange} options={items} size="md" />
-    </div>
-  );
+function TaskMetric({ label, value, tone }) {
+  const colors = tone === "rose"
+    ? "border-rose-200 bg-rose-50 text-rose-700"
+    : tone === "amber"
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : "border-teal-200 bg-teal-50 text-teal-800";
+  return <div className={`rounded-2xl border p-3 text-center sm:p-4 ${colors}`}><p className="text-xs font-semibold">{label}</p><p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl">{value}</p></div>;
 }
 
 export function WorkItemRow({ item, canComplete, canAdminister, canValidate, canCreateVitals, canResolveSeguimiento, currentUserId, onCareAction, onCareReschedule, onMedicationAction, onVitalsAction, onSeguimientoAction }) {
@@ -732,24 +673,15 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
                 title="Marca la tarea como realizada y deja registro firmado."
                 className="min-h-11 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 lg:min-w-[7rem]"
               >
-                Cumplir
+                Marcar hecha
               </button>
-              <button
-                type="button"
-                onClick={onCareReschedule}
-                title="Mover esta tarea a otro día, turno u hora sin marcarla como cumplida ni omitida."
-                className="min-h-11 rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm font-semibold text-sky-700 hover:bg-sky-50 lg:min-w-[7rem]"
-              >
-                Reprogramar
-              </button>
-              <button
-                type="button"
-                onClick={() => onCareAction("omitida")}
-                title="Registrar que la tarea no se ejecutó. Se solicita motivo para mantener trazabilidad."
-                className="min-h-11 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 lg:min-w-[7rem]"
-              >
-                Omitir
-              </button>
+              <details className="relative">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:min-w-[7rem]">Otra acción</summary>
+                <div className="mt-2 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 lg:absolute lg:right-0 lg:z-10 lg:min-w-40 lg:shadow-lg">
+                  <button type="button" onClick={onCareReschedule} className="min-h-11 rounded-lg bg-white px-3 text-sm font-semibold text-sky-700">Reprogramar</button>
+                  <button type="button" onClick={() => onCareAction("omitida")} className="min-h-11 rounded-lg bg-white px-3 text-sm font-semibold text-rose-700">Registrar omisión</button>
+                </div>
+              </details>
             </>
           )}
           {isMed && item.estado === "pendiente" && canAdminister && (
@@ -762,14 +694,10 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
               >
                 Administrar
               </button>
-              <button
-                type="button"
-                onClick={() => onMedicationAction("omitido")}
-                title="Registrar que no se administró la dosis. Se solicita motivo y no descuenta stock."
-                className="min-h-11 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 lg:min-w-[7rem]"
-              >
-                Omitir
-              </button>
+              <details>
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:min-w-[7rem]">Otra acción</summary>
+                <button type="button" onClick={() => onMedicationAction("omitido")} className="mt-2 min-h-11 w-full rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-700">Registrar omisión</button>
+              </details>
             </>
           )}
           {isMed && item.estado === "pendiente_validacion" && canValidateThis && (

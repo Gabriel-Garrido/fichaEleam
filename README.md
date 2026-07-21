@@ -298,6 +298,7 @@ Antes de agregar una pantalla o campo:
 - [`MEDICAMENTOS_SIMPLE.md`](./MEDICAMENTOS_SIMPLE.md): circuito simplificado por rol para indicación, administración y medicamentos controlados.
 - [`FICHA_RESIDENTE_SIMPLE.md`](./FICHA_RESIDENTE_SIMPLE.md): portada, navegación, permisos y alcance normativo de la ficha individual.
 - [`PERSONAL_TURNOS_SIMPLE.md`](./PERSONAL_TURNOS_SIMPLE.md): planta, antecedentes SEREMI, dotación semanal y entrega de turno simplificadas.
+- [`TAREAS_DIARIAS_SIMPLE.md`](./TAREAS_DIARIAS_SIMPLE.md): bandeja priorizada del turno, estados, permisos y comportamiento responsive.
 - [`CLAUDE.md`](./CLAUDE.md): guía técnica y arquitectura para agentes y mantenedores.
 - [`codex.md`](./codex.md): reglas rápidas de colaboración y cambios.
 - [`LIBRETO_VIDEO_TUTORIAL.md`](./LIBRETO_VIDEO_TUTORIAL.md): tutorial actualizado del producto.

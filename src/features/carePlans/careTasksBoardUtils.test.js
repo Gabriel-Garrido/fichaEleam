@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildTaskMetrics,
   getTurnFocus,
+  getTaskProgress,
+  normalizeTaskView,
   normalizeSeguimiento,
   sortWorkItemsByUrgency,
 } from "./careTasksBoardUtils";
@@ -73,5 +75,12 @@ describe("careTasksBoardUtils board helpers", () => {
     expect(getTurnFocus({ porValidar: 0, vencidas: 2 }).tone).toBe("rose");
     expect(getTurnFocus({ porValidar: 0, vencidas: 0, pendientes: 4 }).tone).toBe("teal");
     expect(getTurnFocus({ porValidar: 0, vencidas: 0, pendientes: 0 }).tone).toBe("emerald");
+  });
+
+  it("normalizes the simplified views and does not subtract reprogrammed work twice", () => {
+    expect(normalizeTaskView("cerradas")).toBe("cerradas");
+    expect(normalizeTaskView("vencidas")).toBe("pendientes");
+    expect(normalizeTaskView("unknown")).toBe("pendientes");
+    expect(getTaskProgress({ total: 10, pendientes: 3, reprogramadas: 2 })).toEqual({ total: 10, completed: 7, pct: 70 });
   });
 });
