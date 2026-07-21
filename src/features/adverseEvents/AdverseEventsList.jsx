@@ -61,7 +61,6 @@ export default function AdverseEventsList() {
       desde: "date",
       hasta: "date",
       pendientes: "boolean",
-      familiar: "boolean",
     },
     defaults: {
       q: "",
@@ -72,7 +71,6 @@ export default function AdverseEventsList() {
       desde: "",
       hasta: "",
       pendientes: false,
-      familiar: false,
     },
   });
 
@@ -98,7 +96,6 @@ export default function AdverseEventsList() {
         desde: filters.desde || null,
         hasta: filters.hasta || null,
         soloPendientesCierre: filters.pendientes === true,
-        soloVisiblesFamilia: filters.familiar === true,
       });
       setEvents(data);
     } catch (err) {
@@ -142,7 +139,6 @@ export default function AdverseEventsList() {
             },
             { type: "dateRange", name: "fecha", nameDesde: "desde", nameHasta: "hasta", label: "Período", presets: DATE_PRESETS },
             { type: "toggle", name: "pendientes", label: "Solo pendientes de cierre" },
-            { type: "toggle", name: "familiar", label: "Solo visibles para familia" },
           ]}
           values={filters}
           onFilterChange={setFilter}

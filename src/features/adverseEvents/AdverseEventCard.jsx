@@ -61,11 +61,6 @@ export default function AdverseEventCard({ event, onOpen, compact = false }) {
             Familia informada
           </span>
         )}
-        {event.visible_familiar && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 font-semibold text-teal-700">
-            Visible en portal
-          </span>
-        )}
         <span className="ml-auto text-teal-700 group-hover:underline">Ver detalle →</span>
       </footer>
     </article>

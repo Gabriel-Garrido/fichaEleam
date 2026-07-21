@@ -271,9 +271,6 @@ function ObservationList() {
                     {r.requiere_seguimiento && (
                       <Badge tone="amber" size="sm">{formatFollowUpLabel(r)}</Badge>
                     )}
-                    <Badge tone={r.visible_familiar ? "emerald" : "slate"} size="sm">
-                      {r.visible_familiar ? "Visible familia" : "Interno"}
-                    </Badge>
                     <span className="text-xs font-medium capitalize text-slate-400">{r.turno}</span>
                   </div>
                   <p className="line-clamp-3 text-sm leading-relaxed text-slate-700">{r.descripcion}</p>

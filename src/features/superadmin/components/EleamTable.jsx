@@ -4,6 +4,7 @@ import {
 } from "../utils/superadminFormatters";
 import CustomerHealthBadge from "./CustomerHealthBadge";
 import HelpTooltip from "../../../components/HelpTooltip";
+import { canResendDemoAccess, indexPortfolioUsage, portfolioUsageState, usageDaysSince } from "../utils/portfolioUsage";
 
 // Tooltips de columna: solo en campos que no son auto-evidentes.
 // Cada texto especifica la columna exacta en BD y cómo interpretarla.
@@ -24,6 +25,10 @@ const COL_TIPS = {
     "eleams.ultimo_contacto — Se actualiza automáticamente al crear una interacción CRM. Sin contacto en más de 60 días hace que 'Salud' baje a 'Atención'. 'Sin contacto' en rojo = nunca hubo interacción registrada.",
   proxAccion:
     "eleams.proxima_accion_fecha — Fecha programada para el próximo seguimiento comercial. Se define manualmente en 'Editar ELEAM'.",
+  uso:
+    "Actividad operativa agregada en la ventana seleccionada: signos, observaciones, visitas, medicamentos, cuidados, turnos, residentes, eventos adversos, camas y acreditación.",
+  ultimaActividad:
+    "Último registro operativo conocido del ELEAM, independiente de la ventana seleccionada. No corresponde al último login.",
 };
 
 function ThTip({ children, tip, center, className = "" }) {
@@ -59,17 +64,44 @@ function VencimientoCell({ fecha, pagoActivo, isDemo }) {
   );
 }
 
-export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = {} }) {
+const USAGE_TONE = {
+  emerald: "bg-emerald-100 text-emerald-700",
+  amber: "bg-amber-100 text-amber-800",
+  rose: "bg-rose-100 text-rose-700",
+  slate: "bg-slate-100 text-slate-600",
+};
+
+function lastUsageLabel(value) {
+  const days = usageDaysSince(value);
+  if (days == null) return "Sin actividad";
+  if (days === 0) return "Hoy";
+  if (days === 1) return "Ayer";
+  return `Hace ${days}d`;
+}
+
+export default function EleamTable({
+  eleams,
+  onEdit,
+  onOpen,
+  taskCountByEleam = {},
+  portfolioUsage = [],
+  usageDays = 30,
+  onResendDemoAccess,
+  resendingDemoId,
+}) {
+  const usageByEleam = indexPortfolioUsage(portfolioUsage);
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden w-full">
       <div className="overflow-x-auto w-full">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[1150px] text-sm">
           <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-100">
             <tr>
               <ThTip className="font-bold w-40">ELEAM</ThTip>
               <ThTip className="font-bold">Email admin</ThTip>
               <ThTip tip={COL_TIPS.crmEstado} center className="font-bold">Estado CRM</ThTip>
               <ThTip tip={COL_TIPS.plan} center className="font-bold">Plan</ThTip>
+              <ThTip tip={COL_TIPS.uso} center className="font-bold whitespace-nowrap">Uso {usageDays}d</ThTip>
+              <ThTip tip={COL_TIPS.ultimaActividad} center className="font-bold whitespace-nowrap">Última actividad</ThTip>
               <ThTip tip={COL_TIPS.pago} center className="font-bold">Pago</ThTip>
               <ThTip tip={COL_TIPS.riesgo} center className="font-bold">Riesgo</ThTip>
               <ThTip tip={COL_TIPS.salud} center className="font-bold">Salud</ThTip>
@@ -82,7 +114,7 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
           <tbody className="divide-y divide-slate-50">
             {eleams.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-slate-400 text-sm">
+                <td colSpan={13} className="px-4 py-10 text-center text-slate-400 text-sm">
                   No hay ELEAMs que coincidan con el filtro.
                 </td>
               </tr>
@@ -91,6 +123,10 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
               const riesgo = RIESGO_MAP[e.riesgo_churn] ?? RIESGO_MAP.desconocido;
               const overdue = taskCountByEleam[e.id] ?? 0;
               const isDemo = e.plan === "demo";
+              const usage = usageByEleam[e.id] ?? null;
+              const usageState = usage ? portfolioUsageState(usage) : null;
+              const canResend = canResendDemoAccess(e, usage);
+              const isResending = resendingDemoId === e.id;
               return (
                 <tr key={e.id} className={`transition-colors ${isDemo ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-slate-50"}`}>
                   <td className="px-3 py-2.5 font-semibold text-slate-800 w-40">
@@ -133,6 +169,24 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                       {PLAN_LABEL[e.plan] ?? e.plan ?? "—"}
                     </span>
                   </td>
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    {usage ? (
+                      <>
+                        <span className="block text-sm font-bold tabular-nums text-slate-800">{usage.registros.toLocaleString("es-CL")}</span>
+                        <span className="text-[10px] text-slate-400">{usage.usuariosActivos}/{usage.usuariosTotales} usuarios</span>
+                      </>
+                    ) : <span className="text-xs text-slate-300">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    {usage && usageState ? (
+                      <>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${USAGE_TONE[usageState.tone]}`}>
+                          {usageState.label}
+                        </span>
+                        <span className="mt-0.5 block text-[10px] text-slate-400">{lastUsageLabel(usage.ultimaActividad)}</span>
+                      </>
+                    ) : <span className="text-xs text-slate-300">—</span>}
+                  </td>
                   <td className="px-3 py-2.5 text-center">
                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
                       e.pago_activo
@@ -164,6 +218,17 @@ export default function EleamTable({ eleams, onEdit, onOpen, taskCountByEleam = 
                     {e.proxima_accion_fecha ? formatDate(e.proxima_accion_fecha) : "—"}
                   </td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                    {canResend && (
+                      <button
+                        type="button"
+                        onClick={() => onResendDemoAccess?.(e)}
+                        disabled={Boolean(resendingDemoId)}
+                        title="Genera un enlace nuevo y reenvía las instrucciones para iniciar el demo"
+                        className="mr-3 rounded-md bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-200 disabled:cursor-wait disabled:opacity-50"
+                      >
+                        {isResending ? "Enviando…" : "Reenviar demo"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onOpen(e)}

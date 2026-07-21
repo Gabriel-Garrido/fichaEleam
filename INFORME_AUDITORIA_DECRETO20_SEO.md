@@ -5,6 +5,8 @@
 **Alcance:** auditoría normativa (DS 14 → DS 20), feature de acreditación SEREMI, páginas públicas y SEO/indexación.
 **Rama:** `master` (trabajo en árbol de trabajo, sin commit).
 
+> **Nota de actualización — 2026-07-20:** este informe conserva los hallazgos de la auditoría normativa original. Desde entonces el producto fue simplificado a cinco áreas y se retiraron el portal familiar y el onboarding anterior. El estado técnico vigente está documentado en `README.md` y `CLAUDE.md`. La última verificación integral aprobó 356 tests en 57 archivos, contratos Supabase, build y 18 URLs SEO.
+
 ---
 
 ## 1. Resumen ejecutivo
@@ -18,8 +20,8 @@ Buena parte de esa migración estaba presente como **trabajo no commiteado** en 
 | Validación | Resultado |
 |---|---|
 | ESLint (`npm run lint`) | ✅ sin errores ni warnings |
-| Tests unitarios (`npm run test:run`) | ✅ 318/318 (54 archivos) |
-| Auditoría SEO (`npm run seo:check`) | ✅ 15 URLs, "SEO OK" |
+| Tests unitarios (`npm run test:run`) | ✅ 356/356 (57 archivos), verificación 2026-07-20 |
+| Auditoría SEO (`npm run seo:check`) | ✅ 18 URLs, "SEO OK", verificación 2026-07-20 |
 | Contratos Supabase (`npm run test:contracts`) | ✅ "Contracts OK" |
 | Build de producción (`npm run build`) | ✅ build + prerender de 8 posts |
 | Seed acreditación en sync | ✅ 12 ámbitos, 57 requisitos |

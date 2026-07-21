@@ -52,8 +52,6 @@ export const ADVERSE_EVENT_EMPTY = {
   notificado_familia: false,
   fecha_notificacion_familia: "",
   medio_notificacion_familia: "",
-  visible_familiar: false,
-  resumen_familiar: "",
 };
 
 export function adverseEventSchema() {
@@ -77,16 +75,7 @@ export function adverseEventSchema() {
     notificado_familia: z.boolean().default(false),
     fecha_notificacion_familia: z.string().optional().nullable().transform((v) => v && v.trim() ? v.trim() : null),
     medio_notificacion_familia: selectField("Medio de notificación a familia", MEDIOS_NOTIFICACION_FAMILIA),
-    visible_familiar: z.boolean().default(false),
-    resumen_familiar: optionalText("Resumen para familia", 500),
   }).superRefine((value, ctx) => {
-    if (value.visible_familiar && !value.resumen_familiar) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["resumen_familiar"],
-        message: "Si vas a mostrar el evento al familiar, escribe un resumen seguro para ellos.",
-      });
-    }
     if (value.notificado_familia && !value.medio_notificacion_familia) {
       ctx.addIssue({
         code: "custom",

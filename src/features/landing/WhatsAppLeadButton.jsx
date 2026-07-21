@@ -10,7 +10,7 @@ function WhatsAppIcon({ className = "w-7 h-7" }) {
 }
 
 const SHOW_CALLOUT_AFTER_MS = 6000;
-const HIDE_CALLOUT_AFTER_MS = 8000;
+const CALLOUT_VISIBLE_MS = 8000;
 const CALLOUT_DISMISSED_KEY = "fe_wa_callout_dismissed";
 
 export default function WhatsAppLeadButton({ onOpen }) {
@@ -29,7 +29,7 @@ export default function WhatsAppLeadButton({ onOpen }) {
 
     const timers = calloutTimers.current;
     timers.show = window.setTimeout(() => setShowCallout(true), SHOW_CALLOUT_AFTER_MS);
-    timers.hide = window.setTimeout(() => setShowCallout(false), HIDE_CALLOUT_AFTER_MS);
+    timers.hide = window.setTimeout(() => setShowCallout(false), SHOW_CALLOUT_AFTER_MS + CALLOUT_VISIBLE_MS);
 
     return () => {
       if (timers.show) window.clearTimeout(timers.show);

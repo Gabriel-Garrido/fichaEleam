@@ -6,6 +6,10 @@ function getChipLabel(key, value) {
   if (key === "plan")       return `Plan: ${PLAN_LABEL[value] ?? value}`;
   if (key === "pagoActivo") return `Pago: ${value === "si" ? "Activo" : "Inactivo"}`;
   if (key === "riesgo")     return `Riesgo: ${RIESGO_MAP[value]?.label ?? value}`;
+  if (key === "uso") {
+    const labels = { con_uso: "Con uso", sin_uso: "Sin uso", activos_7d: "Activos 7d", sin_activar: "Usuarios sin activar" };
+    return `Uso: ${labels[value] ?? value}`;
+  }
   return value;
 }
 
@@ -31,7 +35,7 @@ export default function EleamFilters({ filters, setFilters, count }) {
 
   // Active chip filters (excludes the free-text search)
   const activeChips = Object.entries(filters).filter(
-    ([k, v]) => v && k !== "search" && ["crmEstado", "plan", "pagoActivo", "riesgo"].includes(k),
+    ([k, v]) => v && k !== "search" && ["crmEstado", "plan", "pagoActivo", "riesgo", "uso"].includes(k),
   );
 
   const hasAnyFilter = !!filters.search || activeChips.length > 0;
@@ -39,7 +43,7 @@ export default function EleamFilters({ filters, setFilters, count }) {
   return (
     <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 mb-4 space-y-3">
       {/* Row 1: inputs */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3">
         {/* Search */}
         <div className="md:col-span-2">
           <label htmlFor="filter-search" className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">
@@ -73,6 +77,24 @@ export default function EleamFilters({ filters, setFilters, count }) {
           >
             <option value="">Todos los estados</option>
             {CRM_STATES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="filter-usage" className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">
+            Uso de app
+          </label>
+          <select
+            id="filter-usage"
+            value={filters.uso ?? ""}
+            onChange={(e) => set({ uso: e.target.value || undefined })}
+            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+          >
+            <option value="">Todo uso</option>
+            <option value="con_uso">Con uso en ventana</option>
+            <option value="sin_uso">Sin uso en ventana</option>
+            <option value="activos_7d">Activos últimos 7d</option>
+            <option value="sin_activar">Usuarios sin activar</option>
           </select>
         </div>
 

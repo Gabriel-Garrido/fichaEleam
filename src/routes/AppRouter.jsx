@@ -8,6 +8,8 @@ import {
   loadPublicBlogPost,
   loadSoftwareEleamPage,
   loadCalculadoraDotacionPage,
+  loadAutoevaluacionDs20Page,
+  loadPlazosDecreto20Page,
   loadAcreditacionSeremiPage,
   loadFaqPage,
   loadContactoPage,
@@ -19,6 +21,8 @@ const PublicBlogList = lazy(loadPublicBlogList);
 const PublicBlogPost = lazy(loadPublicBlogPost);
 const SoftwareEleamPage = lazy(loadSoftwareEleamPage);
 const CalculadoraDotacionPage = lazy(loadCalculadoraDotacionPage);
+const AutoevaluacionDs20Page = lazy(loadAutoevaluacionDs20Page);
+const PlazosDecreto20Page = lazy(loadPlazosDecreto20Page);
 const AcreditacionSeremiPage = lazy(loadAcreditacionSeremiPage);
 const FaqPage = lazy(loadFaqPage);
 const ContactoPage = lazy(loadContactoPage);
@@ -37,6 +41,8 @@ export default function AppRouter() {
           <Route path="/acreditacion-seremi" element={<AcreditacionSeremiPage />} />
           <Route path="/software-eleam" element={<SoftwareEleamPage />} />
           <Route path="/calculadora-dotacion-eleam" element={<CalculadoraDotacionPage />} />
+          <Route path="/autoevaluacion-decreto-20" element={<AutoevaluacionDs20Page />} />
+          <Route path="/plazos-decreto-20" element={<PlazosDecreto20Page />} />
           <Route path="/preguntas-frecuentes" element={<FaqPage />} />
           <Route path="/contacto" element={<ContactoPage />} />
         </Route>

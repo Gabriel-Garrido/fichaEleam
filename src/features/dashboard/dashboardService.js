@@ -27,7 +27,26 @@ async function getAccreditationSummary() {
     porVencer:      resumen.porVencer,
     vigente:        resumen.vigente,
     noAplica:       resumen.noAplica,
+    requisitosConEvidencia: resumen.requisitosConEvidencia,
+    evidenciasVigentes: resumen.evidenciasVigentes,
     observaciones:  obs ?? [],
+  };
+}
+
+async function getTeamSummary(eleamId) {
+  if (!eleamId) {
+    return { total: 0, admins: 0, funcionarios: 0 };
+  }
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("rol")
+    .eq("eleam_id", eleamId);
+  if (error) throw error;
+  const rows = data ?? [];
+  return {
+    total: rows.length,
+    admins: rows.filter((r) => r.rol === "admin_eleam").length,
+    funcionarios: rows.filter((r) => r.rol === "funcionario").length,
   };
 }
 
@@ -61,7 +80,7 @@ async function getResidentStats() {
     .map((r) => calcAge(r.fecha_nacimiento))
     .filter((a) => a != null);
   const avgAge = ages.length ? Math.round(ages.reduce((a, b) => a + b, 0) / ages.length) : null;
-  const dependencia = { leve: 0, moderado: 0, severo: 0, total: 0, sin_clasificar: 0 };
+  const dependencia = { autovalente: 0, leve: 0, moderado: 0, severo: 0, total: 0, sin_clasificar: 0 };
   for (const r of rows) {
     if (r.estado !== "activo") continue;
     const k = r.nivel_dependencia ?? "sin_clasificar";
@@ -103,6 +122,21 @@ async function getTodayObservationsCount() {
     .lt("fecha_hora", startOfTomorrow());
   if (error) throw error;
   return count ?? 0;
+}
+
+async function getActivationActivitySummary() {
+  const [vitals, observations, shifts] = await Promise.all([
+    supabase.from("signos_vitales").select("id", { count: "exact", head: true }),
+    supabase.from("observaciones_diarias").select("id", { count: "exact", head: true }),
+    supabase.from("turno_entregas").select("id", { count: "exact", head: true }),
+  ]);
+  if (vitals.error) throw vitals.error;
+  if (observations.error) throw observations.error;
+  if (shifts.error) throw shifts.error;
+  return {
+    clinicalRecords: (vitals.count ?? 0) + (observations.count ?? 0),
+    shiftHandoffs: shifts.count ?? 0,
+  };
 }
 
 // Cuenta signos + observaciones del día agrupados por turno (para conocer
@@ -240,7 +274,23 @@ export async function getPendingClinicalAssessments(horizonteDias = 30) {
   return data ?? [];
 }
 
-export async function loadDashboard() {
+async function getDs20ResidentCompliance() {
+  const { data, error } = await supabase.rpc("ds20_resident_compliance_summary");
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function getDs20StaffingComplianceToday() {
+  const today = todayIso();
+  const { data, error } = await supabase.rpc("ds20_staffing_compliance", {
+    p_fecha_desde: today,
+    p_fecha_hasta: today,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function loadDashboard(eleamId = null) {
   const [
     residentStatsResult,
     signosHoyResult,
@@ -254,6 +304,10 @@ export async function loadDashboard() {
     operationalResult,
     bedsResult,
     assessmentsResult,
+    ds20ResidentsResult,
+    ds20StaffingResult,
+    teamResult,
+    activationActivityResult,
   ] = await Promise.allSettled([
     getResidentStats(),
     getTodayVitalSignsCount(),
@@ -267,6 +321,10 @@ export async function loadDashboard() {
     getOperationalTurnSummary(),
     getBedOccupancySummary(),
     getPendingClinicalAssessments(30),
+    getDs20ResidentCompliance(),
+    getDs20StaffingComplianceToday(),
+    getTeamSummary(eleamId),
+    getActivationActivitySummary(),
   ]);
 
   const ok = (r) => r.status === "fulfilled";
@@ -284,6 +342,10 @@ export async function loadDashboard() {
     operationalSummary:   ok(operationalResult)      ? operationalResult.value      : null,
     bedSummary:           ok(bedsResult)             ? bedsResult.value             : null,
     pendingAssessments:   ok(assessmentsResult)      ? assessmentsResult.value      : [],
+    ds20Residents:        ok(ds20ResidentsResult)    ? ds20ResidentsResult.value    : [],
+    ds20Staffing:         ok(ds20StaffingResult)     ? ds20StaffingResult.value     : [],
+    teamSummary:          ok(teamResult)             ? teamResult.value             : { total: 0, admins: 0, funcionarios: 0 },
+    activationActivity:   ok(activationActivityResult) ? activationActivityResult.value : { clinicalRecords: 0, shiftHandoffs: 0 },
     errors: {
       residentStats:    !ok(residentStatsResult),
       actividad:        !ok(signosHoyResult) || !ok(observacionesHoyResult),
@@ -296,6 +358,10 @@ export async function loadDashboard() {
       operational:       !ok(operationalResult),
       beds:              !ok(bedsResult),
       assessments:       !ok(assessmentsResult),
+      ds20Residents:     !ok(ds20ResidentsResult),
+      ds20Staffing:      !ok(ds20StaffingResult),
+      team:              !ok(teamResult),
+      activation:        !ok(activationActivityResult),
     },
   };
 }

@@ -38,7 +38,16 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
     }
   }, [isOpen, defaultCta]);
 
-  const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
+  const set = (field) => (e) => {
+    const { value } = e.target;
+    setForm((p) => ({ ...p, [field]: value }));
+    setErrors((p) => {
+      if (!p[field]) return p;
+      const next = { ...p };
+      delete next[field];
+      return next;
+    });
+  };
 
   function validate() {
     return validateDemoLeadForm(form);
@@ -67,10 +76,13 @@ export default function DemoRequestModal({ isOpen, onClose, defaultCta = null })
       setStatus("success");
     } catch (error) {
       const raw = String(error?.message || "").toLowerCase();
+      const rateLimited = error?.code === "P0001" && raw.includes("solicitudes");
       setErrorMsg(
-        raw.includes("network") || raw.includes("fetch")
-          ? "No pudimos enviar la solicitud por un problema de conexión. Revisa tu internet e intenta nuevamente."
-          : "No pudimos registrar la solicitud. Verifica los datos e intenta nuevamente.",
+        rateLimited
+          ? "Recibimos demasiadas solicitudes seguidas desde tu conexión. Espera unos minutos e intenta nuevamente."
+          : raw.includes("network") || raw.includes("fetch")
+            ? "No pudimos enviar la solicitud por un problema de conexión. Revisa tu internet e intenta nuevamente."
+            : "No pudimos registrar la solicitud. Verifica los datos e intenta nuevamente.",
       );
       setStatus("error");
     }

@@ -7,6 +7,8 @@ export const loadPublicBlogList = () => import("../features/blog/PublicBlogList"
 export const loadPublicBlogPost = () => import("../features/blog/PublicBlogPost");
 export const loadSoftwareEleamPage = () => import("../features/public/SoftwareEleamPage");
 export const loadCalculadoraDotacionPage = () => import("../features/public/CalculadoraDotacionPage");
+export const loadAutoevaluacionDs20Page = () => import("../features/public/AutoevaluacionDs20Page");
+export const loadPlazosDecreto20Page = () => import("../features/public/PlazosDecreto20Page");
 export const loadAcreditacionSeremiPage = () => import("../features/public/AcreditacionSeremiPage");
 export const loadFaqPage = () => import("../features/public/FaqPage");
 export const loadContactoPage = () => import("../features/public/ContactoPage");
@@ -19,6 +21,8 @@ const PUBLIC_ROUTE_LOADERS = {
   "/blog": loadPublicBlogList,
   "/software-eleam": loadSoftwareEleamPage,
   "/calculadora-dotacion-eleam": loadCalculadoraDotacionPage,
+  "/autoevaluacion-decreto-20": loadAutoevaluacionDs20Page,
+  "/plazos-decreto-20": loadPlazosDecreto20Page,
   "/acreditacion-seremi": loadAcreditacionSeremiPage,
   "/preguntas-frecuentes": loadFaqPage,
   "/contacto": loadContactoPage,

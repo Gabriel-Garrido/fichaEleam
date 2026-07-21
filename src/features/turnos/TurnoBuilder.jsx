@@ -64,7 +64,7 @@ export default function TurnoBuilder() {
     setError("");
     try {
       const saved = await saveTurnoEntrega({ fecha, turno, resumen: summary, notas, pendientes });
-      navigate(`/turnos/${saved.id}`);
+      navigate(`/operacion/turnos/${saved.id}`);
     } catch (err) {
       console.error(err);
       setError("No pudimos guardar la entrega. Revisa permisos o conexión.");

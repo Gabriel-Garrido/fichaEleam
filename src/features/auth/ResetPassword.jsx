@@ -11,6 +11,7 @@ import {
   logout,
   subscribePasswordRecovery,
   updatePasswordAndClearResetFlag,
+  verifyPasswordRecoveryToken,
 } from "./authService";
 import { getPasswordStrength, PASSWORD_MAX_LENGTH, validatePassword } from "../../utils/passwordValidation";
 
@@ -57,6 +58,13 @@ export default function ResetPassword() {
       return;
     }
 
+    const tokenHash = paramsFromHash.get("token_hash") || paramsFromSearch.get("token_hash");
+    const recoveryType = paramsFromSearch.get("type") || paramsFromHash.get("type");
+    const hasLegacyRecoveryPayload = recoveryType === "recovery" && (
+      paramsFromHash.has("access_token") ||
+      paramsFromHash.has("refresh_token")
+    );
+
     let cancelled = false;
     let timer;
     let interval;
@@ -69,21 +77,46 @@ export default function ResetPassword() {
       if (interval) clearInterval(interval);
     };
 
-    // Supabase puede entregar el reset como PASSWORD_RECOVERY, SIGNED_IN o
-    // sesión ya persistida, según el tipo de link y el momento de montaje.
-    const unsubscribe = subscribePasswordRecovery((session) => {
-      if (session) markReady();
+    // Los enlaces nuevos llegan directo a la app con token_hash. La app lo
+    // verifica explícitamente, evitando depender de la allowlist de redirects
+    // del proyecto Supabase. Los enlaces antiguos con tokens en el hash siguen
+    // funcionando durante su vigencia.
+    const unsubscribe = subscribePasswordRecovery((session, event) => {
+      if (session && (event === "PASSWORD_RECOVERY" || hasLegacyRecoveryPayload)) markReady();
     });
 
     const checkSession = () => {
       getCurrentAuthSession()
         .then((session) => {
-          if (session) markReady();
+          if (session && hasLegacyRecoveryPayload) markReady();
         })
         .catch(() => {});
     };
-    checkSession();
-    interval = setInterval(checkSession, 500);
+
+    if (tokenHash && recoveryType === "recovery") {
+      verifyPasswordRecoveryToken(tokenHash)
+        .then(() => {
+          if (cancelled) return;
+          window.history.replaceState(null, "", window.location.pathname);
+          markReady();
+        })
+        .catch((verifyError) => {
+          if (cancelled) return;
+          if (timer) clearTimeout(timer);
+          setLinkExpired(true);
+          setLinkError(authErrorMessage(
+            verifyError,
+            "El link de recuperación no es válido, ya fue usado o expiró.",
+          ));
+        });
+    } else if (hasLegacyRecoveryPayload) {
+      checkSession();
+      interval = setInterval(checkSession, 500);
+    } else {
+      setLinkExpired(true);
+      setLinkError("Abre el enlace personal que recibiste por correo o solicita uno nuevo.");
+      return () => unsubscribe();
+    }
 
     timer = setTimeout(() => {
       if (!cancelled) {

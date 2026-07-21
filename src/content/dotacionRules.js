@@ -1,12 +1,16 @@
 // Cálculo referencial de dotación mínima de personal para ELEAM según el Decreto
-// Supremo N°20 del MINSAL (Arts. 15, 16 y 17). Módulo puro y sin dependencias,
-// importable tanto por la página pública (React) como por el generador SEO (Node).
+// Supremo N°20 del MINSAL, considerando modificaciones publicadas hasta el
+// Decreto N°6/2025 y la vigencia ajustada por el Decreto N°9/2025. Módulo puro
+// y sin dependencias, importable por la página pública y por el generador SEO.
 // La validación final de cumplimiento depende de la autoridad sanitaria (SEREMI).
 
 export const DOTACION_META = {
   norma: "Decreto N°20 MINSAL",
   articulos: "Arts. 15, 16 y 17",
   fuenteUrl: "https://www.bcn.cl/leychile/navegar?idNorma=1182129",
+  modificacionesConsideradas: ["Decreto N°6/2025", "Decreto N°9/2025"],
+  vigenciaDesde: "2025-10-01",
+  versionReglas: "2026-06-10",
 };
 
 // Mínimo absoluto de cuidadores en turno nocturno (Art. 17), cualquiera sea el

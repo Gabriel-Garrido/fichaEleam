@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   BARTHEL_ITEMS,
   KATZ_ITEMS,
+  MNA_ITEMS,
+  MMSE_ITEMS,
   addDaysIso,
   computeBarthel,
   computeKatz,
+  computeMna,
+  computeMmse,
   computeNextEvaluation,
   evaluationStatus,
   isAssessmentComplete,
@@ -27,6 +31,27 @@ function minBarthel() {
 function katzAll(value) {
   return KATZ_ITEMS.reduce((acc, item) => {
     acc[item.key] = value;
+    return acc;
+  }, {});
+}
+
+function maxMna() {
+  return MNA_ITEMS.reduce((acc, item) => {
+    acc[item.key] = Math.max(...item.options.map((o) => o.value));
+    return acc;
+  }, {});
+}
+
+function minMna() {
+  return MNA_ITEMS.reduce((acc, item) => {
+    acc[item.key] = 0;
+    return acc;
+  }, {});
+}
+
+function mmseAll(value) {
+  return MMSE_ITEMS.reduce((acc, item) => {
+    acc[item.key] = Math.min(value, item.max);
     return acc;
   }, {});
 }
@@ -57,6 +82,10 @@ describe("clinical assessment rules — Barthel", () => {
     expect(isAssessmentComplete("barthel", partial)).toBe(false);
     expect(isAssessmentComplete("barthel", minBarthel())).toBe(true);
   });
+
+  it("rejects Barthel values that are not part of the scale", () => {
+    expect(isAssessmentComplete("barthel", { ...minBarthel(), bano: 3 })).toBe(false);
+  });
 });
 
 describe("clinical assessment rules — Katz", () => {
@@ -80,6 +109,58 @@ describe("clinical assessment rules — Katz", () => {
   it("isAssessmentComplete is true only when every Katz item is set", () => {
     expect(isAssessmentComplete("katz", { bano: "independiente" })).toBe(false);
     expect(isAssessmentComplete("katz", katzAll("independiente"))).toBe(true);
+  });
+});
+
+describe("clinical assessment rules — MNA", () => {
+  it("returns normal nutrition at the maximum score", () => {
+    const { puntaje, puntajeDecimal, resultado } = computeMna(maxMna());
+    expect(puntaje).toBe(30);
+    expect(puntajeDecimal).toBe(30);
+    expect(resultado).toBe("Estado nutricional normal");
+  });
+
+  it("returns malnutrition at the minimum score", () => {
+    const { resultado } = computeMna(minMna());
+    expect(resultado).toBe("Malnutrición");
+  });
+
+  it("requires every MNA item", () => {
+    const partial = maxMna();
+    delete partial.liquidos;
+    expect(isAssessmentComplete("mna", partial)).toBe(false);
+    expect(isAssessmentComplete("mna", maxMna())).toBe(true);
+  });
+
+  it("rejects MNA values outside the defined options", () => {
+    expect(isAssessmentComplete("mna", { ...maxMna(), liquidos: 0.25 })).toBe(false);
+  });
+});
+
+describe("clinical assessment rules — MMSE", () => {
+  it("returns 30 and expected cognitive performance at maximum score", () => {
+    const detalle = MMSE_ITEMS.reduce((acc, item) => ({ ...acc, [item.key]: item.max }), {});
+    const { puntaje, resultado } = computeMmse(detalle);
+    expect(puntaje).toBe(30);
+    expect(resultado).toBe("Rendimiento cognitivo esperado");
+  });
+
+  it("rejects values above the item maximum", () => {
+    const detalle = mmseAll(5);
+    detalle.copia = 2;
+    expect(isAssessmentComplete("mmse", detalle)).toBe(false);
+  });
+
+  it("rejects decimal MMSE scores", () => {
+    const detalle = MMSE_ITEMS.reduce((acc, item) => ({ ...acc, [item.key]: item.max }), {});
+    detalle.lectura = 0.5;
+    expect(isAssessmentComplete("mmse", detalle)).toBe(false);
+  });
+
+  it("requires every MMSE item", () => {
+    const detalle = MMSE_ITEMS.reduce((acc, item) => ({ ...acc, [item.key]: item.max }), {});
+    delete detalle.registro;
+    expect(isAssessmentComplete("mmse", detalle)).toBe(false);
   });
 });
 

@@ -18,8 +18,7 @@ describe("eventosAdversosService exports", () => {
     expect(typeof service.listEventAudit).toBe("function");
   });
 
-  it("expone helpers de portal familiar y métricas", () => {
-    expect(typeof service.listFamiliarAdverseEvents).toBe("function");
+  it("expone métricas operativas", () => {
     expect(typeof service.getOpenAdverseEventsCount).toBe("function");
   });
 });
@@ -28,13 +27,6 @@ describe("getOpenAdverseEventsCount", () => {
   it("devuelve totales en cero si no hay eleamId", async () => {
     const result = await service.getOpenAdverseEventsCount(null);
     expect(result).toEqual({ total: 0, gravesOCriticos: 0 });
-  });
-});
-
-describe("listFamiliarAdverseEvents", () => {
-  it("devuelve lista vacía cuando no hay residente_id", async () => {
-    const result = await service.listFamiliarAdverseEvents(null);
-    expect(result).toEqual([]);
   });
 });
 

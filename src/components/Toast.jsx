@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 
 const ToastContext = createContext(null);
 
@@ -15,6 +15,13 @@ const STYLES = {
   error: "bg-rose-600",
   warning: "bg-amber-500",
   info: "bg-sky-600",
+};
+
+const LABELS = {
+  success: "Listo",
+  error: "Revisa esto",
+  warning: "Atención",
+  info: "Información",
 };
 
 let _toastCounter = 0;
@@ -37,15 +44,23 @@ function ToastIcon({ type }) {
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const timers = useRef(new Set());
+
+  useEffect(() => () => {
+    timers.current.forEach((timer) => clearTimeout(timer));
+    timers.current.clear();
+  }, []);
 
   const toast = useCallback((message, type = "info", duration) => {
     const id = ++_toastCounter;
     const fallback = type === "error" ? 7000 : 4500;
     const ms = typeof duration === "number" ? duration : fallback;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
+    setToasts((prev) => [...prev.slice(-3), { id, message, type }]);
+    const timer = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
+      timers.current.delete(timer);
     }, ms);
+    timers.current.add(timer);
   }, []);
 
   const dismiss = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -63,10 +78,17 @@ export function ToastProvider({ children }) {
           <div
             key={t.id}
             role={t.type === "error" ? "alert" : "status"}
-            className={`flex items-start gap-3 ${STYLES[t.type] ?? STYLES.info} text-white rounded-xl px-4 py-3 shadow-lg animate-slide-in`}
+            className={`ui-toast ui-toast-${t.type} flex items-start gap-3 ${STYLES[t.type] ?? STYLES.info} text-white rounded-xl px-4 py-3 shadow-lg animate-slide-in`}
           >
-            <ToastIcon type={t.type} />
-            <span className="flex-1 text-sm leading-snug">{t.message}</span>
+            <span className="ui-toast-icon grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15" aria-hidden="true">
+              <ToastIcon type={t.type} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-bold uppercase tracking-[0.12em] text-white/75">
+                {LABELS[t.type] ?? LABELS.info}
+              </span>
+              <span className="mt-0.5 block text-sm leading-snug">{t.message}</span>
+            </span>
             <button
               type="button"
               onClick={() => dismiss(t.id)}

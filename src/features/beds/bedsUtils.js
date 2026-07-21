@@ -6,11 +6,57 @@ export const BED_STATUS_LABELS = {
 
 export const ASSIGNMENT_STATUS_LABELS = {
   ocupada: "Ocupada",
-  reservada_hospitalizacion: "Reservada por hospitalizacion",
+  reservada_hospitalizacion: "Reservada por hospitalización",
 };
 
 export function normalizeCode(value) {
   return String(value ?? "").trim();
+}
+
+function comparableCode(value) {
+  return normalizeCode(value).toLocaleLowerCase("es-CL");
+}
+
+export function hasDuplicateRoomCode({ rooms = [], code, currentId = null } = {}) {
+  const target = comparableCode(code);
+  if (!target) return false;
+  return rooms.some((room) => room.id !== currentId && comparableCode(room.codigo) === target);
+}
+
+export function hasDuplicateBedCode({ beds = [], roomId, code, currentId = null } = {}) {
+  const target = comparableCode(code);
+  if (!target || !roomId) return false;
+  return beds.some((bed) => {
+    const bedRoomId = bed.habitacion_id ?? bed.habitacion?.id ?? bed.habitaciones?.id;
+    return bed.id !== currentId && bedRoomId === roomId && comparableCode(bed.codigo) === target;
+  });
+}
+
+export function suggestNextBedCode(beds = [], roomId = null) {
+  const roomBeds = beds.filter((bed) => {
+    if (!roomId) return true;
+    const bedRoomId = bed.habitacion_id ?? bed.habitacion?.id ?? bed.habitaciones?.id;
+    return bedRoomId === roomId;
+  });
+  const codes = roomBeds.map((bed) => normalizeCode(bed.codigo)).filter(Boolean);
+  if (codes.length === 0) return "1";
+
+  const numericCodes = codes
+    .map((code) => (/^\d+$/.test(code) ? Number.parseInt(code, 10) : null))
+    .filter((value) => Number.isInteger(value) && value > 0);
+  if (numericCodes.length === codes.length) {
+    return String(Math.max(...numericCodes) + 1);
+  }
+
+  const singleLetters = codes
+    .map((code) => (/^[a-z]$/i.test(code) ? code.toUpperCase().charCodeAt(0) : null))
+    .filter((value) => Number.isInteger(value));
+  if (singleLetters.length === codes.length) {
+    const next = Math.max(...singleLetters) + 1;
+    return next <= 90 ? String.fromCharCode(next) : String(codes.length + 1);
+  }
+
+  return String(codes.length + 1);
 }
 
 export function formatBedLocation(cama) {

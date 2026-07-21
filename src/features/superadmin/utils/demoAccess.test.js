@@ -13,8 +13,8 @@ describe("getDemoLeadAccessState", () => {
   it("detects approved demo accounts", () => {
     expect(getDemoLeadAccessState({ estado: "demo_activo", demo_user_id: "user-id" })).toMatchObject({
       key: "account_demo",
-      canGrant: false,
-      actionLabel: "Acceso ya aprobado",
+      canGrant: true,
+      actionLabel: "Reenviar acceso",
     });
   });
 
@@ -38,14 +38,16 @@ describe("demoGrantResultMessage", () => {
   });
 
   it("describes reused demo accounts", () => {
-    expect(demoGrantResultMessage({ code: "reused_demo" })).toMatchObject({
+    expect(demoGrantResultMessage({ code: "reused_demo", email_sent: true })).toMatchObject({
       title: "Demo reutilizado",
+      toast: "Demo activado y enlace de acceso enviado",
     });
   });
 
   it("describes already active demos", () => {
-    expect(demoGrantResultMessage({ code: "already_active" })).toMatchObject({
+    expect(demoGrantResultMessage({ code: "access_resent", email_sent: true })).toMatchObject({
       title: "Demo ya aprobado",
+      toast: "Nuevo enlace de acceso enviado",
     });
   });
 

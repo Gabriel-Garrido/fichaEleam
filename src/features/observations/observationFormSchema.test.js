@@ -11,8 +11,6 @@ const BASE = {
   requiere_seguimiento: false,
   seguimiento_fecha: "",
   seguimiento_turno: "",
-  visible_familiar: false,
-  resumen_familiar: "",
 };
 
 describe("observationFormSchema", () => {
@@ -25,7 +23,6 @@ describe("observationFormSchema", () => {
       acciones_tomadas: null,
       seguimiento_fecha: null,
       seguimiento_turno: null,
-      resumen_familiar: null,
     });
   });
 
@@ -35,12 +32,5 @@ describe("observationFormSchema", () => {
     expect(result.ok).toBe(false);
     expect(result.errors.seguimiento_fecha).toBe("Indica la fecha del seguimiento.");
     expect(result.errors.seguimiento_turno).toBe("Indica el turno del seguimiento.");
-  });
-
-  it("requires a family summary before publishing to family portal", () => {
-    const result = validateObservationForm({ ...BASE, visible_familiar: true });
-
-    expect(result.ok).toBe(false);
-    expect(result.errors.resumen_familiar).toBe("Escribe un resumen para familia antes de publicar esta observación.");
   });
 });

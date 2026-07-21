@@ -11,8 +11,11 @@ const RecuperarAcceso = lazy(() => import("../features/auth/RecuperarAcceso"));
 const ResetPassword = lazy(() => import("../features/auth/ResetPassword"));
 const PaymentPage = lazy(() => import("../features/payment/PaymentPage"));
 const PaymentReturn = lazy(() => import("../features/payment/PaymentReturn"));
-const TeamManagement = lazy(() => import("../features/team/TeamManagement"));
+const StaffDirectory = lazy(() => import("../features/team/StaffDirectory"));
 const ChangePasswordPage = lazy(() => import("../features/team/ChangePasswordPage"));
+const EstablishmentPage = lazy(() => import("../features/establishment/EstablishmentPage"));
+const PersonnelPage = lazy(() => import("../features/personnel/PersonnelPage"));
+const ComplianceHub = lazy(() => import("../features/compliance/ComplianceHub"));
 
 const ResidentList = lazy(() => import("../features/residents/ResidentList"));
 const ResidentForm = lazy(() => import("../features/residents/ResidentForm"));
@@ -31,6 +34,7 @@ const TurnoBuilder = lazy(() => import("../features/turnos/TurnoBuilder"));
 const TurnoPrintable = lazy(() => import("../features/turnos/TurnoPrintable"));
 const CareTasksPage = lazy(() => import("../features/carePlans/CareTasksPage"));
 const EmarTurnPage = lazy(() => import("../features/emar/EmarTurnPage"));
+const StaffingPage = lazy(() => import("../features/ds20/StaffingPage"));
 
 const AccreditationDashboard = lazy(() => import("../features/accreditation/AccreditationDashboard"));
 const AccreditationAmbito = lazy(() => import("../features/accreditation/AccreditationAmbito"));
@@ -44,12 +48,12 @@ const SuperAdminClientes = lazy(() => import("../features/superadmin/SuperAdminC
 const SuperAdminLeads = lazy(() => import("../features/superadmin/SuperAdminLeads"));
 const SuperAdminPagos = lazy(() => import("../features/superadmin/SuperAdminPagos"));
 const SuperAdminTareas = lazy(() => import("../features/superadmin/SuperAdminTareas"));
-const SuperAdminPermisos = lazy(() => import("../features/superadmin/SuperAdminPermisos"));
 const BlogManagement = lazy(() => import("../features/superadmin/blog/BlogManagement"));
 const BlogEditor = lazy(() => import("../features/superadmin/blog/BlogEditor"));
 
-const FamiliarPortal = lazy(() => import("../features/familiar/FamiliarPortal"));
-const FamiliarVisitas = lazy(() => import("../features/familiar/FamiliarVisitas"));
+const EmergenciasPage = lazy(() => import("../features/emergencias/EmergenciasPage"));
+const ReclamosPage = lazy(() => import("../features/reclamos/ReclamosPage"));
+const CumplimientoPage = lazy(() => import("../features/cumplimiento/CumplimientoPage"));
 
 const STAFF = ["admin_eleam", "funcionario"];
 const ADMIN = ["admin_eleam"];
@@ -84,20 +88,50 @@ function AuthenticatedRoutes() {
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="dashboard"><AdminDashboard /></ProtectedRoute>
           } />
 
-          <Route path="/turnos" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="turnos"><TurnosDashboard /></ProtectedRoute>
+          <Route path="/establecimiento" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="establishment"><EstablishmentPage /></ProtectedRoute>
           } />
-          <Route path="/turnos/nueva" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="turnos"><TurnoBuilder /></ProtectedRoute>
+          <Route path="/establecimiento/camas" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="establishment"><BedsPage /></ProtectedRoute>
           } />
-          <Route path="/turnos/tareas" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="care-plans"><CareTasksPage /></ProtectedRoute>
+
+          <Route path="/personal" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="personnel"><PersonnelPage /></ProtectedRoute>
           } />
-          <Route path="/turnos/emar" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="emar"><EmarTurnPage /></ProtectedRoute>
+          <Route path="/personal/equipo" element={
+            <ProtectedRoute allowedRoles={ADMIN} requiredFeature="personnel"><StaffDirectory /></ProtectedRoute>
           } />
-          <Route path="/turnos/:id" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="turnos"><TurnoPrintable /></ProtectedRoute>
+          <Route path="/personal/dotacion" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="personnel"><StaffingPage /></ProtectedRoute>
+          } />
+
+          <Route path="/cumplimiento" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><ComplianceHub /></ProtectedRoute>
+          } />
+          <Route path="/cumplimiento/obligaciones" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><CumplimientoPage /></ProtectedRoute>
+          } />
+          <Route path="/cumplimiento/emergencias" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><EmergenciasPage /></ProtectedRoute>
+          } />
+          <Route path="/cumplimiento/reclamos" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><ReclamosPage /></ProtectedRoute>
+          } />
+
+          <Route path="/operacion/turnos" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><TurnosDashboard /></ProtectedRoute>
+          } />
+          <Route path="/operacion/turnos/nuevo" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><TurnoBuilder /></ProtectedRoute>
+          } />
+          <Route path="/operacion/cuidados" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><CareTasksPage /></ProtectedRoute>
+          } />
+          <Route path="/operacion/medicamentos" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><EmarTurnPage /></ProtectedRoute>
+          } />
+          <Route path="/operacion/turnos/:id" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><TurnoPrintable /></ProtectedRoute>
           } />
 
           <Route path="/residents" element={
@@ -113,66 +147,47 @@ function AuthenticatedRoutes() {
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ResidentForm /></ProtectedRoute>
           } />
 
-          <Route path="/camas" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="beds"><BedsPage /></ProtectedRoute>
-          } />
-
           <Route path="/vital-signs" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="vital-signs"><VitalSignsList /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><VitalSignsList /></ProtectedRoute>
           } />
           <Route path="/vital-signs/new" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="vital-signs"><VitalSignsForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><VitalSignsForm /></ProtectedRoute>
           } />
 
           <Route path="/observations" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="observations"><ObservationList /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ObservationList /></ProtectedRoute>
           } />
           <Route path="/observations/new" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="observations"><ObservationForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ObservationForm /></ProtectedRoute>
           } />
 
           <Route path="/eventos-adversos" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="adverse-events"><AdverseEventsList /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><AdverseEventsList /></ProtectedRoute>
           } />
           <Route path="/eventos-adversos/nuevo" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="adverse-events"><AdverseEventForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><AdverseEventForm /></ProtectedRoute>
           } />
           <Route path="/eventos-adversos/:id" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="adverse-events"><AdverseEventDetail /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><AdverseEventDetail /></ProtectedRoute>
           } />
           <Route path="/eventos-adversos/:id/edit" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="adverse-events"><AdverseEventForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><AdverseEventForm /></ProtectedRoute>
           } />
 
-          <Route path="/accreditation" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="accreditation"><AccreditationDashboard /></ProtectedRoute>
+          <Route path="/cumplimiento/seremi" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationDashboard /></ProtectedRoute>
           } />
-          <Route path="/accreditation/ambito/:codigo" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="accreditation"><AccreditationAmbito /></ProtectedRoute>
+          <Route path="/cumplimiento/seremi/ambito/:codigo" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationAmbito /></ProtectedRoute>
           } />
-          <Route path="/accreditation/requisito/:id" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="accreditation"><AccreditationRequisito /></ProtectedRoute>
+          <Route path="/cumplimiento/seremi/requisito/:id" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationRequisito /></ProtectedRoute>
           } />
-          <Route path="/accreditation/observaciones" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="accreditation"><AccreditationObservaciones /></ProtectedRoute>
+          <Route path="/cumplimiento/seremi/observaciones" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationObservaciones /></ProtectedRoute>
           } />
-          <Route path="/accreditation/carpeta" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="accreditation"><AccreditationCarpeta /></ProtectedRoute>
-          } />
-
-          <Route path="/equipo" element={
-            <ProtectedRoute allowedRoles={ADMIN} requiredFeature="team"><TeamManagement /></ProtectedRoute>
-          } />
-
-          <Route path="/familiar" element={
-            <ProtectedRoute allowedRoles={["familiar"]} requiredFeature="familiar">
-              <FamiliarPortal />
-            </ProtectedRoute>
-          } />
-          <Route path="/familiar/visitas" element={
-            <ProtectedRoute allowedRoles={["familiar"]} requiredFeature="familiar-visitas">
-              <FamiliarVisitas />
-            </ProtectedRoute>
+          <Route path="/cumplimiento/seremi/carpeta" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationCarpeta /></ProtectedRoute>
           } />
 
           <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
@@ -180,7 +195,6 @@ function AuthenticatedRoutes() {
           <Route path="/superadmin/leads" element={<SuperAdminRoute><SuperAdminLeads /></SuperAdminRoute>} />
           <Route path="/superadmin/pagos" element={<SuperAdminRoute><SuperAdminPagos /></SuperAdminRoute>} />
           <Route path="/superadmin/tareas" element={<SuperAdminRoute><SuperAdminTareas /></SuperAdminRoute>} />
-          <Route path="/superadmin/permisos" element={<SuperAdminRoute><SuperAdminPermisos /></SuperAdminRoute>} />
           <Route path="/superadmin/blog" element={<SuperAdminRoute><BlogManagement /></SuperAdminRoute>} />
           <Route path="/superadmin/blog/new" element={<SuperAdminRoute><BlogEditor /></SuperAdminRoute>} />
           <Route path="/superadmin/blog/:id/edit" element={<SuperAdminRoute><BlogEditor /></SuperAdminRoute>} />

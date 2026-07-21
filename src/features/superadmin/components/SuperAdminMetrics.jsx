@@ -45,7 +45,60 @@ function MetricCard({
   );
 }
 
-export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads }) {
+function PriorityClients({ clients = [], onOpenClient }) {
+  if (!clients.length) {
+    return (
+      <section className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+        <p className="text-sm font-semibold text-emerald-900">Sin clientes prioritarios</p>
+        <p className="mt-1 text-xs text-emerald-700">No hay señales críticas de adopción, documentos, tareas vencidas o churn.</p>
+      </section>
+    );
+  }
+
+  const toneClass = {
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    amber: "border-amber-200 bg-amber-50 text-amber-900",
+    rose: "border-rose-200 bg-rose-50 text-rose-900",
+  };
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold text-slate-800">Clientes prioritarios</h2>
+        <p className="text-xs text-slate-500">Score 0-100 calculado con adopción, actividad, evidencia DS20, pagos, tareas y riesgo churn.</p>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-5">
+        {clients.map((client) => (
+          <article key={client.eleamId} className={`rounded-xl border p-4 shadow-sm ${toneClass[client.tone] ?? toneClass.amber}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{client.nombre}</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{client.score}</p>
+              </div>
+              <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold">
+                Score
+              </span>
+            </div>
+            <ul className="mt-3 space-y-1 text-xs leading-relaxed">
+              {client.reasons.slice(0, 3).map((reason) => (
+                <li key={reason} className="line-clamp-1">{reason}</li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => onOpenClient?.(client)}
+              className="mt-3 w-full rounded-lg bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white"
+            >
+              Revisar cliente
+            </button>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads, onOpenClient }) {
   if (!metrics) return null;
 
   const activeRatio = metrics.totalEleams
@@ -60,6 +113,17 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
       title: "Negocio",
       description: "Estado comercial general de la cartera y los ingresos del mes.",
       items: [
+        {
+          label: "Score cartera",
+          value: `${metrics.portfolioScore ?? 0}/100`,
+          sub: "Adopción + riesgo",
+          tone: (metrics.portfolioScore ?? 0) >= 75 ? "emerald" : (metrics.portfolioScore ?? 0) >= 50 ? "amber" : "rose",
+          help: {
+            description: "Promedio del score calculado por cliente con señales de adopción, actividad reciente, evidencia DS20, pagos, tareas vencidas y riesgo churn.",
+            source: "public.eleams, residentes, profiles, acred_documentos y crm_tasks.",
+            action: "Usa clientes prioritarios para decidir a quién contactar primero.",
+          },
+        },
         {
           label: "ELEAMs",
           value: metrics.totalEleams,
@@ -96,6 +160,45 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
       ],
     },
     {
+      title: "Adopción",
+      description: "Señales de activación real y uso inicial dentro de los ELEAM.",
+      items: [
+        {
+          label: "Activación básica",
+          value: metrics.basicActivated ?? 0,
+          sub: "Con residente y funcionario",
+          tone: "emerald",
+          help: {
+            description: "ELEAMs que ya tienen al menos un residente activo y un funcionario registrado.",
+            source: "public.residentes.estado = activo y public.profiles.rol = funcionario por eleam_id.",
+            action: "Si es bajo, prioriza onboarding guiado antes de venta cruzada.",
+          },
+        },
+        {
+          label: "Uso últimos 7d",
+          value: metrics.activeLast7d ?? 0,
+          sub: "Actividad registrada",
+          tone: "teal",
+          help: {
+            description: "ELEAMs con actividad operativa real durante los últimos siete días.",
+            source: "Agregación de signos, observaciones, visitas, medicamentos, cuidados, turnos, residentes, eventos, camas y acreditación.",
+            action: "Detecta clientes vivos versus cuentas creadas sin avance.",
+          },
+        },
+        {
+          label: "DS20 iniciado",
+          value: metrics.ds20Started ?? 0,
+          sub: "Con evidencia cargada",
+          tone: "sky",
+          help: {
+            description: "ELEAMs que ya cargaron al menos un documento de acreditación DS20.",
+            source: "public.acred_documentos por eleam_id.",
+            action: "Buen indicador de avance hacia una carpeta fiscalizable.",
+          },
+        },
+      ],
+    },
+    {
       title: "Pipeline",
       description: "Cuentas que requieren accion comercial o seguimiento de conversion.",
       items: [
@@ -115,7 +218,7 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
         {
           label: "En demo",
           value: metrics.demoEleams,
-          sub: `${demoRatio}% de la cartera`,
+          sub: `${demoRatio}% de la cartera · ${metrics.demosSinUso ?? 0} sin uso`,
           tone: "amber",
           help: {
             description: "ELEAMs con plan demo activo. Son clientes en período de prueba que aún no tienen suscripción paga.",
@@ -166,12 +269,59 @@ export default function SuperAdminMetrics({ metrics, onFilterRisk, onFilterLeads
             action: "Revisa y aprueba las solicitudes pendientes dentro de las 24 horas.",
           },
         },
+        {
+          label: "Inactivos 30d",
+          value: metrics.inactive30d ?? 0,
+          sub: "Sin actividad reciente",
+          tone: (metrics.inactive30d ?? 0) > 0 ? "rose" : "emerald",
+          onClick: onFilterRisk,
+          actionLabel: "Ver cartera",
+          help: {
+            description: "ELEAMs sin actividad registrada o con última actividad mayor a 30 días.",
+            source: "Última actividad agregada de signos, observaciones, visitas, medicamentos, cuidados, turnos, residentes, eventos, camas y acreditación.",
+            action: "Prioriza contacto de recuperación o limpieza comercial.",
+          },
+        },
+        {
+          label: "Docs críticos",
+          value: metrics.criticalDocuments ?? 0,
+          sub: "Vencidos o ≤30 días",
+          tone: (metrics.criticalDocuments ?? 0) > 0 ? "amber" : "emerald",
+          help: {
+            description: "Documentos vigentes con vencimiento vencido o dentro de los próximos 30 días.",
+            source: "public.acred_documentos.fecha_vencimiento y vigente = true.",
+            action: "Útil para soporte proactivo antes de fiscalización.",
+          },
+        },
+        {
+          label: "Accesos pendientes",
+          value: metrics.pendingAccessUsers ?? 0,
+          sub: "Usuarios sin activar clave",
+          tone: (metrics.pendingAccessUsers ?? 0) > 0 ? "amber" : "emerald",
+          help: {
+            description: "Usuarios que aún deben definir contraseña o completar primer ingreso.",
+            source: "public.profiles.must_reset_password = true.",
+            action: "Si sube, revisar entrega de invitaciones y onboarding.",
+          },
+        },
+        {
+          label: "Tareas vencidas",
+          value: metrics.overdueCrmTasks ?? 0,
+          sub: "CRM pendientes",
+          tone: (metrics.overdueCrmTasks ?? 0) > 0 ? "rose" : "emerald",
+          help: {
+            description: "Tareas CRM pendientes o en curso con fecha vencida.",
+            source: "public.crm_tasks.fecha_vencimiento con estado pendiente/en_curso.",
+            action: "Cerrar o reprogramar para que el pipeline no quede sin seguimiento.",
+          },
+        },
       ],
     },
   ];
 
   return (
     <div className="mb-6 space-y-5">
+      <PriorityClients clients={metrics.priorityClients ?? []} onOpenClient={onOpenClient} />
       {groups.map((group) => (
         <section key={group.title} className="space-y-3">
           <div>

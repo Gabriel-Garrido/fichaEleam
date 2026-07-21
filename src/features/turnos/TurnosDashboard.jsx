@@ -58,7 +58,7 @@ export default function TurnosDashboard() {
       actions={
         <button
           type="button"
-          onClick={() => navigate("/turnos/nueva")}
+          onClick={() => navigate("/operacion/turnos/nuevo")}
           className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
         >
           Nueva entrega
@@ -95,7 +95,7 @@ export default function TurnosDashboard() {
               </p>
               <button
                 type="button"
-                onClick={() => navigate("/turnos/nueva")}
+                onClick={() => navigate("/operacion/turnos/nuevo")}
                 className="mt-4 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
               >
                 Preparar entrega
@@ -107,7 +107,7 @@ export default function TurnosDashboard() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => navigate(`/turnos/${item.id}`)}
+                  onClick={() => navigate(`/operacion/turnos/${item.id}`)}
                   className="grid w-full gap-3 py-4 text-left hover:bg-slate-50 sm:grid-cols-[1fr_auto]"
                 >
                   <div className="min-w-0">

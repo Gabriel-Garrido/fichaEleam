@@ -4,7 +4,6 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import PageLayout from "../../layout/PageLayout";
 import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
-import CollapsibleGuide from "../../components/CollapsibleGuide";
 import MetricCard from "../../components/MetricCard";
 import ChipGroup from "../../components/ChipGroup";
 import Badge from "../../components/Badge";
@@ -271,38 +270,10 @@ export default function EmarTurnPage() {
         </div>
       </section>
 
-      <CollapsibleGuide
-        storageKey="emarTurn"
-        title="¿Cómo funciona la administración por turno?"
-        steps={[
-          {
-            title: "Revisar",
-            text: "Las indicaciones activas del residente crean dosis por fecha, turno y horario.",
-          },
-          {
-            title: "Administrar u omitir",
-            text: "Administrar descuenta stock si corresponde; omitir exige motivo y deja el registro auditado.",
-            tone: metrics.pendientes || metrics.vencidas ? "border-amber-200 bg-amber-50" : null,
-          },
-          {
-            title: "Confirmar segunda firma",
-            text: "Algunos medicamentos quedan pendientes para un segundo usuario autorizado.",
-            tone: metrics.porValidar ? "border-sky-200 bg-sky-50" : null,
-          },
-          {
-            title: "Cerrar turno",
-            text: "Revisa pendientes del turno anterior, notas y registros por validar antes de entregar.",
-            tone: metrics.vencidas ? "border-rose-200 bg-rose-50" : null,
-          },
-        ]}
-      />
-
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard label="Pendientes" value={metrics.pendientes} tone="amber" tooltip="Dosis del turno aún por administrar." />
         <MetricCard label="Vencidas" value={metrics.vencidas} tone="rose" tooltip="Dosis que pasaron su hora o ventana de tolerancia." />
         <MetricCard label="Por validar" value={metrics.porValidar} tone="sky" tooltip="Administraciones que necesitan confirmación de un segundo usuario." />
-        <MetricCard label="Doble firma" value={metrics.controlados} tone="slate" tooltip="Medicamentos que exigen lote identificado y confirmación de un segundo usuario." />
-        <MetricCard label="Omitidos" value={metrics.omitidas} tone="rose" tooltip="Dosis no administradas con motivo registrado." />
         <MetricCard label="Total" value={metrics.total} tooltip="Total de dosis programadas en el turno." />
       </section>
 
@@ -387,7 +358,6 @@ export default function EmarTurnPage() {
 function EmarRow({ row, currentUserId, canAdminister, canValidate, onAction }) {
   const overdue = isMedicationOverdue(row);
   const canValidateThis = canValidate && row.administrado_por !== currentUserId;
-  const needsStock = row.indicacion?.requiere_stock || row.indicacion?.es_controlado;
   const dueWindow = formatDueWindow(row);
 
   return (
@@ -401,16 +371,6 @@ function EmarRow({ row, currentUserId, canAdminister, canValidate, onAction }) {
             {row.indicacion?.es_controlado && (
               <Badge tone="rose" size="sm" title="Medicamento controlado: requiere lote identificado y confirmación de un segundo usuario.">
                 Doble firma
-              </Badge>
-            )}
-            {row.indicacion?.requiere_doble_validacion && !row.indicacion?.es_controlado && (
-              <Badge tone="sky" size="sm" title="Necesita que un segundo usuario confirme antes de cerrar.">
-                Segunda firma
-              </Badge>
-            )}
-            {needsStock && (
-              <Badge tone="slate" size="sm" title="Esta indicación descuenta del stock al administrar.">
-                Stock
               </Badge>
             )}
             {overdue && (
@@ -512,9 +472,11 @@ function EmarActionModal({ modal, saving, confirm, onClose, onSubmit }) {
   });
   const [lots, setLots] = useState([]);
   const [loadingLots, setLoadingLots] = useState(false);
+  const [doseError, setDoseError] = useState("");
 
   useEffect(() => {
     setLots([]);
+    setDoseError("");
     if (!modal || modal.action !== "administrado") return;
     const needsLot = modal.row.indicacion?.es_controlado || modal.row.indicacion?.requiere_stock;
     if (!needsLot) return;
@@ -572,6 +534,13 @@ function EmarActionModal({ modal, saving, confirm, onClose, onSubmit }) {
         className="space-y-4"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (modal.action === "administrado") {
+            const num = Number(draft.dosis);
+            if (!Number.isFinite(num) || num <= 0) {
+              setDoseError("La cantidad administrada debe ser un número mayor a 0.");
+              return;
+            }
+          }
           try {
             await onSubmit({
               action: modal.action,
@@ -636,7 +605,7 @@ function EmarActionModal({ modal, saving, confirm, onClose, onSubmit }) {
           </div>
         )}
 
-        {modal.action === "administrado" && (
+        {modal.action === "administrado" && needsLot && (
           <label className="block text-sm font-medium text-slate-700">
             Cantidad administrada ({unitLabel})
             <input
@@ -644,12 +613,17 @@ function EmarActionModal({ modal, saving, confirm, onClose, onSubmit }) {
               min="0.01"
               step="0.01"
               value={draft.dosis}
-              onChange={(e) => setDraft((prev) => ({ ...prev, dosis: e.target.value }))}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              onChange={(e) => { setDoseError(""); setDraft((prev) => ({ ...prev, dosis: e.target.value })); }}
+              aria-invalid={doseError ? "true" : "false"}
+              className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 ${doseError ? "border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-rose-100" : "border-slate-200 focus:border-teal-500 focus:ring-teal-100"}`}
             />
-            <span className="mt-1 block text-xs text-slate-500">
-              Usa la cantidad real entregada; debe coincidir con la unidad del lote para mantener stock confiable.
-            </span>
+            {doseError ? (
+              <span className="mt-1 block text-xs text-rose-600">{doseError}</span>
+            ) : (
+              <span className="mt-1 block text-xs text-slate-500">
+                Usa la cantidad real entregada; debe coincidir con la unidad del lote para mantener stock confiable.
+              </span>
+            )}
           </label>
         )}
 
@@ -666,18 +640,14 @@ function EmarActionModal({ modal, saving, confirm, onClose, onSubmit }) {
           </label>
         )}
 
-        <label className="block text-sm font-medium text-slate-700">
-          Notas
-          <textarea
-            value={draft.notas}
-            onChange={(e) => setDraft((prev) => ({ ...prev, notas: e.target.value }))}
-            rows={4}
-            placeholder={isValidation ? "Validación de segundo usuario..." : "Detalle breve para continuidad clínica..."}
-            className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-          />
-        </label>
+        {(isOmission || isValidation) && (
+          <label className="block text-sm font-medium text-slate-700">
+            Observación <span className="text-xs font-normal text-slate-400">(opcional)</span>
+            <textarea value={draft.notas} onChange={(e) => setDraft((prev) => ({ ...prev, notas: e.target.value }))} rows={3} placeholder={isValidation ? "Observación de la segunda firma..." : "Detalle útil para el siguiente turno..."} className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+          </label>
+        )}
 
-        {!isValidation && (
+        {isOmission && (
           <label className="flex items-start gap-2 text-sm text-slate-700">
             <input
               type="checkbox"

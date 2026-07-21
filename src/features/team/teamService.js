@@ -1,12 +1,5 @@
-import { supabase } from "../../services/supabaseConfig";
+import { ensureSupabase } from "../../services/serviceContext";
 import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
-import { withResidentLocation } from "../beds/bedsUtils";
-
-function ensureSupabase() {
-  if (!supabase) throw new Error("Supabase no está configurado.");
-  return supabase;
-}
-
 // Lista los funcionarios y el admin del ELEAM del usuario autenticado.
 // La RLS profiles_admin_eleam_select permite al admin ver perfiles de su ELEAM.
 export async function getTeamMembers(eleamId) {
@@ -27,45 +20,13 @@ export async function getPendingInvitations(eleamId) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("funcionario_invitaciones")
-    .select("id, nombre, email, telefono, parentesco, token, expira_en, creado_en, usado, rol, residente_id")
+    .select("id, nombre, email, telefono, token, expira_en, creado_en, usado, rol")
     .eq("eleam_id", eleamId)
     .eq("usado", false)
     .gt("expira_en", new Date().toISOString())
     .order("creado_en", { ascending: false });
   if (error) throw error;
   return data ?? [];
-}
-
-// Lista los residentes activos del ELEAM, para asociar familiares.
-export async function getEleamResidentes(eleamId) {
-  if (!eleamId) return [];
-  const sb = ensureSupabase();
-  const { data, error } = await sb
-    .from("residentes")
-    .select(`
-      id, nombre, apellido, estado, cama_actual_id,
-      cama_actual:camas!residentes_cama_actual_id_fkey(
-        id, codigo, nombre, tipo, estado,
-        habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
-      )
-    `)
-    .eq("eleam_id", eleamId)
-    .order("apellido", { ascending: true });
-  if (error) throw error;
-  return (data ?? []).map(withResidentLocation);
-}
-
-// Lista los familiares vinculados a residentes del ELEAM (vista del admin).
-export async function getEleamFamiliares(eleamId) {
-  if (!eleamId) return [];
-  const sb = ensureSupabase();
-  // Traemos los vínculos cuyas residentes pertenecen al ELEAM.
-  const { data, error } = await sb
-    .from("familiar_residentes")
-    .select("profile_id, residente_id, parentesco, residentes(eleam_id, nombre, apellido), profiles!familiar_residentes_profile_id_fkey(id, nombre, email, telefono, rol, must_reset_password)")
-    .order("creado_en", { ascending: false });
-  if (error) throw error;
-  return (data ?? []).filter((row) => row.residentes?.eleam_id === eleamId);
 }
 
 // Elimina una invitación pendiente.
@@ -78,20 +39,20 @@ export async function revokeInvitation(id) {
   if (error) throw error;
 }
 
-// Crea un funcionario o familiar. La cuenta se crea con una contraseña
+// Crea un funcionario. La cuenta se crea con una contraseña
 // aleatoria interna y el usuario recibe por correo un enlace para definir la
 // suya. Retorna { ok, profile_id, email, rol, email_sent, email_error? }.
-export async function createStaffUser({ nombre, email, telefono = null, parentesco = null, rol, residenteId = null }) {
+export async function createStaffUser({ nombre, email, telefono = null }) {
   const sb = ensureSupabase();
   const { data, error } = await sb.functions.invoke("create-staff-user", {
-    body: { nombre, email, telefono, parentesco, rol, residente_id: residenteId },
+    body: { nombre, email, telefono, rol: "funcionario" },
   });
   if (error) await throwEdgeFunctionError(error, "No se pudo crear el usuario");
   if (data?.error) throw new Error(data.error);
   return data;
 }
 
-// Elimina un usuario (funcionario o familiar) del ELEAM usando Admin API via Edge Function.
+// Elimina un funcionario del ELEAM usando Admin API via Edge Function.
 export async function deleteStaffUser(profileId) {
   const sb = ensureSupabase();
   const { data, error } = await sb.functions.invoke("delete-staff-user", {

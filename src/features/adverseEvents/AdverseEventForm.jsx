@@ -69,8 +69,6 @@ function eventToForm(event) {
       ? String(event.fecha_notificacion_familia).slice(0, 16).replace("T", "T")
       : "",
     medio_notificacion_familia: event.medio_notificacion_familia ?? "",
-    visible_familiar: event.visible_familiar ?? false,
-    resumen_familiar: event.resumen_familiar ?? "",
   };
 }
 
@@ -134,10 +132,6 @@ export default function AdverseEventForm() {
       // Si cambia la categoría y no se ha tocado severidad, sugerir.
       if (name === "categoria" && value && !prev.severidad) {
         next.severidad = suggestSeverityFromCategory(value);
-      }
-      // Si desactiva visible_familiar, limpiar resumen.
-      if (name === "visible_familiar" && !checked) {
-        next.resumen_familiar = "";
       }
       // Si desactiva notificado_familia, limpiar medio/fecha.
       if (name === "notificado_familia" && !checked) {
@@ -324,27 +318,6 @@ export default function AdverseEventForm() {
                   error={errors.fecha_notificacion_familia}
                 />
               </FormGrid>
-            )}
-
-            <CheckboxField
-              id="visible_familiar" name="visible_familiar"
-              checked={form.visible_familiar} onChange={handleChange}
-              label="Mostrar este evento en el portal familiar"
-              description="El familiar verá únicamente categoría, severidad, fecha y el resumen. NO verá descripción interna ni testigos."
-            />
-            {form.visible_familiar && (
-              <TextareaField
-                id="resumen_familiar" name="resumen_familiar" label="Resumen seguro para la familia" required
-                value={form.resumen_familiar} onChange={handleChange}
-                error={errors.resumen_familiar}
-                maxLength={500} rows={3}
-                placeholder="Versión adaptada para la familia (sin detalles clínicos sensibles)."
-              />
-            )}
-            {!form.visible_familiar && (
-              <Notice tone="slate" title="Privado">
-                Mientras el evento no esté visible al familiar, la información queda solo en el equipo.
-              </Notice>
             )}
           </div>
         </FormSection>

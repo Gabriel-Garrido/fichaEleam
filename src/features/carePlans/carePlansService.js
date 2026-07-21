@@ -1,21 +1,17 @@
 import { supabase } from "../../services/supabaseConfig";
-import { normalizeFamilyVisibility } from "../familiar/familyVisibility";
+import { getServiceContext } from "../../services/serviceContext";
+import { normalizeFamilyVisibility } from "../../utils/familyVisibility";
 import { withResidentLocation } from "../beds/bedsUtils";
 
 export const CARE_TURNOS = ["mañana", "tarde", "noche"];
 
 export const CARE_CATEGORIES = [
-  ["alimentacion", "Alimentación"],
-  ["hidratacion", "Hidratación"],
-  ["higiene", "Higiene"],
-  ["bano", "Baño"],
-  ["movilidad", "Movilidad"],
-  ["cambios_posicion", "Cambios de posición"],
+  ["alimentacion", "Alimentación e hidratación"],
+  ["higiene", "Higiene y vestuario"],
   ["eliminacion", "Eliminación"],
-  ["prevencion_caidas", "Prevención de caídas"],
-  ["prevencion_up", "Prevención úlceras de presión"],
-  ["actividad", "Actividad"],
-  ["controles", "Controles"],
+  ["movilidad", "Movilidad y prevención"],
+  ["controles", "Salud y controles"],
+  ["actividad", "Bienestar y participación"],
   ["otro", "Otro"],
 ];
 
@@ -180,7 +176,18 @@ export const CARE_ACTIVITY_PRESETS = [
   },
 ];
 
-export const CARE_BASE_PRESET_IDS = CARE_ACTIVITY_PRESETS.map((preset) => preset.id);
+// La rutina inicial cubre las necesidades básicas sin obligar a configurar
+// todas las variantes disponibles en el catálogo.
+export const CARE_BASE_PRESET_IDS = [
+  "desayuno-asistido",
+  "almuerzo-asistido",
+  "once-cena-asistida",
+  "hidratacion-manana",
+  "bano-higiene",
+  "eliminacion-muda",
+  "movilizacion-transferencias",
+  "actividad-estimulacion",
+];
 
 export const CARE_STATUS_LABEL = {
   pendiente: "Pendiente",
@@ -284,19 +291,9 @@ export function previousTurnos(turno) {
 }
 
 export async function getSessionProfile() {
-  const { data: auth, error: authError } = await supabase.auth.getUser();
-  if (authError) throw authError;
-  const userId = auth?.user?.id;
-  if (!userId) throw new Error("Debes iniciar sesión.");
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, eleam_id, rol")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.eleam_id) throw new Error("Tu cuenta no tiene ELEAM asociado.");
-  return { userId, eleamId: data.eleam_id, rol: data.rol };
+  const { userId, eleamId, rol } = await getServiceContext();
+  if (!eleamId) throw new Error("Tu cuenta no tiene ELEAM asociado.");
+  return { userId, eleamId, rol };
 }
 
 export function normalizeSchedule(schedule = {}) {
@@ -410,6 +407,12 @@ export async function saveCarePlan(residenteId, payload = {}) {
     restricciones: payload.restricciones?.trim() || null,
     riesgo_caidas: payload.riesgo_caidas || null,
     riesgo_up: payload.riesgo_up || null,
+    objetivo_biopsicosocial: payload.objetivo_biopsicosocial?.trim() || null,
+    valoracion_social: payload.valoracion_social?.trim() || null,
+    intereses_actividades: payload.intereses_actividades?.trim() || null,
+    necesidades_espirituales: payload.necesidades_espirituales?.trim() || null,
+    meta_rehabilitacion: payload.meta_rehabilitacion?.trim() || null,
+    restricciones_actividad: payload.restricciones_actividad?.trim() || null,
     actualizado_por: userId,
   };
 

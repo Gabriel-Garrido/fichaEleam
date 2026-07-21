@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildBedMetrics, formatBedLocation, withResidentLocation } from "./bedsUtils";
+import {
+  buildBedMetrics,
+  formatBedLocation,
+  hasDuplicateBedCode,
+  hasDuplicateRoomCode,
+  suggestNextBedCode,
+  withResidentLocation,
+} from "./bedsUtils";
 
 describe("beds utilities", () => {
   it("calculates occupancy with reserved hospitalization beds as unavailable", () => {
@@ -40,5 +47,42 @@ describe("beds utilities", () => {
       cama: "B",
       ubicacion_label: "Hab. 204 · Cama B",
     });
+  });
+
+  it("detects duplicate room and bed codes before saving", () => {
+    expect(hasDuplicateRoomCode({
+      rooms: [{ id: "room-1", codigo: "101" }],
+      code: " 101 ",
+    })).toBe(true);
+
+    expect(hasDuplicateRoomCode({
+      rooms: [{ id: "room-1", codigo: "101" }],
+      code: "101",
+      currentId: "room-1",
+    })).toBe(false);
+
+    expect(hasDuplicateBedCode({
+      beds: [{ id: "bed-1", habitacion_id: "room-1", codigo: "A" }],
+      roomId: "room-1",
+      code: "a",
+    })).toBe(true);
+
+    expect(hasDuplicateBedCode({
+      beds: [{ id: "bed-1", habitacion_id: "room-1", codigo: "A" }],
+      roomId: "room-2",
+      code: "A",
+    })).toBe(false);
+  });
+
+  it("suggests the next bed code for numeric and letter sequences", () => {
+    expect(suggestNextBedCode([], "room-1")).toBe("1");
+    expect(suggestNextBedCode([
+      { habitacion_id: "room-1", codigo: "1" },
+      { habitacion_id: "room-1", codigo: "2" },
+    ], "room-1")).toBe("3");
+    expect(suggestNextBedCode([
+      { habitacion_id: "room-1", codigo: "A" },
+      { habitacion_id: "room-1", codigo: "B" },
+    ], "room-1")).toBe("C");
   });
 });

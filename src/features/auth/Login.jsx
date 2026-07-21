@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Navigate, Link } from "react-router-dom";
-import { authErrorMessage, getDemoRequestStatus, isPendingDemoError, login, loginWithGoogle } from "./authService";
+import { authErrorMessage, isPendingDemoError, login, loginWithGoogle } from "./authService";
 import { useAuth } from "../../context/AuthContext";
 import { useLoading } from "../../context/LoadingContext";
 import { isSupabaseConfigured, supabaseConfigError } from "../../services/supabaseConfig";
@@ -160,17 +160,10 @@ export default function Login() {
       await login({ email, password });
     } catch (err) {
       console.warn("Error de login:", err);
-      // Si el correo tiene una solicitud de demo aún sin habilitar, mostramos
-      // el aviso claro en vez de un error genérico de credenciales.
-      const demoStatus = await Promise.race([
-        getDemoRequestStatus(email).catch(() => "none"),
-        new Promise((resolve) => setTimeout(() => resolve("none"), 5000)),
-      ]);
-      if (demoStatus === "pendiente") {
-        setDemoPending(true);
-      } else {
-        setError(authErrorMessage(err, "No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente."));
-      }
+      // No consultar el estado de la demo por email: una RPC anónima permitiría
+      // enumerar cuentas. El mensaje de credenciales ya orienta sin revelar si
+      // el correo existe; OAuth conserva su error DEMO_PENDING firmado.
+      setError(authErrorMessage(err, "No pudimos iniciar sesión. Revisa tus datos o intenta nuevamente."));
     } finally {
       setLoading(false);
     }
@@ -197,8 +190,11 @@ export default function Login() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
       {/* Logo */}
       <div className="mb-6 text-center">
-        <button type="button"
- onClick={() => navigate("/")} className="text-2xl font-black text-teal-700 tracking-tight">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="text-2xl font-black text-teal-700 tracking-tight"
+        >
           FichaEleam
         </button>
         <p className="text-sm text-slate-500 mt-1">Plataforma para ELEAM</p>
@@ -241,7 +237,7 @@ export default function Login() {
         </button>
         <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-5">
           Google no crea cuentas nuevas. Solo funciona si ese correo ya fue aprobado para demo,
-          tiene un ELEAM vigente o fue creado como funcionario/familiar.
+          tiene un ELEAM vigente o fue creado como funcionario.
         </p>
 
         <div className="flex items-center gap-3 mb-5">
@@ -312,7 +308,7 @@ export default function Login() {
         {/* Orientación por tipo de usuario */}
         <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-200">
           <div className="px-4 py-3">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-0.5">Funcionario o familiar</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-0.5">Funcionario</p>
             <p className="text-sm text-slate-600">
               Usa el correo y contraseña que te entregó el administrador o funcionario autorizado de tu ELEAM. Si luego vinculas Google, debe ser el mismo correo.
             </p>

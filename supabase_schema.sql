@@ -19,7 +19,7 @@ create table if not exists public.profiles (
   email      text not null,
   telefono   text,
   rol        text not null default 'admin_eleam'
-             check (rol in ('admin_eleam','funcionario','familiar','superadmin')),
+             check (rol in ('admin_eleam','funcionario','superadmin')),
   creado_en  timestamptz not null default now()
 );
 
@@ -122,7 +122,9 @@ create table if not exists public.residentes (
                            check (estado in ('activo','hospitalizado','egresado','fallecido')),
   indice_barthel           integer check (indice_barthel between 0 and 100),
   escala_katz              text,
-  nivel_dependencia        text check (nivel_dependencia in ('leve','moderado','severo','total')),
+  nivel_dependencia        text check (nivel_dependencia in ('autovalente','leve','moderado','severo','total')),
+  condicion_salud_grave    boolean not null default false,
+  condicion_salud_grave_detalle text,
   creado_por               uuid references auth.users(id) on delete set null,
   creado_en                timestamptz not null default now(),
   actualizado_en           timestamptz not null default now()
@@ -138,6 +140,17 @@ create unique index if not exists residentes_rut_eleam_unique
   where rut is not null;
 create index if not exists idx_residentes_eleam_estado on public.residentes(eleam_id, estado);
 create index if not exists idx_residentes_nombre on public.residentes(apellido, nombre);
+
+alter table public.residentes
+  add column if not exists condicion_salud_grave boolean not null default false,
+  add column if not exists condicion_salud_grave_detalle text;
+
+alter table public.residentes
+  drop constraint if exists residentes_nivel_dependencia_check;
+
+alter table public.residentes
+  add constraint residentes_nivel_dependencia_check
+  check (nivel_dependencia in ('autovalente','leve','moderado','severo','total'));
 
 create table if not exists public.habitaciones (
   id              uuid primary key default gen_random_uuid(),
@@ -311,7 +324,7 @@ create table if not exists public.evaluaciones_clinicas (
   id                  uuid primary key default gen_random_uuid(),
   eleam_id            uuid not null references public.eleams(id) on delete cascade,
   residente_id        uuid not null references public.residentes(id) on delete cascade,
-  tipo                text not null check (tipo in ('barthel','katz')),
+  tipo                text not null check (tipo in ('barthel','katz','mna','mmse')),
   fecha_evaluacion    date not null default current_date,
   motivo              text not null default 'rutina'
                        check (motivo in ('ingreso','rutina','post_hospitalizacion','caida','cambio_clinico','solicitud_medica')),
@@ -331,6 +344,190 @@ create index if not exists idx_eval_eleam_proxima
   on public.evaluaciones_clinicas(eleam_id, proxima_evaluacion);
 create index if not exists idx_eval_residente_proxima
   on public.evaluaciones_clinicas(residente_id, proxima_evaluacion);
+
+alter table public.evaluaciones_clinicas
+  drop constraint if exists evaluaciones_clinicas_tipo_check;
+
+alter table public.evaluaciones_clinicas
+  add constraint evaluaciones_clinicas_tipo_check
+  check (tipo in ('barthel','katz','mna','mmse'));
+
+create table if not exists public.resident_consents (
+  id                       uuid primary key default gen_random_uuid(),
+  eleam_id                 uuid not null references public.eleams(id) on delete cascade,
+  residente_id             uuid not null references public.residentes(id) on delete cascade,
+  fecha_consentimiento     date not null default current_date,
+  firmante_nombre          text not null,
+  firmante_rut             text,
+  firmante_tipo            text not null default 'residente'
+                           check (firmante_tipo in ('residente','representante_legal','familiar_responsable')),
+  relacion_residente       text,
+  acepta_ingreso_voluntario boolean not null default false,
+  acepta_derechos_deberes   boolean not null default false,
+  acepta_reglamento_interno boolean not null default false,
+  residente_puede_firmar    boolean not null default true,
+  firma_data_url            text,
+  pdf_storage_path          text,
+  observaciones             text,
+  registrado_por            uuid references public.profiles(id) on delete set null,
+  creado_en                 timestamptz not null default now(),
+  actualizado_en            timestamptz not null default now(),
+  check (acepta_ingreso_voluntario and acepta_derechos_deberes and acepta_reglamento_interno)
+);
+
+create index if not exists idx_resident_consents_residente
+  on public.resident_consents(residente_id, fecha_consentimiento desc);
+create index if not exists idx_resident_consents_eleam
+  on public.resident_consents(eleam_id, fecha_consentimiento desc);
+
+create table if not exists public.health_centers (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  nombre          text not null,
+  tipo            text not null default 'aps' check (tipo in ('aps','privado','hospital','urgencia','otro')),
+  comuna          text,
+  direccion       text,
+  telefono        text,
+  email           text,
+  contacto_nombre text,
+  notas           text,
+  activo          boolean not null default true,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now()
+);
+
+create index if not exists idx_health_centers_eleam
+  on public.health_centers(eleam_id, activo, nombre);
+
+create table if not exists public.resident_health_network (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null references public.residentes(id) on delete cascade,
+  health_center_id      uuid references public.health_centers(id) on delete set null,
+  sistema_salud         text,
+  inscrito_aps          boolean,
+  numero_ficha          text,
+  medico_referencia     text,
+  telefono_referencia   text,
+  observaciones         text,
+  actualizado_por       uuid references public.profiles(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now(),
+  unique (residente_id)
+);
+
+create index if not exists idx_resident_health_network_eleam
+  on public.resident_health_network(eleam_id);
+create index if not exists idx_resident_health_network_center
+  on public.resident_health_network(health_center_id);
+
+create table if not exists public.health_controls (
+  id                uuid primary key default gen_random_uuid(),
+  eleam_id          uuid not null references public.eleams(id) on delete cascade,
+  residente_id      uuid not null references public.residentes(id) on delete cascade,
+  health_center_id  uuid references public.health_centers(id) on delete set null,
+  tipo              text not null default 'control' check (tipo in ('control','derivacion','urgencia','teleconsulta','otro')),
+  estado            text not null default 'programado' check (estado in ('programado','realizado','cancelado','inasistente')),
+  fecha_programada  date not null,
+  fecha_realizada   date,
+  especialidad      text,
+  profesional       text,
+  motivo            text,
+  resultado         text,
+  proximo_control   date,
+  documento_path    text,
+  registrado_por    uuid references public.profiles(id) on delete set null,
+  creado_en         timestamptz not null default now(),
+  actualizado_en    timestamptz not null default now()
+);
+
+create index if not exists idx_health_controls_residente_fecha
+  on public.health_controls(residente_id, fecha_programada desc);
+create index if not exists idx_health_controls_eleam_fecha
+  on public.health_controls(eleam_id, fecha_programada desc, estado);
+create index if not exists idx_health_controls_proximo
+  on public.health_controls(eleam_id, proximo_control)
+  where proximo_control is not null;
+
+create table if not exists public.staff_members (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  profile_id      uuid references public.profiles(id) on delete set null,
+  nombre          text not null,
+  email           text,
+  telefono        text,
+  cargo           text,
+  tipo_dotacion   text not null default 'cuidador' check (tipo_dotacion in ('cuidador','tens','profesional','manipulador','aseo','administrativo','otro')),
+  activo          boolean not null default true,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now()
+);
+
+create unique index if not exists staff_members_profile_unique
+  on public.staff_members(profile_id)
+  where profile_id is not null;
+create index if not exists idx_staff_members_eleam
+  on public.staff_members(eleam_id, activo, tipo_dotacion);
+
+create table if not exists public.staff_competencies (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  staff_member_id uuid not null references public.staff_members(id) on delete cascade,
+  competencia     text not null,
+  estado          text not null default 'pendiente' check (estado in ('pendiente','vigente','vence_pronto','vencida','no_aplica')),
+  fecha_emision   date,
+  fecha_vencimiento date,
+  certificado_path text,
+  notas           text,
+  registrado_por  uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now(),
+  unique (staff_member_id, competencia)
+);
+
+create index if not exists idx_staff_competencies_eleam_estado
+  on public.staff_competencies(eleam_id, estado, fecha_vencimiento);
+
+create table if not exists public.staff_training_records (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  staff_member_id uuid references public.staff_members(id) on delete cascade,
+  nombre          text not null,
+  tema            text,
+  fecha           date not null default current_date,
+  horas           numeric(5,2) not null default 0 check (horas >= 0),
+  proveedor       text,
+  certificado_path text,
+  notas           text,
+  registrado_por  uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now()
+);
+
+create index if not exists idx_staff_training_eleam_fecha
+  on public.staff_training_records(eleam_id, fecha desc);
+create index if not exists idx_staff_training_member_fecha
+  on public.staff_training_records(staff_member_id, fecha desc);
+
+create table if not exists public.staff_shift_assignments (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  staff_member_id uuid not null references public.staff_members(id) on delete cascade,
+  fecha           date not null,
+  turno           text not null check (turno in ('mañana','tarde','noche')),
+  rol_turno       text not null default 'cuidador' check (rol_turno in ('cuidador','tens','responsable','apoyo','otro')),
+  estado          text not null default 'programado' check (estado in ('programado','confirmado','ausente','reemplazado','cancelado')),
+  notas           text,
+  creado_por      uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now(),
+  unique (staff_member_id, fecha, turno)
+);
+
+create index if not exists idx_staff_shift_eleam_fecha_turno
+  on public.staff_shift_assignments(eleam_id, fecha, turno, estado);
+create index if not exists idx_staff_shift_member_fecha
+  on public.staff_shift_assignments(staff_member_id, fecha desc);
 
 create table if not exists public.turno_entregas (
   id              uuid primary key default gen_random_uuid(),
@@ -623,7 +820,7 @@ create table if not exists public.medicamentos_indicaciones (
   unidad_dosis               text,
   via                        text not null check (via in ('oral','topica','subcutanea','enteral','inhalatoria','oftalmica','otica','nasal','otra')),
   indicacion                 text,
-  prescriptor_nombre         text,
+  prescriptor_nombre         text not null,
   fecha_indicacion           date,
   fecha_inicio               date not null default current_date,
   fecha_fin                  date,
@@ -631,7 +828,7 @@ create table if not exists public.medicamentos_indicaciones (
   es_controlado              boolean not null default false,
   tipo_controlado            text check (tipo_controlado in ('psicotropico','estupefaciente') or tipo_controlado is null),
   requiere_doble_validacion  boolean not null default false,
-  requiere_stock             boolean not null default true,
+  requiere_stock             boolean not null default false,
   visible_familiar           boolean not null default false,
   resumen_familiar           text,
   instrucciones              text,
@@ -897,7 +1094,7 @@ begin
 end $$;
 
 -- ============================================================
--- 3. Invitaciones y portal familiar
+-- 3. Invitaciones y provisionamiento de cuentas
 -- ============================================================
 
 create table if not exists public.funcionario_invitaciones (
@@ -909,25 +1106,14 @@ create table if not exists public.funcionario_invitaciones (
   ),
   nombre        text check (nombre is null or char_length(nombre) <= 120),
   telefono      text check (telefono is null or char_length(telefono) <= 40),
-  parentesco    text check (parentesco is null or char_length(parentesco) <= 80),
   token         text unique not null,
   expira_en     timestamptz not null default (now() + interval '7 days'),
   usado         boolean not null default false,
   usado_en      timestamptz,
-  rol           text not null default 'funcionario' check (rol in ('funcionario','familiar')),
-  residente_id  uuid references public.residentes(id) on delete cascade,
+  rol           text not null default 'funcionario' check (rol = 'funcionario'),
   creado_por    uuid references auth.users(id) on delete set null,
-  creado_en     timestamptz not null default now(),
-  check (
-    (rol = 'familiar' and residente_id is not null)
-    or (rol <> 'familiar' and residente_id is null)
-  )
+  creado_en     timestamptz not null default now()
 );
-
-alter table public.funcionario_invitaciones
-  add column if not exists nombre text,
-  add column if not exists telefono text,
-  add column if not exists parentesco text;
 
 create index if not exists idx_inv_eleam on public.funcionario_invitaciones(eleam_id);
 create index if not exists idx_inv_email on public.funcionario_invitaciones(lower(email));
@@ -944,17 +1130,12 @@ create table if not exists public.auth_provision_requests (
     account_source in ('demo_approved','superadmin_created','admin_created','funcionario_created')
   ),
   eleam_id      uuid not null references public.eleams(id) on delete cascade,
-  rol           text not null check (rol in ('admin_eleam','funcionario','familiar')),
-  residente_id  uuid references public.residentes(id) on delete cascade,
+  rol           text not null check (rol in ('admin_eleam','funcionario')),
   usado         boolean not null default false,
   usado_en      timestamptz,
   usado_por_auth_user_id uuid,
   expira_en     timestamptz not null default (now() + interval '10 minutes'),
   creado_en     timestamptz not null default now(),
-  check (
-    (rol = 'familiar' and residente_id is not null)
-    or (rol <> 'familiar' and residente_id is null)
-  ),
   check (
     (usado = false and usado_en is null and usado_por_auth_user_id is null)
     or (usado = true and usado_en is not null and usado_por_auth_user_id is not null)
@@ -1001,12 +1182,16 @@ create table if not exists public.funcionario_permisos (
   subir_acreditacion      boolean not null default true,
   editar_acreditacion     boolean not null default true,
   archivar_acreditacion   boolean not null default false,
-  registrar_visitas            boolean not null default true,
   editar_indicaciones_cuidado  boolean not null default false,
   aplicar_evaluaciones_clinicas boolean not null default true,
   crear_eventos_adversos        boolean not null default true,
   editar_eventos_adversos       boolean not null default true,
   cerrar_eventos_adversos       boolean not null default false,
+  editar_inventario_bienes      boolean not null default false,
+  gestionar_reclamos            boolean not null default true,
+  gestionar_emergencias         boolean not null default false,
+  registrar_simulacros          boolean not null default true,
+  gestionar_cumplimiento        boolean not null default false,
   actualizado_en               timestamptz not null default now()
 );
 
@@ -1028,13 +1213,18 @@ alter table public.funcionario_permisos
   add column if not exists aplicar_evaluaciones_clinicas   boolean not null default true,
   add column if not exists crear_eventos_adversos          boolean not null default true,
   add column if not exists editar_eventos_adversos         boolean not null default true,
-  add column if not exists cerrar_eventos_adversos         boolean not null default false;
+  add column if not exists cerrar_eventos_adversos         boolean not null default false,
+  add column if not exists editar_inventario_bienes        boolean not null default false,
+  add column if not exists gestionar_reclamos              boolean not null default true,
+  add column if not exists gestionar_emergencias           boolean not null default false,
+  add column if not exists registrar_simulacros            boolean not null default true,
+  add column if not exists gestionar_cumplimiento          boolean not null default false;
 
 create table if not exists public.eleam_feature_permissions (
   id              uuid primary key default gen_random_uuid(),
   eleam_id        uuid not null references public.eleams(id) on delete cascade,
-  rol             text not null check (rol in ('admin_eleam','funcionario','familiar')),
-  feature_id      text not null,
+  rol             text not null check (rol in ('admin_eleam','funcionario')),
+  feature_id      text not null check (feature_id in ('dashboard','establishment','residents','personnel','compliance')),
   enabled         boolean not null default true,
   actualizado_por uuid references public.profiles(id) on delete set null,
   actualizado_en  timestamptz not null default now(),
@@ -1047,7 +1237,7 @@ create index if not exists idx_eleam_feature_permissions_eleam
 create table if not exists public.profile_feature_permissions (
   id              uuid primary key default gen_random_uuid(),
   profile_id      uuid not null references public.profiles(id) on delete cascade,
-  feature_id      text not null,
+  feature_id      text not null check (feature_id in ('dashboard','establishment','residents','personnel','compliance')),
   enabled         boolean not null default true,
   actualizado_por uuid references public.profiles(id) on delete set null,
   actualizado_en  timestamptz not null default now(),
@@ -1328,6 +1518,19 @@ create unique index if not exists demo_leads_active_email_unique
   on public.demo_leads(lower(email))
   where estado in ('nuevo','contactado','demo_activo')
     and demo_user_id is null;
+
+-- Registro de intentos de request_demo_lead para rate limiting. Solo guarda
+-- un hash de la IP (nunca la IP en claro) y se purga en cada llamada; sin
+-- policies: unicamente las funciones security definer la tocan.
+create table if not exists public.demo_lead_throttle (
+  ip_hash   text not null,
+  creado_en timestamptz not null default now()
+);
+
+create index if not exists idx_demo_lead_throttle_ip
+  on public.demo_lead_throttle(ip_hash, creado_en desc);
+
+alter table public.demo_lead_throttle enable row level security;
 
 -- CRM se define sin compatibilidad ni migraciones: si estas tablas existen,
 -- se reconstruyen para evitar contratos vacios con tipos anteriores.
@@ -1697,6 +1900,9 @@ declare
   v_num_residentes text := nullif(trim(coalesce(p_num_residentes, '')), '');
   v_existing public.demo_leads;
   v_lead public.demo_leads;
+  v_ip text;
+  v_ip_hash text;
+  v_attempts integer;
 begin
   if v_nombre is null then
     raise exception 'El nombre es obligatorio' using errcode = 'P0001';
@@ -1731,6 +1937,38 @@ begin
   if v_num_residentes is not null and length(v_num_residentes) > 40 then
     raise exception 'El numero de residentes no puede superar 40 caracteres' using errcode = 'P0001';
   end if;
+
+  -- Rate limiting: la RPC es ejecutable por anon, por lo que sin limite seria
+  -- un vector de spam. PostgREST expone los headers del request como GUC;
+  -- se hashea la primera IP de x-forwarded-for (nunca se guarda en claro).
+  begin
+    v_ip := split_part(
+      coalesce(current_setting('request.headers', true), '{}')::jsonb ->> 'x-forwarded-for',
+      ',', 1
+    );
+  exception when others then
+    v_ip := null;
+  end;
+  v_ip_hash := md5(coalesce(nullif(trim(v_ip), ''), 'sin-ip'));
+
+  delete from public.demo_lead_throttle
+  where creado_en < now() - interval '1 hour';
+
+  select count(*) into v_attempts
+  from public.demo_lead_throttle
+  where ip_hash = v_ip_hash
+    and creado_en > now() - interval '10 minutes';
+  if v_attempts >= 5 then
+    raise exception 'Demasiadas solicitudes seguidas. Espera unos minutos e intenta nuevamente.' using errcode = 'P0001';
+  end if;
+
+  select count(*) into v_attempts
+  from public.demo_lead_throttle;
+  if v_attempts >= 60 then
+    raise exception 'Estamos recibiendo muchas solicitudes en este momento. Intenta nuevamente en unos minutos.' using errcode = 'P0001';
+  end if;
+
+  insert into public.demo_lead_throttle (ip_hash) values (v_ip_hash);
 
   select *
   into v_existing
@@ -1801,30 +2039,114 @@ exception
 end;
 $$;
 
--- Estado de la solicitud de demo asociada a un correo. Lo usa el login
--- para mostrar un aviso claro cuando el usuario solicito un demo pero el
--- equipo aun no habilita su cuenta. No expone datos del lead, solo el estado.
-create or replace function public.demo_lead_status(p_email text)
-returns text
-language sql
+-- Resumen comparativo de uso de la app para toda la cartera. Evita el patrón
+-- N+1 de consultar cada ELEAM por separado y no expone datos clínicos: retorna
+-- únicamente conteos y fechas agregadas. La última actividad es histórica;
+-- registros, usuarios y módulos activos respetan la ventana solicitada.
+create or replace function public.superadmin_portfolio_usage(p_days integer default 30)
+returns table (
+  eleam_id uuid,
+  usuarios_totales bigint,
+  usuarios_activos bigint,
+  usuarios_sin_primer_ingreso bigint,
+  registros bigint,
+  modulos_activos bigint,
+  ultima_actividad timestamptz
+)
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
-  select case
-    when exists (
-      select 1 from public.demo_leads
-      where lower(email) = lower(nullif(trim(coalesce(p_email, '')), ''))
-        and demo_user_id is not null
-    ) then 'aprobado'
-    when exists (
-      select 1 from public.demo_leads
-      where lower(email) = lower(nullif(trim(coalesce(p_email, '')), ''))
-        and demo_user_id is null
-        and estado in ('nuevo','contactado','demo_activo')
-    ) then 'pendiente'
-    else 'none'
-  end;
+declare
+  v_since timestamptz;
+begin
+  if not public.is_superadmin() then
+    raise exception 'Solo superadmin puede consultar el uso general de la cartera.'
+      using errcode = '42501';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 365 then
+    raise exception 'La ventana de uso debe estar entre 1 y 365 dias.'
+      using errcode = '22023';
+  end if;
+
+  v_since := now() - make_interval(days => p_days);
+
+  return query
+  with actividad as (
+    select r.eleam_id, sv.registrado_por as actor_id, sv.creado_en as ocurrido_en, 'signos'::text as modulo
+    from public.signos_vitales sv
+    join public.residentes r on r.id = sv.residente_id
+    union all
+    select r.eleam_id, od.registrado_por, od.creado_en, 'observaciones'
+    from public.observaciones_diarias od
+    join public.residentes r on r.id = od.residente_id
+    union all
+    select r.eleam_id, vf.registrado_por, vf.creado_en, 'visitas'
+    from public.visitas_familiar vf
+    join public.residentes r on r.id = vf.residente_id
+    union all
+    select ma.eleam_id, ma.administrado_por, ma.administrado_en, 'medicamentos'
+    from public.medicamentos_administraciones ma
+    where ma.administrado_en is not null
+    union all
+    select tc.eleam_id, tc.cumplida_por, tc.cumplida_en, 'cuidados'
+    from public.tareas_cuidado tc
+    where tc.cumplida_en is not null
+    union all
+    select te.eleam_id, te.creado_por, te.creado_en, 'turnos'
+    from public.turno_entregas te
+    union all
+    select r.eleam_id, r.creado_por, r.creado_en, 'residentes'
+    from public.residentes r
+    where r.eleam_id is not null
+    union all
+    select ea.eleam_id, ea.registrado_por, ea.creado_en, 'eventos'
+    from public.eventos_adversos ea
+    union all
+    select ca.eleam_id, ca.realizado_por, ca.realizado_en, 'camas'
+    from public.camas_audit ca
+    where ca.eleam_id is not null
+    union all
+    select ad.eleam_id, ad.subido_por, ad.creado_en, 'acreditacion'
+    from public.acred_documentos ad
+  ),
+  uso as (
+    select
+      a.eleam_id,
+      count(*) filter (where a.ocurrido_en >= v_since) as registros,
+      count(distinct a.actor_id) filter (
+        where a.ocurrido_en >= v_since and a.actor_id is not null
+      ) as usuarios_activos,
+      count(distinct a.modulo) filter (where a.ocurrido_en >= v_since) as modulos_activos,
+      max(a.ocurrido_en) as ultima_actividad
+    from actividad a
+    where a.eleam_id is not null
+    group by a.eleam_id
+  ),
+  usuarios as (
+    select
+      p.eleam_id,
+      count(*) as usuarios_totales,
+      count(*) filter (where p.must_reset_password = true) as usuarios_sin_primer_ingreso
+    from public.profiles p
+    where p.eleam_id is not null
+      and p.rol in ('admin_eleam', 'funcionario')
+    group by p.eleam_id
+  )
+  select
+    e.id,
+    coalesce(u.usuarios_totales, 0)::bigint,
+    coalesce(us.usuarios_activos, 0)::bigint,
+    coalesce(u.usuarios_sin_primer_ingreso, 0)::bigint,
+    coalesce(us.registros, 0)::bigint,
+    coalesce(us.modulos_activos, 0)::bigint,
+    us.ultima_actividad
+  from public.eleams e
+  left join usuarios u on u.eleam_id = e.id
+  left join uso us on us.eleam_id = e.id;
+end;
 $$;
 
 create or replace function public.set_updated_at()
@@ -2160,7 +2482,7 @@ begin
     return false;
   end if;
 
-  if v_rol in ('funcionario','familiar') then
+  if v_rol = 'funcionario' then
     select enabled
     into v_profile_enabled
     from public.profile_feature_permissions
@@ -2808,7 +3130,6 @@ begin
     when 'subir_acreditacion'      then subir_acreditacion
     when 'editar_acreditacion'     then editar_acreditacion
     when 'archivar_acreditacion'   then archivar_acreditacion
-    when 'registrar_visitas'       then registrar_visitas
     when 'crear_planes_cuidado'    then crear_planes_cuidado
     when 'editar_planes_cuidado'   then editar_planes_cuidado
     when 'completar_tareas_cuidado' then completar_tareas_cuidado
@@ -2823,6 +3144,11 @@ begin
     when 'crear_eventos_adversos'        then crear_eventos_adversos
     when 'editar_eventos_adversos'       then editar_eventos_adversos
     when 'cerrar_eventos_adversos'       then cerrar_eventos_adversos
+    when 'editar_inventario_bienes'      then editar_inventario_bienes
+    when 'gestionar_reclamos'            then gestionar_reclamos
+    when 'gestionar_emergencias'         then gestionar_emergencias
+    when 'registrar_simulacros'          then registrar_simulacros
+    when 'gestionar_cumplimiento'        then gestionar_cumplimiento
     else false
   end
   into v_result
@@ -3104,10 +3430,7 @@ declare
   v_invitacion record;
   v_provision record;
   v_provision_id uuid := null;
-  v_residente_id uuid := null;
-  v_invitado_por uuid := null;
   v_telefono text := null;
-  v_parentesco text := null;
   v_account_source text := coalesce(new.raw_app_meta_data->>'fichaeleam_account_source', '');
   v_is_qa_seed boolean := current_setting('app.allow_qa_seed_users', true) = 'on'
                           and v_account_source = 'qa_seed';
@@ -3143,15 +3466,9 @@ begin
       else null
     end;
     v_rol := coalesce(nullif(trim(new.raw_app_meta_data->>'rol_direct'), ''), 'funcionario');
-    v_residente_id := case
-      when new.raw_app_meta_data->>'residente_id_direct' is not null
-      then (new.raw_app_meta_data->>'residente_id_direct')::uuid
-      else null
-    end;
     v_telefono := nullif(trim(coalesce(new.raw_user_meta_data->>'telefono', '')), '');
-    v_parentesco := nullif(trim(coalesce(new.raw_user_meta_data->>'parentesco', '')), '');
 
-    if v_rol not in ('admin_eleam', 'funcionario', 'familiar', 'superadmin') then
+    if v_rol not in ('admin_eleam', 'funcionario', 'superadmin') then
       raise exception 'rol_direct invalido para seed QA: %', coalesce(v_rol, 'null')
         using errcode = '42501';
     end if;
@@ -3180,19 +3497,6 @@ begin
       rol                 = excluded.rol,
       eleam_id            = excluded.eleam_id,
       must_reset_password = excluded.must_reset_password;
-
-    if v_rol = 'familiar'
-       and v_residente_id is not null
-       and exists (
-         select 1 from public.residentes r
-         where r.id = v_residente_id
-           and r.eleam_id = v_eleam_id
-           and r.estado in ('activo','hospitalizado')
-       ) then
-      insert into public.familiar_residentes (profile_id, residente_id, parentesco, creado_por)
-      values (new.id, v_residente_id, v_parentesco, null)
-      on conflict do nothing;
-    end if;
 
     return new;
   end if;
@@ -3225,7 +3529,6 @@ begin
 
     v_eleam_id := v_provision.eleam_id;
     v_rol := v_provision.rol;
-    v_residente_id := v_provision.residente_id;
     v_account_source := v_provision.account_source;
 
     if not exists (select 1 from public.eleams where id = v_eleam_id) then
@@ -3238,27 +3541,9 @@ begin
         using errcode = '42501';
     end if;
 
-    if v_rol in ('funcionario', 'familiar') and not public.eleam_has_access(v_eleam_id) then
+    if v_rol = 'funcionario' and not public.eleam_has_access(v_eleam_id) then
       raise exception 'El ELEAM no tiene acceso activo para crear esta cuenta'
         using errcode = '42501';
-    end if;
-
-    if v_rol = 'familiar' then
-      if v_residente_id is null then
-        raise exception 'Provision familiar sin residente asociado'
-          using errcode = '42501';
-      end if;
-
-      if not exists (
-        select 1
-        from public.residentes r
-        where r.id = v_residente_id
-          and r.eleam_id = v_eleam_id
-          and r.estado in ('activo','hospitalizado')
-      ) then
-        raise exception 'Provision familiar invalida para este residente'
-          using errcode = '42501';
-      end if;
     end if;
 
     update public.auth_provision_requests
@@ -3288,7 +3573,7 @@ begin
         using errcode = '42501';
     end if;
 
-    if v_rol not in ('admin_eleam', 'funcionario', 'familiar') then
+    if v_rol not in ('admin_eleam', 'funcionario') then
       raise exception 'rol_direct invalido: rol no permitido (%)', coalesce(v_rol, 'null')
         using errcode = '42501';
     end if;
@@ -3298,33 +3583,9 @@ begin
         using errcode = '42501';
     end if;
 
-    if v_rol in ('funcionario', 'familiar') and not public.eleam_has_access(v_eleam_id) then
+    if v_rol = 'funcionario' and not public.eleam_has_access(v_eleam_id) then
       raise exception 'El ELEAM no tiene acceso activo para crear esta cuenta'
         using errcode = '42501';
-    end if;
-
-    v_residente_id := case
-      when new.raw_app_meta_data->>'residente_id_direct' is not null
-      then (new.raw_app_meta_data->>'residente_id_direct')::uuid
-      else null
-    end;
-
-    if v_rol = 'familiar' then
-      if v_residente_id is null then
-        raise exception 'residente_id_direct requerido para familiar'
-          using errcode = '42501';
-      end if;
-
-      if not exists (
-        select 1
-        from public.residentes r
-        where r.id = v_residente_id
-          and r.eleam_id = v_eleam_id
-          and r.estado in ('activo','hospitalizado')
-      ) then
-        raise exception 'residente_id_direct invalido para este ELEAM'
-          using errcode = '42501';
-      end if;
     end if;
 
     return new;
@@ -3335,7 +3596,7 @@ begin
   if new.raw_app_meta_data->>'provider' = 'google'
      or (new.raw_app_meta_data->'providers') @> '["google"]'::jsonb then
 
-    select i.id, i.nombre, i.telefono, i.parentesco, lower(i.email) as email, i.rol, i.expira_en, i.usado, i.eleam_id, i.residente_id, i.creado_por
+    select i.id, i.nombre, i.telefono, lower(i.email) as email, i.rol, i.expira_en, i.usado, i.eleam_id
     into v_invitacion
     from public.funcionario_invitaciones i
     where lower(i.email) = v_email
@@ -3347,31 +3608,12 @@ begin
     if found then
       v_eleam_id     := v_invitacion.eleam_id;
       v_rol          := coalesce(v_invitacion.rol, 'funcionario');
-      v_residente_id := v_invitacion.residente_id;
-      v_invitado_por := v_invitacion.creado_por;
       v_nombre       := coalesce(nullif(trim(v_invitacion.nombre), ''), v_nombre);
       v_telefono     := nullif(trim(coalesce(v_invitacion.telefono, '')), '');
-      v_parentesco   := nullif(trim(coalesce(v_invitacion.parentesco, '')), '');
 
       if not public.eleam_has_access(v_eleam_id) then
         raise exception 'El acceso pendiente pertenece a un ELEAM sin acceso activo'
           using errcode = '42501';
-      end if;
-
-      if v_rol = 'familiar' then
-        if v_residente_id is null then
-          raise exception 'Acceso familiar sin residente asociado'
-            using errcode = '42501';
-        end if;
-        if not exists (
-          select 1 from public.residentes r
-          where r.id = v_residente_id
-            and r.eleam_id = v_eleam_id
-            and r.estado in ('activo','hospitalizado')
-        ) then
-          raise exception 'El residente asociado al acceso ya no esta activo'
-            using errcode = '42501';
-        end if;
       end if;
 
       update public.funcionario_invitaciones
@@ -3387,12 +3629,6 @@ begin
         rol                 = excluded.rol,
         eleam_id            = excluded.eleam_id,
         must_reset_password = false;
-
-      if v_rol = 'familiar' and v_residente_id is not null then
-        insert into public.familiar_residentes (profile_id, residente_id, parentesco, creado_por)
-        values (new.id, v_residente_id, v_parentesco, v_invitado_por)
-        on conflict do nothing;
-      end if;
 
       return new;
     end if;
@@ -4036,7 +4272,7 @@ as $$
   end;
 $$;
 
--- Registra una evaluación Barthel o Katz con puntaje, resultado y próxima fecha.
+-- Registra una evaluación geriátrica con puntaje, resultado y próxima fecha.
 -- Reutiliza eleam_has_access + funcionario_can('aplicar_evaluaciones_clinicas').
 create or replace function public.registrar_evaluacion_clinica(
   p_residente_id uuid,
@@ -4067,7 +4303,7 @@ begin
     raise exception 'Residente obligatorio' using errcode = 'P0001';
   end if;
 
-  if p_tipo is null or p_tipo not in ('barthel','katz') then
+  if p_tipo is null or p_tipo not in ('barthel','katz','mna','mmse') then
     raise exception 'Tipo de evaluacion invalido' using errcode = 'P0001';
   end if;
 
@@ -4091,6 +4327,14 @@ begin
     raise exception 'Puntaje Katz fuera de rango' using errcode = 'P0001';
   end if;
 
+  if p_tipo = 'mna' and (p_puntaje is null or p_puntaje < 0 or p_puntaje > 30) then
+    raise exception 'Puntaje MNA fuera de rango' using errcode = 'P0001';
+  end if;
+
+  if p_tipo = 'mmse' and (p_puntaje is null or p_puntaje < 0 or p_puntaje > 30) then
+    raise exception 'Puntaje MMSE fuera de rango' using errcode = 'P0001';
+  end if;
+
   select *
   into v_residente
   from public.residentes
@@ -4109,7 +4353,7 @@ begin
   end if;
 
   v_proxima := coalesce(p_fecha_evaluacion, current_date)
-               + (public.evaluacion_intervalo_dias(coalesce(p_motivo, 'rutina')) || ' days')::interval;
+               + public.evaluacion_intervalo_dias(coalesce(p_motivo, 'rutina'));
 
   insert into public.evaluaciones_clinicas (
     eleam_id, residente_id, tipo, fecha_evaluacion, motivo, puntaje, resultado,
@@ -4137,7 +4381,7 @@ $$;
 revoke all on function public.registrar_evaluacion_clinica(uuid, text, integer, text, jsonb, text, text, date) from public;
 grant execute on function public.registrar_evaluacion_clinica(uuid, text, integer, text, jsonb, text, text, date) to authenticated;
 
--- Listado de evaluaciones vencidas/próximas del ELEAM (usado por dashboard).
+-- Listado de evaluaciones faltantes, vencidas o próximas del ELEAM (usado por dashboard).
 create or replace function public.evaluaciones_pendientes_eleam(p_horizonte_dias integer default 30)
 returns table (
   residente_id uuid,
@@ -4172,7 +4416,16 @@ begin
   end if;
 
   return query
-  with ultimas as (
+  with tipos(tipo) as (
+    values ('barthel'::text), ('katz'::text), ('mna'::text), ('mmse'::text)
+  ),
+  residentes_activos as (
+    select id, nombre, apellido
+    from public.residentes
+    where eleam_id = v_eleam_id
+      and estado in ('activo','hospitalizado')
+  ),
+  ultimas as (
     select distinct on (e.residente_id, e.tipo)
       e.residente_id,
       e.tipo,
@@ -4187,23 +4440,277 @@ begin
     order by e.residente_id, e.tipo, e.fecha_evaluacion desc
   )
   select
-    u.residente_id,
+    r.id,
     trim(coalesce(r.nombre, '') || ' ' || coalesce(r.apellido, '')) as residente_nombre,
-    u.tipo,
+    t.tipo,
     u.fecha_evaluacion,
     u.proxima_evaluacion,
-    (u.proxima_evaluacion - current_date)::integer,
+    case when u.proxima_evaluacion is null then null else (u.proxima_evaluacion - current_date)::integer end,
     u.puntaje,
     u.resultado
-  from ultimas u
-  join public.residentes r on r.id = u.residente_id
-  where u.proxima_evaluacion <= current_date + (greatest(p_horizonte_dias, 0) || ' days')::interval
-  order by u.proxima_evaluacion asc, r.apellido asc;
+  from residentes_activos r
+  cross join tipos t
+  left join ultimas u on u.residente_id = r.id and u.tipo = t.tipo
+  where u.residente_id is null
+     or u.proxima_evaluacion <= current_date + (greatest(p_horizonte_dias, 0) || ' days')::interval
+  order by u.proxima_evaluacion nulls first, r.apellido asc, t.tipo asc;
 end;
 $$;
 
 revoke all on function public.evaluaciones_pendientes_eleam(integer) from public;
 grant execute on function public.evaluaciones_pendientes_eleam(integer) to authenticated;
+
+create or replace function public.ds20_staffing_compliance(
+  p_fecha_desde date default current_date,
+  p_fecha_hasta date default current_date + 6
+)
+returns table (
+  fecha date,
+  turno text,
+  residentes_activos integer,
+  residentes_dependencia integer,
+  residentes_autovalentes integer,
+  residentes_sin_clasificar integer,
+  requerido_cuidadores integer,
+  asignados_cuidadores integer,
+  asignados_tens integer,
+  brecha_cuidadores integer,
+  incumple boolean,
+  alertas text[]
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid;
+  v_desde date := coalesce(p_fecha_desde, current_date);
+  v_hasta date := coalesce(p_fecha_hasta, coalesce(p_fecha_desde, current_date));
+begin
+  if (select auth.uid()) is null then
+    return;
+  end if;
+
+  v_eleam_id := public.my_eleam_id();
+  if v_eleam_id is null then
+    return;
+  end if;
+
+  if not public.is_superadmin() and not public.eleam_has_access(v_eleam_id) then
+    return;
+  end if;
+
+  if v_hasta < v_desde then
+    v_hasta := v_desde;
+  end if;
+  if v_hasta > v_desde + 62 then
+    v_hasta := v_desde + 62;
+  end if;
+
+  return query
+  with resident_counts as (
+    select
+      count(*) filter (where estado = 'activo')::integer as total,
+      count(*) filter (
+        where estado = 'activo'
+          and nivel_dependencia in ('leve','moderado','severo','total')
+      )::integer as dep,
+      count(*) filter (
+        where estado = 'activo'
+          and nivel_dependencia = 'autovalente'
+      )::integer as auto,
+      count(*) filter (
+        where estado = 'activo'
+          and nivel_dependencia is null
+      )::integer as sin_clasificar
+    from public.residentes
+    where eleam_id = v_eleam_id
+  ),
+  required as (
+    select
+      total,
+      dep,
+      auto,
+      sin_clasificar,
+      (ceil(dep::numeric / 8) + ceil(auto::numeric / 20))::integer as diurno,
+      greatest(
+        (ceil(dep::numeric / 12) + ceil(auto::numeric / 20))::integer,
+        case when total > 0 then 2 else 0 end
+      ) as nocturno
+    from resident_counts
+  ),
+  slots as (
+    select d::date as fecha, t.turno
+    from generate_series(v_desde, v_hasta, interval '1 day') d
+    cross join (values ('mañana'::text), ('tarde'::text), ('noche'::text)) t(turno)
+  ),
+  assigned as (
+    select
+      a.fecha,
+      a.turno,
+      count(*) filter (
+        where a.rol_turno = 'cuidador'
+          and a.estado in ('programado','confirmado')
+      )::integer as cuidadores,
+      count(*) filter (
+        where a.rol_turno = 'tens'
+          and a.estado in ('programado','confirmado')
+      )::integer as tens
+    from public.staff_shift_assignments a
+    join public.staff_members sm on sm.id = a.staff_member_id
+    where a.eleam_id = v_eleam_id
+      and sm.eleam_id = v_eleam_id
+      and a.fecha between v_desde and v_hasta
+      and sm.activo = true
+    group by a.fecha, a.turno
+  )
+  select
+    s.fecha,
+    s.turno,
+    r.total,
+    r.dep,
+    r.auto,
+    r.sin_clasificar,
+    case when s.turno = 'noche' then r.nocturno else r.diurno end as requerido_cuidadores,
+    coalesce(a.cuidadores, 0) as asignados_cuidadores,
+    coalesce(a.tens, 0) as asignados_tens,
+    coalesce(a.cuidadores, 0) - case when s.turno = 'noche' then r.nocturno else r.diurno end as brecha_cuidadores,
+    (
+      coalesce(a.cuidadores, 0) < case when s.turno = 'noche' then r.nocturno else r.diurno end
+      or (s.turno = 'noche' and r.total > 0 and coalesce(a.cuidadores, 0) < 2)
+      or r.sin_clasificar > 0
+    ) as incumple,
+    array_remove(array[
+      case
+        when coalesce(a.cuidadores, 0) < case when s.turno = 'noche' then r.nocturno else r.diurno end
+          then 'Faltan cuidadores para el turno'
+        else null
+      end,
+      case
+        when s.turno = 'noche' and r.total > 0 and coalesce(a.cuidadores, 0) < 2
+          then 'Mínimo nocturno DS20: 2 cuidadores'
+        else null
+      end,
+      case
+        when r.sin_clasificar > 0
+          then 'Hay residentes activos sin nivel de dependencia'
+        else null
+      end
+    ]::text[], null) as alertas
+  from slots s
+  cross join required r
+  left join assigned a on a.fecha = s.fecha and a.turno = s.turno
+  order by s.fecha asc, array_position(array['mañana','tarde','noche'], s.turno);
+end;
+$$;
+
+revoke all on function public.ds20_staffing_compliance(date, date) from public;
+grant execute on function public.ds20_staffing_compliance(date, date) to authenticated;
+
+create or replace function public.ds20_resident_compliance_summary()
+returns table (
+  residente_id uuid,
+  residente_nombre text,
+  estado text,
+  fecha_ingreso date,
+  nivel_dependencia text,
+  condicion_salud_grave boolean,
+  consentimiento_ok boolean,
+  consentimiento_fecha date,
+  barthel_ok boolean,
+  katz_ok boolean,
+  mna_ok boolean,
+  mmse_ok boolean,
+  red_salud_ok boolean,
+  proximo_control date,
+  pendientes integer
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid;
+begin
+  if (select auth.uid()) is null then
+    return;
+  end if;
+
+  v_eleam_id := public.my_eleam_id();
+  if v_eleam_id is null then
+    return;
+  end if;
+
+  if not public.is_superadmin() and not public.eleam_has_access(v_eleam_id) then
+    return;
+  end if;
+
+  return query
+  with latest_consent as (
+    select distinct on (residente_id)
+      residente_id, fecha_consentimiento
+    from public.resident_consents
+    where eleam_id = v_eleam_id
+    order by residente_id, fecha_consentimiento desc, creado_en desc
+  ),
+  latest_eval as (
+    select distinct on (residente_id, tipo)
+      residente_id, tipo, fecha_evaluacion
+    from public.evaluaciones_clinicas
+    where eleam_id = v_eleam_id
+    order by residente_id, tipo, fecha_evaluacion desc
+  ),
+  health as (
+    select
+      rn.residente_id,
+      true as red_ok,
+      min(coalesce(hc.proximo_control, hc.fecha_programada)) filter (
+        where coalesce(hc.proximo_control, hc.fecha_programada) >= current_date
+          and hc.estado in ('programado','realizado')
+      ) as proximo_control
+    from public.resident_health_network rn
+    left join public.health_controls hc on hc.residente_id = rn.residente_id
+    where rn.eleam_id = v_eleam_id
+      and (rn.health_center_id is not null or nullif(trim(coalesce(rn.sistema_salud, '')), '') is not null)
+    group by rn.residente_id
+  )
+  select
+    r.id,
+    trim(coalesce(r.nombre, '') || ' ' || coalesce(r.apellido, '')) as residente_nombre,
+    r.estado,
+    r.fecha_ingreso,
+    r.nivel_dependencia,
+    r.condicion_salud_grave,
+    lc.residente_id is not null as consentimiento_ok,
+    lc.fecha_consentimiento,
+    exists(select 1 from latest_eval e where e.residente_id = r.id and e.tipo = 'barthel') as barthel_ok,
+    exists(select 1 from latest_eval e where e.residente_id = r.id and e.tipo = 'katz') as katz_ok,
+    exists(select 1 from latest_eval e where e.residente_id = r.id and e.tipo = 'mna') as mna_ok,
+    exists(select 1 from latest_eval e where e.residente_id = r.id and e.tipo = 'mmse') as mmse_ok,
+    coalesce(h.red_ok, false) as red_salud_ok,
+    h.proximo_control,
+    (
+      (case when lc.residente_id is null then 1 else 0 end)
+      + (case when r.nivel_dependencia is null then 1 else 0 end)
+      + (case when not exists(select 1 from latest_eval e where e.residente_id = r.id and e.tipo = 'barthel') then 1 else 0 end)
+      + (case when not exists(select 1 from latest_eval e where e.residente_id = r.id and e.tipo = 'katz') then 1 else 0 end)
+      + (case when not exists(select 1 from latest_eval e where e.residente_id = r.id and e.tipo = 'mna') then 1 else 0 end)
+      + (case when not exists(select 1 from latest_eval e where e.residente_id = r.id and e.tipo = 'mmse') then 1 else 0 end)
+      + (case when coalesce(h.red_ok, false) = false then 1 else 0 end)
+    )::integer as pendientes
+  from public.residentes r
+  left join latest_consent lc on lc.residente_id = r.id
+  left join health h on h.residente_id = r.id
+  where r.eleam_id = v_eleam_id
+    and r.estado in ('activo','hospitalizado')
+  order by pendientes desc, r.apellido asc, r.nombre asc;
+end;
+$$;
+
+revoke all on function public.ds20_resident_compliance_summary() from public;
+grant execute on function public.ds20_resident_compliance_summary() to authenticated;
 
 create or replace function public.generar_tareas_cuidado(
   p_fecha date default current_date,
@@ -4647,7 +5154,7 @@ begin
       coalesce((p_indicacion->>'es_controlado')::boolean, false),
       nullif(p_indicacion->>'tipo_controlado', ''),
       coalesce((p_indicacion->>'requiere_doble_validacion')::boolean, false),
-      coalesce((p_indicacion->>'requiere_stock')::boolean, true),
+      coalesce((p_indicacion->>'requiere_stock')::boolean, false),
       coalesce((p_indicacion->>'visible_familiar')::boolean, false),
       nullif(trim(coalesce(p_indicacion->>'resumen_familiar', '')), ''),
       nullif(trim(coalesce(p_indicacion->>'instrucciones', '')), ''),
@@ -4673,7 +5180,7 @@ begin
         es_controlado = coalesce((p_indicacion->>'es_controlado')::boolean, false),
         tipo_controlado = nullif(p_indicacion->>'tipo_controlado', ''),
         requiere_doble_validacion = coalesce((p_indicacion->>'requiere_doble_validacion')::boolean, false),
-        requiere_stock = coalesce((p_indicacion->>'requiere_stock')::boolean, true),
+        requiere_stock = coalesce((p_indicacion->>'requiere_stock')::boolean, false),
         visible_familiar = coalesce((p_indicacion->>'visible_familiar')::boolean, false),
         resumen_familiar = nullif(trim(coalesce(p_indicacion->>'resumen_familiar', '')), ''),
         instrucciones = nullif(trim(coalesce(p_indicacion->>'instrucciones', '')), ''),
@@ -6030,6 +6537,46 @@ create trigger trg_evaluaciones_clinicas_updated_at
   before update on public.evaluaciones_clinicas
   for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_resident_consents_updated_at on public.resident_consents;
+create trigger trg_resident_consents_updated_at
+  before update on public.resident_consents
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_health_centers_updated_at on public.health_centers;
+create trigger trg_health_centers_updated_at
+  before update on public.health_centers
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_resident_health_network_updated_at on public.resident_health_network;
+create trigger trg_resident_health_network_updated_at
+  before update on public.resident_health_network
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_health_controls_updated_at on public.health_controls;
+create trigger trg_health_controls_updated_at
+  before update on public.health_controls
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_staff_members_updated_at on public.staff_members;
+create trigger trg_staff_members_updated_at
+  before update on public.staff_members
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_staff_competencies_updated_at on public.staff_competencies;
+create trigger trg_staff_competencies_updated_at
+  before update on public.staff_competencies
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_staff_training_updated_at on public.staff_training_records;
+create trigger trg_staff_training_updated_at
+  before update on public.staff_training_records
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_staff_shift_updated_at on public.staff_shift_assignments;
+create trigger trg_staff_shift_updated_at
+  before update on public.staff_shift_assignments
+  for each row execute function public.set_updated_at();
+
 drop trigger if exists trg_eval_sync_resumen_residente on public.evaluaciones_clinicas;
 create trigger trg_eval_sync_resumen_residente
   after insert or update of puntaje, resultado, fecha_evaluacion on public.evaluaciones_clinicas
@@ -6178,8 +6725,8 @@ create trigger trg_acred_provision_on_requisito
 revoke all on function public.request_demo_lead(text, text, text, text, text, text, text, text, text, text, text) from public;
 grant execute on function public.request_demo_lead(text, text, text, text, text, text, text, text, text, text, text) to anon, authenticated;
 
-revoke all on function public.demo_lead_status(text) from public;
-grant execute on function public.demo_lead_status(text) to anon, authenticated;
+revoke all on function public.superadmin_portfolio_usage(integer) from public;
+grant execute on function public.superadmin_portfolio_usage(integer) to authenticated;
 
 revoke all on function public.crm_unsubscribe_by_token(uuid) from public;
 grant execute on function public.crm_unsubscribe_by_token(uuid) to anon, authenticated;
@@ -6330,6 +6877,14 @@ alter table public.crm_interactions enable row level security;
 alter table public.blog_posts enable row level security;
 alter table public.demo_leads enable row level security;
 alter table public.landing_events enable row level security;
+alter table public.resident_consents enable row level security;
+alter table public.health_centers enable row level security;
+alter table public.resident_health_network enable row level security;
+alter table public.health_controls enable row level security;
+alter table public.staff_members enable row level security;
+alter table public.staff_competencies enable row level security;
+alter table public.staff_training_records enable row level security;
+alter table public.staff_shift_assignments enable row level security;
 
 -- Profiles
 drop policy if exists "profiles_own_select" on public.profiles;
@@ -6726,6 +7281,355 @@ create policy "eval_delete" on public.evaluaciones_clinicas
     or (
       public.my_rol() = 'admin_eleam'
       and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+    )
+  );
+
+-- DS20: consentimiento, red de salud, competencias y dotación
+drop policy if exists "resident_consents_select" on public.resident_consents;
+drop policy if exists "resident_consents_insert" on public.resident_consents;
+drop policy if exists "resident_consents_update" on public.resident_consents;
+drop policy if exists "resident_consents_delete" on public.resident_consents;
+
+create policy "resident_consents_select" on public.resident_consents
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "resident_consents_insert" on public.resident_consents
+  for insert with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  );
+
+create policy "resident_consents_update" on public.resident_consents
+  for update using (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  );
+
+create policy "resident_consents_delete" on public.resident_consents
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+    )
+  );
+
+drop policy if exists "health_centers_select" on public.health_centers;
+drop policy if exists "health_centers_insert" on public.health_centers;
+drop policy if exists "health_centers_update" on public.health_centers;
+drop policy if exists "health_centers_delete" on public.health_centers;
+
+create policy "health_centers_select" on public.health_centers
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "health_centers_insert" on public.health_centers
+  for insert with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.funcionario_can('editar_residentes')
+    )
+  );
+
+create policy "health_centers_update" on public.health_centers
+  for update using (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.funcionario_can('editar_residentes')
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.funcionario_can('editar_residentes')
+    )
+  );
+
+create policy "health_centers_delete" on public.health_centers
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+    )
+  );
+
+drop policy if exists "resident_health_network_select" on public.resident_health_network;
+drop policy if exists "resident_health_network_insert" on public.resident_health_network;
+drop policy if exists "resident_health_network_update" on public.resident_health_network;
+drop policy if exists "resident_health_network_delete" on public.resident_health_network;
+
+create policy "resident_health_network_select" on public.resident_health_network
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "resident_health_network_insert" on public.resident_health_network
+  for insert with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  );
+
+create policy "resident_health_network_update" on public.resident_health_network
+  for update using (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  );
+
+create policy "resident_health_network_delete" on public.resident_health_network
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+    )
+  );
+
+drop policy if exists "health_controls_select" on public.health_controls;
+drop policy if exists "health_controls_insert" on public.health_controls;
+drop policy if exists "health_controls_update" on public.health_controls;
+drop policy if exists "health_controls_delete" on public.health_controls;
+
+create policy "health_controls_select" on public.health_controls
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "health_controls_insert" on public.health_controls
+  for insert with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  );
+
+create policy "health_controls_update" on public.health_controls
+  for update using (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
+      and public.funcionario_can('editar_residentes')
+    )
+  );
+
+create policy "health_controls_delete" on public.health_controls
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+    )
+  );
+
+drop policy if exists "staff_members_select" on public.staff_members;
+drop policy if exists "staff_members_insert" on public.staff_members;
+drop policy if exists "staff_members_update" on public.staff_members;
+drop policy if exists "staff_members_delete" on public.staff_members;
+
+create policy "staff_members_select" on public.staff_members
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "staff_members_insert" on public.staff_members
+  for insert with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "staff_members_update" on public.staff_members
+  for update using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "staff_members_delete" on public.staff_members
+  for delete using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+    )
+  );
+
+drop policy if exists "staff_competencies_select" on public.staff_competencies;
+drop policy if exists "staff_competencies_write" on public.staff_competencies;
+drop policy if exists "staff_training_select" on public.staff_training_records;
+drop policy if exists "staff_training_write" on public.staff_training_records;
+drop policy if exists "staff_shift_select" on public.staff_shift_assignments;
+drop policy if exists "staff_shift_write" on public.staff_shift_assignments;
+
+create policy "staff_competencies_select" on public.staff_competencies
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "staff_competencies_write" on public.staff_competencies
+  for all using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "staff_training_select" on public.staff_training_records
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "staff_training_write" on public.staff_training_records
+  for all using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "staff_shift_select" on public.staff_shift_assignments
+  for select using (
+    public.is_superadmin()
+    or (
+      public.my_rol() in ('admin_eleam','funcionario')
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  );
+
+create policy "staff_shift_write" on public.staff_shift_assignments
+  for all using (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      public.my_rol() = 'admin_eleam'
+      and eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
     )
   );
 
@@ -7595,7 +8499,7 @@ create policy "pfp_select" on public.profile_feature_permissions
       and profile_id in (
         select id from public.profiles
         where eleam_id = public.my_eleam_id()
-          and rol in ('funcionario','familiar')
+          and rol = 'funcionario'
       )
     )
   );
@@ -7608,7 +8512,7 @@ create policy "pfp_admin_all" on public.profile_feature_permissions
       and profile_id in (
         select id from public.profiles
         where eleam_id = public.my_eleam_id()
-          and rol in ('funcionario','familiar')
+          and rol = 'funcionario'
       )
     )
   )
@@ -7619,7 +8523,7 @@ create policy "pfp_admin_all" on public.profile_feature_permissions
       and profile_id in (
         select id from public.profiles
         where eleam_id = public.my_eleam_id()
-          and rol in ('funcionario','familiar')
+          and rol = 'funcionario'
       )
       and (
         enabled = false
@@ -7654,7 +8558,6 @@ create policy "vf_select" on public.visitas_familiar
     or (
       (
         public.my_rol() = 'admin_eleam'
-        or public.funcionario_can('registrar_visitas')
       )
       and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
@@ -7677,7 +8580,7 @@ create policy "vf_update" on public.visitas_familiar
   for update using (
     public.is_superadmin()
     or (
-      (public.my_rol() = 'admin_eleam' or public.funcionario_can('registrar_visitas'))
+      public.my_rol() = 'admin_eleam'
       and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
   );
@@ -8093,6 +8996,92 @@ create policy "storage_acreditacion_delete" on storage.objects
     )
   );
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'documentos-eleam',
+  'documentos-eleam',
+  false,
+  10485760,
+  array[
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+  ]
+)
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "storage_documentos_eleam_select" on storage.objects;
+drop policy if exists "storage_documentos_eleam_insert" on storage.objects;
+drop policy if exists "storage_documentos_eleam_update" on storage.objects;
+drop policy if exists "storage_documentos_eleam_delete" on storage.objects;
+
+create policy "storage_documentos_eleam_select" on storage.objects
+  for select using (
+    bucket_id = 'documentos-eleam'
+    and (
+      public.is_superadmin()
+      or (
+        public.my_rol() in ('admin_eleam','funcionario')
+        and public.eleam_has_access(public.my_eleam_id())
+        and split_part(name, '/', 2) = public.my_eleam_id()::text
+      )
+    )
+  );
+
+create policy "storage_documentos_eleam_insert" on storage.objects
+  for insert with check (
+    bucket_id = 'documentos-eleam'
+    and (
+      public.is_superadmin()
+      or (
+        public.my_rol() in ('admin_eleam','funcionario')
+        and public.eleam_has_access(public.my_eleam_id())
+        and split_part(name, '/', 2) = public.my_eleam_id()::text
+      )
+    )
+  );
+
+create policy "storage_documentos_eleam_update" on storage.objects
+  for update using (
+    bucket_id = 'documentos-eleam'
+    and (
+      public.is_superadmin()
+      or (
+        public.my_rol() in ('admin_eleam','funcionario')
+        and public.eleam_has_access(public.my_eleam_id())
+        and split_part(name, '/', 2) = public.my_eleam_id()::text
+      )
+    )
+  )
+  with check (
+    bucket_id = 'documentos-eleam'
+    and (
+      public.is_superadmin()
+      or (
+        public.my_rol() in ('admin_eleam','funcionario')
+        and public.eleam_has_access(public.my_eleam_id())
+        and split_part(name, '/', 2) = public.my_eleam_id()::text
+      )
+    )
+  );
+
+create policy "storage_documentos_eleam_delete" on storage.objects
+  for delete using (
+    bucket_id = 'documentos-eleam'
+    and (
+      public.is_superadmin()
+      or (
+        public.my_rol() = 'admin_eleam'
+        and public.eleam_has_access(public.my_eleam_id())
+        and split_part(name, '/', 2) = public.my_eleam_id()::text
+      )
+    )
+  );
+
 -- ============================================================
 -- 10. Seeds
 -- ============================================================
@@ -8248,3 +9237,969 @@ where crm_estado = 'lead'
   and (pago_activo = true or subscription_status in ('activo','en_gracia'));
 
 -- El seed del blog publico vive en supabase_blog_seed.sql.
+
+-- ============================================================
+-- FASE 2 DS20: modificaciones a tablas existentes
+-- ============================================================
+
+-- 1. Tinetti en evaluaciones clínicas
+alter table public.evaluaciones_clinicas
+  drop constraint if exists evaluaciones_clinicas_tipo_check;
+alter table public.evaluaciones_clinicas
+  add constraint evaluaciones_clinicas_tipo_check
+  check (tipo in ('barthel','katz','mna','mmse','tinetti'));
+
+-- 2. Columnas biopsicosociales en planes_cuidado
+alter table public.planes_cuidado
+  add column if not exists objetivo_biopsicosocial  text
+    constraint planes_cuidado_obj_bio_len check (objetivo_biopsicosocial is null or char_length(objetivo_biopsicosocial) <= 2000),
+  add column if not exists valoracion_social         text
+    constraint planes_cuidado_val_social_len check (valoracion_social is null or char_length(valoracion_social) <= 2000),
+  add column if not exists intereses_actividades     text
+    constraint planes_cuidado_intereses_len check (intereses_actividades is null or char_length(intereses_actividades) <= 2000),
+  add column if not exists necesidades_espirituales  text
+    constraint planes_cuidado_nec_esp_len check (necesidades_espirituales is null or char_length(necesidades_espirituales) <= 2000),
+  add column if not exists meta_rehabilitacion       text
+    constraint planes_cuidado_meta_rehab_len check (meta_rehabilitacion is null or char_length(meta_rehabilitacion) <= 2000),
+  add column if not exists restricciones_actividad   text
+    constraint planes_cuidado_rest_act_len check (restricciones_actividad is null or char_length(restricciones_actividad) <= 2000),
+  add column if not exists validado_por_dt           uuid references public.profiles(id) on delete set null,
+  add column if not exists validado_en               timestamptz;
+
+-- 3. Categorías adicionales en actividades del plan de cuidado
+alter table public.plan_cuidado_actividades
+  drop constraint if exists plan_cuidado_actividades_categoria_check;
+alter table public.plan_cuidado_actividades
+  add constraint plan_cuidado_actividades_categoria_check
+  check (categoria in (
+    'alimentacion','hidratacion','higiene','bano','movilidad',
+    'cambios_posicion','eliminacion','prevencion_caidas',
+    'prevencion_up','actividad','controles','otro',
+    'psicologico','social','preventivo','recreativo'
+  ));
+
+-- 4. Permisos DS20 fase 2 en funcionario_permisos
+alter table public.funcionario_permisos
+  add column if not exists editar_inventario_bienes boolean not null default false,
+  add column if not exists gestionar_reclamos        boolean not null default true,
+  add column if not exists gestionar_emergencias     boolean not null default false,
+  add column if not exists registrar_simulacros      boolean not null default true;
+
+-- 5. Actualizar funcionario_can() con los nuevos permisos
+create or replace function public.funcionario_can(perm text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_rol    text := public.my_rol();
+  v_result boolean;
+begin
+  if v_rol in ('admin_eleam', 'superadmin') then return true; end if;
+  if v_rol <> 'funcionario' then return false; end if;
+
+  if not public.eleam_has_access(public.my_eleam_id()) then
+    return false;
+  end if;
+
+  select case perm
+    when 'crear_residentes'               then crear_residentes
+    when 'editar_residentes'              then editar_residentes
+    when 'eliminar_residentes'            then eliminar_residentes
+    when 'crear_signos_vitales'           then crear_signos_vitales
+    when 'editar_signos_vitales'          then editar_signos_vitales
+    when 'eliminar_signos_vitales'        then eliminar_signos_vitales
+    when 'crear_observaciones'            then crear_observaciones
+    when 'editar_observaciones'           then editar_observaciones
+    when 'eliminar_observaciones'         then eliminar_observaciones
+    when 'subir_acreditacion'             then subir_acreditacion
+    when 'editar_acreditacion'            then editar_acreditacion
+    when 'archivar_acreditacion'          then archivar_acreditacion
+    when 'crear_planes_cuidado'           then crear_planes_cuidado
+    when 'editar_planes_cuidado'          then editar_planes_cuidado
+    when 'completar_tareas_cuidado'       then completar_tareas_cuidado
+    when 'crear_indicaciones_medicamentos'  then crear_indicaciones_medicamentos
+    when 'editar_indicaciones_medicamentos' then editar_indicaciones_medicamentos
+    when 'administrar_medicamentos'       then administrar_medicamentos
+    when 'validar_medicamentos_controlados' then validar_medicamentos_controlados
+    when 'ajustar_stock_medicamentos'     then ajustar_stock_medicamentos
+    when 'asignar_camas'                  then asignar_camas
+    when 'editar_indicaciones_cuidado'    then editar_indicaciones_cuidado
+    when 'aplicar_evaluaciones_clinicas'  then aplicar_evaluaciones_clinicas
+    when 'crear_eventos_adversos'         then crear_eventos_adversos
+    when 'editar_eventos_adversos'        then editar_eventos_adversos
+    when 'cerrar_eventos_adversos'        then cerrar_eventos_adversos
+    when 'editar_inventario_bienes'       then editar_inventario_bienes
+    when 'gestionar_reclamos'             then gestionar_reclamos
+    when 'gestionar_emergencias'          then gestionar_emergencias
+    when 'registrar_simulacros'           then registrar_simulacros
+    else false
+  end
+  into v_result
+  from public.funcionario_permisos
+  where profile_id = (select auth.uid());
+
+  if v_result is null then return false; end if;
+  return v_result;
+end;
+$$;
+
+-- ============================================================
+-- NUEVAS TABLAS DS20 FASE 2
+-- ============================================================
+
+-- Inventario de bienes (DS20 Art. 22)
+create table if not exists public.inventario_bienes (
+  id                uuid primary key default gen_random_uuid(),
+  eleam_id          uuid not null references public.eleams(id) on delete cascade,
+  nombre            text not null
+    constraint inventario_bienes_nombre_len check (char_length(trim(nombre)) between 2 and 120),
+  descripcion       text
+    constraint inventario_bienes_desc_len check (descripcion is null or char_length(descripcion) <= 500),
+  categoria         text not null
+    constraint inventario_bienes_cat_check check (categoria in (
+      'infraestructura','equipamiento_clinico','equipamiento_general',
+      'vehiculo','tecnologia','otro'
+    )),
+  estado            text not null default 'operativo'
+    constraint inventario_bienes_estado_check check (estado in ('operativo','mantenimiento','dado_de_baja')),
+  numero_serie      text,
+  fecha_adquisicion date,
+  fecha_revision    date,
+  proveedor         text,
+  notas             text
+    constraint inventario_bienes_notas_len check (notas is null or char_length(notas) <= 1000),
+  creado_por        uuid references public.profiles(id) on delete set null,
+  actualizado_por   uuid references public.profiles(id) on delete set null,
+  creado_en         timestamptz not null default now(),
+  actualizado_en    timestamptz not null default now()
+);
+create index if not exists idx_inventario_bienes_eleam on public.inventario_bienes(eleam_id, categoria);
+
+-- Persona significativa del residente (DS20 Art. 18)
+create table if not exists public.persona_significativa (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null references public.residentes(id) on delete cascade,
+  nombre                text not null
+    constraint persona_sig_nombre_len check (char_length(trim(nombre)) between 2 and 120),
+  parentesco            text
+    constraint persona_sig_parentesco_len check (parentesco is null or char_length(parentesco) <= 80),
+  telefono              text,
+  email                 text,
+  vive_con_residente    boolean not null default false,
+  descripcion_relacion  text
+    constraint persona_sig_desc_len check (descripcion_relacion is null or char_length(descripcion_relacion) <= 1000),
+  preferencias_visita   text
+    constraint persona_sig_pref_len check (preferencias_visita is null or char_length(preferencias_visita) <= 1000),
+  creado_por            uuid references public.profiles(id) on delete set null,
+  actualizado_por       uuid references public.profiles(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
+);
+create unique index if not exists persona_sig_residente_unique on public.persona_significativa(residente_id);
+create index if not exists idx_persona_sig_eleam on public.persona_significativa(eleam_id);
+
+-- Actividades sociales y recreativas (DS20 Art. 20)
+create table if not exists public.actividades_sociales (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  residente_id    uuid not null references public.residentes(id) on delete cascade,
+  nombre          text not null
+    constraint actividades_soc_nombre_len check (char_length(trim(nombre)) between 2 and 120),
+  tipo            text not null
+    constraint actividades_soc_tipo_check check (tipo in (
+      'recreativa','cultural','espiritual','fisica','social','terapeutica','otro'
+    )),
+  descripcion     text
+    constraint actividades_soc_desc_len check (descripcion is null or char_length(descripcion) <= 1000),
+  frecuencia      text
+    constraint actividades_soc_freq_check check (frecuencia in ('diaria','semanal','mensual','eventual') or frecuencia is null),
+  preferencia     text
+    constraint actividades_soc_pref_check check (preferencia in ('gusta','no_gusta','indiferente') or preferencia is null),
+  fecha_registro  date not null default current_date,
+  registrado_por  uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now()
+);
+create index if not exists idx_actividades_soc_residente on public.actividades_sociales(residente_id, creado_en desc);
+create index if not exists idx_actividades_soc_eleam on public.actividades_sociales(eleam_id, creado_en desc);
+
+-- Plan de emergencias (DS20 Art. 25 N°3)
+create table if not exists public.plan_emergencias (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  titulo                text not null default 'Plan de Emergencias y Desastres'
+    constraint plan_emerg_titulo_len check (char_length(trim(titulo)) between 5 and 200),
+  estado                text not null default 'borrador'
+    constraint plan_emerg_estado_check check (estado in ('borrador','vigente','revision')),
+  objetivo_general      text
+    constraint plan_emerg_obj_len check (objetivo_general is null or char_length(objetivo_general) <= 3000),
+  alcance               text
+    constraint plan_emerg_alcance_len check (alcance is null or char_length(alcance) <= 2000),
+  responsable_id        uuid references public.profiles(id) on delete set null,
+  contactos_emergencia  jsonb,
+  fecha_aprobacion      date,
+  fecha_revision        date,
+  version               integer not null default 1
+    constraint plan_emerg_version_check check (version > 0),
+  creado_por            uuid references public.profiles(id) on delete set null,
+  actualizado_por       uuid references public.profiles(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
+);
+create unique index if not exists plan_emerg_eleam_vigente_unique
+  on public.plan_emergencias(eleam_id) where estado = 'vigente';
+create index if not exists idx_plan_emerg_eleam on public.plan_emergencias(eleam_id, estado);
+
+-- Escenarios dentro del plan de emergencias
+create table if not exists public.escenarios_emergencia (
+  id                  uuid primary key default gen_random_uuid(),
+  eleam_id            uuid not null references public.eleams(id) on delete cascade,
+  plan_id             uuid not null references public.plan_emergencias(id) on delete cascade,
+  nombre              text not null
+    constraint escenarios_nombre_len check (char_length(trim(nombre)) between 3 and 120),
+  tipo                text not null
+    constraint escenarios_tipo_check check (tipo in (
+      'incendio','sismo','inundacion','emergencia_medica',
+      'corte_suministro','evacuacion','otro'
+    )),
+  descripcion         text
+    constraint escenarios_desc_len check (descripcion is null or char_length(descripcion) <= 2000),
+  procedimiento       text
+    constraint escenarios_proc_len check (procedimiento is null or char_length(procedimiento) <= 5000),
+  responsable_id      uuid references public.profiles(id) on delete set null,
+  recursos_necesarios text
+    constraint escenarios_rec_len check (recursos_necesarios is null or char_length(recursos_necesarios) <= 2000),
+  punto_encuentro     text,
+  orden               integer not null default 0,
+  creado_en           timestamptz not null default now(),
+  actualizado_en      timestamptz not null default now()
+);
+create index if not exists idx_escenarios_plan on public.escenarios_emergencia(plan_id, orden);
+
+-- Simulacros (DS20 Art. 25 N°3)
+create table if not exists public.simulacros (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  plan_id         uuid not null references public.plan_emergencias(id) on delete cascade,
+  escenario_id    uuid references public.escenarios_emergencia(id) on delete set null,
+  fecha_realizado date not null,
+  tipo_simulacro  text not null default 'parcial'
+    constraint simulacros_tipo_check check (tipo_simulacro in ('parcial','total','evacuacion','escritorio')),
+  duracion_min    integer
+    constraint simulacros_duracion_check check (duracion_min is null or duracion_min > 0),
+  participantes   integer
+    constraint simulacros_partic_check check (participantes is null or participantes >= 0),
+  resultado       text not null default 'satisfactorio'
+    constraint simulacros_resultado_check check (resultado in ('satisfactorio','con_observaciones','insatisfactorio')),
+  observaciones   text
+    constraint simulacros_obs_len check (observaciones is null or char_length(observaciones) <= 3000),
+  acciones_mejora text
+    constraint simulacros_acc_len check (acciones_mejora is null or char_length(acciones_mejora) <= 2000),
+  registrado_por  uuid references public.profiles(id) on delete set null,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now()
+);
+create index if not exists idx_simulacros_eleam on public.simulacros(eleam_id, fecha_realizado desc);
+create index if not exists idx_simulacros_plan on public.simulacros(plan_id, fecha_realizado desc);
+
+-- Reclamos y sugerencias (DS20 Art. 27)
+create table if not exists public.reclamos_sugerencias (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  folio                 text not null,
+  tipo                  text not null
+    constraint reclamos_tipo_check check (tipo in ('reclamo','sugerencia','felicitacion','consulta')),
+  canal                 text not null default 'presencial'
+    constraint reclamos_canal_check check (canal in (
+      'presencial','escrito','telefonico','email','libro_reclamos','familiar_portal'
+    )),
+  descripcion           text not null
+    constraint reclamos_desc_len check (char_length(trim(descripcion)) between 10 and 5000),
+  solicitante_nombre    text
+    constraint reclamos_sol_nombre_len check (solicitante_nombre is null or char_length(solicitante_nombre) <= 120),
+  solicitante_tipo      text
+    constraint reclamos_sol_tipo_check check (solicitante_tipo in (
+      'residente','familiar','funcionario','visita','anonimo'
+    ) or solicitante_tipo is null),
+  residente_id          uuid references public.residentes(id) on delete set null,
+  estado                text not null default 'abierto'
+    constraint reclamos_estado_check check (estado in ('abierto','en_proceso','resuelto','derivado')),
+  prioridad             text not null default 'normal'
+    constraint reclamos_prio_check check (prioridad in ('baja','normal','alta','urgente')),
+  categoria             text
+    constraint reclamos_cat_check check (categoria in (
+      'atencion','alimentacion','infraestructura','higiene','trato',
+      'medicacion','actividades','administrativo','otro'
+    ) or categoria is null),
+  respuesta             text
+    constraint reclamos_resp_len check (respuesta is null or char_length(respuesta) <= 5000),
+  fecha_respuesta       timestamptz,
+  respondido_por        uuid references public.profiles(id) on delete set null,
+  fecha_compromiso      date,
+  visita_familiar_origen boolean not null default false,
+  registrado_por        uuid references public.profiles(id) on delete set null,
+  creado_en             timestamptz not null default now(),
+  actualizado_en        timestamptz not null default now()
+);
+create unique index if not exists reclamos_folio_eleam_unique on public.reclamos_sugerencias(eleam_id, folio);
+create index if not exists idx_reclamos_eleam on public.reclamos_sugerencias(eleam_id, creado_en desc);
+create index if not exists idx_reclamos_estado on public.reclamos_sugerencias(eleam_id, estado, creado_en desc);
+
+-- ============================================================
+-- FUNCIÓN: Generar folio secuencial de reclamo por ELEAM/año
+-- ============================================================
+create or replace function public.generate_folio_reclamo(p_eleam_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_year text := to_char(current_date, 'YYYY');
+  v_seq  int;
+begin
+  select coalesce(
+    max(cast(substring(folio from '\d+$') as integer)), 0
+  ) + 1
+    into v_seq
+    from public.reclamos_sugerencias
+    where eleam_id = p_eleam_id
+      and folio like v_year || '-%';
+  return v_year || '-' || lpad(v_seq::text, 4, '0');
+end;
+$$;
+
+revoke all on function public.generate_folio_reclamo(uuid) from public;
+grant execute on function public.generate_folio_reclamo(uuid) to authenticated;
+
+-- ============================================================
+-- TRIGGERS: actualizado_en para nuevas tablas
+-- ============================================================
+drop trigger if exists trg_inventario_bienes_updated_at on public.inventario_bienes;
+create trigger trg_inventario_bienes_updated_at
+  before update on public.inventario_bienes
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_persona_sig_updated_at on public.persona_significativa;
+create trigger trg_persona_sig_updated_at
+  before update on public.persona_significativa
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_plan_emerg_updated_at on public.plan_emergencias;
+create trigger trg_plan_emerg_updated_at
+  before update on public.plan_emergencias
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_escenarios_emerg_updated_at on public.escenarios_emergencia;
+create trigger trg_escenarios_emerg_updated_at
+  before update on public.escenarios_emergencia
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_simulacros_updated_at on public.simulacros;
+create trigger trg_simulacros_updated_at
+  before update on public.simulacros
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_reclamos_updated_at on public.reclamos_sugerencias;
+create trigger trg_reclamos_updated_at
+  before update on public.reclamos_sugerencias
+  for each row execute function public.set_updated_at();
+
+-- ============================================================
+-- RLS: Nuevas tablas DS20 Fase 2
+-- ============================================================
+alter table public.inventario_bienes        enable row level security;
+alter table public.persona_significativa    enable row level security;
+alter table public.actividades_sociales     enable row level security;
+alter table public.plan_emergencias         enable row level security;
+alter table public.escenarios_emergencia    enable row level security;
+alter table public.simulacros               enable row level security;
+alter table public.reclamos_sugerencias     enable row level security;
+
+-- Idempotencia: re-ejecutar el esquema debe poder recrear estas politicas.
+drop policy if exists "inventario_bienes_select" on public.inventario_bienes;
+drop policy if exists "inventario_bienes_insert" on public.inventario_bienes;
+drop policy if exists "inventario_bienes_update" on public.inventario_bienes;
+drop policy if exists "inventario_bienes_delete" on public.inventario_bienes;
+drop policy if exists "persona_sig_select" on public.persona_significativa;
+drop policy if exists "persona_sig_insert" on public.persona_significativa;
+drop policy if exists "persona_sig_update" on public.persona_significativa;
+drop policy if exists "persona_sig_delete" on public.persona_significativa;
+drop policy if exists "actividades_soc_select" on public.actividades_sociales;
+drop policy if exists "actividades_soc_insert" on public.actividades_sociales;
+drop policy if exists "actividades_soc_update" on public.actividades_sociales;
+drop policy if exists "actividades_soc_delete" on public.actividades_sociales;
+drop policy if exists "plan_emerg_select" on public.plan_emergencias;
+drop policy if exists "plan_emerg_insert" on public.plan_emergencias;
+drop policy if exists "plan_emerg_update" on public.plan_emergencias;
+drop policy if exists "plan_emerg_delete" on public.plan_emergencias;
+drop policy if exists "escenarios_emerg_select" on public.escenarios_emergencia;
+drop policy if exists "escenarios_emerg_write" on public.escenarios_emergencia;
+drop policy if exists "simulacros_select" on public.simulacros;
+drop policy if exists "simulacros_insert" on public.simulacros;
+drop policy if exists "simulacros_update" on public.simulacros;
+drop policy if exists "simulacros_delete" on public.simulacros;
+drop policy if exists "reclamos_select" on public.reclamos_sugerencias;
+drop policy if exists "reclamos_insert" on public.reclamos_sugerencias;
+drop policy if exists "reclamos_update" on public.reclamos_sugerencias;
+drop policy if exists "reclamos_delete" on public.reclamos_sugerencias;
+
+-- inventario_bienes
+create policy "inventario_bienes_select" on public.inventario_bienes
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+  );
+create policy "inventario_bienes_insert" on public.inventario_bienes
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('editar_inventario_bienes')
+  );
+create policy "inventario_bienes_update" on public.inventario_bienes
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('editar_inventario_bienes')
+  );
+create policy "inventario_bienes_delete" on public.inventario_bienes
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- persona_significativa
+create policy "persona_sig_select" on public.persona_significativa
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+    or exists (
+      select 1 from public.familiar_residentes fr
+      where fr.profile_id = (select auth.uid())
+        and fr.residente_id = persona_significativa.residente_id
+    )
+  );
+create policy "persona_sig_insert" on public.persona_significativa
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.my_rol() in ('admin_eleam','funcionario')
+  );
+create policy "persona_sig_update" on public.persona_significativa
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.my_rol() in ('admin_eleam','funcionario')
+  );
+create policy "persona_sig_delete" on public.persona_significativa
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- actividades_sociales
+create policy "actividades_soc_select" on public.actividades_sociales
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+    or exists (
+      select 1 from public.familiar_residentes fr
+      where fr.profile_id = (select auth.uid())
+        and fr.residente_id = actividades_sociales.residente_id
+    )
+  );
+create policy "actividades_soc_insert" on public.actividades_sociales
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.my_rol() in ('admin_eleam','funcionario')
+  );
+create policy "actividades_soc_update" on public.actividades_sociales
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.my_rol() in ('admin_eleam','funcionario')
+  );
+create policy "actividades_soc_delete" on public.actividades_sociales
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- plan_emergencias
+create policy "plan_emerg_select" on public.plan_emergencias
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+  );
+create policy "plan_emerg_insert" on public.plan_emergencias
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_emergencias')
+  );
+create policy "plan_emerg_update" on public.plan_emergencias
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_emergencias')
+  );
+create policy "plan_emerg_delete" on public.plan_emergencias
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- escenarios_emergencia
+create policy "escenarios_emerg_select" on public.escenarios_emergencia
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+  );
+create policy "escenarios_emerg_write" on public.escenarios_emergencia
+  for all using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_emergencias')
+  );
+
+-- simulacros
+create policy "simulacros_select" on public.simulacros
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+  );
+create policy "simulacros_insert" on public.simulacros
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('registrar_simulacros')
+  );
+create policy "simulacros_update" on public.simulacros
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_emergencias')
+  );
+create policy "simulacros_delete" on public.simulacros
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- reclamos_sugerencias
+create policy "reclamos_select" on public.reclamos_sugerencias
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+    or (
+      public.my_rol() = 'familiar'
+      and visita_familiar_origen = true
+      and residente_id in (
+        select residente_id from public.familiar_residentes
+        where profile_id = (select auth.uid())
+      )
+    )
+  );
+create policy "reclamos_insert" on public.reclamos_sugerencias
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and (
+      public.my_rol() in ('admin_eleam','funcionario')
+      or (public.my_rol() = 'familiar' and visita_familiar_origen = true)
+    )
+  );
+create policy "reclamos_update" on public.reclamos_sugerencias
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_reclamos')
+  );
+create policy "reclamos_delete" on public.reclamos_sugerencias
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- Grants para nuevas tablas
+grant select, insert, update, delete on public.inventario_bienes        to authenticated;
+grant select, insert, update, delete on public.persona_significativa     to authenticated;
+grant select, insert, update, delete on public.actividades_sociales      to authenticated;
+grant select, insert, update, delete on public.plan_emergencias          to authenticated;
+grant select, insert, update, delete on public.escenarios_emergencia     to authenticated;
+grant select, insert, update, delete on public.simulacros                to authenticated;
+grant select, insert, update, delete on public.reclamos_sugerencias      to authenticated;
+
+-- ============================================================
+-- NUEVAS TABLAS DS20 FASE 3: TRANSITORIOS, PROTOCOLOS Y SENAMA
+-- ============================================================
+
+-- 1. Permiso DS20 fase 3 en funcionario_permisos
+alter table public.funcionario_permisos
+  add column if not exists gestionar_cumplimiento boolean not null default false;
+
+-- 2. Actualizar funcionario_can() con el nuevo permiso
+create or replace function public.funcionario_can(perm text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_rol    text := public.my_rol();
+  v_result boolean;
+begin
+  if v_rol in ('admin_eleam', 'superadmin') then return true; end if;
+  if v_rol <> 'funcionario' then return false; end if;
+
+  if not public.eleam_has_access(public.my_eleam_id()) then
+    return false;
+  end if;
+
+  select case perm
+    when 'crear_residentes'               then crear_residentes
+    when 'editar_residentes'              then editar_residentes
+    when 'eliminar_residentes'            then eliminar_residentes
+    when 'crear_signos_vitales'           then crear_signos_vitales
+    when 'editar_signos_vitales'          then editar_signos_vitales
+    when 'eliminar_signos_vitales'        then eliminar_signos_vitales
+    when 'crear_observaciones'            then crear_observaciones
+    when 'editar_observaciones'           then editar_observaciones
+    when 'eliminar_observaciones'         then eliminar_observaciones
+    when 'subir_acreditacion'             then subir_acreditacion
+    when 'editar_acreditacion'            then editar_acreditacion
+    when 'archivar_acreditacion'          then archivar_acreditacion
+    when 'crear_planes_cuidado'           then crear_planes_cuidado
+    when 'editar_planes_cuidado'          then editar_planes_cuidado
+    when 'completar_tareas_cuidado'       then completar_tareas_cuidado
+    when 'crear_indicaciones_medicamentos'  then crear_indicaciones_medicamentos
+    when 'editar_indicaciones_medicamentos' then editar_indicaciones_medicamentos
+    when 'administrar_medicamentos'       then administrar_medicamentos
+    when 'validar_medicamentos_controlados' then validar_medicamentos_controlados
+    when 'ajustar_stock_medicamentos'     then ajustar_stock_medicamentos
+    when 'asignar_camas'                  then asignar_camas
+    when 'editar_indicaciones_cuidado'    then editar_indicaciones_cuidado
+    when 'aplicar_evaluaciones_clinicas'  then aplicar_evaluaciones_clinicas
+    when 'crear_eventos_adversos'         then crear_eventos_adversos
+    when 'editar_eventos_adversos'        then editar_eventos_adversos
+    when 'cerrar_eventos_adversos'        then cerrar_eventos_adversos
+    when 'editar_inventario_bienes'       then editar_inventario_bienes
+    when 'gestionar_reclamos'             then gestionar_reclamos
+    when 'gestionar_emergencias'          then gestionar_emergencias
+    when 'registrar_simulacros'           then registrar_simulacros
+    when 'gestionar_cumplimiento'         then gestionar_cumplimiento
+    else false
+  end
+  into v_result
+  from public.funcionario_permisos
+  where profile_id = (select auth.uid());
+
+  if v_result is null then return false; end if;
+  return v_result;
+end;
+$$;
+
+-- 3. Matriz de brechas del período transitorio (DS20 Arts. transitorios)
+create table if not exists public.transitorio_brechas (
+  id                 uuid primary key default gen_random_uuid(),
+  eleam_id           uuid not null references public.eleams(id) on delete cascade,
+  requisito          text not null
+    constraint trans_brechas_req_len check (char_length(trim(requisito)) between 3 and 200),
+  descripcion        text
+    constraint trans_brechas_desc_len check (descripcion is null or char_length(descripcion) <= 2000),
+  riesgo             text not null default 'medio'
+    constraint trans_brechas_riesgo_check check (riesgo in ('bajo','medio','alto','critico')),
+  estado             text not null default 'pendiente'
+    constraint trans_brechas_estado_check check (estado in ('pendiente','en_proceso','cerrada')),
+  plazo              date,
+  plan_accion        text
+    constraint trans_brechas_plan_len check (plan_accion is null or char_length(plan_accion) <= 2000),
+  responsable_id     uuid references public.profiles(id) on delete set null,
+  notas_seguimiento  text
+    constraint trans_brechas_notas_len check (notas_seguimiento is null or char_length(notas_seguimiento) <= 2000),
+  cerrado_en         timestamptz,
+  creado_por         uuid references public.profiles(id) on delete set null,
+  actualizado_por    uuid references public.profiles(id) on delete set null,
+  creado_en          timestamptz not null default now(),
+  actualizado_en     timestamptz not null default now()
+);
+create index if not exists idx_trans_brechas_eleam on public.transitorio_brechas(eleam_id, estado, plazo);
+
+-- 4. Protocolos operativos del ELEAM (DS20 Art. 25 N°1 y N°4)
+create table if not exists public.protocolos_eleam (
+  id               uuid primary key default gen_random_uuid(),
+  eleam_id         uuid not null references public.eleams(id) on delete cascade,
+  tipo             text not null
+    constraint protocolos_tipo_check check (tipo in (
+      'urgencias_medicas','fallecimiento','ingreso','egreso','aseo_desinfeccion','otro'
+    )),
+  titulo           text not null
+    constraint protocolos_titulo_len check (char_length(trim(titulo)) between 3 and 200),
+  contenido        text
+    constraint protocolos_contenido_len check (contenido is null or char_length(contenido) <= 20000),
+  estado           text not null default 'borrador'
+    constraint protocolos_estado_check check (estado in ('borrador','vigente','revision')),
+  version          integer not null default 1
+    constraint protocolos_version_check check (version > 0),
+  fecha_aprobacion date,
+  fecha_revision   date,
+  responsable_id   uuid references public.profiles(id) on delete set null,
+  creado_por       uuid references public.profiles(id) on delete set null,
+  actualizado_por  uuid references public.profiles(id) on delete set null,
+  creado_en        timestamptz not null default now(),
+  actualizado_en   timestamptz not null default now()
+);
+create unique index if not exists protocolos_eleam_tipo_vigente_unique
+  on public.protocolos_eleam(eleam_id, tipo) where estado = 'vigente';
+create index if not exists idx_protocolos_eleam on public.protocolos_eleam(eleam_id, tipo, estado);
+
+-- 5. Reportes trimestrales a SENAMA (DS20 Art. 31)
+create table if not exists public.reportes_senama (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  periodo         text not null
+    constraint reportes_senama_periodo_check check (periodo ~ '^\d{4}-T[1-4]$'),
+  estado          text not null default 'generado'
+    constraint reportes_senama_estado_check check (estado in ('generado','enviado')),
+  datos           jsonb not null,
+  observaciones   text
+    constraint reportes_senama_obs_len check (observaciones is null or char_length(observaciones) <= 2000),
+  comprobante     text
+    constraint reportes_senama_comp_len check (comprobante is null or char_length(comprobante) <= 300),
+  generado_por    uuid references public.profiles(id) on delete set null,
+  enviado_por     uuid references public.profiles(id) on delete set null,
+  enviado_en      timestamptz,
+  creado_en       timestamptz not null default now(),
+  actualizado_en  timestamptz not null default now()
+);
+create unique index if not exists reportes_senama_periodo_unique on public.reportes_senama(eleam_id, periodo);
+create index if not exists idx_reportes_senama_eleam on public.reportes_senama(eleam_id, creado_en desc);
+
+-- ============================================================
+-- FUNCIÓN: Consolidar datos del reporte SENAMA del ELEAM actual
+-- ============================================================
+create or replace function public.generate_senama_report_data()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid := public.my_eleam_id();
+  v_result   jsonb;
+begin
+  if v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario') then
+    raise exception 'No autorizado para generar el reporte SENAMA.';
+  end if;
+  if not public.eleam_has_access(v_eleam_id) then
+    raise exception 'El ELEAM no tiene acceso vigente.';
+  end if;
+
+  select jsonb_build_object(
+    'eleam', (
+      select jsonb_build_object(
+        'nombre', e.nombre,
+        'rut_empresa', e.rut_empresa,
+        'telefono', e.telefono,
+        'email_admin', e.email_admin
+      )
+      from public.eleams e where e.id = v_eleam_id
+    ),
+    'residentes', (
+      select jsonb_build_object(
+        'total', count(*),
+        'activos', count(*) filter (where estado = 'activo'),
+        'hospitalizados', count(*) filter (where estado = 'hospitalizado'),
+        'egresados', count(*) filter (where estado = 'egresado'),
+        'fallecidos', count(*) filter (where estado = 'fallecido'),
+        'por_dependencia', jsonb_build_object(
+          'leve', count(*) filter (where nivel_dependencia = 'leve' and estado in ('activo','hospitalizado')),
+          'moderado', count(*) filter (where nivel_dependencia = 'moderado' and estado in ('activo','hospitalizado')),
+          'severo', count(*) filter (where nivel_dependencia = 'severo' and estado in ('activo','hospitalizado')),
+          'total_dependencia', count(*) filter (where nivel_dependencia = 'total' and estado in ('activo','hospitalizado')),
+          'sin_clasificar', count(*) filter (where nivel_dependencia is null and estado in ('activo','hospitalizado'))
+        ),
+        'por_sexo', jsonb_build_object(
+          'femenino', count(*) filter (where sexo = 'femenino' and estado in ('activo','hospitalizado')),
+          'masculino', count(*) filter (where sexo = 'masculino' and estado in ('activo','hospitalizado')),
+          'otro', count(*) filter (where coalesce(sexo,'') not in ('femenino','masculino') and estado in ('activo','hospitalizado'))
+        )
+      )
+      from public.residentes where eleam_id = v_eleam_id
+    ),
+    'personal', (
+      select jsonb_build_object(
+        'total_activos', count(*) filter (where activo),
+        'por_tipo_dotacion', (
+          select coalesce(jsonb_object_agg(tipo_dotacion, cnt), '{}'::jsonb)
+          from (
+            select tipo_dotacion, count(*) as cnt
+            from public.staff_members
+            where eleam_id = v_eleam_id and activo
+            group by tipo_dotacion
+          ) t
+        )
+      )
+      from public.staff_members where eleam_id = v_eleam_id
+    ),
+    'capacitacion', (
+      select jsonb_build_object(
+        'horas_anio_actual', coalesce(sum(horas) filter (
+          where extract(year from fecha) = extract(year from current_date)
+        ), 0),
+        'registros_anio_actual', count(*) filter (
+          where extract(year from fecha) = extract(year from current_date)
+        )
+      )
+      from public.staff_training_records where eleam_id = v_eleam_id
+    ),
+    'simulacros', (
+      select jsonb_build_object(
+        'total_anio_actual', count(*) filter (
+          where extract(year from fecha_realizado) = extract(year from current_date)
+        ),
+        'ultimo', max(fecha_realizado)
+      )
+      from public.simulacros where eleam_id = v_eleam_id
+    ),
+    'reclamos', (
+      select jsonb_build_object(
+        'abiertos', count(*) filter (where estado in ('abierto','en_proceso')),
+        'resueltos_anio_actual', count(*) filter (
+          where estado = 'resuelto'
+            and extract(year from creado_en) = extract(year from current_date)
+        )
+      )
+      from public.reclamos_sugerencias where eleam_id = v_eleam_id
+    ),
+    'generado_en', now()
+  ) into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.generate_senama_report_data() from public;
+grant execute on function public.generate_senama_report_data() to authenticated;
+
+-- ============================================================
+-- TRIGGERS: actualizado_en para tablas fase 3
+-- ============================================================
+drop trigger if exists trg_trans_brechas_updated_at on public.transitorio_brechas;
+create trigger trg_trans_brechas_updated_at
+  before update on public.transitorio_brechas
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_protocolos_eleam_updated_at on public.protocolos_eleam;
+create trigger trg_protocolos_eleam_updated_at
+  before update on public.protocolos_eleam
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_reportes_senama_updated_at on public.reportes_senama;
+create trigger trg_reportes_senama_updated_at
+  before update on public.reportes_senama
+  for each row execute function public.set_updated_at();
+
+-- ============================================================
+-- RLS: Tablas DS20 Fase 3
+-- ============================================================
+alter table public.transitorio_brechas enable row level security;
+alter table public.protocolos_eleam    enable row level security;
+alter table public.reportes_senama     enable row level security;
+
+-- Idempotencia: re-ejecutar el esquema debe poder recrear estas politicas.
+drop policy if exists "trans_brechas_select" on public.transitorio_brechas;
+drop policy if exists "trans_brechas_insert" on public.transitorio_brechas;
+drop policy if exists "trans_brechas_update" on public.transitorio_brechas;
+drop policy if exists "trans_brechas_delete" on public.transitorio_brechas;
+drop policy if exists "protocolos_select" on public.protocolos_eleam;
+drop policy if exists "protocolos_insert" on public.protocolos_eleam;
+drop policy if exists "protocolos_update" on public.protocolos_eleam;
+drop policy if exists "protocolos_delete" on public.protocolos_eleam;
+drop policy if exists "reportes_senama_select" on public.reportes_senama;
+drop policy if exists "reportes_senama_insert" on public.reportes_senama;
+drop policy if exists "reportes_senama_update" on public.reportes_senama;
+drop policy if exists "reportes_senama_delete" on public.reportes_senama;
+
+-- transitorio_brechas
+create policy "trans_brechas_select" on public.transitorio_brechas
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+  );
+create policy "trans_brechas_insert" on public.transitorio_brechas
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_cumplimiento')
+  );
+create policy "trans_brechas_update" on public.transitorio_brechas
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_cumplimiento')
+  );
+create policy "trans_brechas_delete" on public.transitorio_brechas
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- protocolos_eleam
+create policy "protocolos_select" on public.protocolos_eleam
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+  );
+create policy "protocolos_insert" on public.protocolos_eleam
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_cumplimiento')
+  );
+create policy "protocolos_update" on public.protocolos_eleam
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_cumplimiento')
+  );
+create policy "protocolos_delete" on public.protocolos_eleam
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- reportes_senama
+create policy "reportes_senama_select" on public.reportes_senama
+  for select using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    or public.is_superadmin()
+  );
+create policy "reportes_senama_insert" on public.reportes_senama
+  for insert with check (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_cumplimiento')
+  );
+create policy "reportes_senama_update" on public.reportes_senama
+  for update using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('gestionar_cumplimiento')
+  );
+create policy "reportes_senama_delete" on public.reportes_senama
+  for delete using (
+    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    and public.my_rol() = 'admin_eleam'
+  );
+
+-- Grants para tablas fase 3
+grant select, insert, update, delete on public.transitorio_brechas to authenticated;
+grant select, insert, update, delete on public.protocolos_eleam    to authenticated;
+grant select, insert, update, delete on public.reportes_senama     to authenticated;

@@ -3,6 +3,19 @@ import { formatDateOnly } from "../../utils/dateUtils";
 import { ASSESSMENT_LABEL, MOTIVO_LABEL } from "./clinicalAssessmentRules";
 
 export default function ClinicalAssessmentHistory({ isOpen, onClose, tipo, items = [] }) {
+  const renderScore = (item) => {
+    if (tipo === "barthel") {
+      return <>{item.puntaje}<span className="text-xs text-slate-400">/100</span> · {item.resultado}</>;
+    }
+    if (tipo === "mna") {
+      return <>{item.detalle?._puntaje_decimal ?? item.puntaje}<span className="text-xs text-slate-400">/30</span> · {item.resultado}</>;
+    }
+    if (tipo === "mmse") {
+      return <>{item.puntaje}<span className="text-xs text-slate-400">/30</span> · {item.resultado}</>;
+    }
+    return item.resultado;
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -20,9 +33,7 @@ export default function ClinicalAssessmentHistory({ isOpen, onClose, tipo, items
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">
-                    {tipo === "barthel"
-                      ? <>{item.puntaje}<span className="text-xs text-slate-400">/100</span> · {item.resultado}</>
-                      : item.resultado}
+                    {renderScore(item)}
                   </p>
                   <p className="text-xs text-slate-500">
                     {formatDateOnly(item.fecha_evaluacion)} · {MOTIVO_LABEL[item.motivo] ?? item.motivo}

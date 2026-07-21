@@ -37,21 +37,6 @@ describe("validateAdverseEventForm", () => {
     expect(r.errors).toHaveProperty("categoria");
   });
 
-  it("exige resumen_familiar cuando visible_familiar es true", () => {
-    const r = validateAdverseEventForm({ ...base, visible_familiar: true, resumen_familiar: "" });
-    expect(r.ok).toBe(false);
-    expect(r.errors).toHaveProperty("resumen_familiar");
-  });
-
-  it("permite visible_familiar con resumen no vacío", () => {
-    const r = validateAdverseEventForm({
-      ...base,
-      visible_familiar: true,
-      resumen_familiar: "Se informó del incidente sin lesiones a la familia.",
-    });
-    expect(r.ok).toBe(true);
-  });
-
   it("exige medio_notificacion_familia cuando notificado_familia es true", () => {
     const r = validateAdverseEventForm({ ...base, notificado_familia: true });
     expect(r.ok).toBe(false);

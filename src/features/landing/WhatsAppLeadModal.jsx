@@ -47,7 +47,16 @@ export default function WhatsAppLeadModal({ isOpen, onClose, source = "floating"
     }
   }, [isOpen, source]);
 
-  const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
+  const set = (field) => (e) => {
+    const { value } = e.target;
+    setForm((p) => ({ ...p, [field]: value }));
+    setErrors((p) => {
+      if (!p[field]) return p;
+      const next = { ...p };
+      delete next[field];
+      return next;
+    });
+  };
   const closeModal = () => {
     if (status === "success") resetFormDraft();
     onClose();

@@ -37,6 +37,13 @@ export const PUBLIC_ASSETS = {
     width: 1600,
     height: 900,
   },
+  seremi: {
+    src: comparisonWebp,
+    publicSrc: "/marketing/excel-papel-vs-fichaeleam-dashboard.png",
+    alt: "Carpeta SEREMI digital de FichaEleam frente a planillas y carpetas en papel",
+    width: 1600,
+    height: 900,
+  },
   shift: {
     src: shiftWebp,
     publicSrc: "/marketing/entrega-turno-equipo-clinico-dashboard.png",

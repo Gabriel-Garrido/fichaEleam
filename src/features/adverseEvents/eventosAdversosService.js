@@ -6,18 +6,10 @@ const EVENT_SELECT = `
   categoria, severidad, descripcion, causas_probables, acciones_inmediatas, testigos,
   estado, requiere_seguimiento, fecha_compromiso_cierre,
   notificado_familia, fecha_notificacion_familia, notificado_por, medio_notificacion_familia,
-  visible_familiar, resumen_familiar,
   registrado_por, cerrado_por, fecha_cierre, conclusiones,
   creado_en, actualizado_en,
   residente:residentes(id, nombre, apellido),
   registrador:profiles!eventos_adversos_registrado_por_fkey(id, nombre)
-`;
-
-const FAMILIAR_SELECT = `
-  id, residente_id, fecha_evento, hora_evento, turno, lugar,
-  categoria, severidad, visible_familiar, resumen_familiar,
-  notificado_familia, fecha_notificacion_familia, medio_notificacion_familia,
-  estado, creado_en
 `;
 
 const ACCION_SELECT = `
@@ -43,7 +35,6 @@ export async function listAdverseEvents({
   desde = null,
   hasta = null,
   soloPendientesCierre = false,
-  soloVisiblesFamilia = false,
   limit = 200,
 } = {}) {
   let q = supabase
@@ -60,7 +51,6 @@ export async function listAdverseEvents({
   if (desde)       q = q.gte("fecha_evento", desde);
   if (hasta)       q = q.lte("fecha_evento", hasta);
   if (soloPendientesCierre) q = q.in("estado", ["registrado", "en_revision", "en_seguimiento"]);
-  if (soloVisiblesFamilia)  q = q.eq("visible_familiar", true);
   if (search) {
     const safe = String(search).trim().replace(/[,()]/g, " ");
     if (safe) {
@@ -242,19 +232,4 @@ function sanitizeDetalle(detalle) {
     else out[k] = v;
   }
   return out;
-}
-
-// ─── Familiar portal ─────────────────────────────────────────────────────
-
-export async function listFamiliarAdverseEvents(residenteId, { limit = 50 } = {}) {
-  if (!residenteId) return [];
-  const { data, error } = await supabase
-    .from("eventos_adversos")
-    .select(FAMILIAR_SELECT)
-    .eq("residente_id", residenteId)
-    .eq("visible_familiar", true)
-    .order("fecha_evento", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data ?? [];
 }

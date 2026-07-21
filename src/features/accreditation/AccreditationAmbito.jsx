@@ -208,7 +208,7 @@ export default function AccreditationAmbito() {
         <h1 className="text-xl font-bold mb-2">Ámbito no encontrado</h1>
         <button
           type="button"
-          onClick={() => navigate("/accreditation")}
+          onClick={() => navigate("/cumplimiento/seremi")}
           className="text-sm text-teal-700 hover:underline"
         >
           Volver a la Carpeta SEREMI
@@ -222,7 +222,7 @@ export default function AccreditationAmbito() {
       <FeatureCoach featureId="accreditation-ambito" standalone />
       <button
         type="button"
-        onClick={() => navigate("/accreditation")}
+        onClick={() => navigate("/cumplimiento/seremi")}
         className="text-sm text-slate-500 hover:text-slate-800"
       >
         ← Volver a la Carpeta SEREMI
@@ -257,7 +257,7 @@ export default function AccreditationAmbito() {
       <FocusRequirement
         requisito={nextRequisito}
         total={requisitos.length}
-        onOpen={() => navigate(`/accreditation/requisito/${nextRequisito.id}`)}
+        onOpen={() => navigate(`/cumplimiento/seremi/requisito/${nextRequisito.id}`)}
       />
 
       {/* Filtros */}
@@ -298,7 +298,7 @@ export default function AccreditationAmbito() {
               <RequisitoRow
                 key={re.id}
                 re={re}
-                onClick={() => navigate(`/accreditation/requisito/${re.id}`)}
+                onClick={() => navigate(`/cumplimiento/seremi/requisito/${re.id}`)}
               />
             ))}
         </div>

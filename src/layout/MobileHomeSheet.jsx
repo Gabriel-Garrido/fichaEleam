@@ -25,7 +25,6 @@ function getGreeting() {
 const ROLE_THEME = {
   admin_eleam: { from: "from-teal-600", to: "to-teal-700", chip: "bg-teal-100 text-teal-800 ring-teal-200" },
   funcionario: { from: "from-violet-600", to: "to-violet-700", chip: "bg-violet-100 text-violet-800 ring-violet-200" },
-  familiar:    { from: "from-rose-500",   to: "to-rose-600",   chip: "bg-rose-100 text-rose-800 ring-rose-200" },
   superadmin:  { from: "from-slate-700",  to: "to-slate-900",  chip: "bg-slate-200 text-slate-800 ring-slate-300" },
 };
 

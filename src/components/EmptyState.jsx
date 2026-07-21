@@ -27,11 +27,11 @@ export default function EmptyState({
 
   return (
     <div
-      className={`flex flex-col items-center rounded-2xl border border-dashed text-center ${toneClasses} ${compact ? "px-4 py-6" : "px-6 py-10"} ${className}`}
+      className={`ui-empty-state flex flex-col items-center rounded-2xl border border-dashed text-center ${toneClasses} ${compact ? "px-4 py-6" : "px-6 py-10"} ${className}`}
       role="status"
     >
       {icon && (
-        <span className={`mb-3 grid h-12 w-12 place-items-center rounded-2xl ${iconWrapClasses}`} aria-hidden="true">
+        <span className={`ui-empty-state-icon mb-3 grid h-12 w-12 place-items-center rounded-2xl ${iconWrapClasses}`} aria-hidden="true">
           {icon}
         </span>
       )}

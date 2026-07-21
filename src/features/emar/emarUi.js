@@ -10,8 +10,6 @@ export const MEDICINE_STATUS_LABEL = {
 
 export const MEDICINE_FILTER_LABEL = {
   ahora: "Ahora",
-  pendientes: "Pendientes",
-  por_validar: "Por validar",
   completadas: "Completadas",
   todas: "Todas",
 };
@@ -36,7 +34,7 @@ export const DEFAULT_MEDICATION_INDICATION = {
   estado: "activo",
   es_controlado: false,
   tipo_controlado: "psicotropico",
-  requiere_stock: true,
+  requiere_stock: false,
   visible_familiar: false,
   resumen_familiar: "",
   instrucciones: "",
@@ -185,6 +183,8 @@ export function validateMedicationIndicationDraft(indication = {}, schedules = [
   const errors = {};
   if (!indication.medicamento_nombre?.trim()) errors.medicamento_nombre = "Medicamento obligatorio";
   if (!indication.dosis?.trim()) errors.dosis = "Dosis obligatoria";
+  if (!indication.prescriptor_nombre?.trim()) errors.prescriptor_nombre = "Identifica al prescriptor";
+  if (!indication.fecha_inicio) errors.fecha_inicio = "Indica la fecha de inicio";
   if (indication.visible_familiar && !indication.resumen_familiar?.trim()) {
     errors.resumen_familiar = "Agrega un resumen antes de publicar a familia";
   }

@@ -2,9 +2,9 @@
 //
 // Body: { profile_id: uuid }
 //
-// Elimina un usuario (funcionario o familiar) del ELEAM del admin.
+// Elimina un funcionario del ELEAM del admin.
 // Requiere Admin API (service role) para borrar de auth.users.
-// El CASCADE en profiles y familiar_residentes limpia el resto.
+// El CASCADE de profiles limpia permisos y referencias dependientes.
 //
 // Reglas:
 //   • Solo admin_eleam puede eliminar.
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "No puedes eliminarte a ti mismo" }, 403);
     }
 
-    // Eliminar de auth.users — CASCADE limpia profiles, familiar_residentes, funcionario_permisos
+    // Eliminar de auth.users — CASCADE limpia profiles y funcionario_permisos.
     const { error: deleteError } = await sb.auth.admin.deleteUser(profileId);
     if (deleteError) {
       console.error("delete-staff-user error:", deleteError);

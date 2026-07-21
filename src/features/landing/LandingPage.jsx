@@ -57,9 +57,9 @@ const BENTO_FEATURES = [
   {
     col: "",
     icon: "users",
-    metric: "Tranquilidad para la familia",
-    title: "Portal para las familias",
-    text: "Cada familia ve cómo está su persona mayor con la información que el equipo decide compartir.",
+    metric: "Continuidad del cuidado",
+    title: "Entrega de turno trazable",
+    text: "El equipo recibe pendientes clínicos, medicamentos y tareas en un resumen operativo verificable.",
     tone: "emerald",
   },
 ];
@@ -68,14 +68,14 @@ const PAIN_POINTS = [
   "Carpetas y cuadernos repartidos entre turnos y habitaciones",
   "Documentos de la SEREMI que vencen sin que nadie avise",
   "Nunca se sabe quién registró o cambió algo, ni cuándo",
-  "Familias que llaman una y otra vez para saber cómo está su persona mayor",
+  "Pendientes clínicos que se pierden entre un turno y el siguiente",
 ];
 
 const SOLUTIONS = [
   "Toda la información en un solo lugar, desde el computador o el teléfono",
   "Avisos automáticos antes de que venza cada documento de la SEREMI",
   "Cada registro queda con el nombre de quién lo hizo y a qué hora",
-  "Un portal donde la familia ve lo que el equipo decide compartir",
+  "Una entrega de turno que reúne alertas, tareas y responsables",
 ];
 
 const ROLES = [
@@ -92,8 +92,8 @@ const ROLES = [
     icon: "pulse",
   },
   {
-    role: "Familias",
-    desc: "La información autorizada de su persona mayor y el registro de visitas.",
+    role: "Cumplimiento",
+    desc: "Evidencias, vencimientos, brechas y preparación para fiscalización en un solo flujo.",
     tone: "emerald",
     icon: "users",
   },
@@ -111,13 +111,13 @@ const PLAN_FEATURES = [
   "Signos vitales con alertas",
   "Entrega de turno y observaciones",
   "Medicamentos y plan de cuidado",
-  "Portal para las familias incluido",
+  "Permisos granulares para el equipo",
 ];
 
 const FAQ_ITEMS = [
   {
     q: "¿Qué es FichaEleam?",
-    a: "FichaEleam es un software web para residencias de personas mayores (ELEAM) en Chile. Reúne la ficha clínica, los signos vitales, las observaciones, la entrega de turno, los medicamentos, el portal para las familias y la Carpeta SEREMI (Decreto N°20) en un solo lugar.",
+    a: "FichaEleam es un software web para residencias de personas mayores (ELEAM) en Chile. Reúne la ficha clínica, los signos vitales, las observaciones, la entrega de turno, los medicamentos y la Carpeta SEREMI (Decreto N°20) en un solo lugar.",
   },
   {
     q: "¿Me ayuda con la fiscalización de la SEREMI?",
@@ -125,7 +125,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "¿Cuánto cuesta?",
-    a: "Los planes son mensuales por residencia y parten en $50.000 + IVA al mes para hasta 14 residentes. Las familias autorizadas no pagan nada adicional.",
+    a: "Los planes son mensuales por residencia y parten en $50.000 + IVA al mes para hasta 14 residentes y 10 funcionarios.",
   },
   {
     q: "¿Cómo funciona la prueba gratis?",
@@ -385,7 +385,7 @@ export default function LandingPage() {
             tone="soft"
             eyebrow="Cada persona ve lo que necesita"
             title="Pensado para el ritmo real de una residencia"
-            description="Dirección, equipo de cuidado y familias entran directo a lo suyo, sin perderse en menús que no usan."
+            description="Dirección, equipo de cuidado y responsables de cumplimiento entran directo a lo suyo, sin perderse en menús que no usan."
           >
             <div className="grid items-center gap-8 lg:grid-cols-[0.9fr_1.1fr]">
               <div className="grid gap-4">
@@ -444,7 +444,7 @@ export default function LandingPage() {
             tone="soft"
             eyebrow="Precios"
             title="Un plan por residencia, todo incluido"
-            description="Todos los módulos vienen en cada plan. Las familias autorizadas no pagan nada adicional."
+            description="Todos los módulos operativos vienen en cada plan; solo cambian los cupos de residentes y funcionarios."
             center
           >
             <Reveal className="mx-auto mb-8 max-w-3xl rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">

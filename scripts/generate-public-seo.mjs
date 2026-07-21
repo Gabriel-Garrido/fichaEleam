@@ -13,6 +13,12 @@ import {
   PUBLIC_ROUTES,
 } from "../src/content/decreto20Eleam.js";
 import { DOTACION_META, DOTACION_REGLAS, calcularDotacion } from "../src/content/dotacionRules.js";
+import {
+  AUTOEVALUACION_FAQ,
+  AUTOEVALUACION_ITEMS,
+  AUTOEVALUACION_META,
+} from "../src/content/autoevaluacionDs20.js";
+import { PLAZOS_FAQ, PLAZOS_HITOS, PLAZOS_META } from "../src/content/plazosDecreto20.js";
 
 const ORIGIN = "https://fichaeleam.cl";
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +38,7 @@ const MARKETING_IMAGES = {
 
 const BASE_TITLE = "FichaEleam · Software para ELEAM en Chile";
 const BASE_DESCRIPTION =
-  "FichaEleam digitaliza la gestión clínica, documental y operativa de ELEAM en Chile: fichas, signos vitales, observaciones, Carpeta SEREMI DS 20 y portal familiar.";
+  "FichaEleam digitaliza la gestión clínica, documental y operativa de ELEAM en Chile: fichas, signos vitales, observaciones, medicamentos y Carpeta SEREMI DS 20.";
 
 function absoluteUrl(value = "") {
   if (!value) return `${ORIGIN}${MARKETING_IMAGES.home}`;
@@ -341,6 +347,17 @@ function renderPage(template, { path, title, description, type = "website", json
   return html.replace('<div id="root"></div>', hydratedRoot);
 }
 
+// Sincroniza la lista blanca del detector de ruta pública en index.html con
+// PUBLIC_ROUTES. Evita que, al agregar una ruta pública, el HTML prerenderizado
+// quede oculto tras el spinner de carga (data-fichaeleam-app-route) por olvido.
+function injectPublicPathList(template) {
+  const paths = JSON.stringify(PUBLIC_ROUTES.map((route) => route.path));
+  if (!/var publicPaths = \[[\s\S]*?\];/.test(template)) {
+    throw new Error("index.html no contiene la lista 'var publicPaths = [...]' esperada por el prerender SEO.");
+  }
+  return template.replace(/var publicPaths = \[[\s\S]*?\];/, `var publicPaths = ${paths};`);
+}
+
 function writeRoute(routePath, html) {
   if (routePath === "/") {
     writeFileSync(join(DIST, "index.html"), html);
@@ -378,7 +395,7 @@ function buildLandingHtml() {
         <li><strong>Observaciones de turno</strong>: 12 categor&iacute;as con seguimiento obligatorio (ca&iacute;das, medicamentos, alimentaci&oacute;n, higiene, etc.).</li>
         <li><strong>Carpeta SEREMI DS 20</strong>: matriz por art&iacute;culos, evidencia requerida, criticidad, estados fiscalizables y alertas de vencimiento.</li>
         <li><strong>eMAR / Kardex electr&oacute;nico</strong>: administraci&oacute;n de medicamentos por turno con historial inmutable.</li>
-        <li><strong>Portal familiar</strong>: cada familiar autorizado ve solo a su residente: signos recientes y registro de visitas.</li>
+        <li><strong>Entrega de turno</strong>: pendientes clínicos, medicamentos y tareas con trazabilidad por responsable.</li>
         <li><strong>Gesti&oacute;n de habitaciones y camas</strong>: inventario, ocupaci&oacute;n y traslados con historial.</li>
       </ul>
 
@@ -427,7 +444,7 @@ function buildPaymentHtml() {
         <li>Carpeta SEREMI DS 20 con matriz por art&iacute;culos, criticidad, evidencia, vencimientos y modo fiscalizaci&oacute;n.</li>
         <li>eMAR (kardex electr&oacute;nico) e historial inmutable de administraci&oacute;n de medicamentos.</li>
         <li>Plan de cuidado con tareas por turno.</li>
-        <li>Portal familiar restringido al residente vinculado.</li>
+        <li>Entrega de turno con alertas, tareas y responsables.</li>
         <li>Permisos granulares por funcionario.</li>
         <li>Importaci&oacute;n masiva v&iacute;a Excel.</li>
         <li>Soporte en espa&ntilde;ol por correo y WhatsApp.</li>
@@ -539,6 +556,85 @@ function calculatorAppJsonLd() {
   };
 }
 
+function buildAutoevaluacionHtml() {
+  const items = AUTOEVALUACION_ITEMS.map((item) => (
+    `<tr><td>${escapeHtml(item.ambito)}</td><td>${escapeHtml(item.articulo)}</td><td>${escapeHtml(item.pregunta)}</td></tr>`
+  )).join("");
+  return `<main class="seo-prerender">
+      <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Autoevaluaci&oacute;n Decreto N&deg;20</nav>
+      <h1>Autoevaluaci&oacute;n Decreto N&deg;20 para ELEAM</h1>
+      <p class="article-summary">${escapeHtml(AUTOEVALUACION_META.descripcion)} Test gratuito, an&oacute;nimo y sin registro: responde 10 preguntas y obt&eacute;n tu porcentaje de preparaci&oacute;n con las brechas a cerrar primero.</p>
+      <img src="${MARKETING_IMAGES.seremi}" alt="Comparativa de carpeta en papel versus Carpeta SEREMI digital de FichaEleam" loading="eager">
+
+      <h2>Los 10 requisitos que revisa el test</h2>
+      <table>
+        <thead><tr><th>&Aacute;mbito</th><th>Art&iacute;culo</th><th>Pregunta</th></tr></thead>
+        <tbody>${items}</tbody>
+      </table>
+
+      <h2>C&oacute;mo interpretar el resultado</h2>
+      <ul>
+        <li><strong>80% o m&aacute;s</strong>: buen nivel de preparaci&oacute;n; concentra el esfuerzo en cerrar los pendientes y mantener la evidencia vigente.</li>
+        <li><strong>50% a 79%</strong>: preparaci&oacute;n parcial; prioriza las brechas de mayor riesgo antes de una fiscalizaci&oacute;n.</li>
+        <li><strong>Menos de 50%</strong>: preparaci&oacute;n insuficiente; arma un plan de adecuaci&oacute;n con responsables y plazos lo antes posible.</li>
+      </ul>
+
+      <p>${escapeHtml(AUTOEVALUACION_META.disclaimer)}</p>
+
+      <p><a href="/plazos-decreto-20">Plazos del Decreto N&deg;20</a> &middot; <a href="/calculadora-dotacion-eleam">Calculadora de dotaci&oacute;n</a> &middot; <a href="/acreditacion-seremi">Gu&iacute;a acreditaci&oacute;n SEREMI</a> &middot; <a href="/contacto">Contacto</a></p>
+    </main>`;
+}
+
+function autoevaluacionAppJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "@id": `${routeUrl("/autoevaluacion-decreto-20")}#app`,
+    name: AUTOEVALUACION_META.nombre,
+    description: AUTOEVALUACION_META.descripcion,
+    url: routeUrl("/autoevaluacion-decreto-20"),
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    inLanguage: "es-CL",
+    isAccessibleForFree: true,
+    image: absoluteUrl(MARKETING_IMAGES.seremi),
+    offers: { "@type": "Offer", price: "0", priceCurrency: "CLP" },
+    publisher: { "@type": "Organization", name: "FichaEleam", url: `${ORIGIN}/` },
+  };
+}
+
+function buildPlazosHtml() {
+  const hitos = PLAZOS_HITOS.map((hito) => (
+    `<div class="card">
+        <h3>${escapeHtml(hito.titulo)}</h3>
+        <p><strong>${escapeHtml(hito.fechaLegible)}</strong></p>
+        <p>${escapeHtml(hito.descripcion)}</p>
+        <ul>${hito.acciones.map((accion) => `<li>${escapeHtml(accion)}</li>`).join("")}</ul>
+      </div>`
+  )).join("");
+  return `<main class="seo-prerender">
+      <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Plazos del Decreto N&deg;20</nav>
+      <h1>Plazos del Decreto N&deg;20 para ELEAM</h1>
+      <p class="article-summary">El Decreto N&deg;20 del MINSAL rige desde el 1 de octubre de 2025. Los ELEAM existentes tienen plazo general de adecuaci&oacute;n hasta el 1 de octubre de 2028 (3 a&ntilde;os) y hasta el 1 de octubre de 2030 (5 a&ntilde;os) para la certificaci&oacute;n de prevenci&oacute;n y protecci&oacute;n contra incendios.</p>
+      <img src="${MARKETING_IMAGES.seremi}" alt="Carpeta SEREMI digital de FichaEleam frente a carpetas en papel" loading="eager">
+
+      <h2>Los 3 hitos del per&iacute;odo transitorio</h2>
+      <div class="grid">${hitos}</div>
+
+      <h2>Por d&oacute;nde empezar la adecuaci&oacute;n</h2>
+      <ol>
+        <li>Diagnostica tus brechas con la <a href="/autoevaluacion-decreto-20">autoevaluaci&oacute;n gratuita de 10 preguntas</a>.</li>
+        <li>Prioriza por riesgo: dotaci&oacute;n, plan de emergencias y protocolos primero.</li>
+        <li>Asigna responsable y plazo a cada brecha en una matriz de adecuaci&oacute;n.</li>
+        <li>Mant&eacute;n la evidencia documental vigente y ordenada por art&iacute;culo del decreto.</li>
+      </ol>
+
+      <p>Fuente oficial: <a href="${escapeHtml(PLAZOS_META.fuenteUrl)}" rel="noopener nofollow" target="_blank">${escapeHtml(PLAZOS_META.fuenteNombre)}</a>.</p>
+
+      <p><a href="/autoevaluacion-decreto-20">Autoevaluaci&oacute;n Decreto N&deg;20</a> &middot; <a href="/acreditacion-seremi">Gu&iacute;a acreditaci&oacute;n SEREMI</a> &middot; <a href="/calculadora-dotacion-eleam">Calculadora de dotaci&oacute;n</a> &middot; <a href="/contacto">Contacto</a></p>
+    </main>`;
+}
+
 function buildSoftwareHtml() {
   return `<main class="seo-prerender">
       <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Software para ELEAM</nav>
@@ -555,7 +651,7 @@ function buildSoftwareHtml() {
         <li><strong>Medicamentos (eMAR)</strong>: kardex electr&oacute;nico con doble validaci&oacute;n y control de stock.</li>
         <li><strong>Carpeta SEREMI DS 20</strong>: matriz por art&iacute;culos con evidencias, criticidad, vigencias y modo fiscalizaci&oacute;n.</li>
         <li><strong>Acceso del equipo</strong>: simult&aacute;neo desde cualquier dispositivo.</li>
-        <li><strong>Acceso de familias</strong>: portal con signos recientes y visitas.</li>
+        <li><strong>Permisos del equipo</strong>: acceso granular según responsabilidades.</li>
         <li><strong>Auditor&iacute;a</strong>: cada cambio queda inmutable.</li>
         <li><strong>Backup</strong>: autom&aacute;tico en la nube.</li>
       </ul>
@@ -569,7 +665,7 @@ function buildSoftwareHtml() {
         <li>eMAR (kardex electr&oacute;nico) con stock por lote, receta, temperatura, gaveta, eliminaci&oacute;n y doble validaci&oacute;n.</li>
         <li>Carpeta SEREMI DS 20 con matriz por art&iacute;culos, evidencias, criticidad y transitorios.</li>
         <li>Habitaciones y camas con historial de ocupaci&oacute;n.</li>
-        <li>Portal familiar restringido por residente vinculado.</li>
+        <li>Trazabilidad clínica y operativa por usuario y fecha.</li>
         <li>Entrega de turno con resumen cl&iacute;nico, eMAR y pendientes.</li>
         <li>Permisos granulares por funcionario.</li>
         <li>Importaci&oacute;n masiva v&iacute;a Excel con validadores nativos.</li>
@@ -591,7 +687,7 @@ function buildSoftwareHtml() {
 function buildFaqHtml() {
   const sections = [
     { titulo: "Producto", items: [
-      ["&iquest;Qu&eacute; es FichaEleam?", "Software web especializado para ELEAM en Chile que centraliza ficha cl&iacute;nica, signos vitales, observaciones, programa integral, eMAR, habitaciones, portal familiar y Carpeta SEREMI DS 20."],
+      ["&iquest;Qu&eacute; es FichaEleam?", "Software web especializado para ELEAM en Chile que centraliza ficha cl&iacute;nica, signos vitales, observaciones, programa integral, eMAR, habitaciones y Carpeta SEREMI DS 20."],
       ["&iquest;En qu&eacute; se diferencia de un software gen&eacute;rico?", "Trae matriz DS 20 por art&iacute;culos, rangos cl&iacute;nicos para personas mayores, turnos ma&ntilde;ana/tarde/noche y manejo de controlados con doble validaci&oacute;n."],
       ["&iquest;Es web o de escritorio?", "Es web. Funciona en cualquier dispositivo con navegador moderno y conexi&oacute;n a internet."],
     ]},
@@ -694,7 +790,7 @@ function buildPostHtml(post, posts = []) {
 
       <aside class="card" aria-label="Sobre FichaEleam">
         <h2>FichaEleam &middot; Software para ELEAM en Chile</h2>
-        <p>Carpeta SEREMI DS 20, fichas cl&iacute;nicas digitales, signos vitales con alertas, eMAR, programa integral y portal familiar. Cuenta demo real con 30 d&iacute;as de prueba gratuita.</p>
+        <p>Carpeta SEREMI DS 20, fichas cl&iacute;nicas digitales, signos vitales con alertas, eMAR y programa integral. Cuenta demo real con 30 d&iacute;as de prueba gratuita.</p>
         <p><a href="/">Solicitar demo gratuito</a> &middot; <a href="/software-eleam">Ver software para ELEAM</a> &middot; <a href="/acreditacion-seremi">Gu&iacute;a SEREMI</a> &middot; <a href="/pago">Planes y precios</a> &middot; <a href="https://wa.me/56951187764">WhatsApp +56 9 5118 7764</a></p>
       </aside>
 
@@ -1008,6 +1104,8 @@ function buildSitemap(posts) {
     "/acreditacion-seremi": { image: MARKETING_IMAGES.seremi, imageTitle: "Carpeta SEREMI DS 20 para ELEAM" },
     "/software-eleam": { image: MARKETING_IMAGES.software, imageTitle: "Dashboard de FichaEleam para gestion clinica" },
     "/calculadora-dotacion-eleam": { image: MARKETING_IMAGES.shift, imageTitle: "Calculadora de dotacion de personal para ELEAM DS 20" },
+    "/autoevaluacion-decreto-20": { image: MARKETING_IMAGES.seremi, imageTitle: "Autoevaluacion Decreto N 20 para ELEAM" },
+    "/plazos-decreto-20": { image: MARKETING_IMAGES.seremi, imageTitle: "Plazos del periodo transitorio del Decreto N 20" },
     "/blog": { image: MARKETING_IMAGES.shift, imageTitle: "Blog FichaEleam para gestion de ELEAM" },
     "/preguntas-frecuentes": { image: MARKETING_IMAGES.shift, imageTitle: "Preguntas frecuentes de FichaEleam" },
     "/pago": { image: MARKETING_IMAGES.software, imageTitle: "Planes y precios de FichaEleam" },
@@ -1085,7 +1183,7 @@ FichaEleam esta disenado para apoyar la gestion y evidencia documental exigida p
 ${planLines}
 - Institucional (35+ residentes): cotizacion personalizada por WhatsApp, cupos a medida.
 
-Los residentes activos y hospitalizados consumen cupo. Residentes egresados o fallecidos no consumen cupo. Los funcionarios creados y las invitaciones pendientes de funcionarios consumen cupo; familiares no consumen cupo de funcionarios. Pago mensual con MercadoPago.
+Los residentes activos y hospitalizados consumen cupo. Residentes egresados o fallecidos no consumen cupo. Los funcionarios creados y las invitaciones pendientes de funcionarios consumen cupo. Pago mensual con MercadoPago.
 
 ## Funcionalidades principales
 
@@ -1097,7 +1195,7 @@ Los residentes activos y hospitalizados consumen cupo. Residentes egresados o fa
 - Gestion de habitaciones y camas con historial de ocupacion
 - eMAR (kardex electronico), stock, receta, frio, temperatura, gaveta, eliminacion y control
 - Eventos adversos y eventos criticos con seguimiento
-- Portal para familias del residente con visitas y signos recientes
+- Entrega de turno con pendientes clínicos, medicamentos y tareas
 - Gestion de equipo con permisos granulares por funcionario
 - Importacion masiva via Excel con validadores nativos
 - Cuenta demo real con 30 dias de prueba gratuita
@@ -1113,6 +1211,27 @@ ${routeLines}
 ## Articulos publicados
 
 ${postLines}
+
+## Herramientas gratuitas (sin registro)
+
+- Autoevaluacion Decreto N 20 (${ORIGIN}/autoevaluacion-decreto-20/): test de 10 preguntas que mide la preparacion de un ELEAM ante una fiscalizacion SEREMI. Cubre autorizacion sanitaria, dotacion, capacitacion, plan de emergencias, protocolos, consentimiento de ingreso, evaluaciones geriatricas, red de salud, reclamos y evidencia documental. Entrega porcentaje de preparacion y brechas con su articulo del decreto.
+- Calculadora de dotacion (${ORIGIN}/calculadora-dotacion-eleam/): estima los cuidadores minimos por turno segun los articulos 15, 16 y 17 del Decreto N 20 (1 cuidador diurno por cada 8 residentes con dependencia, 1 nocturno por cada 12, 1 por cada 20 autovalentes por turno, minimo 2 cuidadores nocturnos siempre) y la brecha contra la dotacion actual.
+- Plazos del Decreto N 20 (${ORIGIN}/plazos-decreto-20/): fechas oficiales del periodo transitorio con cuenta regresiva y plan de adecuacion sugerido.
+- Guia acreditacion SEREMI (${ORIGIN}/acreditacion-seremi/): requisitos del DS 20 ordenados por ambito y articulo, con evidencias y vencimientos.
+
+## Plazos del periodo transitorio del Decreto N 20
+
+- 1 de octubre de 2025: entrada en vigencia del decreto. Los ELEAM nuevos deben cumplirlo completo desde el primer dia.
+- 1 de octubre de 2028: fin del plazo general de adecuacion (3 anos) para ELEAM existentes: dotacion, protocolos, plan de emergencias, registros y documentacion.
+- 1 de octubre de 2030: plazo limite de la certificacion de prevencion y proteccion contra incendios (5 anos).
+
+## Preguntas frecuentes clave
+
+- Cuando entro en vigencia el Decreto N 20? El 1 de octubre de 2025; desde esa fecha es el reglamento vigente para todos los ELEAM de Chile.
+- Cuanto plazo tienen los ELEAM existentes para adecuarse? 3 anos (hasta el 1 de octubre de 2028) en general, y 5 anos (hasta el 1 de octubre de 2030) para la certificacion contra incendios.
+- Cual es la dotacion minima nocturna de un ELEAM? Al menos 2 cuidadores en horario nocturno, cualquiera sea el numero de residentes (articulo 17).
+- Que exige el decreto sobre reclamos? Un registro codificado de reclamos y sugerencias, visible y de facil consulta, con folio y respuesta (articulo 27).
+- Que protocolos exige el articulo 25? Ingreso y egreso, plan de induccion y capacitacion anual, plan de emergencias y desastres con simulacros, protocolos de urgencias medicas y fallecimiento, programa de atencion integral y plan de integracion sociocomunitaria.
 
 ## Marco regulatorio (Chile)
 
@@ -1170,6 +1289,8 @@ ErrorDocument 404 /404.html
   RewriteEngine On
   RewriteCond %{HTTPS} off
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  RewriteCond %{HTTP_HOST} ^www\\.(.+)$ [NC]
+  RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
 
   RewriteBase /
   RewriteRule ^index\\.html$ - [L]
@@ -1212,7 +1333,7 @@ function main() {
   if (!existsSync(OG_PUBLIC)) createOgImage(OG_PUBLIC);
   copyFileSync(OG_PUBLIC, OG_DIST);
 
-  const template = readFileSync(TEMPLATE_PATH, "utf8");
+  const template = injectPublicPathList(readFileSync(TEMPLATE_PATH, "utf8"));
   const posts = loadBlogPosts();
   cleanPrerenderTargets();
 
@@ -1286,6 +1407,33 @@ function main() {
       calculatorAppJsonLd(),
     ],
     rootHtml: buildCalculadoraHtml(),
+  }));
+
+  writeRoute("/autoevaluacion-decreto-20", renderPage(template, {
+    path: "/autoevaluacion-decreto-20",
+    title: "Autoevaluación Decreto N°20 para ELEAM · Test gratuito",
+    description: "Responde 10 preguntas y mide qué tan preparado está tu ELEAM ante una fiscalización SEREMI según el Decreto N°20: dotación, emergencias, reclamos y evidencia.",
+    image: MARKETING_IMAGES.seremi,
+    imageAlt: "Comparativa de carpeta en papel versus Carpeta SEREMI digital de FichaEleam",
+    jsonLd: [
+      breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Autoevaluación Decreto N°20", url: "/autoevaluacion-decreto-20" }]),
+      faqPageJsonLd(AUTOEVALUACION_FAQ),
+      autoevaluacionAppJsonLd(),
+    ],
+    rootHtml: buildAutoevaluacionHtml(),
+  }));
+
+  writeRoute("/plazos-decreto-20", renderPage(template, {
+    path: "/plazos-decreto-20",
+    title: "Plazos del Decreto N°20: cuándo debe adecuarse tu ELEAM",
+    description: "Fechas clave del Decreto N°20 para ELEAM: vigencia desde octubre 2025, adecuación general hasta octubre 2028 y certificación contra incendios hasta octubre 2030.",
+    image: MARKETING_IMAGES.seremi,
+    imageAlt: "Carpeta SEREMI digital de FichaEleam frente a carpetas en papel",
+    jsonLd: [
+      breadcrumbJsonLd([{ name: "Inicio", url: "/" }, { name: "Plazos del Decreto N°20", url: "/plazos-decreto-20" }]),
+      faqPageJsonLd(PLAZOS_FAQ),
+    ],
+    rootHtml: buildPlazosHtml(),
   }));
 
   writeRoute("/preguntas-frecuentes", renderPage(template, {

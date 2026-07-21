@@ -1,26 +1,14 @@
 import {
-  emailField,
   optionalDate,
   optionalRut,
   optionalText,
   parseWithSchema,
-  phoneField,
   requiredDate,
   requiredText,
   selectField,
   splitCommaList,
   z,
 } from "../../utils/formValidation";
-
-export const PARENTESCOS = [
-  ["", "Seleccionar parentesco"],
-  ["hijo/a", "Hijo/a"],
-  ["conyuge", "Cónyuge / Pareja"],
-  ["hermano/a", "Hermano/a"],
-  ["nieto/a", "Nieto/a"],
-  ["sobrino/a", "Sobrino/a"],
-  ["otro", "Otro"],
-];
 
 export const GRUPOS_SANGUINEOS = [
   ["", "No especificado"],
@@ -43,17 +31,13 @@ export const RESIDENT_EMPTY = {
   diagnostico_principal: "",
   alergias: "",
   grupo_sanguineo: "",
+  nivel_dependencia: "",
+  condicion_salud_grave: false,
+  condicion_salud_grave_detalle: "",
   fecha_ingreso: new Date().toISOString().split("T")[0],
   estado: "activo",
   fecha_egreso: "",
   motivo_egreso: "",
-};
-
-export const FAMILY_EMPTY = {
-  nombre: "",
-  parentesco: "",
-  email: "",
-  telefono: "",
 };
 
 const SEXO = ["masculino", "femenino", "otro"];
@@ -61,6 +45,7 @@ const CIVIL = ["soltero", "casado", "viudo", "divorciado", "otro"];
 const ESTADOS_CREATE = ["activo", "hospitalizado"];
 const ESTADOS_EDIT = ["activo", "hospitalizado", "egresado", "fallecido"];
 const SANGRE = GRUPOS_SANGUINEOS.map(([value]) => value).filter(Boolean);
+const DEPENDENCIA = ["autovalente", "leve", "moderado", "severo", "total"];
 
 function localNoon(value) {
   if (!value) return null;
@@ -83,6 +68,9 @@ export function residentSchema({ isEditing = false } = {}) {
     diagnostico_principal: optionalText("Diagnóstico principal", 500),
     alergias: z.string().optional().nullable().transform(splitCommaList),
     grupo_sanguineo: selectField("Grupo sanguíneo", SANGRE),
+    nivel_dependencia: selectField("Nivel de dependencia", DEPENDENCIA),
+    condicion_salud_grave: z.boolean().optional().default(false),
+    condicion_salud_grave_detalle: optionalText("Detalle condición de salud grave", 500),
     fecha_ingreso: requiredDate("Fecha de ingreso"),
     estado: selectField("Estado", allowedStates, { required: true }),
     fecha_egreso: optionalDate("Fecha de egreso"),
@@ -100,6 +88,9 @@ export function residentSchema({ isEditing = false } = {}) {
     if (egreso && ingreso && egreso < ingreso) {
       ctx.addIssue({ code: "custom", path: ["fecha_egreso"], message: "La fecha de egreso no puede ser anterior al ingreso." });
     }
+    if (egreso && egreso > today) {
+      ctx.addIssue({ code: "custom", path: ["fecha_egreso"], message: "La fecha de egreso no puede ser futura." });
+    }
 
     if (["egresado", "fallecido"].includes(value.estado)) {
       if (!value.fecha_egreso) {
@@ -111,22 +102,15 @@ export function residentSchema({ isEditing = false } = {}) {
     } else if (!isEditing && !ESTADOS_CREATE.includes(value.estado)) {
       ctx.addIssue({ code: "custom", path: ["estado"], message: "El alta solo permite residentes activos u hospitalizados." });
     }
+
+    if (value.condicion_salud_grave && !value.condicion_salud_grave_detalle) {
+      ctx.addIssue({ code: "custom", path: ["condicion_salud_grave_detalle"], message: "Describe la condición que requiere revisión técnica." });
+    }
   });
 }
 
-export const familySchema = z.object({
-  nombre: requiredText("Nombre del familiar", 120),
-  parentesco: selectField("Parentesco", PARENTESCOS.map(([value]) => value).filter(Boolean), { required: true }),
-  email: emailField("Correo del familiar"),
-  telefono: phoneField("Teléfono del familiar"),
-});
-
 export function validateResidentForm(form, options) {
   return parseWithSchema(residentSchema(options), form);
-}
-
-export function validateFamilyForm(form) {
-  return parseWithSchema(familySchema, form);
 }
 
 export function residentToForm(resident = {}) {
@@ -142,5 +126,8 @@ export function residentToForm(resident = {}) {
     sexo: resident.sexo ?? "",
     estado_civil: resident.estado_civil ?? "",
     grupo_sanguineo: resident.grupo_sanguineo ?? "",
+    nivel_dependencia: resident.nivel_dependencia ?? "",
+    condicion_salud_grave: resident.condicion_salud_grave === true,
+    condicion_salud_grave_detalle: resident.condicion_salud_grave_detalle ?? "",
   };
 }

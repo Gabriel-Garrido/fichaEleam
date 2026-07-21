@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createVitalSigns } from "./vitalSignsService";
-import { CARE_TURNOS, nextFollowUpSlot } from "../carePlans/carePlansService";
+import { CARE_TURNOS, currentTurno, nextFollowUpSlot } from "../carePlans/carePlansService";
 import { getResidents } from "../residents/residentService";
 import { isValidUUID } from "../../utils/validators";
 import { useToast } from "../../components/Toast";
@@ -64,7 +64,13 @@ function VitalSignsForm() {
   const rawId = searchParams.get("residenteId");
   const preselectedId = rawId && isValidUUID(rawId) ? rawId : null;
 
-  const [form, setForm] = useState(() => ({ ...INITIAL, residente_id: preselectedId ?? "", fecha_hora: nowLocalISO() }));
+  const [form, setForm] = useState(() => ({
+    ...INITIAL,
+    residente_id: preselectedId ?? "",
+    fecha_hora: nowLocalISO(),
+    // El turno parte alineado con la hora actual; el usuario puede cambiarlo.
+    turno: currentTurno(),
+  }));
   const [residents, setResidents] = useState([]);
   const [saving, setSaving] = useState(false);
   const [loadingRes, setLoadingRes] = useState(true);
@@ -265,7 +271,10 @@ function VitalSignsForm() {
                 Fecha y hora <span className="text-rose-500 text-xs">*</span>
               </label>
               <input id="fecha_hora" type="datetime-local" name="fecha_hora" value={form.fecha_hora}
-                onChange={handleChange} required className={INPUT_CLS} />
+                onChange={handleChange} required
+                aria-invalid={fieldErrors.fecha_hora ? "true" : "false"}
+                className={`${INPUT_CLS} ${fieldErrors.fecha_hora ? "border-rose-400 bg-rose-50" : ""}`} />
+              {fieldErrors.fecha_hora && <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.fecha_hora}</p>}
             </div>
             <div>
               <label htmlFor="turno" className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -395,19 +404,35 @@ function VitalSignsForm() {
             />
 
             <div className="sm:col-span-2">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-1 gap-2">
                 <label className="text-sm font-medium text-slate-600">Escala de dolor (0–10)</label>
-                <PainBadge value={form.dolor_escala} />
+                <div className="flex items-center gap-2">
+                  {form.dolor_escala === "" ? (
+                    <span className="text-xs text-slate-400">No evaluado</span>
+                  ) : (
+                    <>
+                      <PainBadge value={form.dolor_escala} />
+                      <button
+                        type="button"
+                        onClick={() => setForm((prev) => ({ ...prev, dolor_escala: "" }))}
+                        className="text-xs font-semibold text-slate-400 hover:text-slate-600 hover:underline"
+                      >
+                        Quitar
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <input
                 type="range"
                 name="dolor_escala"
-                value={form.dolor_escala || 0}
+                value={form.dolor_escala === "" ? 0 : form.dolor_escala}
                 onChange={handleChange}
                 min="0"
                 max="10"
-                className="w-full accent-teal-700"
+                className={`w-full accent-teal-700 ${form.dolor_escala === "" ? "opacity-50" : ""}`}
                 aria-invalid={fieldErrors.dolor_escala ? "true" : "false"}
+                aria-label="Escala de dolor de 0 a 10; mueve el control para evaluar"
               />
               {fieldErrors.dolor_escala && <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.dolor_escala}</p>}
               <div className="flex justify-between text-xs mt-1">

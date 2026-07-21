@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildStockLotAlerts,
   buildMedicationMetrics,
+  DEFAULT_MEDICATION_INDICATION,
   daysUntilLotExpiry,
   getMedicationTurnFocus,
   getStockLotStatus,
@@ -90,9 +91,13 @@ describe("emarUi indication helpers", () => {
     });
 
     expect(validateMedicationIndicationDraft(
-      { medicamento_nombre: "Paracetamol", dosis: "1 comprimido", visible_familiar: true, resumen_familiar: "Analgésico indicado." },
+      { medicamento_nombre: "Paracetamol", dosis: "1 comprimido", prescriptor_nombre: "Dra. Pérez", fecha_inicio: "2026-05-23", visible_familiar: true, resumen_familiar: "Analgésico indicado." },
       [{ frecuencia: "diaria", turno: "mañana", hora: "09:00" }],
     )).toEqual({});
+  });
+
+  it("mantiene el inventario fuera del flujo habitual", () => {
+    expect(DEFAULT_MEDICATION_INDICATION.requiere_stock).toBe(false);
   });
 });
 

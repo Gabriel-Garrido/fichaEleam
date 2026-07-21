@@ -4,11 +4,11 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import PageLayout from "../../layout/PageLayout";
 import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
-import CollapsibleGuide from "../../components/CollapsibleGuide";
 import MetricCard from "../../components/MetricCard";
 import EmptyState from "../../components/EmptyState";
 import ChipGroup from "../../components/ChipGroup";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { useAuth } from "../../context/AuthContext";
 import {
   CARE_TURNOS,
@@ -48,6 +48,7 @@ import {
   getPendingVitalSignsResidents,
   createVitalSigns,
 } from "../vitalSigns/vitalSignsService";
+import { VITAL_NUMERIC_RULES } from "../vitalSigns/vitalSignsFormSchema";
 import {
   getPendingSeguimientos,
   resolverSeguimiento,
@@ -465,17 +466,6 @@ export default function CareTasksPage() {
         )}
       </section>
 
-      <CollapsibleGuide
-        storageKey="careTasks"
-        title="¿Cómo funciona la bandeja del turno?"
-        steps={[
-          { title: "Cargar", text: "La vista genera las tareas recurrentes del turno sin duplicarlas." },
-          { title: "Ejecutar", text: "Cumple cuidados o administra medicamentos dentro de la ventana indicada." },
-          { title: "Reprogramar u omitir", text: "Si no corresponde ejecutar, deja motivo, nueva hora o trazabilidad." },
-          { title: "Seguimiento", text: "Activa seguimiento cuando el equipo deba revisar la evolución después." },
-        ]}
-      />
-
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 xl:grid-cols-9">
         <MetricCard label="Pendientes" value={metrics.pendientes} tone="amber" tooltip="Tareas del turno aún sin cerrar." />
         <MetricCard label="Vencidas" value={metrics.vencidas} tone="rose" tooltip="Tareas que pasaron su hora o ventana de ejecución." />
@@ -484,7 +474,7 @@ export default function CareTasksPage() {
         <MetricCard label="Reprogramadas" value={metrics.reprogramadas} tone="sky" tooltip="Tareas movidas a otra hora o turno." className={showMetricDetails ? "" : "hidden xl:block"} />
         <MetricCard label="Cuidado" value={metrics.cuidado} tone="teal" tooltip="Rutinas y actividades del plan de cuidado (alimentación, higiene, movilidad, etc.)." className={showMetricDetails ? "" : "hidden xl:block"} />
         <MetricCard label="Medicamentos" value={metrics.medicamentos} tone="sky" tooltip="Dosis programadas del turno." className={showMetricDetails ? "" : "hidden xl:block"} />
-        <MetricCard label="Signos" value={metrics.signos} tone="teal" tooltip="Control de presión, frecuencia, temperatura, saturación y dolor." className={showMetricDetails ? "" : "hidden xl:block"} />
+        <MetricCard label="Signos" value={metrics.signos} tone="violet" tooltip="Control de presión, frecuencia, temperatura, saturación y dolor." className={showMetricDetails ? "" : "hidden xl:block"} />
         <MetricCard label="Seguimiento" value={metrics.seguimientos} tone="amber" tooltip="Controles pendientes del equipo (caídas, reacciones, heridas) que requieren cierre." className={showMetricDetails ? "" : "hidden xl:block"} />
       </section>
 
@@ -1127,7 +1117,9 @@ export function RescheduleCareTaskModal({ modal, saving, onClose, onSubmit }) {
 }
 
 export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
+  const confirm = useConfirm();
   const [notas, setNotas] = useState("");
+  const [doseError, setDoseError] = useState("");
   const [motivo, setMotivo] = useState("rechazo");
   const [seguimiento, setSeguimiento] = useState(false);
   const [seguimientoFecha, setSeguimientoFecha] = useState(todayIso());
@@ -1139,6 +1131,7 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
 
   useEffect(() => {
     setNotas("");
+    setDoseError("");
     setMotivo("rechazo");
     setSeguimiento(false);
     if (modal?.row) {
@@ -1171,6 +1164,20 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
   const isValidation = modal.action === "validar";
   const needsLot = modal.action === "administrado" && (modal.row.indicacion?.es_controlado || modal.row.indicacion?.requiere_stock);
   const unitLabel = modal.row.indicacion?.unidad_dosis || "unidad";
+  const dirty = notas.trim() !== "" || seguimiento || (modal.action === "administrado" && dosis !== "1");
+  const handleClose = async () => {
+    if (dirty) {
+      const ok = await confirm({
+        title: "Descartar cambios",
+        message: "Hay cambios sin guardar en este registro de medicamento.",
+        confirmText: "Descartar",
+        cancelText: "Seguir editando",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
   const actionCopy = isValidation
     ? "Confirma la administración como segundo usuario. Esta acción firma la validación y cierra el pendiente."
     : isOmission
@@ -1184,13 +1191,21 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
   return (
     <Modal
       isOpen={!!modal}
-      onClose={onClose}
+      onClose={handleClose}
       title={isValidation ? "Validar registro" : isOmission ? "Registrar omisión" : "Administrar medicamento"}
+      closeOnBackdrop={false}
     >
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
+          if (modal.action === "administrado") {
+            const num = Number(dosis);
+            if (!Number.isFinite(num) || num <= 0) {
+              setDoseError("La cantidad administrada debe ser un número mayor a 0.");
+              return;
+            }
+          }
           onSubmit({
             action: modal.action,
             row: modal.row,
@@ -1260,12 +1275,17 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
               min="0.01"
               step="0.01"
               value={dosis}
-              onChange={(e) => setDosis(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              onChange={(e) => { setDoseError(""); setDosis(e.target.value); }}
+              aria-invalid={doseError ? "true" : "false"}
+              className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 ${doseError ? "border-rose-400 bg-rose-50 focus:border-rose-500 focus:ring-rose-100" : "border-slate-200 focus:border-teal-500 focus:ring-teal-100"}`}
             />
-            <span className="mt-1 block text-xs text-slate-500">
-              Usa la cantidad real entregada; debe coincidir con la unidad del lote para mantener stock confiable.
-            </span>
+            {doseError ? (
+              <span className="mt-1 block text-xs text-rose-600">{doseError}</span>
+            ) : (
+              <span className="mt-1 block text-xs text-slate-500">
+                Usa la cantidad real entregada; debe coincidir con la unidad del lote para mantener stock confiable.
+              </span>
+            )}
           </label>
         )}
 
@@ -1313,7 +1333,7 @@ export function MedicationTaskModal({ modal, saving, onClose, onSubmit }) {
         )}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
+          <button type="button" onClick={handleClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
           <button type="submit" disabled={saving || (needsLot && (!loteId || lots.length === 0))} className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto">
@@ -1377,13 +1397,35 @@ const VITALS_FORM_INITIAL = {
   saturacion_oxigeno: "",
   glucosa: "",
   peso: "",
-  dolor_escala: "0",
+  // "" = no evaluado; "0" significa "sin dolor" y solo se registra si se evalúa.
+  dolor_escala: "",
   estado_conciencia: "alerta",
   observaciones: "",
 };
 
+const VITALS_MEASURE_FIELDS = [
+  "presion_sistolica", "presion_diastolica", "frecuencia_cardiaca",
+  "frecuencia_respiratoria", "temperatura", "saturacion_oxigeno",
+  "glucosa", "peso", "dolor_escala",
+];
+
+// Valida contra los mismos rangos del schema para evitar errores de constraint
+// de la BD con mensajes crípticos.
+function firstVitalsRangeError(form) {
+  for (const [name, [label, min, max]] of Object.entries(VITAL_NUMERIC_RULES)) {
+    const raw = form[name];
+    if (raw === "" || raw == null) continue;
+    const num = Number(raw);
+    if (!Number.isFinite(num) || num < min || num > max) {
+      return `${label}: ingresa un valor entre ${min} y ${max}.`;
+    }
+  }
+  return null;
+}
+
 export function VitalSignsTaskModal({ modal, saving, onClose, onSubmit }) {
   const [form, setForm] = useState(VITALS_FORM_INITIAL);
+  const [formError, setFormError] = useState("");
   const [seguimiento, setSeguimiento] = useState(false);
   const [seguimientoFecha, setSeguimientoFecha] = useState(todayIso());
   const [seguimientoTurno, setSeguimientoTurno] = useState(currentTurno());
@@ -1402,6 +1444,7 @@ export function VitalSignsTaskModal({ modal, saving, onClose, onSubmit }) {
   useEffect(() => {
     if (!modal) return;
     setForm(VITALS_FORM_INITIAL);
+    setFormError("");
     setSeguimiento(false);
     const next = nextFollowUpSlot(modal.row.fecha, modal.row.turno);
     setSeguimientoFecha(next.fecha);
@@ -1412,9 +1455,11 @@ export function VitalSignsTaskModal({ modal, saving, onClose, onSubmit }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setFormError("");
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const hasAnyValue = VITALS_MEASURE_FIELDS.some((field) => form[field] !== "");
   const liveBadge = VITAL_STATUS[liveOverall.status];
   const resident = modal.row.residentes;
   const resName = [resident?.apellido, resident?.nombre].filter(Boolean).join(", ") || "Residente";
@@ -1425,6 +1470,11 @@ export function VitalSignsTaskModal({ modal, saving, onClose, onSubmit }) {
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
+          const rangeError = firstVitalsRangeError(form);
+          if (rangeError) {
+            setFormError(rangeError);
+            return;
+          }
           onSubmit({ row: modal.row, form, seguimiento, seguimientoFecha, seguimientoTurno });
         }}
       >
@@ -1461,20 +1511,34 @@ export function VitalSignsTaskModal({ modal, saving, onClose, onSubmit }) {
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between mb-1 gap-2">
             <label className="text-xs font-medium text-slate-600">Dolor (0–10)</label>
-            <span className={`text-xs font-medium ${painStatus(form.dolor_escala) === "critical" ? "text-rose-600" : painStatus(form.dolor_escala) === "warning" ? "text-amber-600" : "text-slate-500"}`}>
-              {form.dolor_escala || 0}/10
-            </span>
+            {form.dolor_escala === "" ? (
+              <span className="text-xs text-slate-400">No evaluado</span>
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <span className={`text-xs font-medium ${painStatus(form.dolor_escala) === "critical" ? "text-rose-600" : painStatus(form.dolor_escala) === "warning" ? "text-amber-600" : "text-slate-500"}`}>
+                  {form.dolor_escala}/10
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setFormError(""); setForm((prev) => ({ ...prev, dolor_escala: "" })); }}
+                  className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 hover:underline"
+                >
+                  Quitar
+                </button>
+              </span>
+            )}
           </div>
           <input
             type="range"
             name="dolor_escala"
-            value={form.dolor_escala || 0}
+            value={form.dolor_escala === "" ? 0 : form.dolor_escala}
             onChange={handleChange}
             min="0"
             max="10"
-            className="w-full accent-teal-700"
+            className={`w-full accent-teal-700 ${form.dolor_escala === "" ? "opacity-50" : ""}`}
+            aria-label="Escala de dolor de 0 a 10; mueve el control para evaluar"
           />
           <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
             <span>0 Sin dolor</span>
@@ -1527,11 +1591,20 @@ export function VitalSignsTaskModal({ modal, saving, onClose, onSubmit }) {
           copy="El seguimiento quedará pendiente para reevaluar signos, dolor, conciencia o respuesta clínica en el turno definido."
         />
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        {formError && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
+            {formError}
+          </div>
+        )}
+
+        <div className="flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+          {!hasAnyValue && (
+            <p className="text-xs text-slate-400 sm:mr-auto">Registra al menos un parámetro para guardar el control.</p>
+          )}
           <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="w-full rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60 sm:w-auto">
+          <button type="submit" disabled={saving || !hasAnyValue} className="w-full rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60 sm:w-auto">
             {saving ? "Guardando..." : "Registrar signos"}
           </button>
         </div>

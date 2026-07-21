@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import HelpTooltip from "../../components/HelpTooltip";
 import PageLayout from "../../layout/PageLayout";
-import { WelcomeModal, hasSeenWelcome, markWelcomeSeen } from "../welcome";
-import OnboardingSteps from "./OnboardingSteps";
 import { loadDashboard } from "./dashboardService";
 import { recordOverallStatus } from "../vitalSigns/vitalRanges";
 import { getOpenAdverseEventsCount } from "../adverseEvents/eventosAdversosService";
@@ -13,39 +11,36 @@ import {
 } from "./dashboardUtils";
 import { KpiCard, QuickAction } from "./DashboardShared";
 import {
-  CriticalAlerts, ManagementBrief, RiskMatrix, FirstRunPanel,
+  CriticalAlerts, ManagementBrief, RiskMatrix,
   ClinicalBoard, DependencyChart, ShiftActivity, Demographics,
   FollowUpsCard, IncidentsCard, ExpiringDocsCard, AccreditationCard,
 } from "./DashboardPanels";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { profile, eleam, rol, can, canFeature, isAdminEleam } = useAuth();
+  const { profile, eleam, rol, can, canFeature } = useAuth();
 
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [adverseCount, setAdverseCount] = useState({ total: 0, gravesOCriticos: 0 });
-  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    if (isAdminEleam && profile?.id && !hasSeenWelcome(profile.id)) {
-      setShowWelcome(true);
-    }
-  }, [isAdminEleam, profile?.id]);
-
-  const closeWelcome = () => {
-    if (profile?.id) markWelcomeSeen(profile.id);
-    setShowWelcome(false);
-  };
-
-  useEffect(() => {
+    let cancelled = false;
     setLoadError(false);
-    loadDashboard()
-      .then(setData)
-      .catch((err) => { console.error("loadDashboard", err); setLoadError(true); })
-      .finally(() => setLoading(false));
-  }, []);
+    setLoading(true);
+    loadDashboard(eleam?.id)
+      .then((nextData) => { if (!cancelled) setData(nextData); })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("loadDashboard", err);
+          setLoadError(true);
+        }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [eleam?.id, reloadKey]);
 
   useEffect(() => {
     if (!eleam?.id) { setAdverseCount({ total: 0, gravesOCriticos: 0 }); return; }
@@ -73,6 +68,8 @@ export default function AdminDashboard() {
       vencidos:              (s.vencidos ?? []).length,
       porVencer:             (s.porVencer ?? []).length,
       observacionesAbiertas: (s.observaciones ?? []).length,
+      requisitosConEvidencia:s.requisitosConEvidencia ?? 0,
+      evidenciasVigentes:    s.evidenciasVigentes ?? 0,
       ambitos:               s.ambitos ?? [],
     };
   }, [data]);
@@ -140,13 +137,13 @@ export default function AdminDashboard() {
     canFeature(featureId) && (!permission || can(permission));
 
   const headerActions = [
-    canUse("turnos") && {
+    canUse("residents") && {
       key: "shift",
       label: "Entrega de turno",
       className: "rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800",
-      onClick: () => navigate("/turnos/nueva"),
+      onClick: () => navigate("/operacion/turnos/nuevo"),
     },
-    canUse("vital-signs", "crear_signos_vitales") && {
+    canUse("residents", "crear_signos_vitales") && {
       key: "vitals",
       label: "Registrar control",
       className: "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50",
@@ -155,45 +152,23 @@ export default function AdminDashboard() {
   ].filter(Boolean);
 
   const mainQuickActions = [
-    canUse("turnos") && { iconId: "shift", label: "Entrega de turno", route: "/turnos/nueva" },
-    canUse("care-plans") && { iconId: "tasks", label: "Tareas diarias", route: "/turnos/tareas" },
-    canUse("emar", "administrar_medicamentos") && { iconId: "meds", label: "Medicamentos del turno", route: "/turnos/emar" },
-    canUse("vital-signs", "crear_signos_vitales") && { iconId: "vitals", label: "Registrar signos vitales", route: "/vital-signs/new" },
-    canUse("observations", "crear_observaciones") && { iconId: "observations", label: "Nueva observación", route: "/observations/new" },
-    rol !== "funcionario" && canUse("accreditation") && { iconId: "accreditation", label: "Carpeta SEREMI", route: "/accreditation/carpeta" },
+    canUse("residents") && { iconId: "shift", label: "Registro del turno", route: "/operacion/turnos/nuevo" },
+    canUse("residents") && { iconId: "tasks", label: "Cuidados del turno", route: "/operacion/cuidados" },
+    canUse("residents", "administrar_medicamentos") && { iconId: "meds", label: "Medicamentos", route: "/operacion/medicamentos" },
+    canUse("residents", "crear_signos_vitales") && { iconId: "vitals", label: "Registrar signos vitales", route: "/vital-signs/new" },
+    canUse("residents", "crear_observaciones") && { iconId: "observations", label: "Nueva observación", route: "/observations/new" },
+    rol !== "funcionario" && canUse("compliance") && { iconId: "accreditation", label: "Preparar carpeta", route: "/cumplimiento/seremi/carpeta" },
     rol === "funcionario" && canUse("residents") && { iconId: "residents", label: "Ver residentes", route: "/residents" },
   ].filter(Boolean);
 
   const extraQuickActions = [
     canUse("residents", "crear_residentes") && { iconId: "residents", label: "Agregar residente", route: "/residents/new" },
     canUse("residents") && { iconId: "residents", label: "Ver residentes", route: "/residents" },
-    canUse("vital-signs") && { iconId: "vitals", label: "Historial signos", route: "/vital-signs" },
-    canUse("observations") && { iconId: "observations", label: "Ver observaciones", route: "/observations" },
-    canUse("accreditation") && { iconId: "accreditation", label: "Panel acreditación", route: "/accreditation" },
-    rol !== "funcionario" && canUse("team") && { iconId: "team", label: "Gestionar equipo", route: "/equipo" },
+    canUse("residents") && { iconId: "vitals", label: "Historial signos", route: "/vital-signs" },
+    canUse("residents") && { iconId: "observations", label: "Ver observaciones", route: "/observations" },
+    canUse("compliance") && { iconId: "accreditation", label: "Cumplimiento SEREMI", route: "/cumplimiento" },
+    rol !== "funcionario" && canUse("personnel") && { iconId: "team", label: "Gestionar personal", route: "/personal" },
   ].filter(Boolean);
-
-  const showOnboarding = isAdminEleam && !loading && !loadError && (stats?.total ?? 0) === 0;
-
-  if (showOnboarding) {
-    return (
-      <PageLayout
-        title={profile?.nombre ? `Hola, ${profile.nombre}` : "Inicio"}
-        eyebrow={`${todayDateLong()} · turno ${turno}`}
-        description={`${eleam?.nombre ? `${eleam.nombre}. ` : ""}Configura tu ELEAM en pocos pasos para empezar a gestionar el día.`}
-        className="space-y-6"
-      >
-        <WelcomeModal
-          open={showWelcome}
-          onClose={closeWelcome}
-          adminName={profile?.nombre}
-          eleamName={eleam?.nombre}
-          isDemo={eleam?.plan === "demo"}
-        />
-        <OnboardingSteps eleamName={eleam?.nombre} isDemo={eleam?.plan === "demo"} />
-      </PageLayout>
-    );
-  }
 
   return (
     <PageLayout
@@ -218,30 +193,18 @@ export default function AdminDashboard() {
       }
       className="space-y-6"
     >
-      <WelcomeModal
-        open={showWelcome}
-        onClose={closeWelcome}
-        adminName={profile?.nombre}
-        eleamName={eleam?.nombre}
-        isDemo={eleam?.plan === "demo"}
-      />
-
       {loadError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
           <p className="text-sm font-semibold text-rose-800">No se pudo cargar el resumen del día</p>
           <p className="text-xs text-rose-600 mt-1">Revisa tu conexión y recarga la página para reintentar.</p>
           <button
             type="button"
-            onClick={() => { setLoadError(false); setLoading(true); loadDashboard().then(setData).catch((err) => { console.error("loadDashboard", err); setLoadError(true); }).finally(() => setLoading(false)); }}
+            onClick={() => setReloadKey((key) => key + 1)}
             className="mt-3 rounded-xl bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-rose-700"
           >
             Reintentar
           </button>
         </div>
-      )}
-
-      {!loading && !loadError && (stats?.total ?? 0) === 0 && (
-        <FirstRunPanel navigate={navigate} />
       )}
 
       <ManagementBrief
@@ -302,7 +265,7 @@ export default function AdminDashboard() {
                 sub={beds ? `${beds.disponibles} disponibles · ${beds.residentesSinCama} residentes sin cama` : "Sin inventario de camas"}
                 icon="beds"
                 tone={(beds?.disponibles ?? 0) > 0 ? "emerald" : "amber"}
-                onClick={() => navigate("/camas")}
+                onClick={() => navigate("/establecimiento/camas")}
               />
               <KpiCard
                 title="Carpeta SEREMI DS 20"
@@ -311,7 +274,7 @@ export default function AdminDashboard() {
                 sub={`${acreditacion.vigente} de ${acreditacion.total} requisitos vigentes${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
                 icon="accreditation"
                 tone={acreditacion.porcentaje >= 80 ? "emerald" : acreditacion.porcentaje >= 40 ? "amber" : "rose"}
-                onClick={() => navigate("/accreditation")}
+                onClick={() => navigate("/cumplimiento/seremi")}
               />
             </>
           ) : (
@@ -332,7 +295,7 @@ export default function AdminDashboard() {
                 sub={beds ? `${beds.disponibles} disponibles · ${beds.residentesSinCama} residentes sin cama` : "Sin inventario de camas"}
                 icon="beds"
                 tone={(beds?.disponibles ?? 0) > 0 ? "emerald" : "amber"}
-                onClick={() => navigate("/camas")}
+                onClick={() => navigate("/establecimiento/camas")}
               />
               <KpiCard
                 title="Estado clínico"
@@ -359,7 +322,7 @@ export default function AdminDashboard() {
                 sub={`${acreditacion.vigente} de ${acreditacion.total} requisitos vigentes${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
                 icon="accreditation"
                 tone={acreditacion.porcentaje >= 80 ? "emerald" : acreditacion.porcentaje >= 40 ? "amber" : "rose"}
-                onClick={() => navigate("/accreditation")}
+                onClick={() => navigate("/cumplimiento/seremi")}
               />
             </>
           )}
@@ -372,6 +335,8 @@ export default function AdminDashboard() {
         expiring={data?.expiringDocuments ?? []}
         operational={operational}
         assessments={data?.pendingAssessments ?? []}
+        ds20Residents={data?.ds20Residents ?? []}
+        ds20Staffing={data?.ds20Staffing ?? []}
         adverseEvents={adverseCount}
         loading={loading}
         navigate={navigate}
@@ -479,7 +444,7 @@ function OperationalTurnPanel({ loading, summary, navigate }) {
         tone={emarTone}
         sub={`${emar.pendiente ?? 0} pendientes · ${emar.pendiente_validacion ?? 0} por validar · ${emar.vencidas ?? 0} vencidos`}
         action="Abrir medicamentos"
-        onClick={() => navigate("/turnos/emar")}
+        onClick={() => navigate("/operacion/medicamentos")}
       />
       <OperationalCard
         title="Tareas de cuidado"
@@ -487,7 +452,7 @@ function OperationalTurnPanel({ loading, summary, navigate }) {
         tone={careTone}
         sub={`${care.pendiente ?? 0} pendientes · ${care.reprogramada ?? 0} reprogramadas · ${care.vencidas ?? 0} vencidas`}
         action="Abrir tareas"
-        onClick={() => navigate("/turnos/tareas")}
+        onClick={() => navigate("/operacion/cuidados")}
       />
     </section>
   );

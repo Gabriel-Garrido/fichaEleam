@@ -1,6 +1,6 @@
 // POST /functions/v1/create-staff-user
 //
-// Body: { nombre: string, email: string, telefono?: string, parentesco?: string, rol?: 'funcionario' | 'familiar', residente_id?: uuid }
+// Body: { nombre: string, email: string, telefono?: string, rol?: 'funcionario' }
 //
 // Para correos Gmail (@gmail.com): crea una invitación en funcionario_invitaciones
 // y el usuario puede ingresar directamente con Google OAuth. No necesita contraseña.
@@ -12,11 +12,8 @@
 // Nunca confiar en user_metadata para eleam_id/rol.
 //
 // Reglas:
-//   • Admin ELEAM con suscripción activa/en_gracia puede crear funcionarios y familiares.
-//   • Funcionario del ELEAM puede crear familiares vinculados a residentes activos.
-//   • Si rol='familiar' → nombre, email, teléfono, parentesco y residente_id son obligatorios.
-//   • Si rol='familiar' → residente_id obligatorio y debe pertenecer al ELEAM.
-//   • Si rol='funcionario' → respeta max_funcionarios del plan.
+//   • Solo el admin ELEAM con suscripción activa/en_gracia puede crear funcionarios.
+//   • El alta respeta max_funcionarios del plan.
 //   • La contraseña nunca se devuelve; el acceso se entrega por enlace al correo.
 //   • Si Resend no está configurado o falla, retorna email_sent=false y email_error.
 
@@ -30,7 +27,6 @@ import {
 import {
   EMAIL_RE,
   GMAIL_RE,
-  UUID_RE,
   createAuthProvisionRequest,
   deleteAuthProvisionRequest,
   generateAccessLink,
@@ -133,11 +129,8 @@ Deno.serve(async (req) => {
     const nombre = cleanText(body.nombre, 120);
     const cleanEmail = String(body.email ?? "").trim().toLowerCase();
     const telefono = normalizePhone(body.telefono);
-    const parentesco = cleanText(body.parentesco, 80).toLowerCase();
-    const rol = String(body.rol ?? "funcionario").trim();
-    const residenteId: string | null = body.residente_id
-      ? String(body.residente_id).trim()
-      : null;
+    const requestedRole = String(body.rol ?? "funcionario").trim();
+    const rol = "funcionario" as const;
 
     if (!nombre) {
       return jsonResponse(req, { error: "El nombre es obligatorio" }, 400);
@@ -151,28 +144,16 @@ Deno.serve(async (req) => {
     if (!cleanEmail || !EMAIL_RE.test(cleanEmail)) {
       return jsonResponse(req, { error: "Email inválido" }, 400);
     }
-    if (!["funcionario", "familiar"].includes(rol)) {
-      return jsonResponse(req, { error: "Rol inválido" }, 400);
+    if (requestedRole !== rol) {
+      return jsonResponse(req, { error: "Solo se pueden crear cuentas de funcionarios" }, 400);
     }
-    if (profile.rol === "funcionario" && rol !== "familiar") {
+    if (profile.rol !== "admin_eleam") {
       return jsonResponse(req, {
-        error: "Un funcionario solo puede crear cuentas familiares vinculadas a residentes.",
+        error: "Solo el administrador del ELEAM puede crear funcionarios.",
       }, 403);
-    }
-    if (rol === "familiar" && !residenteId) {
-      return jsonResponse(req, { error: "Para crear un familiar debes seleccionar un residente" }, 400);
-    }
-    if (rol === "familiar" && !parentesco) {
-      return jsonResponse(req, { error: "Parentesco del familiar es obligatorio" }, 400);
-    }
-    if (rol === "familiar" && !telefono) {
-      return jsonResponse(req, { error: "Teléfono del familiar es obligatorio" }, 400);
     }
     if (telefono && !isValidChilePhone(telefono)) {
       return jsonResponse(req, { error: "Teléfono inválido. Usa un número chileno, por ejemplo +56 9 1234 5678." }, 400);
-    }
-    if (residenteId && !UUID_RE.test(residenteId)) {
-      return jsonResponse(req, { error: "residente_id tiene formato inválido" }, 400);
     }
 
     const isGmail = GMAIL_RE.test(cleanEmail);
@@ -189,21 +170,6 @@ Deno.serve(async (req) => {
 
     if (!eleamHasAccess(eleam)) {
       return jsonResponse(req, { error: "El ELEAM no tiene acceso activo" }, 403);
-    }
-
-    // Validar residente para familiar
-    if (rol === "familiar") {
-      const { data: res } = await sb
-        .from("residentes")
-        .select("id, eleam_id, estado")
-        .eq("id", residenteId!)
-        .maybeSingle();
-      if (!res || res.eleam_id !== eleam.id) {
-        return jsonResponse(req, { error: "El residente no pertenece a tu ELEAM" }, 400);
-      }
-      if (!["activo", "hospitalizado"].includes(String(res.estado ?? ""))) {
-        return jsonResponse(req, { error: "Solo puedes vincular familiares a residentes activos u hospitalizados" }, 400);
-      }
     }
 
     // Dedupe de invitaciones Gmail antes de contar límites: reintentar el alta
@@ -233,9 +199,7 @@ Deno.serve(async (req) => {
           .update({
             nombre,
             telefono: telefono || null,
-            parentesco: rol === "familiar" ? parentesco : null,
             rol,
-            residente_id: residenteId || null,
             expira_en: expiresAt,
             creado_por: user.id,
           })
@@ -348,22 +312,6 @@ Deno.serve(async (req) => {
           }, 500);
         }
 
-        if (rol === "familiar" && residenteId) {
-          const { error: linkErr } = await sb.from("familiar_residentes").insert({
-            profile_id: existingAuthUser.id,
-            residente_id: residenteId,
-            parentesco,
-            creado_por: user.id,
-          });
-          if (linkErr) {
-            await sb.from("profiles").delete().eq("id", existingAuthUser.id);
-            console.error("gmail familiar link for existing user", linkErr);
-            return jsonResponse(req, {
-              error: "No se pudo vincular el familiar al residente seleccionado.",
-            }, 500);
-          }
-        }
-
         const currentAppMeta =
           existingAuthUser.app_metadata && typeof existingAuthUser.app_metadata === "object"
             ? existingAuthUser.app_metadata
@@ -375,7 +323,6 @@ Deno.serve(async (req) => {
             fichaeleam_account_source: "admin_created_google",
             eleam_id_direct: profile.eleam_id,
             rol_direct: rol,
-            ...(rol === "familiar" && residenteId ? { residente_id_direct: residenteId } : {}),
           },
         });
 
@@ -408,8 +355,6 @@ Deno.serve(async (req) => {
         token: invToken,
         expira_en: expiresAt,
         rol,
-        residente_id: residenteId || null,
-        parentesco: rol === "familiar" ? parentesco : null,
         creado_por: user.id,
       });
 
@@ -462,23 +407,6 @@ Deno.serve(async (req) => {
         }, 409);
       }
 
-      if (rol === "familiar" && residenteId) {
-        const { error: familiarLinkErr } = await sb.from("familiar_residentes").insert({
-          profile_id: existingAuthUser.id,
-          residente_id: residenteId,
-          parentesco,
-          creado_por: user.id,
-        });
-
-        if (familiarLinkErr) {
-          await sb.from("profiles").delete().eq("id", existingAuthUser.id);
-          console.error("staff familiar repair link", familiarLinkErr);
-          return jsonResponse(req, {
-            error: "No se pudo vincular el familiar al residente seleccionado.",
-          }, 500);
-        }
-      }
-
       const currentAppMetadata =
         existingAuthUser.app_metadata && typeof existingAuthUser.app_metadata === "object"
           ? existingAuthUser.app_metadata
@@ -496,7 +424,6 @@ Deno.serve(async (req) => {
           fichaeleam_account_source: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
           eleam_id_direct: profile.eleam_id,
           rol_direct: rol,
-          ...(rol === "familiar" && residenteId ? { residente_id_direct: residenteId } : {}),
         },
         user_metadata: {
           ...currentUserMetadata,
@@ -542,7 +469,6 @@ Deno.serve(async (req) => {
       eleamId: profile.eleam_id,
       rol,
       accountSource: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
-      residenteId,
     });
 
     if (provisionErr || !provisionId) {
@@ -562,7 +488,6 @@ Deno.serve(async (req) => {
         fichaeleam_account_source: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
         eleam_id_direct: profile.eleam_id,
         rol_direct: rol,
-        ...(rol === "familiar" && residenteId ? { residente_id_direct: residenteId } : {}),
       },
       user_metadata: {
         nombre,
@@ -609,23 +534,6 @@ Deno.serve(async (req) => {
       return jsonResponse(req, {
         error: "Auth creó el usuario, pero no se pudo crear su perfil. Aplica supabase_schema.sql y vuelve a intentar.",
       }, 500);
-    }
-
-    if (rol === "familiar" && residenteId) {
-      const { error: familiarProvisionErr } = await sb.from("familiar_residentes").upsert({
-        profile_id: createdUserId,
-        residente_id: residenteId,
-        parentesco,
-        creado_por: user.id,
-      }, { onConflict: "profile_id,residente_id" });
-
-      if (familiarProvisionErr) {
-        await sb.auth.admin.deleteUser(createdUserId);
-        console.error("staff familiar link after auth create", familiarProvisionErr);
-        return jsonResponse(req, {
-          error: "Auth creó el usuario, pero no se pudo vincular el familiar al residente.",
-        }, 500);
-      }
     }
 
     const linkResult = await generateAccessLink(sb, cleanEmail);

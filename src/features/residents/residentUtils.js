@@ -13,6 +13,7 @@ export const ESTADO_BADGE = {
 };
 
 export const DEPENDENCIA_TONE = {
+  autovalente: "bg-sky-50 text-sky-700 border-sky-200",
   leve:     "bg-emerald-50 text-emerald-700 border-emerald-200",
   moderado: "bg-amber-50 text-amber-700 border-amber-200",
   severo:   "bg-orange-50 text-orange-700 border-orange-200",
@@ -49,13 +50,26 @@ export function initials(nombre = "", apellido = "") {
 
 export function calcAge(fechaNacimiento) {
   if (!fechaNacimiento) return null;
-  const fn = new Date(fechaNacimiento);
+  const parts = String(fechaNacimiento).split("-").map(Number);
+  const fn = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(fechaNacimiento);
   if (isNaN(fn)) return null;
   const today = new Date();
   let age = today.getFullYear() - fn.getFullYear();
   const m = today.getMonth() - fn.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < fn.getDate())) age--;
   return age;
+}
+
+const RESIDENT_TAB_ALIASES = {
+  info: "resumen",
+  signos: "resumen",
+  observaciones: "resumen",
+  tareas: "turno",
+};
+
+export function normalizeResidentTab(value, allowed = ["resumen", "ds20", "turno", "care", "emar", "trazabilidad"]) {
+  const normalized = RESIDENT_TAB_ALIASES[value] ?? value ?? "resumen";
+  return allowed.includes(normalized) ? normalized : "resumen";
 }
 
 function normalizeAllergyValue(value) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countFuncionarioSlots,
   countPlanResidentSlots,
+  formatDailyPrice,
   getEffectivePlanLimits,
   planFitsUsage,
   PUBLIC_PLAN_CATALOG,
@@ -53,5 +54,14 @@ describe("planCatalog", () => {
     expect(planFitsUsage(plan14, { residents: 14, staff: 10 })).toBe(true);
     expect(planFitsUsage(plan14, { residents: 15, staff: 10 })).toBe(false);
     expect(planFitsUsage(plan14, { residents: 14, staff: 11 })).toBe(false);
+  });
+
+  it("derives the daily price label used across landing and payment plans", () => {
+    for (const plan of PUBLIC_PLAN_CATALOG) {
+      expect(formatDailyPrice(plan.precio_clp)).toBe(plan.dailyLabel);
+    }
+    expect(formatDailyPrice(null)).toBeNull();
+    expect(formatDailyPrice(0)).toBeNull();
+    expect(formatDailyPrice("no-numero")).toBeNull();
   });
 });

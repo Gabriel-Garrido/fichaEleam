@@ -1,5 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
-import { computeAssessment, isAssessmentComplete } from "./clinicalAssessmentRules";
+import { ASSESSMENT_TYPES, computeAssessment, isAssessmentComplete } from "./clinicalAssessmentRules";
 
 const ASSESSMENT_SELECT = `
   id, residente_id, eleam_id, tipo, fecha_evaluacion, motivo,
@@ -39,20 +39,24 @@ export async function submitAssessment({
   fechaEvaluacion = null,
 }) {
   if (!residenteId) throw new Error("Residente obligatorio");
-  if (!tipo || (tipo !== "barthel" && tipo !== "katz")) {
+  if (!tipo || !ASSESSMENT_TYPES.includes(tipo)) {
     throw new Error("Tipo de evaluación inválido");
   }
   if (!isAssessmentComplete(tipo, detalle)) {
     throw new Error("Completa todas las preguntas antes de guardar.");
   }
-  const { puntaje, resultado } = computeAssessment(tipo, detalle);
+  const assessment = computeAssessment(tipo, detalle);
+  const { puntaje, resultado } = assessment;
+  const detalleFinal = tipo === "mna" && assessment.puntajeDecimal != null
+    ? { ...detalle, _puntaje_decimal: assessment.puntajeDecimal }
+    : detalle;
 
   const { data, error } = await supabase.rpc("registrar_evaluacion_clinica", {
     p_residente_id: residenteId,
     p_tipo: tipo,
     p_puntaje: puntaje,
     p_resultado: resultado,
-    p_detalle: detalle,
+    p_detalle: detalleFinal,
     p_motivo: motivo,
     p_observaciones: observaciones ?? null,
     p_fecha_evaluacion: fechaEvaluacion ?? null,

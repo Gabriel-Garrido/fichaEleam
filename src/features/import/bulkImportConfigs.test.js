@@ -1,19 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { normalizeResidentRows, normalizeStaffRows } from "./bulkImportConfigs";
 
-const family = {
-  familiar_nombre: "Paula Rojas",
-  familiar_parentesco: "hija",
-  familiar_email: "paula.rojas@gmail.com",
-  familiar_telefono: "+56 9 1234 5678",
-};
-
 describe("bulkImportConfigs", () => {
   it("blocks imported active and hospitalized residents over the plan quota", () => {
     const rows = normalizeResidentRows([
-      { rowNumber: 2, raw: { nombre: "Ana", apellido: "Rojas", fecha_ingreso: "2026-01-01", estado: "activo", ...family } },
-      { rowNumber: 3, raw: { nombre: "Luis", apellido: "Diaz", fecha_ingreso: "2026-01-01", estado: "hospitalizado", ...family, familiar_email: "luis.fam@gmail.com" } },
-      { rowNumber: 4, raw: { nombre: "Eva", apellido: "Perez", fecha_ingreso: "2026-01-01", estado: "activo", ...family, familiar_email: "eva.fam@gmail.com" } },
+      { rowNumber: 2, raw: { nombre: "Ana", apellido: "Rojas", fecha_ingreso: "2026-01-01", estado: "activo" } },
+      { rowNumber: 3, raw: { nombre: "Luis", apellido: "Diaz", fecha_ingreso: "2026-01-01", estado: "hospitalizado" } },
+      { rowNumber: 4, raw: { nombre: "Eva", apellido: "Perez", fecha_ingreso: "2026-01-01", estado: "activo" } },
     ], {
       existingResidents: [{ estado: "activo" }],
       maxResidentes: 2,
@@ -36,7 +29,6 @@ describe("bulkImportConfigs", () => {
           estado: "Activa",
           nivel_dependencia: "Moderada",
           estado_civil: "Soltera",
-          ...family,
         },
       },
       {
@@ -49,8 +41,6 @@ describe("bulkImportConfigs", () => {
           estado: "hospitalizada",
           nivel_dependencia: "alta",
           estado_civil: "Divorciada",
-          ...family,
-          familiar_email: "rosa.contreras@gmail.com",
         },
       },
     ]);
@@ -69,11 +59,6 @@ describe("bulkImportConfigs", () => {
       nivel_dependencia: "severo",
       estado_civil: "divorciado",
     });
-    expect(rows[0].familyPayload).toMatchObject({
-      nombre: "Paula Rojas",
-      parentesco: "hijo/a",
-      email: "paula.rojas@gmail.com",
-    });
   });
 
   it("returns an actionable error when resident RUT checksum is invalid", () => {
@@ -85,7 +70,6 @@ describe("bulkImportConfigs", () => {
           apellido: "Fernandez",
           rut: "22.111.333-4",
           fecha_ingreso: "2026-05-16",
-          ...family,
         },
       },
     ]);
@@ -94,7 +78,7 @@ describe("bulkImportConfigs", () => {
     expect(rows[0].payload.rut).toBeNull();
   });
 
-  it("requires a complete familiar on every resident import row", () => {
+  it("allows a minimal resident import row", () => {
     const rows = normalizeResidentRows([
       {
         rowNumber: 2,
@@ -102,15 +86,11 @@ describe("bulkImportConfigs", () => {
           nombre: "Julia",
           apellido: "Navarro",
           fecha_ingreso: "2026-05-16",
-          familiar_nombre: "Carolina Navarro",
-          familiar_parentesco: "hija",
-          familiar_email: "carolina@example.com",
         },
       },
     ]);
 
-    expect(rows[0].familyPayload).toBeNull();
-    expect(rows[0].errors.join(" ")).toContain("Teléfono del familiar");
+    expect(rows[0].errors).toEqual([]);
   });
 
   it("counts pending staff invitations against staff import quota", () => {

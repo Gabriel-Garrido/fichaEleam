@@ -147,10 +147,23 @@ Deno.serve(async (req) => {
     const eleamNombre = lead.eleam_nombre || "Demo ELEAM";
 
     if (lead.demo_user_id) {
-      return success(req, "already_active", "Este lead ya tiene acceso demo aprobado.", {
+      const linkResult = await generateAccessLink(sb, cleanEmail);
+      const emailResult: EmailResult = linkResult.link
+        ? await sendDemoAccessLink({
+            email: cleanEmail,
+            nombre: lead.nombre,
+            setupUrl: linkResult.link,
+            eleamNombre,
+          })
+        : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+
+      return success(req, "access_resent", "El demo ya estaba aprobado; se generó un nuevo enlace de acceso.", {
         already_active: true,
         profile_id: lead.demo_user_id,
         email: cleanEmail,
+        email_sent: emailResult.sent,
+        email_skipped: emailResult.skipped === true,
+        ...(emailResult.error ? { email_error: emailResult.error } : {}),
       });
     }
 
@@ -223,6 +236,17 @@ Deno.serve(async (req) => {
         });
       }
 
+      const { error: profileResetErr } = await sb.from("profiles").update({
+        must_reset_password: true,
+      }).eq("id", existingProfile.id);
+
+      if (profileResetErr) {
+        console.error("demo reusable profile reset flag", profileResetErr);
+        return fail(req, "internal_error", "El demo se activó, pero no se pudo preparar el nuevo acceso.", 500, {
+          detail: describeError(profileResetErr),
+        });
+      }
+
       const { error: leadUpdateErr } = await sb.from("demo_leads").update({
         demo_user_id: existingProfile.id,
         demo_access_granted_at: new Date().toISOString(),
@@ -237,11 +261,24 @@ Deno.serve(async (req) => {
         });
       }
 
+      const linkResult = await generateAccessLink(sb, cleanEmail);
+      const emailResult: EmailResult = linkResult.link
+        ? await sendDemoAccessLink({
+            email: cleanEmail,
+            nombre: lead.nombre,
+            setupUrl: linkResult.link,
+            eleamNombre,
+          })
+        : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+
       return success(req, "reused_demo", "Demo activado usando una cuenta existente compatible.", {
         reused_existing_user: true,
         profile_id: existingProfile.id,
         eleam_id: existingProfile.eleam_id,
         email: cleanEmail,
+        email_sent: emailResult.sent,
+        email_skipped: emailResult.skipped === true,
+        ...(emailResult.error ? { email_error: emailResult.error } : {}),
       });
     }
 

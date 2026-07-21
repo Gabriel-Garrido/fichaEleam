@@ -1,7 +1,6 @@
 export const ROLE_LABEL = {
   admin_eleam: { txt: "Administrador", cls: "bg-indigo-100 text-indigo-700" },
   funcionario: { txt: "Funcionario",   cls: "bg-emerald-100 text-emerald-700" },
-  familiar:    { txt: "Familiar",      cls: "bg-sky-100 text-sky-700" },
   superadmin:  { txt: "Superadmin",    cls: "bg-amber-100 text-amber-800" },
 };
 
@@ -54,9 +53,19 @@ export const PERM_GROUPS = [
     ],
   },
   {
-    label: "Evaluaciones funcionales",
+    label: "Evaluaciones geriátricas",
     perms: [
-      { key: "aplicar_evaluaciones_clinicas", label: "Aplicar Barthel y Katz" },
+      { key: "aplicar_evaluaciones_clinicas", label: "Aplicar Barthel, Katz, MNA, MMSE y Tinetti" },
+    ],
+  },
+  {
+    label: "Documentos DS20",
+    perms: [
+      { key: "editar_inventario_bienes", label: "Editar inventario de bienes" },
+      { key: "gestionar_reclamos",       label: "Gestionar reclamos y sugerencias" },
+      { key: "gestionar_emergencias",    label: "Editar plan de emergencias" },
+      { key: "registrar_simulacros",     label: "Registrar simulacros" },
+      { key: "gestionar_cumplimiento",   label: "Gestionar cumplimiento DS20 (brechas, protocolos, SENAMA)" },
     ],
   },
   {
@@ -77,12 +86,6 @@ export const PERM_GROUPS = [
       { key: "archivar_acreditacion", label: "Archivar" },
     ],
   },
-  {
-    label: "Visitas familiares",
-    perms: [
-      { key: "registrar_visitas", label: "Registrar visitas" },
-    ],
-  },
 ];
 
 export const DEFAULT_PERMS = {
@@ -95,9 +98,11 @@ export const DEFAULT_PERMS = {
   administrar_medicamentos: true, validar_medicamentos_controlados: false, ajustar_stock_medicamentos: false,
   asignar_camas: true,
   subir_acreditacion: true,   editar_acreditacion: true,   archivar_acreditacion: false,
-  registrar_visitas: true,
   aplicar_evaluaciones_clinicas: true,
   crear_eventos_adversos: true, editar_eventos_adversos: true, cerrar_eventos_adversos: false,
+  editar_inventario_bienes: false, gestionar_reclamos: true,
+  gestionar_emergencias: false, registrar_simulacros: true,
+  gestionar_cumplimiento: false,
 };
 
 export const PLANTILLAS_CARGO = {
@@ -111,9 +116,11 @@ export const PLANTILLAS_CARGO = {
     administrar_medicamentos: true, validar_medicamentos_controlados: true, ajustar_stock_medicamentos: true,
     asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
-    registrar_visitas: true,
     aplicar_evaluaciones_clinicas: true,
     crear_eventos_adversos: true, editar_eventos_adversos: true, cerrar_eventos_adversos: true,
+    editar_inventario_bienes: false, gestionar_reclamos: true,
+    gestionar_emergencias: false, registrar_simulacros: true,
+    gestionar_cumplimiento: false,
   },
   "Kinesiólogo/a": {
     crear_residentes: false,  editar_residentes: true,   eliminar_residentes: false,
@@ -125,9 +132,11 @@ export const PLANTILLAS_CARGO = {
     administrar_medicamentos: false, validar_medicamentos_controlados: false, ajustar_stock_medicamentos: false,
     asignar_camas: true,
     subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
-    registrar_visitas: false,
     aplicar_evaluaciones_clinicas: true,
     crear_eventos_adversos: true, editar_eventos_adversos: true, cerrar_eventos_adversos: false,
+    editar_inventario_bienes: false, gestionar_reclamos: false,
+    gestionar_emergencias: false, registrar_simulacros: false,
+    gestionar_cumplimiento: false,
   },
   "Médico/a": {
     crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
@@ -139,9 +148,11 @@ export const PLANTILLAS_CARGO = {
     administrar_medicamentos: true, validar_medicamentos_controlados: true, ajustar_stock_medicamentos: true,
     asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: false,
-    registrar_visitas: false,
     aplicar_evaluaciones_clinicas: true,
     crear_eventos_adversos: true, editar_eventos_adversos: true, cerrar_eventos_adversos: true,
+    editar_inventario_bienes: false, gestionar_reclamos: true,
+    gestionar_emergencias: true, registrar_simulacros: true,
+    gestionar_cumplimiento: false,
   },
   "Auxiliar ATD": {
     crear_residentes: false,  editar_residentes: false,  eliminar_residentes: false,
@@ -153,9 +164,11 @@ export const PLANTILLAS_CARGO = {
     administrar_medicamentos: true, validar_medicamentos_controlados: false, ajustar_stock_medicamentos: false,
     asignar_camas: true,
     subir_acreditacion: false, editar_acreditacion: false, archivar_acreditacion: false,
-    registrar_visitas: true,
     aplicar_evaluaciones_clinicas: false,
     crear_eventos_adversos: true, editar_eventos_adversos: false, cerrar_eventos_adversos: false,
+    editar_inventario_bienes: false, gestionar_reclamos: true,
+    gestionar_emergencias: false, registrar_simulacros: true,
+    gestionar_cumplimiento: false,
   },
   "Administrativo/a": {
     crear_residentes: true,   editar_residentes: true,   eliminar_residentes: false,
@@ -167,8 +180,10 @@ export const PLANTILLAS_CARGO = {
     administrar_medicamentos: false, validar_medicamentos_controlados: false, ajustar_stock_medicamentos: false,
     asignar_camas: true,
     subir_acreditacion: true,  editar_acreditacion: true,  archivar_acreditacion: true,
-    registrar_visitas: false,
     aplicar_evaluaciones_clinicas: false,
     crear_eventos_adversos: false, editar_eventos_adversos: false, cerrar_eventos_adversos: false,
+    editar_inventario_bienes: true, gestionar_reclamos: true,
+    gestionar_emergencias: true, registrar_simulacros: true,
+    gestionar_cumplimiento: true,
   },
 };

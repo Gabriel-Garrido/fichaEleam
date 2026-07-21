@@ -3,16 +3,22 @@ import { featureDefaultMap, featuresForRole } from "./featureCatalog";
 
 describe("featureCatalog", () => {
   it("returns only features available for the requested role", () => {
-    expect(featuresForRole("familiar").map((feature) => feature.id)).toEqual([
-      "familiar",
-      "familiar-visitas",
+    expect(featuresForRole("funcionario").map((feature) => feature.id)).toEqual([
+      "dashboard",
+      "establishment",
+      "residents",
+      "personnel",
+      "compliance",
     ]);
   });
 
   it("keeps features enabled by default and honors explicit false values", () => {
-    expect(featureDefaultMap("familiar", { "familiar-visitas": false })).toEqual({
-      familiar: true,
-      "familiar-visitas": false,
+    expect(featureDefaultMap("funcionario", { personnel: false })).toEqual({
+      dashboard: true,
+      establishment: true,
+      residents: true,
+      personnel: false,
+      compliance: true,
     });
   });
 });

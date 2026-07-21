@@ -1,0 +1,39 @@
+{
+  "version": "5",
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.45.4": "1108d69216995335d057dbd15907caaf514a4d1ef082f097050573b9d589a57c"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@eslint/js@^9.25.0",
+        "npm:@fontsource-variable/fraunces@^5.2.9",
+        "npm:@fontsource-variable/inter@^5.2.8",
+        "npm:@supabase/supabase-js@^2.104.0",
+        "npm:@tailwindcss/vite@^4.1.8",
+        "npm:@types/react-dom@^19.1.2",
+        "npm:@types/react@^19.1.2",
+        "npm:@vitejs/plugin-react@^4.4.1",
+        "npm:autoprefixer@^10.4.21",
+        "npm:deno@^2.9.3",
+        "npm:eslint-plugin-react-hooks@^5.2.0",
+        "npm:eslint-plugin-react-refresh@~0.4.19",
+        "npm:eslint@^9.25.0",
+        "npm:globals@16",
+        "npm:pdf-lib@^1.17.1",
+        "npm:postcss@^8.5.4",
+        "npm:react-dom@^19.1.0",
+        "npm:react-router-dom@^7.6.1",
+        "npm:react@^19.1.0",
+        "npm:read-excel-file@^9.0.9",
+        "npm:sharp@~0.34.5",
+        "npm:supabase@^2.98.2",
+        "npm:tailwindcss@^4.1.8",
+        "npm:vite@^6.3.5",
+        "npm:vitest@^4.1.6",
+        "npm:write-excel-file@^4.0.6",
+        "npm:zod@^4.4.3"
+      ]
+    }
+  }
+}

@@ -277,6 +277,27 @@ if (exists(sitemapPath)) {
   }
 }
 
+const indexPath = path.join(dist, "index.html");
+if (exists(indexPath)) {
+  const indexHtml = read(indexPath);
+  const match = indexHtml.match(/var publicPaths = (\[[\s\S]*?\]);/);
+  if (!match) {
+    fail("dist/index.html no contiene la lista 'var publicPaths' del detector de ruta pública.");
+  } else {
+    let injected = [];
+    try {
+      injected = JSON.parse(match[1]);
+    } catch {
+      fail("dist/index.html: la lista 'var publicPaths' no es JSON válido.");
+    }
+    const expected = PUBLIC_ROUTES.map((route) => route.path);
+    const missing = expected.filter((p) => !injected.includes(p));
+    if (missing.length) {
+      fail(`dist/index.html: 'var publicPaths' no incluye rutas públicas: ${missing.join(", ")}. El prerender de esas rutas quedaría oculto tras el spinner.`);
+    }
+  }
+}
+
 const robotsPath = path.join(dist, "robots.txt");
 if (exists(robotsPath)) {
   const robots = read(robotsPath);

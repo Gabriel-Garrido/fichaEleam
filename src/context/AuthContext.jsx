@@ -18,6 +18,9 @@ const FAIL_CLOSED_PERMS = new Set([
   "editar_indicaciones_medicamentos",
   "editar_indicaciones_cuidado",
   "cerrar_eventos_adversos",
+  "editar_inventario_bienes",
+  "gestionar_emergencias",
+  "gestionar_cumplimiento",
 ]);
 const AUTH_NOTICE_STORAGE_KEY = "fichaeleam_auth_notice";
 
@@ -33,10 +36,15 @@ function storeAuthNotice(message) {
   window.sessionStorage.setItem(AUTH_NOTICE_STORAGE_KEY, message);
 }
 
-function purgeLegacyOnboardingKeys() {
+function purgeRetiredGuidanceKeys() {
   if (typeof window === "undefined") return;
   try {
-    const prefixes = ["fichaeleam_activation_v1_", "fichaeleam_onboarding_v2_"];
+    const prefixes = [
+      "fichaeleam_activation_v1_",
+      "fichaeleam_onboarding_v2_",
+      "fichaeleam_welcome_v1_",
+      "fichaeleam_coach_v1_",
+    ];
     const toRemove = [];
     for (let i = 0; i < window.localStorage.length; i += 1) {
       const key = window.localStorage.key(i);
@@ -113,7 +121,7 @@ export function AuthProvider({ children }) {
       }
 
       if (!data) {
-        const message = "No encontramos una cuenta habilitada para este correo. Si solicitaste demo, el login se habilita cuando el equipo apruebe tu cuenta; si eres funcionario o familiar, pide que creen tu usuario.";
+        const message = "No encontramos una cuenta habilitada para este correo. Pide al administrador del ELEAM que cree tu acceso.";
         storeAuthNotice(message);
         setAuthNotice(message);
         setProfile(null);
@@ -132,7 +140,7 @@ export function AuthProvider({ children }) {
         setAuthNotice(message);
         await supabase.auth.signOut();
         return;
-      } else if (!data.eleam_id && (data.rol === "funcionario" || data.rol === "familiar")) {
+      } else if (!data.eleam_id && data.rol === "funcionario") {
         const message = "Tu cuenta no tiene un ELEAM asociado. Contacta al administrador del establecimiento.";
         storeAuthNotice(message);
         setAuthNotice(message);
@@ -159,7 +167,7 @@ export function AuthProvider({ children }) {
       // Una fila ausente significa feature habilitada por defecto.
       try {
         if (data.eleam_id && data.rol !== "superadmin") {
-          const profileFeatureQuery = data.rol === "funcionario" || data.rol === "familiar"
+          const profileFeatureQuery = data.rol === "funcionario"
             ? supabase
                 .from("profile_feature_permissions")
                 .select("feature_id, enabled")
@@ -237,7 +245,7 @@ export function AuthProvider({ children }) {
           setPermisos(null);
           setFeaturePermissions(null);
           setAuthNotice(takeStoredAuthNotice());
-          purgeLegacyOnboardingKeys();
+          purgeRetiredGuidanceKeys();
         }
       }
     );
@@ -279,7 +287,6 @@ export function AuthProvider({ children }) {
   const rol = profile?.rol ?? null;
   const isAdminEleam  = rol === "admin_eleam";
   const isFuncionario = rol === "funcionario";
-  const isFamiliar    = rol === "familiar";
   const isSuperadmin  = rol === "superadmin";
   const isStaff       = isAdminEleam || isFuncionario;
 
@@ -317,12 +324,10 @@ export function AuthProvider({ children }) {
   // Ruta inicial según rol/estado de suscripción.
   // - superadmin sin ELEAM → /superadmin (operador de la plataforma).
   // - superadmin con ELEAM (cuenta demo) → /dashboard para mostrar la app.
-  // - familiar con ELEAM activo → /familiar.
-  // - staff/familiar sin acceso vigente → /pago con bloqueo informativo.
+  // - staff sin acceso vigente → /pago con bloqueo informativo.
   let homePath = "/";
   if (user) {
     if (isSuperadmin)            homePath = profile?.eleam_id ? "/dashboard" : "/superadmin";
-    else if (isFamiliar)         homePath = pagoActivo ? "/familiar" : "/pago?sinAcceso=1";
     else if (pagoActivo)         homePath = "/dashboard";
     else                         homePath = "/pago?sinAcceso=1";
   }
@@ -339,7 +344,6 @@ export function AuthProvider({ children }) {
     rol,
     isAdminEleam,
     isFuncionario,
-    isFamiliar,
     isSuperadmin,
     isStaff,
     homePath,
@@ -356,7 +360,7 @@ export function AuthProvider({ children }) {
     refetchProfile,
   }), [
     user, profile, eleam, plan, subscriptionStatus, pagoActivo, rol,
-    isAdminEleam, isFuncionario, isFamiliar, isSuperadmin, isStaff,
+    isAdminEleam, isFuncionario, isSuperadmin, isStaff,
     homePath, permisos, featurePermissions, featurePermissionsError, can, canFeature,
     mustResetPassword, profileLoading, authLoading, authNotice,
     supabaseError, refetchProfile,

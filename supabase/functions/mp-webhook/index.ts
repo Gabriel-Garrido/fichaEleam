@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
 
     return jsonOk({ ok: true });
   } catch (e) {
-    const msg = String(e?.message ?? e);
+    const msg = e instanceof Error ? e.message : String(e);
     console.error("mp-webhook handler error", msg);
     if (eventInsert.data?.id) {
       await sb.from("mp_webhook_events")

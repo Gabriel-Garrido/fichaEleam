@@ -7,6 +7,7 @@ import {
   ASSESSMENT_LABEL,
   ASSESSMENT_SHORT_LABEL,
   MOTIVO_LABEL,
+  computeTinetti,
   evaluationStatus,
 } from "./clinicalAssessmentRules";
 import ClinicalAssessmentModal from "./ClinicalAssessmentModal";
@@ -40,6 +41,43 @@ function ScoreDisplay({ tipo, assessment }) {
           {assessment.puntaje}<span className="text-sm font-medium text-slate-400">/100</span>
         </p>
         <p className="text-sm text-slate-600">{assessment.resultado}</p>
+      </div>
+    );
+  }
+  if (tipo === "mna") {
+    const display = assessment.detalle?._puntaje_decimal ?? assessment.puntaje;
+    return (
+      <div>
+        <p className="text-2xl font-semibold text-slate-900 tabular-nums">
+          {display}<span className="text-sm font-medium text-slate-400">/30</span>
+        </p>
+        <p className="text-sm text-slate-600">{assessment.resultado}</p>
+      </div>
+    );
+  }
+  if (tipo === "mmse") {
+    return (
+      <div>
+        <p className="text-2xl font-semibold text-slate-900 tabular-nums">
+          {assessment.puntaje}<span className="text-sm font-medium text-slate-400">/30</span>
+        </p>
+        <p className="text-sm text-slate-600">{assessment.resultado}</p>
+      </div>
+    );
+  }
+  if (tipo === "tinetti") {
+    const sub = computeTinetti(assessment.detalle ?? {});
+    const puntaje = assessment.puntaje ?? sub.puntaje;
+    const tono = puntaje >= 25 ? "emerald" : puntaje >= 19 ? "amber" : "rose";
+    return (
+      <div>
+        <div className="flex items-end gap-2">
+          <p className={`text-2xl font-semibold tabular-nums ${tono === "emerald" ? "text-emerald-700" : tono === "amber" ? "text-amber-700" : "text-rose-700"}`}>
+            {puntaje}<span className="text-sm font-medium text-slate-400">/28</span>
+          </p>
+          <span className="text-xs text-slate-500 pb-1">Eq: {sub.equilibrio}/16 · Mar: {sub.marcha}/12</span>
+        </div>
+        <p className="text-sm text-slate-600">{assessment.resultado || sub.resultado}</p>
       </div>
     );
   }

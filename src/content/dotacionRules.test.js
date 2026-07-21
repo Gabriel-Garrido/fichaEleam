@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { calcularDotacion, dotacionEventValue, MIN_CUIDADORES_NOCTURNOS } from "./dotacionRules";
+import {
+  calcularDotacion,
+  dotacionEventValue,
+  DOTACION_META,
+  MIN_CUIDADORES_NOCTURNOS,
+} from "./dotacionRules";
+
+describe("DOTACION_META", () => {
+  it("declara vigencia y modificaciones normativas consideradas", () => {
+    expect(DOTACION_META.vigenciaDesde).toBe("2025-10-01");
+    expect(DOTACION_META.modificacionesConsideradas).toEqual([
+      "Decreto N°6/2025",
+      "Decreto N°9/2025",
+    ]);
+    expect(DOTACION_META.versionReglas).toBe("2026-06-10");
+  });
+});
 
 describe("calcularDotacion — residentes con dependencia (Art. 15)", () => {
   it("aplica 1 cuidador diurno hasta 8 residentes", () => {

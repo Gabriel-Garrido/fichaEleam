@@ -41,6 +41,12 @@ export default defineConfig({
               id.includes('node_modules/sheetjs')) {
             return 'vendor-excel';
           }
+          // PDF — pesado y solo se carga bajo demanda (import dinámico en consentPdf)
+          if (id.includes('node_modules/pdf-lib') ||
+              id.includes('node_modules/@pdf-lib') ||
+              id.includes('node_modules/pako')) {
+            return 'vendor-pdf';
+          }
           // Resto de node_modules en un chunk genérico para que no contaminen vendor-react
           if (id.includes('node_modules')) {
             return 'vendor-misc';

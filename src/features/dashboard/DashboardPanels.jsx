@@ -11,7 +11,7 @@ import {
 } from "./dashboardUtils";
 import {
   Card, AlertChip, BriefMetric, FilterPill,
-  MiniVitals, SetupAction, Stat, SexoRow,
+  MiniVitals, Stat, SexoRow,
 } from "./DashboardShared";
 
 /* ─── Critical alerts strip ──────────────────────────────────── */
@@ -22,6 +22,8 @@ export function CriticalAlerts({
   expiring,
   operational,
   assessments = [],
+  ds20Residents = [],
+  ds20Staffing = [],
   adverseEvents = { total: 0, gravesOCriticos: 0 },
   loading,
   navigate,
@@ -37,11 +39,13 @@ export function CriticalAlerts({
   });
   const emarUrgent = (operational?.emar?.pendiente_validacion ?? 0) + (operational?.emar?.vencidas ?? 0);
   const careUrgent = operational?.care?.vencidas ?? 0;
-  const overdueAssessments = assessments.filter((a) => (a.dias_restantes ?? 0) < 0);
+  const overdueAssessments = assessments.filter((a) => a.dias_restantes == null || a.dias_restantes < 0);
   const assessmentsCount = overdueAssessments.length;
+  const ds20ResidentPending = ds20Residents.filter((item) => (item.pendientes ?? 0) > 0);
+  const ds20StaffingIssues = ds20Staffing.filter((item) => item.incumple);
   const adverseOpen = adverseEvents?.total ?? 0;
   const adverseSerious = adverseEvents?.gravesOCriticos ?? 0;
-  const totalAlertas = critical.length + followUps.length + docs7d.length + emarUrgent + careUrgent + assessmentsCount + adverseOpen;
+  const totalAlertas = critical.length + followUps.length + docs7d.length + emarUrgent + careUrgent + assessmentsCount + ds20ResidentPending.length + ds20StaffingIssues.length + adverseOpen;
 
   if (!totalAlertas) {
     return (
@@ -70,61 +74,98 @@ export function CriticalAlerts({
         </h2>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
-        <AlertChip
-          label="Medicamentos urgentes"
-          value={emarUrgent}
-          tone="rose"
-          onClick={emarUrgent ? () => navigate("/turnos/emar") : null}
-          hint={emarUrgent ? "Vencidos o registros sin validar" : "Al día"}
-        />
-        <AlertChip
-          label="Tareas vencidas"
-          value={careUrgent}
-          tone="amber"
-          onClick={careUrgent ? () => navigate("/turnos/tareas") : null}
-          hint={careUrgent ? "Plan de cuidado por cerrar" : "Al día"}
-        />
-        <AlertChip
-          label="Signos vitales críticos"
-          value={critical.length}
-          tone="rose"
-          onClick={critical.length ? () => navigate("/vital-signs") : null}
-          hint={critical.length ? critical.slice(0, 2).map((r) => `${r.nombre} ${r.apellido}`).join(" · ") : "Sin críticos"}
-        />
-        <AlertChip
-          label="Seguimientos pendientes"
-          value={followUps.length}
-          tone="amber"
-          onClick={followUps.length ? () => navigate("/observations") : null}
-          hint={followUps.length ? "Observaciones marcadas para seguimiento" : "Al día"}
-        />
-        <AlertChip
-          label="Documentos por vencer ≤ 7d"
-          value={docs7d.length}
-          tone="amber"
-          onClick={docs7d.length ? () => navigate("/accreditation") : null}
-          hint={docs7d.length ? "Renovar antes del vencimiento" : "Sin urgencias"}
-        />
-        <AlertChip
-          label="Evaluaciones funcionales vencidas"
-          value={assessmentsCount}
-          tone="rose"
-          onClick={assessmentsCount ? () => navigate(`/residents/${overdueAssessments[0].residente_id}`) : null}
-          hint={assessmentsCount
-            ? overdueAssessments.slice(0, 2).map((a) => `${a.residente_nombre}`).join(" · ")
-            : "Barthel y Katz al día"}
-        />
-        <AlertChip
-          label="Eventos adversos abiertos"
-          value={adverseOpen}
-          tone={adverseSerious > 0 ? "rose" : "amber"}
-          onClick={adverseOpen ? () => navigate("/eventos-adversos") : null}
-          hint={adverseOpen
-            ? adverseSerious > 0
-              ? `${adverseSerious} grave${adverseSerious === 1 ? "" : "s"} o crítico${adverseSerious === 1 ? "" : "s"}`
-              : "En seguimiento — leves o moderados"
-            : "Sin pendientes"}
-        />
+        {[
+          {
+            label: "Medicamentos urgentes",
+            value: emarUrgent,
+            tone: "rose",
+            onClick: emarUrgent ? () => navigate("/operacion/medicamentos") : null,
+            hint: emarUrgent ? "Vencidos o registros sin validar" : "Al día",
+          },
+          {
+            label: "Signos vitales críticos",
+            value: critical.length,
+            tone: "rose",
+            onClick: critical.length ? () => navigate("/vital-signs") : null,
+            hint: critical.length ? critical.slice(0, 2).map((r) => `${r.nombre} ${r.apellido}`).join(" · ") : "Sin críticos",
+          },
+          {
+            label: "Eventos adversos abiertos",
+            value: adverseOpen,
+            tone: adverseSerious > 0 ? "rose" : "amber",
+            onClick: adverseOpen ? () => navigate("/eventos-adversos") : null,
+            hint: adverseOpen
+              ? adverseSerious > 0
+                ? `${adverseSerious} grave${adverseSerious === 1 ? "" : "s"} o crítico${adverseSerious === 1 ? "" : "s"}`
+                : "En seguimiento — leves o moderados"
+              : "Sin pendientes",
+          },
+          {
+            label: "Brechas de dotación",
+            value: ds20StaffingIssues.length,
+            tone: "rose",
+            onClick: ds20StaffingIssues.length ? () => navigate("/personal/dotacion") : null,
+            hint: ds20StaffingIssues.length
+              ? ds20StaffingIssues.slice(0, 2).map((a) => `${a.turno}: ${a.brecha_cuidadores}`).join(" · ")
+              : "Dotación cubierta",
+          },
+          {
+            label: "Evaluaciones DS20 pendientes",
+            value: assessmentsCount,
+            tone: "rose",
+            onClick: assessmentsCount ? () => navigate(`/residents/${overdueAssessments[0].residente_id}`) : null,
+            hint: assessmentsCount
+              ? overdueAssessments.slice(0, 2).map((a) => `${a.residente_nombre}`).join(" · ")
+              : "Barthel, Katz, MNA y MMSE al día",
+          },
+          {
+            label: "Tareas vencidas",
+            value: careUrgent,
+            tone: "amber",
+            onClick: careUrgent ? () => navigate("/operacion/cuidados") : null,
+            hint: careUrgent ? "Plan de cuidado por cerrar" : "Al día",
+          },
+          {
+            label: "Seguimientos pendientes",
+            value: followUps.length,
+            tone: "amber",
+            onClick: followUps.length ? () => navigate("/observations") : null,
+            hint: followUps.length ? "Observaciones marcadas para seguimiento" : "Al día",
+          },
+          {
+            label: "Documentos por vencer ≤ 7d",
+            value: docs7d.length,
+            tone: "amber",
+            onClick: docs7d.length ? () => navigate("/cumplimiento/seremi") : null,
+            hint: docs7d.length ? "Renovar antes del vencimiento" : "Sin urgencias",
+          },
+          {
+            label: "Ingreso DS20 incompleto",
+            value: ds20ResidentPending.length,
+            tone: "amber",
+            onClick: ds20ResidentPending.length ? () => navigate(`/residents/${ds20ResidentPending[0].residente_id}`) : null,
+            hint: ds20ResidentPending.length
+              ? ds20ResidentPending.slice(0, 2).map((a) => `${a.residente_nombre}`).join(" · ")
+              : "Ingresos completos",
+          },
+        ]
+          // Activas primero (rojas antes que ámbar); las que están al día quedan
+          // al final en gris para no competir visualmente.
+          .sort((a, b) => {
+            const activeA = a.value > 0 ? (a.tone === "rose" ? 0 : 1) : 2;
+            const activeB = b.value > 0 ? (b.tone === "rose" ? 0 : 1) : 2;
+            return activeA - activeB;
+          })
+          .map((chip) => (
+            <AlertChip
+              key={chip.label}
+              label={chip.label}
+              value={chip.value}
+              tone={chip.tone}
+              onClick={chip.onClick}
+              hint={chip.hint}
+            />
+          ))}
       </div>
     </div>
   );
@@ -159,19 +200,19 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
     ?? ((operational?.care?.pendiente ?? 0) + (operational?.care?.reprogramada ?? 0));
   let nextAction;
   if (emarOverdue) {
-    nextAction = { label: "Administrar medicamento vencido", hint: `${emarOverdue} medicamento${emarOverdue === 1 ? "" : "s"} fuera de horario`, path: "/turnos/emar", tone: "rose" };
+    nextAction = { label: "Administrar medicamento vencido", hint: `${emarOverdue} medicamento${emarOverdue === 1 ? "" : "s"} fuera de horario`, path: "/operacion/medicamentos", tone: "rose" };
   } else if (emarValidation) {
-    nextAction = { label: "Validar medicamentos", hint: `${emarValidation} administraci${emarValidation === 1 ? "ón" : "ones"} requiere segundo usuario`, path: "/turnos/emar", tone: "rose" };
+    nextAction = { label: "Validar medicamentos", hint: `${emarValidation} administraci${emarValidation === 1 ? "ón" : "ones"} requiere segundo usuario`, path: "/operacion/medicamentos", tone: "rose" };
   } else if (careOverdue) {
-    nextAction = { label: "Cerrar tareas vencidas", hint: `${careOverdue} tarea${careOverdue === 1 ? "" : "s"} de cuidado vencida${careOverdue === 1 ? "" : "s"}`, path: "/turnos/tareas", tone: "amber" };
+    nextAction = { label: "Cerrar tareas vencidas", hint: `${careOverdue} tarea${careOverdue === 1 ? "" : "s"} de cuidado vencida${careOverdue === 1 ? "" : "s"}`, path: "/operacion/cuidados", tone: "amber" };
   } else if (carePending) {
-    nextAction = { label: "Completar tareas del turno", hint: `${carePending} tarea${carePending === 1 ? "" : "s"} pendiente${carePending === 1 ? "" : "s"}`, path: "/turnos/tareas", tone: "amber" };
+    nextAction = { label: "Completar tareas del turno", hint: `${carePending} tarea${carePending === 1 ? "" : "s"} pendiente${carePending === 1 ? "" : "s"}`, path: "/operacion/cuidados", tone: "amber" };
   } else if (stale.length) {
     nextAction = { label: "Tomar controles pendientes", hint: `${stale.length} residente${stale.length === 1 ? "" : "s"} sin control hoy`, path: "/vital-signs/new", tone: "rose" };
   } else if (followUps.length) {
     nextAction = { label: "Cerrar seguimientos", hint: `${followUps.length} observaci${followUps.length === 1 ? "ón" : "ones"} por revisar`, path: "/observations", tone: "amber" };
   } else if (expiring7) {
-    nextAction = { label: "Renovar documentos", hint: `${expiring7} vencen en 7 días o menos`, path: "/accreditation", tone: "amber" };
+    nextAction = { label: "Renovar documentos", hint: `${expiring7} vencen en 7 días o menos`, path: "/cumplimiento/seremi", tone: "amber" };
   } else {
     nextAction = { label: "Mantener seguimiento", hint: "Sin bloqueos urgentes; revisa el panel clínico si necesitas detalle", path: "/vital-signs", tone: "emerald" };
   }
@@ -253,29 +294,6 @@ export function RiskMatrix({ clinicalSummary, highDependency, staleCount, follow
         ))}
       </div>
     </Card>
-  );
-}
-
-/* ─── First run panel ─────────────────────────────────────────── */
-
-export function FirstRunPanel({ navigate }) {
-  return (
-    <section className="bg-white border border-teal-100 rounded-2xl shadow-sm p-5">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-teal-700 font-semibold">Primeros pasos</p>
-          <h2 className="text-xl font-bold text-slate-900 mt-1">Configura tu ELEAM para empezar a gestionar el turno</h2>
-          <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-            Agrega residentes activos, registra el primer control y sube documentos base para que el dashboard entregue indicadores útiles.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 lg:min-w-[460px]">
-          <SetupAction label="Agregar residente" sub="Ficha clínica base"   onClick={() => navigate("/residents/new")} />
-          <SetupAction label="Subir documento"   sub="Carpeta SEREMI"       onClick={() => navigate("/accreditation")} />
-          <SetupAction label="Asignar camas"     sub="Habitaciones y camas" onClick={() => navigate("/camas")} />
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -579,7 +597,7 @@ export function ExpiringDocsCard({ items, navigate }) {
       tone="amber"
       action={items.length > 0 && (
         <button type="button"
- onClick={() => navigate("/accreditation")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
+ onClick={() => navigate("/cumplimiento/seremi")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
       )}
     >
       {items.length === 0 ? (
@@ -591,7 +609,7 @@ export function ExpiringDocsCard({ items, navigate }) {
             const urgent = daysLeft <= 7;
             const r = re.requisito;
             return (
-              <li key={re.id} onClick={() => navigate(`/accreditation/requisito/${re.id}`)}
+              <li key={re.id} onClick={() => navigate(`/cumplimiento/seremi/requisito/${re.id}`)}
                 className="bg-white rounded-xl border border-slate-100 px-3 py-2 cursor-pointer hover:bg-amber-50/50 transition-colors flex justify-between items-center gap-3"
               >
                 <div className="flex-1 min-w-0">
@@ -640,7 +658,7 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
                                               "border-rose-200 bg-rose-50";
             return (
               <button type="button"
- key={a.codigo} onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
+ key={a.codigo} onClick={() => navigate(`/cumplimiento/seremi/ambito/${a.codigo}`)}
                 className={`text-left rounded-xl border p-2 hover:shadow-sm transition-all ${tone}`}
               >
                 <p className="text-[10px] font-mono text-slate-500">{a.codigo}</p>
@@ -653,11 +671,11 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
       )}
       <div className="flex items-center justify-between mt-4">
         <button type="button"
- onClick={() => navigate("/accreditation")} className="text-xs font-semibold text-teal-700 hover:underline">
+ onClick={() => navigate("/cumplimiento/seremi")} className="text-xs font-semibold text-teal-700 hover:underline">
           Abrir Carpeta SEREMI →
         </button>
         <button type="button"
- onClick={() => navigate("/accreditation/observaciones")} className="text-xs text-slate-500 hover:underline">
+ onClick={() => navigate("/cumplimiento/seremi/observaciones")} className="text-xs text-slate-500 hover:underline">
           Observaciones
         </button>
       </div>

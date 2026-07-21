@@ -259,6 +259,7 @@ export default function SuperAdminDashboard() {
         metrics={metrics}
         onFilterRisk={() => navigate("/superadmin/clientes")}
         onFilterLeads={() => navigate("/superadmin/leads")}
+        onOpenClient={(client) => navigate(`/superadmin/clientes?search=${encodeURIComponent(client.nombre ?? "")}`)}
       />
 
       {/* Pipeline */}

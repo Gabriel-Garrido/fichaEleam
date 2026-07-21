@@ -1,106 +1,45 @@
+// El producto se configura por áreas de trabajo, no por cada pantalla interna.
+// Los permisos clínicos sensibles siguen controlándose con funcionario_permisos.
 export const FEATURE_CATALOG = [
   {
     id: "dashboard",
-    label: "Inicio operativo",
-    description: "Prioridades, alertas y resumen diario.",
-    group: "Operación",
+    label: "Inicio",
+    description: "Prioridades, alertas y avance de cumplimiento.",
+    group: "FichaEleam",
     roles: ["admin_eleam", "funcionario"],
   },
   {
-    id: "turnos",
-    label: "Entrega de turno",
-    description: "Resumen para traspasar pendientes al siguiente equipo.",
-    group: "Operación",
+    id: "establishment",
+    label: "Establecimiento",
+    description: "Infraestructura, capacidad, habitaciones y camas.",
+    group: "FichaEleam",
     roles: ["admin_eleam", "funcionario"],
   },
   {
     id: "residents",
     label: "Residentes",
-    description: "Fichas, contactos y datos clínicos base.",
-    group: "Operación",
+    description: "Carpetas personales, cuidados, salud y registros diarios.",
+    group: "FichaEleam",
     roles: ["admin_eleam", "funcionario"],
   },
   {
-    id: "beds",
-    label: "Camas y ocupación",
-    description: "Inventario, disponibilidad y asignaciones.",
-    group: "Operación",
+    id: "personnel",
+    label: "Personal",
+    description: "Equipo, competencias, capacitación, turnos y dotación.",
+    group: "FichaEleam",
     roles: ["admin_eleam", "funcionario"],
   },
   {
-    id: "care-plans",
-    label: "Plan de cuidado",
-    description: "Pautas no farmacológicas y tareas por turno.",
-    group: "Operación",
+    id: "compliance",
+    label: "Cumplimiento SEREMI",
+    description: "Requisitos, documentos, protocolos, reclamos y fiscalización.",
+    group: "FichaEleam",
     roles: ["admin_eleam", "funcionario"],
-  },
-  {
-    id: "emar",
-    label: "Medicamentos",
-    description: "Administración, stock y doble revisión.",
-    group: "Operación",
-    roles: ["admin_eleam", "funcionario"],
-  },
-  {
-    id: "vital-signs",
-    label: "Signos vitales",
-    description: "Registro e historial de controles clínicos.",
-    group: "Operación",
-    roles: ["admin_eleam", "funcionario"],
-  },
-  {
-    id: "observations",
-    label: "Observaciones",
-    description: "Novedades, incidentes y seguimientos.",
-    group: "Operación",
-    roles: ["admin_eleam", "funcionario"],
-  },
-  {
-    id: "adverse-events",
-    label: "Eventos adversos",
-    description: "Registro reglamentario de caídas, errores y eventos serios.",
-    group: "Operación",
-    roles: ["admin_eleam", "funcionario"],
-  },
-  {
-    id: "accreditation",
-    label: "Carpeta SEREMI",
-    description: "Acreditación, documentos y observaciones.",
-    group: "Gestión",
-    roles: ["admin_eleam", "funcionario"],
-  },
-  {
-    id: "team",
-    label: "Equipo",
-    description: "Usuarios, familiares y permisos.",
-    group: "Gestión",
-    roles: ["admin_eleam"],
-  },
-  {
-    id: "subscription",
-    label: "Suscripción",
-    description: "Plan, pagos y estado del acceso.",
-    group: "Gestión",
-    roles: ["admin_eleam"],
-  },
-  {
-    id: "familiar",
-    label: "Portal familiar",
-    description: "Resumen visible del residente vinculado.",
-    group: "Familia",
-    roles: ["familiar"],
-  },
-  {
-    id: "familiar-visitas",
-    label: "Visitas familiares",
-    description: "Registro de visitas y notas para el equipo.",
-    group: "Familia",
-    roles: ["familiar"],
   },
 ];
 
 export const FEATURE_BY_ID = Object.fromEntries(FEATURE_CATALOG.map((feature) => [feature.id, feature]));
-export const FEATURE_ROLES = ["admin_eleam", "funcionario", "familiar"];
+export const FEATURE_ROLES = ["admin_eleam", "funcionario"];
 
 export function featuresForRole(role) {
   return FEATURE_CATALOG.filter((feature) => feature.roles.includes(role));

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   INITIAL_CARE_SCHEDULE,
+  buildDailyShiftSchedules,
   buildQuickCarePlanDefaults,
   calculateCarePlanReadiness,
+  careScheduleError,
   formatCareSchedule,
   groupCarePresetsByArea,
 } from "./carePlanUi";
@@ -31,7 +33,6 @@ describe("carePlanUi helpers", () => {
           titulo: "Hidratación",
           prioridad: "alta",
           requiere_observacion: true,
-          visible_familiar: true,
           horarios: [{ turno: "mañana", hora: "10:00", activo: true }],
         },
       ],
@@ -39,7 +40,6 @@ describe("carePlanUi helpers", () => {
 
     expect(metrics).toEqual({
       active: 1,
-      familyVisible: 1,
       hasClinicalSummary: true,
     });
   });
@@ -55,5 +55,23 @@ describe("carePlanUi helpers", () => {
     const groups = groupCarePresetsByArea();
     expect(groups.Nutrición.length).toBeGreaterThan(0);
     expect(groups.Higiene.length).toBeGreaterThan(0);
+  });
+
+  it("careScheduleError detecta horarios que se guardarían mal", () => {
+    expect(careScheduleError(INITIAL_CARE_SCHEDULE)).toBeNull();
+    expect(careScheduleError({ ...INITIAL_CARE_SCHEDULE, hora: "" })).toMatch(/hora/i);
+    expect(careScheduleError({ ...INITIAL_CARE_SCHEDULE, frecuencia: "semanal", dias_semana: [] })).toMatch(/un día/i);
+    expect(careScheduleError({ ...INITIAL_CARE_SCHEDULE, frecuencia: "semanal", dias_semana: [1, 3] })).toBeNull();
+    expect(careScheduleError({ ...INITIAL_CARE_SCHEDULE, frecuencia: "una_vez", fecha_unica: "" })).toMatch(/fecha/i);
+    expect(careScheduleError({ ...INITIAL_CARE_SCHEDULE, frecuencia: "una_vez", fecha_unica: "2026-07-01" })).toBeNull();
+  });
+
+  it("reduce la programación de cuidado a turnos diarios únicos", () => {
+    expect(buildDailyShiftSchedules(["noche", "mañana", "noche", "invalido"], [
+      { id: "n1", turno: "noche", hora: "22:00", frecuencia: "semanal" },
+    ])).toEqual([
+      expect.objectContaining({ turno: "mañana", frecuencia: "diaria", activo: true }),
+      expect.objectContaining({ id: "n1", turno: "noche", hora: "22:00", frecuencia: "diaria" }),
+    ]);
   });
 });

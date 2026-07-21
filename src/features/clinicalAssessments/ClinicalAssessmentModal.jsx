@@ -9,11 +9,16 @@ import {
   ASSESSMENT_HELP,
   BARTHEL_ITEMS,
   KATZ_ITEMS,
+  MNA_ITEMS,
+  MMSE_ITEMS,
+  TINETTI_EQUILIBRIO_ITEMS,
+  TINETTI_MARCHA_ITEMS,
   MOTIVO_OPTIONS,
   computeAssessment,
   computeNextEvaluation,
   getKatzOptions,
   getItems,
+  isAssessmentItemComplete,
   isAssessmentComplete,
 } from "./clinicalAssessmentRules";
 import { submitAssessment } from "./clinicalAssessmentService";
@@ -105,6 +110,83 @@ function KatzItem({ item, value, onChange, disabled }) {
   );
 }
 
+function MnaItem({ item, value, onChange, disabled }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-slate-900">{item.label}</h3>
+        {item.help && (
+          <HelpTooltip label={`Ayuda: ${item.label}`}>{item.help}</HelpTooltip>
+        )}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {item.options.map((opt) => (
+          <ItemOption
+            key={opt.value}
+            name={`mna_${item.key}`}
+            value={opt.value}
+            current={value}
+            label={`${opt.label} · ${opt.value} pts`}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TinettiItem({ item, value, onChange, disabled }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-slate-900">{item.label}</h3>
+        {item.help && (
+          <HelpTooltip label={`Ayuda: ${item.label}`}>{item.help}</HelpTooltip>
+        )}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {item.options.map((opt) => (
+          <ItemOption
+            key={opt.value}
+            name={`tinetti_${item.key}`}
+            value={opt.value}
+            current={value}
+            label={`${opt.label} · ${opt.value} pts`}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MmseItem({ item, value, onChange, disabled }) {
+  const id = `mmse_${item.key}`;
+  return (
+    <label className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" htmlFor={id}>
+      <span className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-slate-900">{item.label}</span>
+        {item.help && <HelpTooltip label={`Ayuda: ${item.label}`}>{item.help}</HelpTooltip>}
+      </span>
+      <span className="mt-1 block text-xs text-slate-500">Máximo {item.max} puntos</span>
+      <input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min="0"
+        max={item.max}
+        step="1"
+        value={value ?? ""}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm tabular-nums outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50"
+      />
+    </label>
+  );
+}
+
 function todayIso() {
   const now = new Date();
   const y = now.getFullYear();
@@ -137,8 +219,8 @@ export default function ClinicalAssessmentModal({ isOpen, onClose, resident, tip
   }, [isOpen, tipo, resident?.id]);
 
   const completedCount = useMemo(() => {
-    return items.filter((item) => detalle[item.key] != null && detalle[item.key] !== "").length;
-  }, [detalle, items]);
+    return items.filter((item) => isAssessmentItemComplete(tipo, item, detalle)).length;
+  }, [detalle, items, tipo]);
 
   const complete = isAssessmentComplete(tipo, detalle);
   const { puntaje, resultado } = useMemo(
@@ -258,6 +340,13 @@ export default function ClinicalAssessmentModal({ isOpen, onClose, resident, tip
               {complete ? (
                 <>
                   {tipo === "barthel" ? <>{puntaje} / 100 pts · </> : null}
+                  {tipo === "mna" ? <>{computeAssessment(tipo, detalle).puntajeDecimal ?? puntaje} / 30 pts · </> : null}
+                  {tipo === "mmse" ? <>{puntaje} / 30 pts · </> : null}
+                  {tipo === "tinetti" ? (
+                    <>
+                      {computeAssessment(tipo, detalle).puntaje} / 28 pts ·{" "}
+                    </>
+                  ) : null}
                   {resultado}
                 </>
               ) : (
@@ -289,6 +378,60 @@ export default function ClinicalAssessmentModal({ isOpen, onClose, resident, tip
               onChange={(value) => setDetalle((prev) => ({ ...prev, [item.key]: value }))}
             />
           ))}
+          {tipo === "mna" && MNA_ITEMS.map((item) => (
+            <MnaItem
+              key={item.key}
+              item={item}
+              value={detalle[item.key]}
+              disabled={saving || !canApply}
+              onChange={(value) => setDetalle((prev) => ({ ...prev, [item.key]: value }))}
+            />
+          ))}
+          {tipo === "mmse" && MMSE_ITEMS.map((item) => (
+            <MmseItem
+              key={item.key}
+              item={item}
+              value={detalle[item.key]}
+              disabled={saving || !canApply}
+              onChange={(value) => setDetalle((prev) => ({ ...prev, [item.key]: value }))}
+            />
+          ))}
+          {tipo === "tinetti" && (
+            <>
+              <div className="flex items-center gap-2 pt-1">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="rounded-full bg-teal-50 px-3 py-0.5 text-xs font-bold uppercase tracking-wide text-teal-700">
+                  Parte A — Equilibrio
+                </span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+              {TINETTI_EQUILIBRIO_ITEMS.map((item) => (
+                <TinettiItem
+                  key={item.key}
+                  item={item}
+                  value={detalle[item.key]}
+                  disabled={saving || !canApply}
+                  onChange={(value) => setDetalle((prev) => ({ ...prev, [item.key]: value }))}
+                />
+              ))}
+              <div className="flex items-center gap-2 pt-1">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="rounded-full bg-teal-50 px-3 py-0.5 text-xs font-bold uppercase tracking-wide text-teal-700">
+                  Parte B — Marcha
+                </span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+              {TINETTI_MARCHA_ITEMS.map((item) => (
+                <TinettiItem
+                  key={item.key}
+                  item={item}
+                  value={detalle[item.key]}
+                  disabled={saving || !canApply}
+                  onChange={(value) => setDetalle((prev) => ({ ...prev, [item.key]: value }))}
+                />
+              ))}
+            </>
+          )}
         </div>
 
         <label className="block text-sm font-medium text-slate-700">

@@ -65,8 +65,6 @@ function ObservationForm() {
     requiere_seguimiento: false,
     seguimiento_fecha: "",
     seguimiento_turno: "",
-    visible_familiar: false,
-    resumen_familiar: "",
   });
   const [residents, setResidents] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -97,10 +95,6 @@ function ObservationForm() {
           seguimiento_fecha: prev.seguimiento_fecha || next.fecha,
           seguimiento_turno: prev.seguimiento_turno || next.turno,
         };
-      }
-
-      if (name === "visible_familiar" && !checked) {
-        return { ...prev, visible_familiar: false, resumen_familiar: "" };
       }
 
       const nextForm = { ...prev, [name]: type === "checkbox" ? checked : value };
@@ -159,7 +153,7 @@ function ObservationForm() {
       <FormHeader
         eyebrow="Observaciones"
         title="Nueva observación"
-        description="Registra el hecho clínico u operativo, define si requiere seguimiento y decide con control explícito qué se publica al portal familiar."
+        description="Registra el hecho clínico u operativo y deja claro si el equipo debe realizar un seguimiento."
         onBack={() => navigate(-1)}
       />
 
@@ -259,8 +253,8 @@ function ObservationForm() {
           </FormSection>
 
           <FormSection
-            title="Detalle y comunicación"
-            description="Escribe el registro interno completo. Si publicas a familia, usa un resumen breve, claro y no técnico."
+            title="Detalle del registro"
+            description="Escribe solo la información necesaria para que el siguiente turno comprenda lo ocurrido y pueda actuar."
           >
             <div className="space-y-4">
               <TextareaField
@@ -286,28 +280,6 @@ function ObservationForm() {
                 rows={3}
                 placeholder="Indica intervenciones realizadas, avisos, derivaciones o controles posteriores."
               />
-              <CheckboxField
-                id="visible_familiar"
-                name="visible_familiar"
-                label="Publicar en portal familiar"
-                description="Desactivado por defecto. Al publicar, la familia solo verá el resumen escrito abajo."
-                checked={form.visible_familiar}
-                onChange={handleChange}
-              />
-              {form.visible_familiar && (
-                <TextareaField
-                  id="resumen_familiar"
-                  name="resumen_familiar"
-                  label="Resumen para familia"
-                  required
-                  value={form.resumen_familiar}
-                  onChange={handleChange}
-                  error={fieldErrors.resumen_familiar}
-                  maxLength={240}
-                  rows={3}
-                  placeholder="Ej.: Se observó estable durante el turno. Se mantendrá control habitual."
-                />
-              )}
             </div>
           </FormSection>
 

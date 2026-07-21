@@ -76,7 +76,7 @@ export default function PaymentReturn() {
     return (
       <ReturnShell>
         <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-emerald-500">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-emerald-500" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
@@ -112,7 +112,7 @@ export default function PaymentReturn() {
     return (
       <ReturnShell>
         <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-rose-50">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-rose-500">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-rose-500" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
           </svg>
         </div>
@@ -189,15 +189,17 @@ export default function PaymentReturn() {
       ) : (
         <>
           <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-amber-50">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-amber-500">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-amber-500" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
           </div>
           <h1 className="text-xl font-black text-slate-800 mb-2">
-            El pago fue recibido
+            {mpStatus === "success" ? "El pago fue recibido" : "La confirmación está tardando"}
           </h1>
           <p className="text-sm text-slate-600 mb-2 leading-relaxed font-medium">
-            Tu pago fue procesado por MercadoPago, pero la confirmación está tardando más de lo esperado.
+            {mpStatus === "success"
+              ? "Tu pago fue procesado por MercadoPago, pero la confirmación está tardando más de lo esperado."
+              : "Aún no recibimos la confirmación de MercadoPago. Si completaste el pago, la activación llegará en unos minutos."}
           </p>
           <p className="text-sm text-slate-500 mb-1 leading-relaxed">
             Esto es normal — la confirmación puede tardar entre 2 y 10 minutos.
@@ -232,6 +234,13 @@ export default function PaymentReturn() {
               Contactar soporte
             </a>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/pago")}
+            className="mt-4 text-xs font-semibold text-slate-400 underline underline-offset-2 hover:text-slate-600"
+          >
+            Volver a planes
+          </button>
         </>
       )}
     </ReturnShell>

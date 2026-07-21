@@ -1,5 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
-import { normalizeFamilyVisibility } from "../familiar/familyVisibility";
+import { normalizeFamilyVisibility } from "../../utils/familyVisibility";
 import { withResidentLocation } from "../beds/bedsUtils";
 import { sortStockLotsByExpiry } from "./emarUi";
 import {
@@ -261,14 +261,14 @@ export async function saveMedicationIndication({ residenteId, indication, schedu
     es_controlado: indication.es_controlado === true,
     tipo_controlado: indication.es_controlado ? indication.tipo_controlado || "psicotropico" : null,
     requiere_doble_validacion: indication.es_controlado === true,
-    requiere_stock: indication.requiere_stock !== false,
+    requiere_stock: indication.es_controlado === true,
     ...normalizeFamilyVisibility(indication),
     instrucciones: indication.instrucciones?.trim() || null,
     actualizado_por: userId,
   };
 
-  if (!payload.medicamento_nombre || !payload.dosis) {
-    throw new Error("Medicamento y dosis son obligatorios.");
+  if (!payload.medicamento_nombre || !payload.dosis || !payload.prescriptor_nombre || !payload.fecha_inicio) {
+    throw new Error("Medicamento, dosis, prescriptor y fecha de inicio son obligatorios.");
   }
 
   const sourceSchedules = Array.isArray(indication.schedules) && indication.schedules.length

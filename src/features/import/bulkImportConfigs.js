@@ -1,6 +1,5 @@
 import { formatRut, validateEmail, validateRut } from "../../utils/validators";
 import { isResidentInPlanQuota } from "../payment/planCatalog";
-import { PARENTESCOS, validateFamilyForm } from "../residents/residentFormSchema";
 import { DEFAULT_PERMS, PLANTILLAS_CARGO } from "../team/teamConstants";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -189,10 +188,9 @@ export const residentImportConfig = {
   emptyLabel: "residentes",
   instructions: [
     "Descarga la planilla y completa una fila por residente.",
-    "Cada fila debe incluir un familiar responsable con correo y teléfono. Si el familiar no queda vinculado, la fila falla completa.",
     "No cambies los títulos de columnas. Puedes dejar vacías las columnas opcionales.",
-    "El sistema validará RUT, fechas, estado, familiar responsable y duplicados antes de importar.",
-    "La cama se asigna después desde el módulo Camas.",
+    "El sistema validará RUT, fechas, estado y duplicados antes de importar.",
+    "La cama se asigna después desde Establecimiento.",
   ],
   columns: [
     { key: "nombre", header: "Nombres *", aliases: ["nombre"], required: true, width: 20 },
@@ -202,14 +200,10 @@ export const residentImportConfig = {
     { key: "sexo", header: "Sexo", validationList: ["masculino", "femenino", "otro"], width: 14 },
     { key: "fecha_ingreso", header: "Fecha ingreso *", aliases: ["fecha de ingreso"], required: true, width: 18 },
     { key: "estado", header: "Estado", validationList: ["activo", "hospitalizado"], width: 16 },
-    { key: "nivel_dependencia", header: "Nivel dependencia", validationList: ["leve", "moderado", "severo", "total"], width: 20 },
+    { key: "nivel_dependencia", header: "Nivel dependencia", validationList: ["autovalente", "leve", "moderado", "severo", "total"], width: 20 },
     { key: "prevision", header: "Previsión", aliases: ["prevision"], width: 16 },
     { key: "diagnostico_principal", header: "Diagnóstico principal", aliases: ["diagnostico principal"], width: 28 },
     { key: "alergias", header: "Alergias", width: 24, note: "Separa múltiples alergias con coma." },
-    { key: "familiar_nombre", header: "Familiar nombre *", aliases: ["nombre familiar"], required: true, width: 24 },
-    { key: "familiar_parentesco", header: "Familiar parentesco *", aliases: ["parentesco familiar"], required: true, validationList: PARENTESCOS.map(([value]) => value).filter(Boolean), width: 20 },
-    { key: "familiar_email", header: "Familiar correo *", aliases: ["correo familiar", "email familiar"], required: true, width: 28 },
-    { key: "familiar_telefono", header: "Familiar teléfono *", aliases: ["telefono familiar", "teléfono familiar"], required: true, width: 18, note: "Ejemplo: +56 9 1234 5678" },
     { key: "nacionalidad", header: "Nacionalidad", width: 16 },
     { key: "estado_civil", header: "Estado civil", validationList: ["soltero", "casado", "viudo", "divorciado", "otro"], width: 16 },
     { key: "grupo_sanguineo", header: "Grupo sanguíneo", aliases: ["grupo sanguineo"], width: 16 },
@@ -227,10 +221,6 @@ export const residentImportConfig = {
       prevision: "FONASA",
       diagnostico_principal: "Hipertensión arterial",
       alergias: "Penicilina",
-      familiar_nombre: "Paula González",
-      familiar_parentesco: "hijo/a",
-      familiar_email: "paula.gonzalez@gmail.com",
-      familiar_telefono: "+56 9 1234 5678",
       nacionalidad: "Chilena",
     },
   ],
@@ -244,8 +234,8 @@ export const staffImportConfig = {
   primaryAction: "Importar funcionarios",
   emptyLabel: "funcionarios",
   instructions: [
-    "Completa una fila por funcionario. No incluyas administradores ni familiares en esta planilla.",
-    "El cargo define los permisos iniciales. Después puedes ajustarlos desde Equipo y permisos.",
+    "Completa una fila por funcionario. No incluyas administradores en esta planilla.",
+    "El cargo define un perfil seguro de permisos iniciales.",
     "Los correos Gmail se habilitan para entrar con Google. Otros correos reciben un enlace de acceso por correo.",
   ],
   columns: [
@@ -325,27 +315,13 @@ export function normalizeResidentRows(rows, {
       fecha_egreso: null,
       motivo_egreso: null,
       estado,
-      nivel_dependencia: normalizeEnum(r.nivel_dependencia, "Nivel dependencia", ["leve", "moderado", "severo", "total"], errors),
+      nivel_dependencia: normalizeEnum(r.nivel_dependencia, "Nivel dependencia", ["autovalente", "leve", "moderado", "severo", "total"], errors),
     };
-
-    const familyResult = validateFamilyForm({
-      nombre: clean(r.familiar_nombre),
-      parentesco: normalizeEnum(
-        r.familiar_parentesco,
-        "Parentesco",
-        PARENTESCOS.map(([value]) => value).filter(Boolean),
-        errors,
-      ) ?? "",
-      email: clean(r.familiar_email).toLowerCase(),
-      telefono: clean(r.familiar_telefono),
-    });
-    if (!familyResult.ok) errors.push(...Object.values(familyResult.errors));
 
     return {
       rowNumber: row.rowNumber,
       label: `${apellido || "Sin apellido"}, ${nombre || "sin nombre"}`,
       payload,
-      familyPayload: familyResult.ok ? familyResult.data : null,
       errors,
     };
   });

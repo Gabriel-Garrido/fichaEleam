@@ -7,6 +7,7 @@ export const DECRETO20_META = {
   fuenteUrl: "https://www.bcn.cl/leychile/navegar?idNorma=1182129",
   fuenteNombre: "Ley Chile / Biblioteca del Congreso Nacional de Chile",
   vigenciaDesde: "2025-10-01",
+  modificacionesConsideradas: ["Decreto N°6/2025", "Decreto N°9/2025"],
   plazoGeneralAnios: 3,
   plazoIncendioAnios: 5,
   transitorios: [
@@ -22,7 +23,7 @@ export const DECRETO20_META = {
     },
   ],
   decretoDerogado: "normativa anterior",
-  versionContenido: "2026-06-09",
+  versionContenido: "2026-06-10",
 };
 
 export const DECRETO20_COPY = {
@@ -35,7 +36,7 @@ export const DECRETO20_COPY = {
   landing:
     "Digitaliza tu ELEAM y mantén ordenada la evidencia que exige el Decreto N°20.",
   seoDescription:
-    "FichaEleam digitaliza la gestión clínica, administrativa y documental de ELEAM en Chile: carpeta SEREMI Decreto N°20, programa de atención integral, medicamentos, turnos, registros y portal familiar.",
+    "FichaEleam digitaliza la gestión clínica, administrativa y documental de ELEAM en Chile: carpeta SEREMI Decreto N°20, programa de atención integral, medicamentos, turnos y registros.",
 };
 
 export const DECRETO20_AMBITOS = [
@@ -871,6 +872,8 @@ export const PUBLIC_ROUTES = [
   { path: "/software-eleam", priority: "0.95", changefreq: "monthly" },
   { path: "/acreditacion-seremi", priority: "0.95", changefreq: "monthly" },
   { path: "/calculadora-dotacion-eleam", priority: "0.90", changefreq: "monthly" },
+  { path: "/autoevaluacion-decreto-20", priority: "0.90", changefreq: "monthly" },
+  { path: "/plazos-decreto-20", priority: "0.90", changefreq: "monthly" },
   { path: "/preguntas-frecuentes", priority: "0.70", changefreq: "monthly" },
   { path: "/contacto", priority: "0.70", changefreq: "monthly" },
   { path: "/pago", priority: "0.75", changefreq: "monthly" },
@@ -884,14 +887,13 @@ export const PRIVATE_NOINDEX_ROUTES = [
   "/reset-password",
   "/cambiar-clave",
   "/dashboard",
-  "/turnos",
+  "/operacion/turnos",
   "/residents",
-  "/camas",
+  "/establecimiento/camas",
   "/vital-signs",
   "/observations",
   "/eventos-adversos",
-  "/accreditation",
-  "/equipo",
-  "/familiar",
+  "/cumplimiento/seremi",
+  "/personal/equipo",
   "/superadmin",
 ];

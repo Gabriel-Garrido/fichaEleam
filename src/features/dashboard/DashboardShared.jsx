@@ -65,7 +65,7 @@ export function QuickAction({ iconId, label, onClick }) {
 /* ─── Alert chip ──────────────────────────────────────────────── */
 
 export function AlertChip({ label, value, tone, onClick, hint }) {
-  const t = ALERT_TONE[tone];
+  const t = value ? ALERT_TONE[tone] : ALERT_TONE.slate;
   return (
     <button
       type="button"
@@ -110,7 +110,7 @@ export function BriefMetric({ label, value, status, sub, tone, help }) {
     emerald: { value: "text-emerald-700 bg-emerald-50",         status: "bg-emerald-50 text-emerald-700 border-emerald-100" },
     amber:   { value: "text-amber-800 bg-amber-50",             status: "bg-amber-50 text-amber-800 border-amber-100" },
     rose:    { value: "text-rose-700 bg-rose-50",               status: "bg-rose-50 text-rose-700 border-rose-100" },
-    gray:    { value: "text-slate-600 bg-slate-50",               status: "bg-slate-50 text-slate-600 border-slate-100" },
+    slate:   { value: "text-slate-600 bg-slate-50",               status: "bg-slate-50 text-slate-600 border-slate-100" },
   }[tone] ?? { value: "text-slate-700 bg-slate-50", status: "bg-slate-50 text-slate-600 border-slate-100" };
   return (
     <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
@@ -151,21 +151,6 @@ export function MiniVitals({ s }) {
       <Pill label="T°" value={s.temperatura != null ? `${s.temperatura}°` : null} />
       <Pill label="SpO₂" value={s.saturacion_oxigeno != null ? `${s.saturacion_oxigeno}%` : null} />
     </div>
-  );
-}
-
-/* ─── Setup action (first run) ────────────────────────────────── */
-
-export function SetupAction({ label, sub, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-left rounded-xl border border-slate-100 bg-slate-50 hover:bg-teal-50 hover:border-teal-200 px-4 py-3 transition-colors"
-    >
-      <div className="font-semibold text-slate-800 text-sm">{label}</div>
-      <div className="text-xs text-slate-500">{sub}</div>
-    </button>
   );
 }
 

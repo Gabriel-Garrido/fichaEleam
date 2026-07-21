@@ -1,288 +1,96 @@
 const hasAccess = (auth) => auth?.pagoActivo || auth?.isSuperadmin;
 
 export const ROLE_LABELS = {
-  admin_eleam: "Admin",
+  admin_eleam: "Administrador",
   funcionario: "Funcionario",
-  familiar: "Familiar",
-  superadmin: "Superadmin",
+  superadmin: "Superadministrador",
 };
 
+const PRODUCT_ITEMS = [
+  {
+    id: "dashboard",
+    featureId: "dashboard",
+    label: "Inicio",
+    icon: "home",
+    path: "/dashboard",
+    description: "Prioridades, alertas y avance de cumplimiento",
+    roles: ["admin_eleam", "funcionario", "superadmin"],
+    requiresEleam: true,
+    requiresActive: true,
+    mobile: true,
+  },
+  {
+    id: "establishment",
+    featureId: "establishment",
+    label: "Establecimiento",
+    shortLabel: "ELEAM",
+    icon: "beds",
+    path: "/establecimiento",
+    description: "Infraestructura, capacidad, habitaciones y camas",
+    roles: ["admin_eleam", "funcionario", "superadmin"],
+    requiresEleam: true,
+    requiresActive: true,
+    mobile: true,
+  },
+  {
+    id: "residents",
+    featureId: "residents",
+    label: "Residentes",
+    icon: "residents",
+    path: "/residents",
+    description: "Carpetas personales, salud y registros diarios",
+    roles: ["admin_eleam", "funcionario", "superadmin"],
+    requiresEleam: true,
+    requiresActive: true,
+    mobile: true,
+  },
+  {
+    id: "personnel",
+    featureId: "personnel",
+    label: "Personal",
+    icon: "team",
+    path: "/personal",
+    description: "Equipo, competencias, capacitación y dotación",
+    roles: ["admin_eleam", "funcionario", "superadmin"],
+    requiresEleam: true,
+    requiresActive: true,
+    mobile: true,
+  },
+  {
+    id: "compliance",
+    featureId: "compliance",
+    label: "Cumplimiento SEREMI",
+    shortLabel: "SEREMI",
+    icon: "compliance",
+    path: "/cumplimiento",
+    description: "Requisitos, documentos, protocolos y fiscalización",
+    roles: ["admin_eleam", "funcionario", "superadmin"],
+    requiresEleam: true,
+    requiresActive: true,
+    mobile: true,
+  },
+];
+
+const PLATFORM_ITEMS = [
+  { id: "superadmin", label: "Resumen", icon: "overview", path: "/superadmin", roles: ["superadmin"] },
+  { id: "superadmin-clientes", label: "Clientes", icon: "clients", path: "/superadmin/clientes", roles: ["superadmin"] },
+  { id: "superadmin-leads", label: "Leads", icon: "leads", path: "/superadmin/leads", roles: ["superadmin"] },
+  { id: "superadmin-pagos", label: "Pagos", icon: "payments_sa", path: "/superadmin/pagos", roles: ["superadmin"] },
+  { id: "superadmin-tareas", label: "Tareas", icon: "tasks", path: "/superadmin/tareas", roles: ["superadmin"] },
+  { id: "blog-admin", label: "Blog", icon: "blog", path: "/superadmin/blog", roles: ["superadmin"] },
+];
+
 export const NAV_SECTIONS = [
-  {
-    id: "operacion",
-    label: "Operación",
-    items: [
-      {
-        id: "dashboard",
-        featureId: "dashboard",
-        label: "Inicio",
-        icon: "home",
-        path: "/dashboard",
-        description: "Prioridades y alertas del día",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-      {
-        id: "turnos",
-        featureId: "turnos",
-        label: "Entrega de turno",
-        shortLabel: "Turno",
-        icon: "shift",
-        path: "/turnos",
-        description: "Resumen operativo para el siguiente equipo",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-      {
-        id: "residents",
-        featureId: "residents",
-        label: "Residentes",
-        icon: "residents",
-        path: "/residents",
-        description: "Fichas clínicas, contactos y estado",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-      {
-        id: "beds",
-        featureId: "beds",
-        label: "Camas",
-        icon: "beds",
-        path: "/camas",
-        description: "Inventario, ocupación y asignaciones",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-      {
-        id: "care-tasks",
-        featureId: "care-plans",
-        label: "Tareas del turno",
-        shortLabel: "Tareas",
-        icon: "tasks",
-        path: "/turnos/tareas",
-        description: "Cumplimiento de planes de cuidado por turno",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-      {
-        id: "emar",
-        featureId: "emar",
-        label: "Medicamentos",
-        icon: "meds",
-        path: "/turnos/emar",
-        description: "Administración, stock y doble revisión",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-      {
-        id: "vital-signs",
-        featureId: "vital-signs",
-        label: "Signos vitales",
-        icon: "vitals",
-        path: "/vital-signs",
-        description: "Controles y alertas clínicas",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-      },
-      {
-        id: "observations",
-        featureId: "observations",
-        label: "Observaciones",
-        icon: "observations",
-        path: "/observations",
-        description: "Novedades, incidentes y seguimiento",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-      },
-      {
-        id: "adverse-events",
-        featureId: "adverse-events",
-        label: "Eventos adversos",
-        icon: "alert",
-        path: "/eventos-adversos",
-        description: "Registro y seguimiento de caídas, errores y eventos serios",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-      },
-    ],
-  },
-  {
-    id: "gestion",
-    label: "Gestión",
-    items: [
-      {
-        id: "accreditation",
-        featureId: "accreditation",
-        label: "Carpeta SEREMI",
-        shortLabel: "SEREMI",
-        icon: "accreditation",
-        path: "/accreditation",
-        description: "Documentos, vencimientos y observaciones",
-        roles: ["admin_eleam", "funcionario", "superadmin"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-      {
-        id: "team",
-        featureId: "team",
-        label: "Equipo",
-        icon: "team",
-        path: "/equipo",
-        description: "Usuarios, familiares y permisos",
-        roles: ["admin_eleam"],
-        requiresEleam: true,
-        requiresActive: true,
-      },
-      {
-        id: "subscription",
-        featureId: "subscription",
-        label: "Suscripción",
-        icon: "payment",
-        path: "/pago",
-        description: "Plan, pagos y estado del acceso",
-        roles: ["admin_eleam"],
-        requiresEleam: true,
-      },
-    ],
-  },
-  {
-    id: "familia",
-    label: "Portal familiar",
-    items: [
-      {
-        id: "familiar",
-        featureId: "familiar",
-        label: "Mi residente",
-        shortLabel: "Residente",
-        icon: "familiar",
-        path: "/familiar",
-        description: "Resumen visible para la familia",
-        roles: ["familiar"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-      {
-        id: "familiar-visitas",
-        featureId: "familiar-visitas",
-        label: "Visitas",
-        icon: "visits",
-        path: "/familiar/visitas",
-        description: "Registro de visitas familiares",
-        roles: ["familiar"],
-        requiresEleam: true,
-        requiresActive: true,
-        mobile: true,
-      },
-    ],
-  },
-  {
-    id: "plataforma",
-    label: "Plataforma",
-    items: [
-      {
-        id: "superadmin",
-        label: "Resumen",
-        icon: "overview",
-        path: "/superadmin",
-        description: "Indicadores ejecutivos",
-        roles: ["superadmin"],
-        requiresEleam: false,
-        mobile: true,
-      },
-      {
-        id: "superadmin-clientes",
-        label: "Clientes",
-        icon: "clients",
-        path: "/superadmin/clientes",
-        description: "Cartera ELEAM y salud comercial",
-        roles: ["superadmin"],
-        requiresEleam: false,
-        mobile: true,
-      },
-      {
-        id: "superadmin-leads",
-        label: "Leads",
-        icon: "leads",
-        path: "/superadmin/leads",
-        description: "Demo guiado, contactos y landing",
-        roles: ["superadmin"],
-        requiresEleam: false,
-        mobile: true,
-      },
-      {
-        id: "superadmin-pagos",
-        label: "Pagos",
-        icon: "payments_sa",
-        path: "/superadmin/pagos",
-        description: "Conciliación y activaciones",
-        roles: ["superadmin"],
-        requiresEleam: false,
-      },
-      {
-        id: "superadmin-tareas",
-        label: "Tareas",
-        icon: "tasks",
-        path: "/superadmin/tareas",
-        description: "Seguimiento CRM",
-        roles: ["superadmin"],
-        requiresEleam: false,
-      },
-      {
-        id: "superadmin-permisos",
-        label: "Permisos",
-        icon: "permissions",
-        path: "/superadmin/permisos",
-        description: "Features por ELEAM y rol",
-        roles: ["superadmin"],
-        requiresEleam: false,
-      },
-      {
-        id: "blog-admin",
-        label: "Blog",
-        icon: "blog",
-        path: "/superadmin/blog",
-        description: "Contenido público y SEO",
-        roles: ["superadmin"],
-        requiresEleam: false,
-      },
-    ],
-  },
+  { id: "producto", label: "Gestión del ELEAM", items: PRODUCT_ITEMS },
+  { id: "plataforma", label: "Administración de plataforma", items: PLATFORM_ITEMS },
 ];
 
 export const QUICK_ACTIONS = [
   {
-    id: "turno-nuevo",
-    featureId: "turnos",
-    label: "Nueva entrega",
-    description: "Preparar resumen del turno actual",
-    icon: "shift",
-    path: "/turnos/nueva",
-    roles: ["admin_eleam", "funcionario", "superadmin"],
-    requiresEleam: true,
-    requiresActive: true,
-  },
-  {
     id: "resident-new",
     featureId: "residents",
-    label: "Nuevo residente",
-    description: "Crear ficha de ingreso",
+    label: "Ingresar residente",
+    description: "Crear su carpeta personal",
     icon: "residents",
     path: "/residents/new",
     roles: ["admin_eleam", "funcionario", "superadmin"],
@@ -291,85 +99,37 @@ export const QUICK_ACTIONS = [
     permission: "crear_residentes",
   },
   {
-    id: "beds",
-    featureId: "beds",
-    label: "Camas",
-    description: "Ver disponibilidad y ocupación",
-    icon: "beds",
-    path: "/camas",
-    roles: ["admin_eleam", "funcionario", "superadmin"],
-    requiresEleam: true,
-    requiresActive: true,
-    permission: "asignar_camas",
-  },
-  {
-    id: "vital-new",
-    featureId: "vital-signs",
-    label: "Registrar signos",
-    description: "Registrar control clínico",
-    icon: "vitals",
-    path: "/vital-signs/new",
-    roles: ["admin_eleam", "funcionario", "superadmin"],
-    requiresEleam: true,
-    requiresActive: true,
-    permission: "crear_signos_vitales",
-  },
-  {
-    id: "care-tasks",
-    featureId: "care-plans",
-    label: "Tareas del turno",
-    description: "Abrir cumplimiento del turno",
+    id: "daily-care",
+    featureId: "residents",
+    label: "Cuidados del turno",
+    description: "Registrar tareas programadas",
     icon: "tasks",
-    path: "/turnos/tareas",
+    path: "/operacion/cuidados",
     roles: ["admin_eleam", "funcionario", "superadmin"],
     requiresEleam: true,
     requiresActive: true,
     permission: "completar_tareas_cuidado",
   },
   {
-    id: "emar-turno",
-    featureId: "emar",
+    id: "medications",
+    featureId: "residents",
     label: "Medicamentos",
-    description: "Administrar medicamentos del turno",
+    description: "Abrir administración del turno",
     icon: "meds",
-    path: "/turnos/emar",
+    path: "/operacion/medicamentos",
     roles: ["admin_eleam", "funcionario", "superadmin"],
     requiresEleam: true,
     requiresActive: true,
     permission: "administrar_medicamentos",
   },
   {
-    id: "observation-new",
-    featureId: "observations",
-    label: "Nueva observación",
-    description: "Dejar novedad o seguimiento",
-    icon: "observations",
-    path: "/observations/new",
+    id: "shift-handoff",
+    featureId: "residents",
+    label: "Registro del turno",
+    description: "Revisar y entregar novedades",
+    icon: "shift",
+    path: "/operacion/turnos",
     roles: ["admin_eleam", "funcionario", "superadmin"],
-    requiresEleam: true,
-    requiresActive: true,
-    permission: "crear_observaciones",
-  },
-  {
-    id: "adverse-event-new",
-    featureId: "adverse-events",
-    label: "Registrar evento",
-    description: "Registrar caída, error o incidente serio",
-    icon: "alert",
-    path: "/eventos-adversos/nuevo",
-    roles: ["admin_eleam", "funcionario", "superadmin"],
-    requiresEleam: true,
-    requiresActive: true,
-    permission: "crear_eventos_adversos",
-  },
-  {
-    id: "visit-new",
-    featureId: "familiar-visitas",
-    label: "Registrar visita",
-    description: "Portal familiar",
-    icon: "visits",
-    path: "/familiar/visitas",
-    roles: ["familiar"],
     requiresEleam: true,
     requiresActive: true,
   },
@@ -388,10 +148,9 @@ function itemAllowed(item, auth) {
 export const HOME_SLOT = "__home__";
 
 export const MOBILE_BOTTOM_NAV = {
-  admin_eleam: ["dashboard", "residents", HOME_SLOT, "beds", "care-tasks"],
-  funcionario: ["dashboard", "care-tasks", HOME_SLOT, "emar", "residents"],
-  familiar:    ["familiar", HOME_SLOT, "familiar-visitas"],
-  superadmin:  ["superadmin", "superadmin-clientes", HOME_SLOT, "superadmin-leads", "superadmin-tareas"],
+  admin_eleam: ["dashboard", "residents", HOME_SLOT, "personnel", "compliance"],
+  funcionario: ["dashboard", "residents", HOME_SLOT, "personnel", "compliance"],
+  superadmin: ["superadmin", "superadmin-clientes", HOME_SLOT, "superadmin-leads", "superadmin-tareas"],
 };
 
 export function getMobileBottomNav(auth) {
@@ -399,40 +158,29 @@ export function getMobileBottomNav(auth) {
 
   if (!hasAccess(auth) && auth.rol === "admin_eleam") {
     return [
-      { type: "nav", item: { id: "activate", label: "Activar", icon: "$", path: "/pago?sinAcceso=1" } },
+      { type: "nav", item: { id: "activate", label: "Activar", icon: "payment", path: "/pago?sinAcceso=1" } },
       { type: "home" },
     ];
   }
 
   if (!hasAccess(auth) && auth.rol === "funcionario") {
     return [
-      { type: "nav", item: { id: "inactive", label: "Inactivo", icon: "!", disabled: true } },
+      { type: "nav", item: { id: "inactive", label: "Inactivo", icon: "alert", disabled: true } },
       { type: "home" },
     ];
   }
 
   const slots = MOBILE_BOTTOM_NAV[auth.rol];
   if (!slots) return [];
+  const itemById = new Map(NAV_SECTIONS.flatMap((section) => section.items).map((item) => [item.id, item]));
 
-  const itemById = new Map();
-  for (const section of NAV_SECTIONS) {
-    for (const item of section.items) itemById.set(item.id, item);
-  }
+  const resolved = slots.map((slot) => {
+    if (slot === HOME_SLOT) return { type: "home" };
+    const item = itemById.get(slot);
+    return item && itemAllowed(item, auth) ? { type: "nav", item } : null;
+  }).filter(Boolean);
 
-  const resolved = slots
-    .map((slot) => {
-      if (slot === HOME_SLOT) return { type: "home" };
-      const item = itemById.get(slot);
-      if (!item) return null;
-      if (!itemAllowed(item, auth)) return null;
-      return { type: "nav", item };
-    })
-    .filter(Boolean);
-
-  if (!resolved.some((s) => s.type === "home")) {
-    resolved.push({ type: "home" });
-  }
-
+  if (!resolved.some((slot) => slot.type === "home")) resolved.push({ type: "home" });
   return resolved;
 }
 
@@ -440,49 +188,25 @@ export function getNavigationSections(auth) {
   if (!auth?.user) return [];
 
   if (!hasAccess(auth) && auth.rol === "admin_eleam") {
-    return [
-      {
-        id: "activacion",
-        label: "Activación",
-        items: [
-          {
-            id: "activate",
-            label: "Activar ELEAM",
-            icon: "$",
-            path: "/pago?sinAcceso=1",
-            description: "Elegir plan y habilitar el acceso",
-            mobile: true,
-          },
-        ],
-      },
-    ];
+    return [{
+      id: "activacion",
+      label: "Cuenta",
+      items: [{ id: "activate", label: "Activar ELEAM", icon: "payment", path: "/pago?sinAcceso=1", description: "Elegir plan y habilitar el acceso" }],
+    }];
   }
 
   if (!hasAccess(auth) && auth.rol === "funcionario") {
-    return [
-      {
-        id: "bloqueado",
-        label: "Acceso",
-        items: [
-          {
-            id: "inactive",
-            label: "Suscripción inactiva",
-            icon: "!",
-            description: "Contacta al administrador del ELEAM",
-            disabled: true,
-            mobile: true,
-          },
-        ],
-      },
-    ];
+    return [{
+      id: "bloqueado",
+      label: "Acceso",
+      items: [{ id: "inactive", label: "Suscripción inactiva", icon: "alert", description: "Contacta al administrador del ELEAM", disabled: true }],
+    }];
   }
 
-  return NAV_SECTIONS
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => itemAllowed(item, auth)),
-    }))
-    .filter((section) => section.items.length > 0);
+  return NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => itemAllowed(item, auth)),
+  })).filter((section) => section.items.length > 0);
 }
 
 export function getQuickActions(auth) {

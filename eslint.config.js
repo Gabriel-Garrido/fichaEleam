@@ -39,6 +39,7 @@ export default [
             'ADMIN_STEPS',
             'FUNCIONARIO_STEPS',
             'FAMILIAR_STEPS',
+            'NAV_ICON_IDS',
           ],
         },
       ],

@@ -1,10 +1,9 @@
 import { supabase } from "../../services/supabaseConfig";
-import { normalizeFamilyVisibility } from "../familiar/familyVisibility";
 
 const OBSERVATION_SELECT = `
   id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas,
   requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado,
-  visible_familiar, resumen_familiar, registrado_por,
+  registrado_por,
   creado_en, actualizado_en
 `;
 
@@ -44,7 +43,6 @@ export const createObservation = async (payload) => {
   const requiereSeguimiento = payload.requiere_seguimiento === true;
   const cleanPayload = {
     ...payload,
-    ...normalizeFamilyVisibility(payload),
     seguimiento_fecha: requiereSeguimiento ? payload.seguimiento_fecha || null : null,
     seguimiento_turno: requiereSeguimiento ? payload.seguimiento_turno || null : null,
     seguimiento_estado: requiereSeguimiento ? payload.seguimiento_estado || "pendiente" : "pendiente",
@@ -60,9 +58,6 @@ export const createObservation = async (payload) => {
 
 export const updateObservation = async (id, payload) => {
   const cleanPayload = { ...payload };
-  if ("visible_familiar" in payload || "resumen_familiar" in payload) {
-    Object.assign(cleanPayload, normalizeFamilyVisibility(payload));
-  }
 
   const { data, error } = await supabase
     .from("observaciones_diarias")
@@ -149,8 +144,6 @@ export const continuarSeguimiento = async (id, { notas = null, nuevaFecha, nuevo
       seguimiento_fecha: nuevaFecha,
       seguimiento_turno: nuevoTurno,
       seguimiento_estado: "pendiente",
-      visible_familiar: false,
-      resumen_familiar: null,
       registrado_por: user?.id,
     })
     .select(OBSERVATION_SELECT)

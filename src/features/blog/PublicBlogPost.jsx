@@ -200,7 +200,7 @@ export default function PublicBlogPost() {
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-300">FichaEleam</p>
                     <h2 className="mt-3 text-2xl font-semibold">Software diseñado para ELEAM en Chile</h2>
                     <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                      Carpeta SEREMI Decreto N°20, fichas clínicas digitales, signos vitales, turnos y portal familiar.
+                      Carpeta SEREMI Decreto N°20, fichas clínicas digitales, signos vitales, turnos y medicamentos.
                     </p>
                     <div className="mt-5 flex flex-wrap gap-3">
                       <button type="button" onClick={() => openDemo("blog_post_article_demo")} className={PUBLIC_BUTTON.primary}>

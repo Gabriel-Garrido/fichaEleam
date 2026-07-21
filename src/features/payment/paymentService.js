@@ -1,4 +1,4 @@
-import { supabase } from "../../services/supabaseConfig";
+import { ensureSupabase } from "../../services/serviceContext";
 import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
 
 const PLAN_SELECT = `
@@ -14,10 +14,6 @@ const PAYMENT_SELECT = `
   mp_payment_id, mp_preapproval_id, mp_authorized_payment_id, creado_en
 `;
 
-function ensureSupabase() {
-  if (!supabase) throw new Error("Supabase no está configurado.");
-  return supabase;
-}
 
 // Obtiene los planes activos visibles (vía RLS planes_select_public)
 export async function getActivePlans() {

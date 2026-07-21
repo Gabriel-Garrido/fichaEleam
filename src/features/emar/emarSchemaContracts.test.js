@@ -19,6 +19,8 @@ describe("medication schema contracts", () => {
     expect(schema).toContain("med_stock_lotes_textos_contract");
     expect(schema).toContain("med_stock_lotes_vencimiento_contract");
     expect(schema).toContain("med_admin_cierre_contract");
+    expect(schema).toMatch(/prescriptor_nombre\s+text not null/i);
+    expect(schema).toMatch(/requiere_stock\s+boolean not null default false/i);
   });
 
   it("blocks expired lots during medication administration", () => {

@@ -18,7 +18,7 @@ import { DECRETO20_REQUISITOS } from "../../content/decreto20Eleam";
 const FAQ = [
   {
     q: "¿Qué es un software para ELEAM?",
-    a: "Es una plataforma digital que centraliza fichas clínicas, signos vitales, turnos, medicamentos, programa de atención integral, portal familiar y carpeta SEREMI para ELEAM.",
+    a: "Es una plataforma digital que centraliza fichas clínicas, signos vitales, turnos, medicamentos, programa de atención integral y carpeta SEREMI para ELEAM.",
   },
   {
     q: "¿Por qué un software especializado y no Excel?",
@@ -44,9 +44,9 @@ const MODULES = [
   ["Entrega de turno", "Resumen de medicamentos, tareas, observaciones y prioridades del siguiente turno."],
   ["Medicamentos y eMAR", "Administración por turno, historial y control operacional de medicamentos."],
   ["Carpeta SEREMI DS 20", "Matriz Decreto N°20, artículos, criticidad, evidencias, estados, vencimientos y observaciones."],
-  ["Portal familiar", "Acceso restringido para que cada familiar vea solo la información autorizada."],
+  ["Evaluaciones geriátricas", "Barthel, Katz, MNA y MMSE dentro de la ficha del residente."],
   ["Habitaciones y camas", "Inventario, ocupación, traslados, reservas y trazabilidad operacional."],
-  ["Equipo y permisos", "Roles granulares para administradores, funcionarios y familiares."],
+  ["Equipo y permisos", "Accesos claros para administradores y funcionarios."],
 ];
 
 const COMPARISON = [
@@ -54,7 +54,7 @@ const COMPARISON = [
   ["Signos vitales", "Planilla con revisión manual", "Alertas y rangos para persona mayor"],
   ["Turnos", "Cuaderno o WhatsApp", "Resumen digital del turno"],
   ["SEREMI", "Carpetas físicas y vencimientos manuales", "Ámbitos, evidencias y vencimientos"],
-  ["Familias", "Llamadas recurrentes", "Portal autorizado por residente"],
+  ["Evaluaciones", "Escalas en archivos separados", "Historial clínico por residente"],
 ];
 
 export default function SoftwareEleamPage() {
@@ -64,7 +64,7 @@ export default function SoftwareEleamPage() {
   useSEO({
     title: "Software para ELEAM en Chile · Gestión clínica y SEREMI",
     description:
-      "Software web especializado para ELEAM en Chile: ficha clínica digital, signos vitales, entrega de turno, medicamentos, portal familiar y carpeta SEREMI Decreto N°20.",
+      "Software web especializado para ELEAM en Chile: ficha clínica digital, signos vitales, entrega de turno, medicamentos y carpeta SEREMI Decreto N°20.",
     path: "/software-eleam",
     image: PUBLIC_ASSETS.software.publicSrc,
     keywords: [
@@ -191,7 +191,7 @@ export default function SoftwareEleamPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <PublicMetric value="Acceso" label="Información separada por ELEAM" tone="slate" />
-                <PublicMetric value="Roles" label="Administrador, funcionario y familiar" tone="teal" />
+                <PublicMetric value="Roles" label="Administrador y funcionario" tone="teal" />
                 <PublicMetric value="Trazabilidad" label="Historial de cambios críticos" tone="amber" />
                 <PublicMetric value="Web" label="Acceso seguro sin instalación local" tone="emerald" />
               </div>

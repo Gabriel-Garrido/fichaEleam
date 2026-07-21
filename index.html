@@ -9,16 +9,13 @@
     <meta name="format-detection" content="telephone=no" />
     <script>
       (function () {
+        // Rutas públicas con HTML prerenderizado. scripts/generate-public-seo.mjs
+        // regenera esta lista desde PUBLIC_ROUTES en cada build para que no se
+        // desincronice; este valor solo aplica en desarrollo (vite sirve sin prerender).
+        var publicPaths = ["/","/software-eleam","/acreditacion-seremi","/calculadora-dotacion-eleam","/autoevaluacion-decreto-20","/plazos-decreto-20","/preguntas-frecuentes","/contacto","/pago","/blog"];
         var path = window.location.pathname.replace(/\/+$/, "") || "/";
         var isPublicPrerenderRoute =
-          path === "/" ||
-          path === "/pago" ||
-          path === "/acreditacion-seremi" ||
-          path === "/software-eleam" ||
-          path === "/preguntas-frecuentes" ||
-          path === "/contacto" ||
-          path === "/blog" ||
-          path.indexOf("/blog/") === 0;
+          publicPaths.indexOf(path) !== -1 || path.indexOf("/blog/") === 0;
 
         if (!isPublicPrerenderRoute) {
           document.documentElement.setAttribute("data-fichaeleam-app-route", "true");
@@ -72,7 +69,7 @@
     <title>FichaEleam · Software de gestión clínica y SEREMI para ELEAM en Chile</title>
     <meta
       name="description"
-      content="Plataforma chilena para Establecimientos de Larga Estadía para Personas Mayores (ELEAM): fichas clínicas digitales, signos vitales, observaciones de turno, carpeta SEREMI Decreto N°20 y portal para familias."
+      content="Plataforma chilena para Establecimientos de Larga Estadía para Personas Mayores (ELEAM): fichas clínicas digitales, signos vitales, observaciones de turno, medicamentos y carpeta SEREMI Decreto N°20."
     />
     <meta name="keywords" content="ELEAM, ficha clínica ELEAM, fiscalización SEREMI, Decreto N°20, residencias persona mayor Chile, software ELEAM, acreditación SEREMI" />
     <meta name="author" content="FichaEleam" />
@@ -99,7 +96,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://fichaeleam.cl/" />
     <meta property="og:title" content="FichaEleam · Software de gestión clínica y SEREMI para ELEAM" />
-    <meta property="og:description" content="Digitaliza tu ELEAM: fichas clínicas, signos vitales, observaciones por turno, carpeta SEREMI lista para fiscalización y portal de familias." />
+    <meta property="og:description" content="Digitaliza tu ELEAM: fichas clínicas, signos vitales, medicamentos, observaciones por turno y carpeta SEREMI lista para fiscalización." />
     <meta property="og:locale" content="es_CL" />
     <meta property="og:site_name" content="FichaEleam" />
     <meta property="og:image" content="https://fichaeleam.cl/og-image.png" />
@@ -138,7 +135,7 @@
             "width": 1200,
             "height": 630
           },
-          "description": "FichaEleam es un software diseñado para ELEAM en Chile que organiza la matriz DS 20 por artículos del Decreto N°20. Incluye ficha clínica digital, signos vitales con alertas, observaciones de turno, Carpeta SEREMI y portal para familias.",
+          "description": "FichaEleam es un software diseñado para ELEAM en Chile que organiza la matriz DS 20 por artículos del Decreto N°20. Incluye ficha clínica digital, signos vitales con alertas, observaciones de turno, medicamentos y Carpeta SEREMI.",
           "areaServed": { "@type": "Country", "name": "Chile" },
           "knowsAbout": ["Decreto N°20", "SEREMI", "ELEAM", "persona mayor Chile", "ficha clínica digital", "acreditación SEREMI", "Ley 20.584", "Ley 19.628", "Kardex medicamentos", "trazabilidad clínica"],
           "contactPoint": [
@@ -170,7 +167,7 @@
           "operatingSystem": "Web",
           "url": "https://fichaeleam.cl/",
           "inLanguage": "es-CL",
-          "description": "Plataforma chilena para Establecimientos de Larga Estadía para Personas Mayores (ELEAM): ficha clínica digital, signos vitales con alertas, 12 tipos de observaciones de turno, Carpeta SEREMI con matriz DS 20 por artículos del Decreto N°20 y portal para familias.",
+          "description": "Plataforma chilena para Establecimientos de Larga Estadía para Personas Mayores (ELEAM): ficha clínica digital, signos vitales con alertas, observaciones de turno, medicamentos y Carpeta SEREMI con matriz DS 20 por artículos del Decreto N°20.",
           "offers": {
             "@type": "AggregateOffer",
             "priceCurrency": "CLP",
@@ -285,7 +282,7 @@
               "name": "¿Qué es FichaEleam?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "FichaEleam es un software chileno diseñado exclusivamente para Establecimientos de Larga Estadía para Personas Mayores (ELEAM). Incluye ficha clínica digital, signos vitales con alertas, observaciones por turno, Carpeta SEREMI con la matriz DS 20 por artículos del Decreto N°20 y portal para familias de residentes."
+                "text": "FichaEleam es un software chileno diseñado exclusivamente para Establecimientos de Larga Estadía para Personas Mayores (ELEAM). Incluye ficha clínica digital, signos vitales con alertas, observaciones por turno, medicamentos y Carpeta SEREMI con la matriz DS 20 por artículos del Decreto N°20."
               }
             },
             {
@@ -317,15 +314,15 @@
               "name": "¿Cómo resguardan mis datos bajo la Ley 19.628 de protección de datos personales?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Sí. FichaEleam implementa control de acceso por rol (director, funcionario clínico, familiar autorizado), cifrado en tránsito y reposo, y registro de auditoría de cada acción. Los datos clínicos no salen de los servidores autorizados y solo el personal que necesita información puede verla, conforme a la Ley N°19.628 sobre protección de la vida privada."
+                "text": "FichaEleam implementa control de acceso por rol, cifrado en tránsito y reposo, aislamiento por establecimiento y registro de auditoría para operaciones críticas. Solo el personal autorizado puede consultar datos clínicos, conforme a la Ley N°19.628 sobre protección de la vida privada."
               }
             },
             {
               "@type": "Question",
-              "name": "¿Las familias pueden ver la ficha de su familiar?",
+              "name": "¿Puedo controlar qué puede hacer cada funcionario?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Sí. Cada residente puede tener uno o más familiares autorizados con acceso a un portal restringido donde ven al residente vinculado, los últimos signos vitales y el registro de visitas. No pueden modificar registros clínicos, solo consultarlos y registrar sus propias visitas."
+                "text": "Sí. El administrador asigna permisos granulares para crear, editar o eliminar registros y para acciones sensibles de medicamentos, camas, cumplimiento, emergencias y eventos adversos. La base de datos vuelve a validar cada permiso."
               }
             },
             {
@@ -343,7 +340,7 @@
           "@id": "https://fichaeleam.cl/#service",
           "serviceType": "Software de gestión clínica para ELEAM",
           "name": "FichaEleam · Gestión clínica y SEREMI para ELEAM",
-          "description": "Software SaaS chileno para Establecimientos de Larga Estadía para Personas Mayores (ELEAM): ficha clínica digital, signos vitales, observaciones por turno, Carpeta SEREMI Decreto N°20 y portal familiar.",
+          "description": "Software SaaS chileno para Establecimientos de Larga Estadía para Personas Mayores (ELEAM): ficha clínica digital, signos vitales, medicamentos, observaciones por turno y Carpeta SEREMI Decreto N°20.",
           "provider": { "@id": "https://fichaeleam.cl/#organization" },
           "areaServed": { "@type": "Country", "name": "Chile" },
           "audience": {

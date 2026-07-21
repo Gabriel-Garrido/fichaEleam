@@ -151,52 +151,6 @@ a {
   animation: home-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* ── Welcome (bienvenida admin) ───────────────────────────── */
-@keyframes welcome-rise {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.animate-welcome-rise {
-  animation: welcome-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.welcome-sheen {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  width: 45%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-  transform: translateX(-150%);
-  animation: welcome-sheen 2.4s ease-in-out 0.3s infinite;
-  pointer-events: none;
-}
-@keyframes welcome-sheen {
-  0%   { transform: translateX(-150%); }
-  55%  { transform: translateX(320%); }
-  100% { transform: translateX(320%); }
-}
-
-.welcome-sparkle {
-  font-size: 0.9rem;
-  line-height: 1;
-  animation: welcome-sparkle 1.8s ease-in-out infinite;
-}
-@keyframes welcome-sparkle {
-  0%, 100% { opacity: 0; transform: scale(0.5) rotate(0deg); }
-  50%      { opacity: 1; transform: scale(1) rotate(20deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-welcome-rise,
-  .welcome-sheen,
-  .welcome-sparkle {
-    animation: none;
-  }
-  .animate-welcome-rise { opacity: 1; transform: none; }
-  .welcome-sheen { display: none; }
-}
-
 /* ── Mobile UX helpers ───────────────────────────────────── */
 .tap-highlight-none {
   -webkit-tap-highlight-color: transparent;
@@ -371,6 +325,50 @@ a {
   background-image:
     radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.08) 1px, transparent 0);
   background-size: 26px 26px;
+}
+
+/* Refuerzo positivo sobrio: solo opacity/transform para evitar layout y repaints costosos. */
+.ui-button:not(:disabled) {
+  will-change: auto;
+}
+
+.ui-button:not(:disabled):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-button:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -12px rgb(15 118 110 / 0.55);
+  }
+
+  .ui-empty-state:hover .ui-empty-state-icon {
+    transform: translateY(-2px) scale(1.03);
+  }
+}
+
+.ui-empty-state-icon {
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ui-toast-success .ui-toast-icon {
+  animation: ui-success-pop 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ui-success-pop {
+  0% { transform: scale(0.72); opacity: 0.3; }
+  65% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-button,
+  .ui-empty-state-icon,
+  .ui-toast-success .ui-toast-icon {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 .scroll-mt-public {

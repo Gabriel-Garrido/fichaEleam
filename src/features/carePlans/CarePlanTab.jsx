@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
 import useSessionFormDraft from "../../hooks/useSessionFormDraft";
 import CarePlanActivityModal from "./CarePlanActivityModal";
 import {
-  CARE_ACTIVITY_PRESETS,
   CARE_BASE_PRESET_IDS,
   CARE_CATEGORY_LABEL,
   CARE_TURNOS,
@@ -18,21 +16,14 @@ import {
   saveCarePlan,
 } from "./carePlansService";
 import {
-  PRIORITY_BORDER,
-  PRIORITY_LABEL,
-  PRIORITY_TONE,
-} from "./careTasksBoardUtils";
-import {
   INITIAL_CARE_ACTIVITY,
   INITIAL_CARE_SCHEDULE,
   TURN_LABELS,
   buildCarePlanForm,
   buildQuickCarePlanDefaults,
   calculateCarePlanReadiness,
-  carePresetKey,
   formatCareSchedule,
   getActiveCareSchedules,
-  groupCarePresetsByArea,
   sortCareActivities,
 } from "./carePlanUi";
 
@@ -67,8 +58,6 @@ export default function CarePlanTab({ resident }) {
   const [activityModal, setActivityModal] = useState(null);
   const [clinicalOpen, setClinicalOpen] = useState(false);
   const [showPaused, setShowPaused] = useState(false);
-  const [familyPreview, setFamilyPreview] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
 
   const canEdit = can("editar_planes_cuidado");
   const canCreate = can("crear_planes_cuidado");
@@ -110,17 +99,6 @@ export default function CarePlanTab({ resident }) {
     () => calculateCarePlanReadiness({ plan, activities: plan?.actividades ?? [] }),
     [plan]
   );
-
-  const existingPresetIds = useMemo(() => {
-    const keys = new Set(activities.map(carePresetKey));
-    return new Set(
-      CARE_ACTIVITY_PRESETS
-        .filter((preset) => keys.has(carePresetKey(preset.activity)))
-        .map((preset) => preset.id)
-    );
-  }, [activities]);
-
-  const presetGroups = useMemo(() => groupCarePresetsByArea(), []);
 
   const handleCreatePlan = async (includeBaseRoutine) => {
     if (!canCreate) return;
@@ -193,7 +171,6 @@ export default function CarePlanTab({ resident }) {
       const createdText = `${result.created} rutina${result.created === 1 ? "" : "s"}`;
       const skippedText = result.skipped ? `, ${result.skipped} ya existían` : "";
       toast(`Rutina base agregada: ${createdText}${skippedText}.`, "success");
-      setShowTemplates(false);
       await load();
     } catch (err) {
       console.error(err);
@@ -240,32 +217,6 @@ export default function CarePlanTab({ resident }) {
     });
   };
 
-  const duplicateActivity = (activity) => {
-    setActivityModal({
-      activity: {
-        ...INITIAL_CARE_ACTIVITY,
-        ...activity,
-        id: undefined,
-        titulo: `${activity.titulo} (copia)`,
-        activo: true,
-      },
-      schedules: getActiveCareSchedules(activity).map((schedule) => ({ ...schedule, id: undefined })),
-    });
-  };
-
-  const openPreset = (preset) => {
-    const existing = activities.find((item) => carePresetKey(item) === carePresetKey(preset.activity));
-    if (existing) {
-      if (canEdit) openActivity(existing);
-      return;
-    }
-
-    setActivityModal({
-      activity: { ...INITIAL_CARE_ACTIVITY, ...preset.activity },
-      schedules: [{ ...INITIAL_CARE_SCHEDULE, ...preset.schedule }],
-    });
-  };
-
   const openNewActivity = () => setActivityModal({ activity: INITIAL_CARE_ACTIVITY, schedules: [INITIAL_CARE_SCHEDULE] });
 
   if (loading) {
@@ -289,7 +240,6 @@ export default function CarePlanTab({ resident }) {
         resident={resident}
         plan={plan}
         metrics={metrics}
-        onFamilyPreview={() => setFamilyPreview(true)}
       />
 
       <RoutineCockpit
@@ -300,15 +250,9 @@ export default function CarePlanTab({ resident }) {
         saving={saving}
         presetSaving={presetSaving}
         showPaused={showPaused}
-        showTemplates={showTemplates}
-        presetGroups={presetGroups}
-        existingPresetIds={existingPresetIds}
-        onToggleTemplates={() => setShowTemplates((prev) => !prev)}
         onAddBaseRoutine={handleAddBaseRoutine}
         onNew={openNewActivity}
-        onOpenPreset={openPreset}
         onEdit={openActivity}
-        onDuplicate={duplicateActivity}
         onDeactivate={handleDeactivate}
         onTogglePaused={() => setShowPaused((prev) => !prev)}
         onReactivate={handleReactivate}
@@ -334,44 +278,29 @@ export default function CarePlanTab({ resident }) {
         onSubmit={handleSaveActivity}
       />
 
-      <FamilyPreviewModal
-        isOpen={familyPreview}
-        onClose={() => setFamilyPreview(false)}
-        plan={plan}
-        activities={activities}
-        resident={resident}
-      />
     </div>
   );
 }
 
-function CarePlanHeader({ resident, plan, metrics, onFamilyPreview }) {
+function CarePlanHeader({ resident, plan, metrics }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="teal">Plan activo</Badge>
+            <Badge tone="teal">Programa activo</Badge>
             <Badge>Versión {plan.version ?? 1}</Badge>
           </div>
           <h2 className="mt-3 text-xl font-semibold text-slate-950 sm:text-2xl">
             {plan.titulo || `Plan de cuidado de ${residentFullName(resident)}`}
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Define rutinas de cuidado por turno. El equipo verá cada rutina como una tarea accionable en su jornada.
+            Acciones y frecuencia del programa de atención integral de la persona residente.
           </p>
           <p className="mt-3 text-sm font-medium text-slate-500">
             {metrics.active} rutina{metrics.active === 1 ? "" : "s"} activa{metrics.active === 1 ? "" : "s"}
-            {metrics.familyVisible > 0 && ` · ${metrics.familyVisible} visible${metrics.familyVisible === 1 ? "" : "s"} para la familia`}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onFamilyPreview}
-          className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
-        >
-          Vista familiar
-        </button>
       </div>
     </section>
   );
@@ -390,7 +319,7 @@ function CarePlanEmptyState({ resident, canCreate, saving, onCreate }) {
         Parte con una rutina base lista (alimentación, hidratación, higiene, movilidad, prevención y bienestar) y ajústala después solo donde haga falta. Toma menos de un minuto.
       </p>
       {canCreate ? (
-        <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
+        <div className="mt-6 flex justify-center">
           <button
             type="button"
             onClick={() => onCreate(true)}
@@ -398,14 +327,6 @@ function CarePlanEmptyState({ resident, canCreate, saving, onCreate }) {
             className="w-full rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
           >
             {saving ? "Creando..." : "Crear plan con rutina base"}
-          </button>
-          <button
-            type="button"
-            onClick={() => onCreate(false)}
-            disabled={saving}
-            className="w-full rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
-          >
-            Crear plan vacío
           </button>
         </div>
       ) : (
@@ -423,15 +344,9 @@ function RoutineCockpit({
   saving,
   presetSaving,
   showPaused,
-  showTemplates,
-  presetGroups,
-  existingPresetIds,
-  onToggleTemplates,
   onAddBaseRoutine,
   onNew,
-  onOpenPreset,
   onEdit,
-  onDuplicate,
   onDeactivate,
   onTogglePaused,
   onReactivate,
@@ -454,12 +369,8 @@ function RoutineCockpit({
         </div>
         {canCreate && (
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <button
-              type="button"
-              onClick={onToggleTemplates}
-              className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
-            >
-              Plantillas
+            <button type="button" onClick={onAddBaseRoutine} disabled={presetSaving || saving} className="w-full rounded-xl border border-teal-200 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-60 sm:w-auto">
+              {presetSaving ? "Agregando..." : "Agregar cuidados esenciales"}
             </button>
             <button
               type="button"
@@ -471,32 +382,6 @@ function RoutineCockpit({
           </div>
         )}
       </div>
-
-      {canCreate && showTemplates && (
-        <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-950">Plantillas recomendadas</p>
-              <p className="text-xs text-slate-500">Agrega una rutina específica o edita una existente.</p>
-            </div>
-            <button
-              type="button"
-              onClick={onAddBaseRoutine}
-              disabled={presetSaving || saving}
-              className="w-full rounded-xl border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-60 sm:w-auto"
-            >
-              {presetSaving ? "Agregando..." : "Agregar rutina base completa"}
-            </button>
-          </div>
-          <PresetPicker
-            groups={presetGroups}
-            existingPresetIds={existingPresetIds}
-            saving={saving || presetSaving}
-            canEdit={canEdit}
-            onOpen={onOpenPreset}
-          />
-        </div>
-      )}
 
       {activities.length === 0 && pausedActivities.length === 0 ? (
         <EmptyActivities onAddBaseRoutine={canCreate ? onAddBaseRoutine : null} saving={presetSaving || saving} />
@@ -511,7 +396,6 @@ function RoutineCockpit({
               canCreate={canCreate}
               saving={saving}
               onEdit={onEdit}
-              onDuplicate={onDuplicate}
               onDeactivate={onDeactivate}
             />
           ))}
@@ -541,7 +425,7 @@ function groupActivitiesByTurn(activities = []) {
   }, {});
 }
 
-function TurnRoutineColumn({ turno, items, canEdit, canCreate, saving, onEdit, onDuplicate, onDeactivate }) {
+function TurnRoutineColumn({ turno, items, canEdit, saving, onEdit, onDeactivate }) {
   return (
     <div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -561,10 +445,8 @@ function TurnRoutineColumn({ turno, items, canEdit, canCreate, saving, onEdit, o
               key={activity.id}
               activity={activity}
               canEdit={canEdit}
-              canCreate={canCreate}
               saving={saving}
               onEdit={onEdit}
-              onDuplicate={onDuplicate}
               onDeactivate={onDeactivate}
             />
           ))}
@@ -607,17 +489,12 @@ function PresetPicker({ groups, existingPresetIds, saving, canEdit, onOpen }) {
   );
 }
 
-function ActivityRow({ activity, canEdit, canCreate, saving, onEdit, onDuplicate, onDeactivate }) {
+function ActivityRow({ activity, canEdit, saving, onEdit, onDeactivate }) {
   const schedules = getActiveCareSchedules(activity);
   return (
-    <article className={`rounded-xl border border-slate-200 border-l-4 bg-white p-3 ${PRIORITY_BORDER[activity.prioridad] ?? PRIORITY_BORDER.media}`}>
+    <article className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge tone="teal">{CARE_CATEGORY_LABEL[activity.categoria] ?? activity.categoria}</Badge>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PRIORITY_TONE[activity.prioridad] ?? PRIORITY_TONE.media}`}>
-          {PRIORITY_LABEL[activity.prioridad] ?? activity.prioridad}
-        </span>
-        {activity.requiere_observacion && <Badge tone="amber">Seguimiento</Badge>}
-        {activity.visible_familiar && <Badge tone="emerald">Familia</Badge>}
       </div>
 
       <h4 className="mt-2 text-sm font-semibold text-slate-950">{activity.titulo}</h4>
@@ -631,21 +508,11 @@ function ActivityRow({ activity, canEdit, canCreate, saving, onEdit, onDuplicate
         ))}
       </div>
 
-      {activity.visible_familiar && activity.resumen_familiar?.trim() && (
-        <p className="mt-3 rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-2 text-xs leading-5 text-teal-800">
-          {activity.resumen_familiar}
-        </p>
-      )}
 
       <div className="mt-3 flex flex-wrap gap-2">
         {canEdit && (
           <button type="button" onClick={() => onEdit(activity)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
             Editar
-          </button>
-        )}
-        {canCreate && (
-          <button type="button" onClick={() => onDuplicate(activity)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-            Duplicar
           </button>
         )}
         {canEdit && (
@@ -660,86 +527,6 @@ function ActivityRow({ activity, canEdit, canCreate, saving, onEdit, onDuplicate
         )}
       </div>
     </article>
-  );
-}
-
-function FamilyPreviewModal({ isOpen, onClose, plan, activities, resident }) {
-  const published = (activities ?? []).filter((activity) => activity.visible_familiar && activity.activo !== false);
-  const hasPlanContent =
-    plan?.objetivos?.trim() || plan?.pauta_alimentacion?.trim()
-    || plan?.pauta_hidratacion?.trim() || plan?.restricciones?.trim()
-    || plan?.riesgo_caidas || plan?.riesgo_up;
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Vista familiar - ${residentFullName(resident)}`}
-      panelClassName="max-w-2xl p-4 sm:p-6"
-    >
-      <div className="space-y-5">
-        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
-          Solo aparecen contenidos marcados como visibles para familia.
-        </div>
-
-        {hasPlanContent && (
-          <section className="space-y-3">
-            <p className="text-xs font-bold uppercase text-slate-400">Plan compartido</p>
-            {plan?.objetivos?.trim() && (
-              <div>
-                <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Objetivos</p>
-                <p className="whitespace-pre-line text-sm text-slate-700">{plan.objetivos}</p>
-              </div>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2">
-              {plan?.pauta_alimentacion?.trim() && (
-                <InfoBox tone="teal" label="Alimentación" value={plan.pauta_alimentacion} />
-              )}
-              {plan?.pauta_hidratacion?.trim() && (
-                <InfoBox tone="sky" label="Hidratación" value={plan.pauta_hidratacion} />
-              )}
-            </div>
-            {plan?.restricciones?.trim() && (
-              <InfoBox tone="amber" label="Alertas y restricciones" value={plan.restricciones} />
-            )}
-            <div className="flex flex-wrap gap-2">
-              {plan?.riesgo_caidas && <RiskBadge label="Caídas" value={plan.riesgo_caidas} />}
-              {plan?.riesgo_up && <RiskBadge label="UPP" value={plan.riesgo_up} tooltip={UPP_TOOLTIP} />}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <p className="mb-3 text-xs font-bold uppercase text-slate-400">
-            Rutinas publicadas ({published.length})
-          </p>
-          {published.length === 0 ? (
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-center">
-              <p className="text-sm font-semibold text-slate-700">Ninguna rutina publicada</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Edita una rutina y activa la publicación familiar para compartirla.
-              </p>
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {published.map((activity) => (
-                <li key={activity.id} className="rounded-xl border border-teal-100 bg-teal-50/70 p-3">
-                  <Badge tone="teal">{CARE_CATEGORY_LABEL[activity.categoria] ?? activity.categoria}</Badge>
-                  <p className="mt-2 text-sm font-semibold text-slate-800">{activity.resumen_familiar}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {getActiveCareSchedules(activity).map((schedule, index) => (
-                      <span key={schedule.id ?? index} className="rounded-full border border-slate-100 bg-white px-2 py-0.5 text-xs text-slate-400">
-                        {formatCareSchedule(schedule)}
-                      </span>
-                    ))}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </Modal>
   );
 }
 
@@ -835,17 +622,26 @@ function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty
       </button>
 
       {!open && (
-        <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4 sm:p-5">
-          <ClinicalSummaryItem label="Objetivo" value={plan.objetivos} fallback="Sin objetivo registrado" />
-          <ClinicalSummaryItem label="Alimentación" value={plan.pauta_alimentacion} fallback="Sin pauta específica" />
-          <ClinicalSummaryItem label="Hidratación" value={plan.pauta_hidratacion} fallback="Sin pauta específica" />
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-            <p className="text-xs font-semibold uppercase text-slate-400">Riesgos</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <RiskBadge label="Caídas" value={plan.riesgo_caidas} />
-              <RiskBadge label="UPP" value={plan.riesgo_up} tooltip={UPP_TOOLTIP} />
+        <div className="border-t border-slate-100 p-4 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <ClinicalSummaryItem label="Objetivo" value={plan.objetivos} fallback="Sin objetivo registrado" />
+            <ClinicalSummaryItem label="Alimentación" value={plan.pauta_alimentacion} fallback="Sin pauta específica" />
+            <ClinicalSummaryItem label="Hidratación" value={plan.pauta_hidratacion} fallback="Sin pauta específica" />
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase text-slate-400">Riesgos</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <RiskBadge label="Caídas" value={plan.riesgo_caidas} />
+                <RiskBadge label="UPP" value={plan.riesgo_up} tooltip={UPP_TOOLTIP} />
+              </div>
             </div>
           </div>
+          {(plan.objetivo_biopsicosocial || plan.valoracion_social || plan.meta_rehabilitacion) && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 border-t border-slate-100 pt-3">
+              <ClinicalSummaryItem label="Objetivo biopsicosocial" value={plan.objetivo_biopsicosocial} fallback={null} />
+              <ClinicalSummaryItem label="Valoración social" value={plan.valoracion_social} fallback={null} />
+              <ClinicalSummaryItem label="Meta de rehabilitación" value={plan.meta_rehabilitacion} fallback={null} />
+            </div>
+          )}
         </div>
       )}
 
@@ -1020,7 +816,7 @@ function SelectField({ label, value, onChange, disabled, tooltip }) {
   );
 }
 
-function TextArea({ label, value, onChange, disabled, rows = 3 }) {
+function TextArea({ label, value, onChange, disabled, rows = 3, placeholder }) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
@@ -1029,7 +825,8 @@ function TextArea({ label, value, onChange, disabled, rows = 3 }) {
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         rows={rows}
-        className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50"
+        placeholder={placeholder}
+        className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50"
       />
     </label>
   );

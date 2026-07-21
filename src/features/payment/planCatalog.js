@@ -59,6 +59,13 @@ export function formatPlanPrice(plan) {
   return `$${Number(plan.precio_clp).toLocaleString("es-CL")}`;
 }
 
+export function formatDailyPrice(precioClp) {
+  const monthly = Number(precioClp);
+  if (!Number.isFinite(monthly) || monthly <= 0) return null;
+  const daily = Math.round(monthly / 30 / 100) * 100;
+  return `~$${daily.toLocaleString("es-CL")} / día`;
+}
+
 export function getEffectivePlanLimits(eleam = {}) {
   const plan = eleam?.planes ?? null;
   return {

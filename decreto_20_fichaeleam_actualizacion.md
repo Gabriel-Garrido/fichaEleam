@@ -9,6 +9,8 @@
 **Fecha de elaboración de este documento:** 2026-06-09.  
 **Nota:** Este documento es una guía técnica y operativa para desarrollo de software. No reemplaza la lectura del texto oficial ni una asesoría jurídica/sanitaria.
 
+> **Estado de producto (2026-07-20):** este archivo conserva el análisis normativo amplio y propuestas de evolución. No todas las propuestas forman parte del producto vigente. En particular, el portal familiar y las cuentas familiares no están activos; las obligaciones de comunicación se registran como antecedentes clínicos o reglamentarios por administradores y funcionarios. Para arquitectura, rutas y alcance actual consulta `README.md` y `CLAUDE.md`.
+
 ---
 
 # 1. Estado normativo vigente

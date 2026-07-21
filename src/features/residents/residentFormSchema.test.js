@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateFamilyForm, validateResidentForm } from "./residentFormSchema";
+import { validateResidentForm } from "./residentFormSchema";
 
 const baseResident = {
   nombre: "Elena",
@@ -22,7 +22,7 @@ const baseResident = {
 };
 
 describe("residentFormSchema", () => {
-  it("normalizes a resident without Barthel/Katz/dependency/contact fields", () => {
+  it("normalizes a resident without Barthel/Katz/contact cache fields", () => {
     const result = validateResidentForm(baseResident, { isEditing: false });
 
     expect(result.ok).toBe(true);
@@ -31,9 +31,9 @@ describe("residentFormSchema", () => {
       apellido: "Rojas",
       estado: "activo",
       alergias: ["Penicilina", "Ibuprofeno"],
+      nivel_dependencia: "moderado",
     });
     expect(result.data).not.toHaveProperty("indice_barthel");
-    expect(result.data).not.toHaveProperty("nivel_dependencia");
     expect(result.data).not.toHaveProperty("nombre_contacto");
   });
 
@@ -44,6 +44,13 @@ describe("residentFormSchema", () => {
     expect(result.errors.estado).toContain("no es válido");
   });
 
+  it("allows dependency to remain unclassified for DS20 alerts", () => {
+    const result = validateResidentForm({ ...baseResident, nivel_dependencia: "" }, { isEditing: false });
+
+    expect(result.ok).toBe(true);
+    expect(result.data.nivel_dependencia).toBeNull();
+  });
+
   it("requires egreso date and reason when editing to egresado", () => {
     const result = validateResidentForm({ ...baseResident, estado: "egresado" }, { isEditing: true });
 
@@ -52,35 +59,15 @@ describe("residentFormSchema", () => {
     expect(result.errors.motivo_egreso).toContain("motivo");
   });
 
-  it("requires family name, email, phone and relationship", () => {
-    const result = validateFamilyForm({
-      nombre: " Paula  Rojas ",
-      parentesco: "hijo/a",
-      email: " PAULA.ROJAS@GMAIL.COM ",
-      telefono: "+56 9 1234 5678",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.data).toMatchObject({
-      nombre: "Paula Rojas",
-      parentesco: "hijo/a",
-      email: "paula.rojas@gmail.com",
-    });
-    expect(result.data.telefono).toBe("+56 9 1234 5678");
-  });
-
-  it("returns actionable family validation errors", () => {
-    const result = validateFamilyForm({
-      nombre: "",
-      parentesco: "",
-      email: "correo-invalido",
-      telefono: "123",
-    });
+  it("rejects a future egreso date", () => {
+    const future = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
+    const result = validateResidentForm(
+      { ...baseResident, estado: "egresado", fecha_egreso: future, motivo_egreso: "Traslado" },
+      { isEditing: true }
+    );
 
     expect(result.ok).toBe(false);
-    expect(result.errors.nombre).toContain("obligatorio");
-    expect(result.errors.parentesco).toContain("obligatorio");
-    expect(result.errors.email).toContain("formato válido");
-    expect(result.errors.telefono).toContain("chileno válido");
+    expect(result.errors.fecha_egreso).toContain("futura");
   });
+
 });

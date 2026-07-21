@@ -5,12 +5,13 @@ import { describe, expect, it } from "vitest";
 
 const schema = readFileSync(join(cwd(), "supabase_schema.sql"), "utf8");
 
-describe("resident and family schema contracts", () => {
-  it("stores family contact data on profiles and invitations", () => {
+describe("resident and staff schema contracts", () => {
+  it("stores staff contact data on profiles and invitations", () => {
     expect(schema).toContain("telefono   text");
     expect(schema).toContain("add column if not exists telefono text");
     expect(schema).toContain("nombre        text check");
-    expect(schema).toContain("parentesco    text check");
+    expect(schema).toContain("telefono      text check");
+    expect(schema).not.toContain("parentesco    text check");
   });
 
   it("keeps emergency contact columns out of resident creation", () => {

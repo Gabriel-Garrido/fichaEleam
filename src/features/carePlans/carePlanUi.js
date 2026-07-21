@@ -9,6 +9,12 @@ export const INITIAL_CARE_PLAN = {
   restricciones: "",
   riesgo_caidas: "",
   riesgo_up: "",
+  objetivo_biopsicosocial: "",
+  valoracion_social: "",
+  intereses_actividades: "",
+  necesidades_espirituales: "",
+  meta_rehabilitacion: "",
+  restricciones_actividad: "",
 };
 
 export const INITIAL_CARE_ACTIVITY = {
@@ -63,6 +69,41 @@ export function cloneCareSchedule(schedule = {}) {
     tolerancia_min: Number(schedule.tolerancia_min ?? INITIAL_CARE_SCHEDULE.tolerancia_min),
     activo: schedule.activo !== false,
   };
+}
+
+export function buildDailyShiftSchedules(shifts = ["mañana"], currentSchedules = []) {
+  const selected = [...new Set(shifts)].filter((shift) => CARE_TURNOS.includes(shift));
+  const safeShifts = selected.length ? selected : ["mañana"];
+  return CARE_TURNOS
+    .filter((shift) => safeShifts.includes(shift))
+    .map((shift) => {
+      const existing = currentSchedules.find((item) => item.turno === shift);
+      return {
+        ...INITIAL_CARE_SCHEDULE,
+        ...existing,
+        frecuencia: "diaria",
+        dias_semana: [1, 2, 3, 4, 5, 6, 7],
+        dias_mes: [1],
+        fecha_unica: "",
+        tolerancia_min: 60,
+        turno: shift,
+        activo: true,
+      };
+    });
+}
+
+// Errores de horario que el guardado silenciaría: "semanal" sin días vuelve a
+// ejecutarse todos los días (normalizeSchedule) y "una_vez" sin fecha nunca
+// genera tarea.
+export function careScheduleError(schedule) {
+  if (!schedule?.hora) return "Indica la hora de ejecución.";
+  if (schedule.frecuencia === "semanal" && !(schedule.dias_semana?.length)) {
+    return "Selecciona al menos un día de la semana.";
+  }
+  if (schedule.frecuencia === "una_vez" && !schedule.fecha_unica) {
+    return "Indica la fecha de ejecución.";
+  }
+  return null;
 }
 
 export function getActiveCareSchedules(activity) {
@@ -135,12 +176,17 @@ export function buildCarePlanForm(plan) {
     restricciones: plan.restricciones ?? "",
     riesgo_caidas: plan.riesgo_caidas ?? "",
     riesgo_up: plan.riesgo_up ?? "",
+    objetivo_biopsicosocial: plan.objetivo_biopsicosocial ?? "",
+    valoracion_social: plan.valoracion_social ?? "",
+    intereses_actividades: plan.intereses_actividades ?? "",
+    necesidades_espirituales: plan.necesidades_espirituales ?? "",
+    meta_rehabilitacion: plan.meta_rehabilitacion ?? "",
+    restricciones_actividad: plan.restricciones_actividad ?? "",
   } : INITIAL_CARE_PLAN;
 }
 
 export function calculateCarePlanReadiness({ plan, activities = [] } = {}) {
   const active = sortCareActivities(activities);
-  const familyVisible = active.filter((item) => item.visible_familiar).length;
   const hasClinicalSummary = Boolean(
     plan?.objetivos?.trim()
     || plan?.pauta_alimentacion?.trim()
@@ -152,7 +198,6 @@ export function calculateCarePlanReadiness({ plan, activities = [] } = {}) {
 
   return {
     active: active.length,
-    familyVisible,
     hasClinicalSummary,
   };
 }

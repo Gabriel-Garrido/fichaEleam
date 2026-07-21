@@ -1,7 +1,7 @@
 import { supabase } from "../../services/supabaseConfig";
+import { getEleamContext } from "../../services/serviceContext";
 import { isValidUUID } from "../../utils/validators";
 import { withResidentLocation } from "../beds/bedsUtils";
-import { createStaffUser } from "../team/teamService";
 
 const RESIDENT_SELECT = `
   id, eleam_id, nombre, apellido, rut, fecha_nacimiento, sexo,
@@ -10,6 +10,7 @@ const RESIDENT_SELECT = `
   alergias, grupo_sanguineo, fecha_ingreso, fecha_egreso,
   motivo_egreso, estado, cama_actual_id,
   indice_barthel, escala_katz, nivel_dependencia,
+  condicion_salud_grave, condicion_salud_grave_detalle,
   creado_por, creado_en, actualizado_en,
   cama_actual:camas!residentes_cama_actual_id_fkey(
     id, eleam_id, habitacion_id, codigo, nombre, tipo, estado, notas, orden,
@@ -27,19 +28,6 @@ function stripLocationFields(payload = {}) {
   delete clean.cama_actual_id;
   delete clean.ubicacion_label;
   return clean;
-}
-
-// Obtiene el eleam_id del perfil del usuario autenticado actual
-async function getMyEleamId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado.");
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("eleam_id, rol")
-    .eq("id", user.id)
-    .single();
-  if (error || !data?.eleam_id) throw new Error("ELEAM no encontrado para este usuario.");
-  return { userId: user.id, eleamId: data.eleam_id, rol: data.rol };
 }
 
 export const getResidents = async (estado = null) => {
@@ -69,7 +57,7 @@ export const getResidentById = async (id) => {
 };
 
 export const createResident = async (residentData) => {
-  const { userId, eleamId } = await getMyEleamId();
+  const { userId, eleamId } = await getEleamContext();
   const payload = stripLocationFields(residentData);
   const { data, error } = await supabase
     .from("residentes")
@@ -81,7 +69,7 @@ export const createResident = async (residentData) => {
 };
 
 export const createResidentsBatch = async (rows, onProgress = null) => {
-  const { userId, eleamId, rol } = await getMyEleamId();
+  const { userId, eleamId, rol } = await getEleamContext();
   if (rol !== "admin_eleam") {
     throw new Error("Solo el administrador del ELEAM puede cargar residentes desde Excel.");
   }
@@ -89,7 +77,6 @@ export const createResidentsBatch = async (rows, onProgress = null) => {
   let done = 0;
 
   for (const row of rows) {
-    let createdResident = null;
     try {
       const payload = stripLocationFields(row.payload);
       const { data, error } = await supabase
@@ -98,34 +85,18 @@ export const createResidentsBatch = async (rows, onProgress = null) => {
         .select(RESIDENT_SELECT)
         .single();
       if (error) throw error;
-      createdResident = withResidentLocation(data);
-      if (!row.familyPayload) {
-        throw new Error("Cada residente debe incluir un familiar responsable completo.");
-      }
-      const residenteId = createdResident?.id;
-      if (!isValidUUID(residenteId)) {
-        throw new Error("No se pudo confirmar el ID del residente creado para vincular su familiar responsable.");
-      }
-      const family = await createStaffUser({
-        nombre: row.familyPayload.nombre,
-        email: row.familyPayload.email,
-        telefono: row.familyPayload.telefono,
-        parentesco: row.familyPayload.parentesco,
-        rol: "familiar",
-        residenteId,
+      results.push({
+        ok: true,
+        rowNumber: row.rowNumber,
+        label: row.label,
+        data: withResidentLocation(data),
       });
-      results.push({ ok: true, rowNumber: row.rowNumber, label: row.label, data: createdResident, family });
     } catch (error) {
-      let rollbackWarning = "";
-      if (createdResident?.id) {
-        const { error: deleteError } = await supabase.from("residentes").delete().eq("id", createdResident.id);
-        if (deleteError) rollbackWarning = " El residente quedó creado; elimina o vincula el familiar manualmente.";
-      }
       const message =
         error?.code === "23505"
           ? "Ya existe un residente con ese RUT en este establecimiento."
           : error?.message || "No se pudo crear el residente.";
-      results.push({ ok: false, rowNumber: row.rowNumber, label: row.label, error: `${message}${rollbackWarning}` });
+      results.push({ ok: false, rowNumber: row.rowNumber, label: row.label, error: message });
     } finally {
       done += 1;
       onProgress?.(done, rows.length);
@@ -153,28 +124,6 @@ export const deleteResident = async (id) => {
   if (!isValidUUID(id)) throw new Error("ID de residente inválido.");
   // La RLS garantiza que solo se puede eliminar si pertenece al ELEAM del usuario
   const { error } = await supabase.from("residentes").delete().eq("id", id);
-  if (error) throw error;
-};
-
-export const getFamiliarForResidente = async (residenteId) => {
-  if (!isValidUUID(residenteId)) return null;
-  const { data, error } = await supabase
-    .from("familiar_residentes")
-    .select("parentesco, profile_id, profiles!familiar_residentes_profile_id_fkey(id, nombre, email, telefono)")
-    .eq("residente_id", residenteId)
-    .order("creado_en", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
-};
-
-export const removeFamiliarLink = async (residenteId) => {
-  if (!isValidUUID(residenteId)) throw new Error("ID de residente inválido.");
-  const { error } = await supabase
-    .from("familiar_residentes")
-    .delete()
-    .eq("residente_id", residenteId);
   if (error) throw error;
 };
 

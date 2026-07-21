@@ -22,7 +22,7 @@ import {
 } from "./paymentService";
 import { canStartSubscription, subscriptionButtonLabel } from "./paymentStatus";
 import { formatDate } from "../../utils/dateUtils";
-import { getEffectivePlanLimits, planLimitError, PUBLIC_PLAN_CATALOG } from "./planCatalog";
+import { formatDailyPrice, getEffectivePlanLimits, planLimitError, PUBLIC_PLAN_CATALOG } from "./planCatalog";
 import { isMercadoPagoCheckoutUrl } from "./mercadoPagoUrls";
 import { FeatureCoach } from "../featureCoach";
 import { buildWhatsAppUrl } from "../landing/whatsAppLeadUtils";
@@ -67,6 +67,32 @@ const SUBSCRIPTION_LABEL = {
   vencido: { txt: "Suscripción vencida", cls: "bg-rose-100 text-rose-700" },
   inactivo: { txt: "Activación pendiente", cls: "bg-amber-100 text-amber-800" },
 };
+
+const PAGO_ESTADO_LABEL = {
+  completado: { txt: "Completado", cls: "bg-emerald-100 text-emerald-700" },
+  fallido: { txt: "Fallido", cls: "bg-rose-100 text-rose-700" },
+  pendiente: { txt: "Pendiente", cls: "bg-amber-100 text-amber-700" },
+  reembolsado: { txt: "Reembolsado", cls: "bg-slate-100 text-slate-600" },
+};
+
+function PlanGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12" aria-busy="true" aria-label="Cargando planes">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="rounded-2xl border-2 border-slate-200 bg-white p-6 animate-pulse">
+          <div className="mx-auto h-3 w-28 rounded-full bg-slate-200" />
+          <div className="mx-auto mt-4 h-8 w-32 rounded-xl bg-slate-200" />
+          <div className="mx-auto mt-2 h-3 w-20 rounded-full bg-slate-100" />
+          <div className="mt-6 space-y-2">
+            <div className="mx-auto h-3 w-44 rounded-full bg-slate-100" />
+            <div className="mx-auto h-3 w-36 rounded-full bg-slate-100" />
+          </div>
+          <div className="mt-8 h-10 w-full rounded-xl bg-slate-200" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function PlansFallbackCard({
   title = "Estamos cargando los planes",
@@ -177,7 +203,7 @@ export default function PaymentPage() {
   useSEO({
     title: "Planes y precios · activa tu ELEAM",
     description:
-      "Planes mensuales en CLP para tu ELEAM en Chile. Pago con MercadoPago, cupos claros para residentes y funcionarios, y familias incluidas. Cancela cuando quieras.",
+      "Planes mensuales en CLP para tu ELEAM en Chile. Pago con MercadoPago y cupos claros para residentes y funcionarios. Cancela cuando quieras.",
     path: "/pago",
     image: PUBLIC_ASSETS.software.publicSrc,
     keywords: ["precio software ELEAM", "planes ELEAM Chile", "FichaEleam precio"],
@@ -232,10 +258,14 @@ export default function PaymentPage() {
     return cleanup;
   }, [loadPlanData]);
 
-  const handleStart = async (codigo) => {
+  const handleStart = async (codigo, openDemo = null) => {
     if (!user) {
-      toast("Para contratar FichaEleam, solicita una demo y habilitaremos tu cuenta.", "info");
-      navigate("/");
+      if (openDemo) {
+        openDemo("payment_plan_card");
+      } else {
+        toast("Para contratar FichaEleam, solicita una demo y habilitaremos tu cuenta.", "info");
+        navigate("/");
+      }
       return;
     }
     if (!isAdminEleam) {
@@ -339,7 +369,7 @@ export default function PaymentPage() {
         ? "El establecimiento todavía no tiene demo aprobado o suscripción vigente para entrar al panel."
         : "Selecciona el plan que corresponde al tamaño de tu residencia o solicita una demo para revisar tu caso.";
 
-  const body = (
+  const renderBody = (openDemo = null) => (
     <div className={`${showPublicNav ? "max-w-5xl py-12" : "max-w-7xl py-5 sm:px-6 lg:px-8 lg:py-8"} mx-auto px-4`}>
         {user && <FeatureCoach featureId="subscription" standalone />}
         {sinAcceso && (
@@ -360,7 +390,7 @@ export default function PaymentPage() {
         {user && !isAdminEleam && (
           <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 mb-8 flex gap-4 items-start">
             <div className="shrink-0 mt-0.5 w-6 h-6 bg-sky-200 rounded-full flex items-center justify-center">
-              <svg className="w-3.5 h-3.5 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -372,7 +402,7 @@ export default function PaymentPage() {
               </h3>
               <p className="text-sm text-sky-700">
                 {blockedNonAdmin
-                  ? "Funcionarios y familiares no pueden activar pagos. Pide al administrador que regularice la suscripción o solicita que el superadmin revise el demo."
+                  ? "Los funcionarios no pueden activar pagos. Pide al administrador que regularice la suscripción o solicita que el superadmin revise el demo."
                   : "Tu acceso está incluido sin costo mientras el administrador del ELEAM mantenga la suscripción activa. Si crees que la suscripción debería estar activa, contáctalo."}
               </p>
               {rol && (
@@ -392,7 +422,7 @@ export default function PaymentPage() {
             <div className={`p-5 sm:p-6 ${demoExpired ? "bg-rose-50" : "bg-amber-50"}`}>
               <div className="flex items-start gap-4">
                 <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${demoExpired ? "bg-rose-100" : "bg-amber-100"}`}>
-                  <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`h-5 w-5 ${demoExpired ? "text-rose-600" : "text-amber-700"}`}>
+                  <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`h-5 w-5 ${demoExpired ? "text-rose-600" : "text-amber-700"}`} aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                   </svg>
                 </div>
@@ -517,9 +547,10 @@ export default function PaymentPage() {
                           <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
                           </svg>
-                          Hasta{" "}
-                          <span className="font-semibold text-slate-700">{effectiveLimits.maxResidents}</span>
-                          {" "}residentes
+                          <span>
+                            <span className="font-semibold text-slate-700">{planUsage.residents}</span>
+                            {" de "}{effectiveLimits.maxResidents} residentes
+                          </span>
                         </div>
                       )}
                       {effectiveLimits.maxStaff && (
@@ -527,9 +558,10 @@ export default function PaymentPage() {
                           <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
                           </svg>
-                          Hasta{" "}
-                          <span className="font-semibold text-slate-700">{effectiveLimits.maxStaff}</span>
-                          {" "}funcionarios
+                          <span>
+                            <span className="font-semibold text-slate-700">{planUsage.staff}</span>
+                            {" de "}{effectiveLimits.maxStaff} funcionarios
+                          </span>
                         </div>
                       )}
                     </div>
@@ -564,7 +596,7 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* Subscription card for non-admin with an eleam (funcionario / familiar) */}
+        {/* Subscription card for a staff account associated with an ELEAM. */}
         {user && eleam && !isDemo && !isAdminEleam && (
           <div className="mb-8 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -607,15 +639,7 @@ export default function PaymentPage() {
 
         {/* Planes dinámicos */}
         {loadingPlans ? (
-          <PlansFallbackCard
-            whatsappUrl={whatsappPlanUrl}
-            title="Estamos cargando los planes"
-            message="Si los planes no aparecen en unos segundos, escríbenos por WhatsApp y te ayudamos a activar tu ELEAM con el plan correcto."
-            details="También puedes esperar; la carga se actualiza automáticamente cuando responde el servicio de planes."
-            onRetry={loadPlanData}
-            retryLabel="Volver a cargar"
-            busy
-          />
+          <PlanGridSkeleton />
         ) : plansError ? (
           <PlansFallbackCard
             whatsappUrl={whatsappPlanUrl}
@@ -636,13 +660,14 @@ export default function PaymentPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
             {plans.map((p) => {
               const popular = p.destacado;
-              const isPendingPlan = eleam?.plan_id === p.id && subscriptionStatus === "pendiente";
-              const isCurrent = eleam?.plan_id === p.id && pagoActivo && !isPendingPlan;
+              const isPendingPlan = Boolean(p.id) && eleam?.plan_id === p.id && subscriptionStatus === "pendiente";
+              const isCurrent = Boolean(p.id) && eleam?.plan_id === p.id && pagoActivo && !isPendingPlan;
               const limitError = user && isAdminEleam ? planLimitError(p, planUsage) : null;
               const disabledByUsage = Boolean(limitError);
+              const dailyLabel = p.dailyLabel ?? formatDailyPrice(p.precio_clp);
               return (
                 <div
-                  key={p.id}
+                  key={p.id ?? p.codigo}
                   className={`rounded-2xl p-6 border-2 text-center relative flex flex-col ${
                     popular
                       ? "border-teal-700 bg-teal-700 text-white shadow-xl"
@@ -661,7 +686,7 @@ export default function PaymentPage() {
                     {formatCLP(p.precio_clp)}
                   </p>
                   <p className={`text-xs mb-4 ${popular ? "text-teal-200" : "text-slate-400"}`}>
-                    CLP / mes
+                    CLP / mes{dailyLabel ? ` · ${dailyLabel}` : ""}
                   </p>
                   <ul className={`text-xs mb-6 space-y-1 ${popular ? "text-teal-100" : "text-slate-500"}`}>
                     <li>Hasta {p.max_residentes ?? "∞"} residentes activos u hospitalizados</li>
@@ -682,7 +707,7 @@ export default function PaymentPage() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => handleStart(p.codigo)}
+                        onClick={() => handleStart(p.codigo, openDemo)}
                         disabled={loadingAction || (user && !isAdminEleam) || isPendingPlan || disabledByUsage}
                         className={`w-full font-semibold py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                           popular
@@ -708,7 +733,7 @@ export default function PaymentPage() {
             {INCLUYE.map((item, i) => (
               <li key={i} className="flex items-center gap-3 text-sm text-slate-600">
                 <div className="w-5 h-5 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
-                  <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
@@ -726,27 +751,26 @@ export default function PaymentPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-slate-500 border-b">
-                    <th className="py-2">Fecha</th>
-                    <th>Monto</th>
-                    <th>Estado</th>
-                    <th>Método</th>
+                    <th scope="col" className="py-2 font-semibold">Fecha</th>
+                    <th scope="col" className="font-semibold">Monto</th>
+                    <th scope="col" className="font-semibold">Estado</th>
+                    <th scope="col" className="font-semibold">Método</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pagos.map((p) => (
-                    <tr key={p.id} className="border-b last:border-0">
-                      <td className="py-2">{formatDate(p.fecha_pago)}</td>
-                      <td>{formatCLP(p.monto)}</td>
-                      <td>
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${
-                          p.estado === "completado" ? "bg-emerald-100 text-emerald-700" :
-                          p.estado === "fallido"   ? "bg-rose-100 text-rose-700" :
-                          "bg-amber-100 text-amber-700"
-                        }`}>{p.estado}</span>
-                      </td>
-                      <td className="text-slate-500">{p.metodo_pago ?? "—"}</td>
-                    </tr>
-                  ))}
+                  {pagos.map((p) => {
+                    const estadoInfo = PAGO_ESTADO_LABEL[p.estado] ?? { txt: p.estado, cls: "bg-slate-100 text-slate-600" };
+                    return (
+                      <tr key={p.id} className="border-b last:border-0">
+                        <td className="py-2">{formatDate(p.fecha_pago)}</td>
+                        <td>{formatCLP(p.monto)}</td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded-full text-xs ${estadoInfo.cls}`}>{estadoInfo.txt}</span>
+                        </td>
+                        <td className="text-slate-500">{p.metodo_pago === "mercadopago" ? "MercadoPago" : p.metodo_pago ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -761,7 +785,7 @@ export default function PaymentPage() {
     </div>
   );
 
-  if (!showPublicNav) return body;
+  if (!showPublicNav) return renderBody();
   return (
     <PublicShell current="/pago">
       {({ openDemo }) => (
@@ -774,7 +798,7 @@ export default function PaymentPage() {
                   Precios claros para digitalizar tu ELEAM
                 </h1>
                 <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-                  Elige según residentes activos u hospitalizados. Todos los planes incluyen ficha clínica, signos vitales, Carpeta SEREMI y portal familiar.
+                  Elige según residentes activos u hospitalizados. Todos los planes incluyen ficha clínica, signos vitales y Carpeta SEREMI.
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <button type="button" onClick={() => openDemo("payment_public_hero")} className={PUBLIC_BUTTON.primary}>
@@ -791,7 +815,7 @@ export default function PaymentPage() {
               <ProductImage asset={PUBLIC_ASSETS.software} priority />
             </div>
           </section>
-          <div id="planes">{body}</div>
+          <div id="planes">{renderBody(openDemo)}</div>
         </div>
       )}
     </PublicShell>

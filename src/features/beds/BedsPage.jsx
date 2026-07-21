@@ -7,6 +7,7 @@ import EmptyState from "../../components/EmptyState";
 import FilterBar from "../../components/FilterBar";
 import HelpTooltip from "../../components/HelpTooltip";
 import Modal from "../../components/Modal";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import {
   ErrorSummary,
@@ -36,6 +37,9 @@ import {
   BED_STATUS_LABELS,
   formatBedLocation,
   groupBedsByRoom,
+  hasDuplicateBedCode,
+  hasDuplicateRoomCode,
+  suggestNextBedCode,
 } from "./bedsUtils";
 import { validateBedForm, validateRoomForm } from "./bedsFormSchema";
 
@@ -62,6 +66,15 @@ const FILTERS = [
 
 function bedError(error, fallback) {
   const message = error?.message || "";
+  if (error?.code === "23505" && /habitaciones/i.test(message)) {
+    return "Ya existe una habitación con ese código en este ELEAM.";
+  }
+  if (error?.code === "23505" && /camas/i.test(message)) {
+    return "Ya existe una cama con ese código en la habitación seleccionada.";
+  }
+  if (error?.code === "23503") {
+    return "No se puede completar la acción porque existen registros vinculados.";
+  }
   if (/cama|habitacion|residente|hospitalizacion|ocupada|reservada|operativa|autorizado/i.test(message)) {
     return message;
   }
@@ -123,7 +136,7 @@ function inputClass() {
   return "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100";
 }
 
-function RoomModal({ initial, onClose, onSubmit, saving }) {
+function RoomModal({ initial, rooms = [], onClose, onSubmit, saving }) {
   const [form, setForm] = useState(() => ({
     id: initial?.id ?? null,
     codigo: initial?.codigo ?? "",
@@ -147,6 +160,12 @@ function RoomModal({ initial, onClose, onSubmit, saving }) {
       scrollToFirstError(result.errors);
       return;
     }
+    if (hasDuplicateRoomCode({ rooms, code: result.data.codigo, currentId: result.data.id })) {
+      const nextErrors = { codigo: "Ya existe una habitación con ese código." };
+      setErrors(nextErrors);
+      scrollToFirstError(nextErrors);
+      return;
+    }
     onSubmit(result.data);
   };
   return (
@@ -168,7 +187,7 @@ function RoomModal({ initial, onClose, onSubmit, saving }) {
   );
 }
 
-function BedModal({ habitaciones, initial, onClose, onSubmit, saving }) {
+function BedModal({ habitaciones, camas = [], initial, onClose, onSubmit, saving }) {
   const [form, setForm] = useState(() => ({
     id: initial?.id ?? null,
     habitacion_id: initial?.habitacion_id ?? initial?.habitacion?.id ?? habitaciones[0]?.id ?? "",
@@ -180,6 +199,7 @@ function BedModal({ habitaciones, initial, onClose, onSubmit, saving }) {
     notas: initial?.notas ?? "",
   }));
   const [errors, setErrors] = useState({});
+  const selectedRoom = habitaciones.find((room) => room.id === form.habitacion_id);
   const set = (key, value) => {
     setFieldErrorCleared(setErrors, key);
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -190,6 +210,18 @@ function BedModal({ habitaciones, initial, onClose, onSubmit, saving }) {
     setErrors(result.errors);
     if (!result.ok) {
       scrollToFirstError(result.errors);
+      return;
+    }
+    if (hasDuplicateBedCode({ beds: camas, roomId: result.data.habitacion_id, code: result.data.codigo, currentId: result.data.id })) {
+      const nextErrors = { codigo: "Ya existe una cama con ese código en esta habitación." };
+      setErrors(nextErrors);
+      scrollToFirstError(nextErrors);
+      return;
+    }
+    if (initial?.assignment && result.data.estado !== "operativa") {
+      const nextErrors = { estado: "Libera o transfiere al residente antes de dejar esta cama fuera de servicio." };
+      setErrors(nextErrors);
+      scrollToFirstError(nextErrors);
       return;
     }
     onSubmit(result.data);
@@ -208,6 +240,11 @@ function BedModal({ habitaciones, initial, onClose, onSubmit, saving }) {
           options={habitaciones.map((room) => [room.id, `${room.codigo}${room.nombre ? ` · ${room.nombre}` : ""}`])}
           error={errors.habitacion_id}
         />
+        {selectedRoom?.estado && selectedRoom.estado !== "operativa" && (
+          <Notice tone="amber">
+            Esta habitación no está operativa. Puedes guardar la cama, pero no podrá asignarse hasta reactivar la habitación.
+          </Notice>
+        )}
         <FormGrid>
           <TextField id="codigo" name="codigo" label="Código" required value={form.codigo} onChange={(e) => set("codigo", e.target.value)} error={errors.codigo} maxLength={40} placeholder="A" />
           <TextField id="orden" name="orden" type="number" label="Orden" value={form.orden} onChange={(e) => set("orden", e.target.value)} error={errors.orden} min={0} max={9999} />
@@ -328,8 +365,13 @@ function TransferModal({ bed, availableBeds, onClose, onSubmit, saving }) {
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           <span className="font-semibold">{occupantName(resident)}</span> desde {formatBedLocation(bed)}
         </div>
+        {availableBeds.length === 0 && (
+          <Notice tone="amber">
+            No hay camas operativas disponibles para transferir. Crea una cama o libera una existente antes de continuar.
+          </Notice>
+        )}
         <Field label="Cama destino">
-          <select className={inputClass()} value={targetBedId} onChange={(e) => setTargetBedId(e.target.value)} required>
+          <select className={inputClass()} value={targetBedId} onChange={(e) => setTargetBedId(e.target.value)} required disabled={availableBeds.length === 0}>
             <option value="">Selecciona una cama disponible</option>
             {availableBeds.map((item) => (
               <option key={item.id} value={item.id}>{formatBedLocation(item)}</option>
@@ -339,9 +381,9 @@ function TransferModal({ bed, availableBeds, onClose, onSubmit, saving }) {
         <Field label="Notas">
           <textarea className={inputClass()} rows={3} value={notas} onChange={(e) => setNotas(e.target.value)} />
         </Field>
-        <div className="flex justify-end gap-2">
-          <Button className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" disabled={saving || !targetBedId} className="bg-teal-600 text-white hover:bg-teal-700">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button className="w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={saving || !targetBedId} className="w-full bg-teal-600 text-white hover:bg-teal-700 sm:w-auto">
             Transferir
           </Button>
         </div>
@@ -375,9 +417,9 @@ function ReleaseModal({ bed, onClose, onSubmit, saving }) {
         <Field label="Notas">
           <textarea className={inputClass()} rows={3} value={notas} onChange={(e) => setNotas(e.target.value)} />
         </Field>
-        <div className="flex justify-end gap-2">
-          <Button className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" disabled={saving} className="bg-rose-600 text-white hover:bg-rose-700">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button className="w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={saving} className="w-full bg-rose-600 text-white hover:bg-rose-700 sm:w-auto">
             Liberar
           </Button>
         </div>
@@ -463,8 +505,10 @@ function BedCard({ bed, canAdmin, canAssign, onAssign, onEdit, onDelete, onTrans
 export default function BedsPage() {
   const auth = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [filters, setFilterParam, clearFilters] = useFilterParams({
     schema: { estado: "string", q: "string" },
@@ -483,10 +527,16 @@ export default function BedsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      setOverview(await getBedsOverview());
+      const data = await getBedsOverview();
+      setOverview(data);
+      return data;
     } catch (error) {
-      toast(bedError(error, "No se pudo cargar la ocupación de camas."), "error");
+      const message = bedError(error, "No se pudo cargar la ocupación de camas.");
+      setLoadError(message);
+      toast(message, "error");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -527,10 +577,28 @@ export default function BedsPage() {
     (overview?.camas ?? []).filter((bed) => bed.estado === "operativa" && (bed.habitacion?.estado ?? "operativa") === "operativa" && !bed.assignment),
   [overview]);
 
+  const roomBedCount = useMemo(() => {
+    const counts = new Map();
+    for (const bed of overview?.camas ?? []) {
+      const roomId = bed.habitacion_id ?? bed.habitacion?.id ?? bed.habitaciones?.id;
+      counts.set(roomId, (counts.get(roomId) ?? 0) + 1);
+    }
+    return counts;
+  }, [overview]);
+
+  const openBedModal = useCallback((roomId = null) => {
+    const habitaciones = overview?.habitaciones ?? [];
+    const selectedRoomId = roomId ?? habitaciones[0]?.id ?? "";
+    setBedModal({
+      habitacion_id: selectedRoomId,
+      codigo: suggestNextBedCode(overview?.camas ?? [], selectedRoomId),
+    });
+  }, [overview]);
+
   async function runAction(action, success, fallback) {
     setSaving(true);
     try {
-      await action();
+      const result = await action();
       toast(success, "success");
       await load();
       setRoomModal(null);
@@ -538,12 +606,75 @@ export default function BedsPage() {
       setAssignModal(null);
       setTransferModal(null);
       setReleaseModal(null);
+      return result;
     } catch (error) {
       toast(bedError(error, fallback), "error");
+      return null;
     } finally {
       setSaving(false);
     }
   }
+
+  const handleRoomSubmit = async (form) => {
+    const isNew = !form.id;
+    const hadNoBeds = (overview?.camas ?? []).length === 0;
+    setSaving(true);
+    try {
+      const room = await saveHabitacion(form);
+      toast("Habitación guardada.", "success");
+      setRoomModal(null);
+      const nextOverview = await load();
+      if (isNew && hadNoBeds) {
+        setBedModal({
+          habitacion_id: room.id,
+          codigo: suggestNextBedCode(nextOverview?.camas ?? [], room.id),
+        });
+      }
+    } catch (error) {
+      toast(bedError(error, "No se pudo guardar la habitación."), "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteRoom = async (room) => {
+    const totalBeds = roomBedCount.get(room.id) ?? 0;
+    if (totalBeds > 0) {
+      toast("No se puede eliminar una habitación con camas. Elimina o mueve las camas primero.", "warning");
+      return;
+    }
+    const ok = await confirm({
+      title: "Eliminar habitación",
+      message: `¿Eliminar la habitación ${room.codigo}? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      danger: true,
+    });
+    if (!ok) return;
+    await runAction(
+      () => deleteHabitacion(room.id),
+      "Habitación eliminada.",
+      "No se pudo eliminar la habitación.",
+    );
+  };
+
+  const handleDeleteBed = async (bed) => {
+    if (bed.assignment) {
+      toast("Libera o transfiere al residente antes de eliminar la cama.", "warning");
+      return;
+    }
+    const ok = await confirm({
+      title: "Eliminar cama",
+      message: `¿Eliminar ${formatBedLocation(bed)}? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      danger: true,
+    });
+    if (!ok) return;
+    await runAction(
+      () => deleteCama(bed.id),
+      "Cama eliminada.",
+      "No se pudo eliminar la cama.",
+    );
+  };
 
   const metrics = overview?.metrics ?? {
     operativas: 0,
@@ -562,13 +693,18 @@ export default function BedsPage() {
       eyebrow="Operación"
       description="Inventario, disponibilidad y ocupación en tiempo real."
       actions={
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           {canAdminBeds && (
             <>
-              <Button className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => setRoomModal({})}>
+              <Button disabled={loading || Boolean(loadError)} className="w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto" onClick={() => setRoomModal({})}>
                 Nueva habitación
               </Button>
-              <Button className="bg-teal-600 text-white hover:bg-teal-700" onClick={() => setBedModal({})} disabled={(overview?.habitaciones ?? []).length === 0}>
+              <Button
+                className="w-full bg-teal-600 text-white hover:bg-teal-700 sm:w-auto"
+                onClick={() => openBedModal()}
+                disabled={loading || Boolean(loadError) || (overview?.habitaciones ?? []).length === 0}
+                title={(overview?.habitaciones ?? []).length === 0 ? "Primero crea una habitación." : undefined}
+              >
                 Nueva cama
               </Button>
             </>
@@ -576,6 +712,23 @@ export default function BedsPage() {
         </div>
       }
     >
+      {loadError ? (
+        <EmptyState
+          tone="rose"
+          title="No se pudo cargar camas"
+          description={loadError}
+          icon={
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+            </svg>
+          }
+          action={
+            <Button type="button" onClick={load} className="bg-teal-700 text-white hover:bg-teal-800">
+              Reintentar
+            </Button>
+          }
+        />
+      ) : (
       <div className="space-y-5">
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-7">
           <Kpi label="Operativas" value={metrics.operativas} sub="Aptas para uso" />
@@ -669,14 +822,18 @@ export default function BedsPage() {
                   </div>
                   {canAdminBeds && (
                     <div className="flex flex-wrap gap-2">
+                      <Button className="border border-teal-200 bg-white text-teal-700 hover:bg-teal-50" onClick={() => openBedModal(room.id)}>
+                        Agregar cama
+                      </Button>
                       <Button className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => setRoomModal(room)}>
                         Editar habitación
                       </Button>
-                      <Button className="border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" onClick={() => runAction(
-                        () => deleteHabitacion(room.id),
-                        "Habitación eliminada.",
-                        "No se pudo eliminar la habitación."
-                      )}>
+                      <Button
+                        disabled={(roomBedCount.get(room.id) ?? 0) > 0}
+                        title={(roomBedCount.get(room.id) ?? 0) > 0 ? "Elimina o mueve las camas antes de borrar la habitación." : undefined}
+                        className="border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                        onClick={() => handleDeleteRoom(room)}
+                      >
                         Eliminar
                       </Button>
                     </div>
@@ -685,7 +842,12 @@ export default function BedsPage() {
                 <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
                   {room.camas.length === 0 && (
                     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                      Esta habitación aún no tiene camas registradas.
+                      <p>Esta habitación aún no tiene camas registradas.</p>
+                      {canAdminBeds && (
+                        <Button className="mt-3 bg-teal-700 text-white hover:bg-teal-800" onClick={() => openBedModal(room.id)}>
+                          Agregar cama
+                        </Button>
+                      )}
                     </div>
                   )}
                   {room.camas.map((bed) => (
@@ -696,11 +858,7 @@ export default function BedsPage() {
                       canAssign={canAssignBeds}
                       onAssign={setAssignModal}
                       onEdit={setBedModal}
-                      onDelete={(target) => runAction(
-                        () => deleteCama(target.id),
-                        "Cama eliminada.",
-                        "No se pudo eliminar la cama."
-                      )}
+                      onDelete={handleDeleteBed}
                       onTransfer={setTransferModal}
                       onRelease={setReleaseModal}
                     />
@@ -711,23 +869,22 @@ export default function BedsPage() {
           </div>
         )}
       </div>
+      )}
 
       {roomModal && (
         <RoomModal
           initial={roomModal}
+          rooms={overview?.habitaciones ?? []}
           onClose={() => setRoomModal(null)}
           saving={saving}
-          onSubmit={(form) => runAction(
-            () => saveHabitacion(form),
-            "Habitación guardada.",
-            "No se pudo guardar la habitación."
-          )}
+          onSubmit={handleRoomSubmit}
         />
       )}
       {bedModal && (
         <BedModal
           initial={bedModal}
           habitaciones={overview?.habitaciones ?? []}
+          camas={overview?.camas ?? []}
           onClose={() => setBedModal(null)}
           saving={saving}
           onSubmit={(form) => runAction(

@@ -18,7 +18,7 @@ const CATEGORIES = [
     qa: [
       {
         q: "¿Qué es FichaEleam?",
-        a: "FichaEleam es un software web especializado para Establecimientos de Larga Estadía para Personas Mayores (ELEAM) en Chile. Centraliza ficha clínica, signos vitales, observaciones por turno, plan de cuidado, administración de medicamentos, gestión de habitaciones, portal familiar y carpeta SEREMI Decreto N°20 en una sola plataforma.",
+        a: "FichaEleam es un software web especializado para Establecimientos de Larga Estadía para Personas Mayores (ELEAM) en Chile. Centraliza ficha clínica, signos vitales, observaciones por turno, plan de cuidado, administración de medicamentos, gestión de habitaciones y carpeta SEREMI Decreto N°20 en una sola plataforma.",
       },
       {
         q: "¿En qué se diferencia de un software clínico genérico?",
@@ -49,10 +49,6 @@ const CATEGORIES = [
       {
         q: "¿Hay costo de implementación?",
         a: "No. La activación es inmediata: una vez aprobado el demo, recibes tu cuenta lista para usar. No hay fee por configuración, instalación ni capacitación.",
-      },
-      {
-        q: "¿Las familias y funcionarios pagan extra?",
-        a: "No. Cada plan incluye un cupo de funcionarios; las familias del residente son ilimitadas y sin costo adicional. Solo cuentan residentes activos u hospitalizados — egresados o fallecidos no consumen cupo.",
       },
       {
         q: "¿Hay descuento por pago anual?",
@@ -140,15 +136,11 @@ const CATEGORIES = [
       },
       {
         q: "¿Qué tipos de cuenta existen?",
-        a: "Cinco roles: superadmin (operador de la plataforma), admin_eleam (dueño del ELEAM), funcionario (personal clínico), familiar (familia del residente) y, en próximas versiones, roles especializados como kinesiólogo o nutricionista con permisos preconfigurados.",
+        a: "Tres roles simples: superadmin para operar la plataforma, administrador para dirigir el ELEAM y funcionario para registrar el trabajo clínico y operativo autorizado.",
       },
       {
         q: "¿Puedo controlar qué ve cada funcionario?",
-        a: "Sí. El admin del ELEAM define permisos granulares por funcionario: crear/editar/eliminar residentes, signos vitales, observaciones, planes de cuidado, medicamentos, acreditación y visitas. También puede habilitar o deshabilitar módulos completos por funcionario.",
-      },
-      {
-        q: "¿Cómo invito a las familias?",
-        a: "Desde el panel de equipo seleccionas al residente y agregas el correo del familiar. El sistema le envía un enlace de acceso. Las familias solo ven al residente con quien están vinculadas; nunca a otros.",
+        a: "Sí. El administrador define permisos operativos por funcionario para residentes, signos vitales, observaciones, planes de cuidado, medicamentos y acreditación.",
       },
     ],
   },

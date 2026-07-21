@@ -63,7 +63,131 @@ const ELEAM_USAGE_SOURCES = [
   { table: "acred_documentos",              who: "subido_por",      ts: "creado_en",       scope: "eleam" },
 ];
 
-const USAGE_ROLES = ["admin_eleam", "funcionario", "familiar"];
+const USAGE_ROLES = ["admin_eleam", "funcionario"];
+
+function daysSinceIso(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return null;
+  return Math.floor((Date.now() - date.getTime()) / 86400000);
+}
+
+function isRecentIso(value, days) {
+  const diff = daysSinceIso(value);
+  return diff != null && diff <= days;
+}
+
+function isOverdueDate(value) {
+  if (!value) return false;
+  return value < new Date().toISOString().slice(0, 10);
+}
+
+function isCriticalDocument(doc) {
+  if (!doc?.fecha_vencimiento || doc.vigente === false) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const limit = new Date(today.getTime() + 30 * 86400000);
+  const due = new Date(doc.fecha_vencimiento);
+  if (Number.isNaN(due.valueOf())) return false;
+  return due <= limit;
+}
+
+function reasonPriority(reason) {
+  if (/Riesgo churn alto|cliente_riesgo/i.test(reason)) return 0;
+  if (/tarea/i.test(reason)) return 1;
+  if (/documento/i.test(reason)) return 2;
+  if (/Demo sin uso/i.test(reason)) return 3;
+  if (/Sin actividad/i.test(reason)) return 4;
+  if (/Pago inactivo/i.test(reason)) return 5;
+  if (/Sin residentes/i.test(reason)) return 6;
+  if (/Sin equipo/i.test(reason)) return 7;
+  if (/Sin evidencia/i.test(reason)) return 8;
+  return 20;
+}
+
+function countByEleam(rows = [], predicate = null) {
+  const out = new Map();
+  for (const row of rows) {
+    if (!row?.eleam_id) continue;
+    if (predicate && !predicate(row)) continue;
+    out.set(row.eleam_id, (out.get(row.eleam_id) ?? 0) + 1);
+  }
+  return out;
+}
+
+function lastActivityByEleam(...sources) {
+  const out = new Map();
+  for (const rows of sources) {
+    for (const row of rows ?? []) {
+      if (!row?.eleam_id || !row.creado_en) continue;
+      const current = out.get(row.eleam_id);
+      if (!current || row.creado_en > current) out.set(row.eleam_id, row.creado_en);
+    }
+  }
+  return out;
+}
+
+export function computeClientScore(eleam, context) {
+  const residents = context.residentCounts.get(eleam.id) ?? 0;
+  const activeResidents = context.activeResidentCounts.get(eleam.id) ?? 0;
+  const staff = context.staffCounts.get(eleam.id) ?? 0;
+  const docs = context.documentCounts.get(eleam.id) ?? 0;
+  const criticalDocs = context.criticalDocumentCounts.get(eleam.id) ?? 0;
+  const overdueTasks = context.overdueTaskCounts.get(eleam.id) ?? 0;
+  const lastActivity = context.lastActivity.get(eleam.id) ?? null;
+  const daysInactive = daysSinceIso(lastActivity);
+  const reasons = [];
+
+  let score = 25;
+  if (activeResidents > 0) score += 20; else reasons.push("Sin residentes activos");
+  if (staff > 0) score += 15; else reasons.push("Sin equipo operativo");
+  if (docs > 0) score += 15; else reasons.push("Sin evidencia DS20");
+  if (eleam.pago_activo) score += 15;
+  else if (eleam.plan === "demo") score += 5;
+  else reasons.push("Pago inactivo");
+  if (isRecentIso(lastActivity, 7)) score += 10;
+  else if (daysInactive == null) reasons.push("Sin actividad registrada");
+  else if (daysInactive > 30) reasons.push(`Sin actividad hace ${daysInactive}d`);
+
+  if (eleam.riesgo_churn === "alto" || eleam.crm_estado === "cliente_riesgo") {
+    score -= 25;
+    reasons.push("Riesgo churn alto");
+  } else if (eleam.riesgo_churn === "medio") {
+    score -= 10;
+    reasons.push("Riesgo churn medio");
+  }
+  if (overdueTasks > 0) {
+    score -= Math.min(20, overdueTasks * 8);
+    reasons.push(`${overdueTasks} tarea${overdueTasks === 1 ? "" : "s"} vencida${overdueTasks === 1 ? "" : "s"}`);
+  }
+  if (criticalDocs > 0) {
+    score -= Math.min(15, criticalDocs * 5);
+    reasons.push(`${criticalDocs} documento${criticalDocs === 1 ? "" : "s"} crítico${criticalDocs === 1 ? "" : "s"}`);
+  }
+  if (eleam.plan === "demo" && residents === 0 && docs === 0) {
+    score -= 10;
+    reasons.push("Demo sin uso");
+  }
+
+  const normalized = Math.max(0, Math.min(100, Math.round(score)));
+  const visibleReasons = reasons.length
+    ? [...reasons].sort((a, b) => reasonPriority(a) - reasonPriority(b)).slice(0, 4)
+    : ["Sin alertas relevantes"];
+  return {
+    eleamId: eleam.id,
+    nombre: eleam.nombre,
+    score: normalized,
+    tone: normalized >= 75 ? "emerald" : normalized >= 50 ? "amber" : "rose",
+    residents,
+    activeResidents,
+    staff,
+    docs,
+    criticalDocs,
+    overdueTasks,
+    lastActivity,
+    reasons: visibleReasons,
+  };
+}
 
 // ─────────────────────────────────────────────────────────────
 // Métricas
@@ -77,9 +201,9 @@ export async function getMetrics() {
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
-  const [eleamsRes, residentsRes, pagosRes, leadsRes] = await Promise.allSettled([
-    supabase.from("eleams").select("id, pago_activo, plan, crm_estado, riesgo_churn, creado_en"),
-    supabase.from("residentes").select("id, estado"),
+  const [eleamsRes, residentsRes, pagosRes, leadsRes, profilesRes, docsRes, tasksRes, usageRes] = await Promise.allSettled([
+    supabase.from("eleams").select("id, nombre, pago_activo, plan, crm_estado, riesgo_churn, ultimo_contacto, fecha_vencimiento_suscripcion, creado_en"),
+    supabase.from("residentes").select("id, eleam_id, estado, creado_en"),
     supabase
       .from("pagos")
       .select("monto, fecha_pago, estado")
@@ -89,15 +213,72 @@ export async function getMetrics() {
       .from("demo_leads")
       .select("id", { count: "exact", head: true })
       .gte("creado_en", sevenDaysAgo),
+    supabase
+      .from("profiles")
+      .select("id, eleam_id, rol, must_reset_password, creado_en"),
+    supabase
+      .from("acred_documentos")
+      .select("id, eleam_id, vigente, fecha_vencimiento, creado_en"),
+    supabase
+      .from("crm_tasks")
+      .select("id, eleam_id, estado, fecha_vencimiento, creado_en"),
+    supabase.rpc("superadmin_portfolio_usage", { p_days: 30 }),
   ]);
 
   const eleams    = eleamsRes.status    === "fulfilled" ? (eleamsRes.value.data ?? []) : [];
   const residents = residentsRes.status === "fulfilled" ? (residentsRes.value.data ?? []) : [];
   const pagos     = pagosRes.status     === "fulfilled" ? (pagosRes.value.data ?? []) : [];
   const newLeadsLast7d = leadsRes.status === "fulfilled" ? (leadsRes.value.count ?? 0) : 0;
+  const profiles  = profilesRes.status  === "fulfilled" ? (profilesRes.value.data ?? []) : [];
+  const documents = docsRes.status      === "fulfilled" ? (docsRes.value.data ?? []) : [];
+  const tasks     = tasksRes.status     === "fulfilled" ? (tasksRes.value.data ?? []) : [];
+  const usageRows = usageRes.status === "fulfilled" && !usageRes.value.error
+    ? (usageRes.value.data ?? [])
+    : [];
 
   const thisMonth = new Date(thisMonthStart);
   const leadStates = new Set(["lead", "contactado", "demo_agendada", "demo_realizada", "prueba"]);
+  const residentCounts = countByEleam(residents);
+  const activeResidentCounts = countByEleam(residents, (r) => r.estado === "activo");
+  const staffCounts = countByEleam(profiles, (p) => p.rol === "funcionario");
+  const pendingAccessCounts = countByEleam(profiles, (p) => p.must_reset_password === true);
+  const documentCounts = countByEleam(documents);
+  const criticalDocumentCounts = countByEleam(documents, isCriticalDocument);
+  const overdueTaskCounts = countByEleam(tasks, (t) => !["completada", "cancelada"].includes(t.estado) && isOverdueDate(t.fecha_vencimiento));
+  const fallbackLastActivity = lastActivityByEleam(residents, profiles, documents);
+  const lastActivity = usageRows.length
+    ? new Map(usageRows.map((row) => [row.eleam_id, row.ultima_actividad ?? null]))
+    : fallbackLastActivity;
+  const usageByEleam = new Map(usageRows.map((row) => [row.eleam_id, row]));
+  const clientScores = eleams.map((eleam) => computeClientScore(eleam, {
+    residentCounts,
+    activeResidentCounts,
+    staffCounts,
+    documentCounts,
+    criticalDocumentCounts,
+    overdueTaskCounts,
+    lastActivity,
+  }));
+  const basicActivated = clientScores.filter((c) => c.activeResidents > 0 && c.staff > 0).length;
+  const ds20Started = clientScores.filter((c) => c.docs > 0).length;
+  const activeLast7d = eleams.filter((e) => isRecentIso(lastActivity.get(e.id), 7)).length;
+  const inactive30d = eleams.filter((e) => {
+    const d = daysSinceIso(lastActivity.get(e.id));
+    return d == null || d > 30;
+  }).length;
+  const demosSinUso = eleams.filter((e) =>
+    e.plan === "demo" &&
+    (usageRows.length
+      ? Number(usageByEleam.get(e.id)?.registros ?? 0) === 0
+      : (residentCounts.get(e.id) ?? 0) === 0 && (documentCounts.get(e.id) ?? 0) === 0)
+  ).length;
+  const portfolioScore = clientScores.length
+    ? Math.round(clientScores.reduce((sum, c) => sum + c.score, 0) / clientScores.length)
+    : 0;
+  const priorityClients = clientScores
+    .filter((c) => c.score < 75 || c.overdueTasks > 0 || c.criticalDocs > 0)
+    .sort((a, b) => a.score - b.score || b.overdueTasks - a.overdueTasks || b.criticalDocs - a.criticalDocs)
+    .slice(0, 5);
 
   return {
     totalEleams:         eleams.length,
@@ -111,6 +292,16 @@ export async function getMetrics() {
     activeResidents:     residents.filter((r) => r.estado === "activo").length,
     mrrCLP:              pagos.reduce((sum, p) => sum + (p.monto ?? 0), 0),
     newLeadsLast7d,
+    portfolioScore,
+    basicActivated,
+    ds20Started,
+    activeLast7d,
+    inactive30d,
+    demosSinUso,
+    pendingAccessUsers:  [...pendingAccessCounts.values()].reduce((sum, n) => sum + n, 0),
+    criticalDocuments:   [...criticalDocumentCounts.values()].reduce((sum, n) => sum + n, 0),
+    overdueCrmTasks:     [...overdueTaskCounts.values()].reduce((sum, n) => sum + n, 0),
+    priorityClients,
   };
 }
 
@@ -127,6 +318,39 @@ export async function getAllEleams() {
     .order("creado_en", { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function getPortfolioUsage(days = 30) {
+  const windowDays = Number(days);
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new Error("La ventana de uso debe estar entre 1 y 365 días.");
+  }
+
+  const [usageResult, pendingAdminsResult] = await Promise.all([
+    supabase.rpc("superadmin_portfolio_usage", { p_days: windowDays }),
+    supabase
+      .from("profiles")
+      .select("eleam_id")
+      .eq("rol", "admin_eleam")
+      .eq("must_reset_password", true),
+  ]);
+  if (usageResult.error) throw usageResult.error;
+  if (pendingAdminsResult.error) throw pendingAdminsResult.error;
+
+  const pendingAdminEleams = new Set(
+    (pendingAdminsResult.data ?? []).map((profile) => profile.eleam_id).filter(Boolean),
+  );
+
+  return (usageResult.data ?? []).map((row) => ({
+    eleamId: row.eleam_id,
+    usuariosTotales: Number(row.usuarios_totales ?? 0),
+    usuariosActivos: Number(row.usuarios_activos ?? 0),
+    usuariosSinPrimerIngreso: Number(row.usuarios_sin_primer_ingreso ?? 0),
+    registros: Number(row.registros ?? 0),
+    modulosActivos: Number(row.modulos_activos ?? 0),
+    ultimaActividad: row.ultima_actividad ?? null,
+    adminDemoSinPrimerIngreso: pendingAdminEleams.has(row.eleam_id),
+  }));
 }
 
 export async function getEleamDetail(eleamId) {
@@ -317,8 +541,10 @@ export async function getLeads({ estado = null, search = "", limit = 200 } = {})
     .limit(limit);
   if (estado) q = q.eq("estado", estado);
   if (search.trim()) {
-    const s = search.trim();
-    q = q.or(`nombre.ilike.%${s}%,email.ilike.%${s}%,eleam_nombre.ilike.%${s}%`);
+    // Comas y paréntesis separan condiciones en la sintaxis .or() de
+    // PostgREST: se neutralizan para que la búsqueda no rompa el filtro.
+    const s = search.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ").trim();
+    if (s) q = q.or(`nombre.ilike.%${s}%,email.ilike.%${s}%,eleam_nombre.ilike.%${s}%`);
   }
   const { data, error } = await q;
   if (error) throw error;
@@ -371,6 +597,38 @@ export async function grantDemoAccess(leadId) {
   };
 }
 
+export async function resendDemoAccessForEleam(eleamId) {
+  if (!eleamId) throw new Error("ELEAM requerido para reenviar el acceso.");
+
+  const { data: adminProfile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, email")
+    .eq("eleam_id", eleamId)
+    .eq("rol", "admin_eleam")
+    .eq("must_reset_password", true)
+    .limit(1)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  if (!adminProfile) {
+    throw new Error("El administrador de este demo ya completó su acceso inicial.");
+  }
+
+  const { data: lead, error: leadError } = await supabase
+    .from("demo_leads")
+    .select("id, email")
+    .eq("demo_user_id", adminProfile.id)
+    .eq("estado", "demo_activo")
+    .order("demo_access_granted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (leadError) throw leadError;
+  if (!lead) {
+    throw new Error("No encontramos la solicitud de demo aprobada asociada a este administrador.");
+  }
+
+  return grantDemoAccess(lead.id);
+}
+
 // Etiquetas amigables por página pública. La clave es el valor `elemento` que
 // cada página envía vía usePageView(). Lo que no esté aquí cae en "Otras".
 const PAGE_VIEW_LABELS = {
@@ -379,12 +637,20 @@ const PAGE_VIEW_LABELS = {
   "/software-eleam": "Software ELEAM",
   "/acreditacion-seremi": "Acreditación SEREMI",
   "/calculadora-dotacion-eleam": "Calculadora dotación",
+  "/autoevaluacion-decreto-20": "Autoevaluación DS 20",
+  "/plazos-decreto-20": "Plazos Decreto N°20",
   "/preguntas-frecuentes": "Preguntas frecuentes",
   "/contacto": "Contacto",
   "/pago": "Planes y precios",
   "/blog": "Blog (lista)",
   blog_post: "Blog (artículo)",
 };
+
+// Extrae "p:NN" del valor compacto del evento tool_use de la autoevaluación.
+function autoevalPct(valor) {
+  const match = /p:(\d+)/.exec(valor ?? "");
+  return match ? Number(match[1]) : null;
+}
 
 export async function getLandingMetrics(days = 30) {
   const since = new Date(Date.now() - days * 86400000).toISOString();
@@ -455,12 +721,20 @@ export async function getLandingMetrics(days = 30) {
     .map(([key, count]) => ({ key, label: PAGE_VIEW_LABELS[key] ?? "Otras", count }))
     .sort((a, b) => b.count - a.count);
 
-  // ── Uso de la calculadora de dotación (evento tool_use) ──────
+  // ── Uso de herramientas gratuitas (eventos tool_use) ─────────
   const calcUses = events.filter((e) => e.tipo === "tool_use" && e.elemento === "calculadora_dotacion");
+  const autoevalUses = events.filter((e) => e.tipo === "tool_use" && e.elemento === "autoevaluacion_ds20");
+  const autoevalPcts = autoevalUses.map((e) => autoevalPct(e.valor)).filter((p) => p != null);
   const toolUsage = {
     calculadoraUsos: calcUses.length,
     calculadoraConDeficit: calcUses.filter((e) => (e.valor ?? "").includes("def:1")).length,
     calculadoraDemoClicks: ctaEvents.filter((e) => e.elemento === "calculadora_demo").length,
+    autoevalUsos: autoevalUses.length,
+    autoevalBajoCumplimiento: autoevalPcts.filter((p) => p < 50).length,
+    autoevalPromedioPct: autoevalPcts.length
+      ? Math.round(autoevalPcts.reduce((sum, p) => sum + p, 0) / autoevalPcts.length)
+      : null,
+    autoevalDemoClicks: ctaEvents.filter((e) => e.elemento === "autoevaluacion_demo").length,
   };
 
   // ── Daily page_view counts (last 14 days) ────────────────────

@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Loading from "../../components/Loading";
+import { useToast } from "../../components/Toast";
 import { useFilterParams } from "../../hooks/useFilterParams";
 import EleamFilters from "./components/EleamFilters";
 import EleamTable from "./components/EleamTable";
 import EleamEditModal from "./components/EleamEditModal";
 import EleamCustomerDrawer from "./components/EleamCustomerDrawer";
+import PortfolioUsageOverview from "./components/PortfolioUsageOverview";
 import PaymentModal from "./components/PaymentModal";
 import SuperAdminPageHeader from "./components/SuperAdminPageHeader";
+import { indexPortfolioUsage, usageDaysSince } from "./utils/portfolioUsage";
 import {
   createCrmTask,
   completeCrmTask,
@@ -17,18 +20,21 @@ import {
   getEleamDetail,
   getEleamInteractions,
   getEleamPayments,
+  getPortfolioUsage,
+  resendDemoAccessForEleam,
   updateEleam,
   registerPayment,
 } from "./superadminService";
 
 export default function SuperAdminClientes() {
+  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [eleams, setEleams] = useState([]);
   const [tasks, setTasks] = useState([]);
   // Mapeo bidireccional URL ↔ filtros (claves cortas en URL, mismo shape para EleamFilters).
   const [urlFilters, setUrlFilter] = useFilterParams({
-    schema: { search: "string", crmEstado: "string", plan: "string", riesgo: "string", pagoActivo: "string" },
-    defaults: { search: "", crmEstado: "", plan: "", riesgo: "", pagoActivo: "" },
+    schema: { search: "string", crmEstado: "string", plan: "string", riesgo: "string", pagoActivo: "string", uso: "string" },
+    defaults: { search: "", crmEstado: "", plan: "", riesgo: "", pagoActivo: "", uso: "" },
   });
   const filters = useMemo(() => ({
     search: urlFilters.search || undefined,
@@ -36,6 +42,7 @@ export default function SuperAdminClientes() {
     plan: urlFilters.plan || undefined,
     riesgo: urlFilters.riesgo || undefined,
     pagoActivo: urlFilters.pagoActivo || undefined,
+    uso: urlFilters.uso || undefined,
   }), [urlFilters, searchParams]);
   const setFilters = useCallback((next) => {
     const value = typeof next === "function" ? next(filters) : next;
@@ -45,6 +52,7 @@ export default function SuperAdminClientes() {
       plan: value?.plan ?? "",
       riesgo: value?.riesgo ?? "",
       pagoActivo: value?.pagoActivo ?? "",
+      uso: value?.uso ?? "",
     });
   }, [filters, setUrlFilter]);
   const [loading, setLoading] = useState(true);
@@ -55,22 +63,53 @@ export default function SuperAdminClientes() {
   const [loadingEleam, setLoadingEleam] = useState(false);
   const [showPay, setShowPay] = useState(false);
   const [payForEleamId, setPayFor] = useState("");
+  const [usageDays, setUsageDays] = useState(30);
+  const [portfolioUsage, setPortfolioUsage] = useState([]);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState("");
+  const [resendingDemoId, setResendingDemoId] = useState(null);
 
   const refresh = async () => {
     setLoading(true);
+    setUsageLoading(true);
     setError("");
+    setUsageError("");
     try {
-      const [e, t] = await Promise.all([
+      const [eleamsResult, tasksResult, usageResult] = await Promise.allSettled([
         getAllEleams(),
         getCrmTasks({ soloPendientes: false, limit: 200 }),
+        getPortfolioUsage(usageDays),
       ]);
-      setEleams(e);
-      setTasks(t);
+      if (eleamsResult.status === "rejected") throw eleamsResult.reason;
+      if (tasksResult.status === "rejected") throw tasksResult.reason;
+      setEleams(eleamsResult.value);
+      setTasks(tasksResult.value);
+      if (usageResult.status === "fulfilled") {
+        setPortfolioUsage(usageResult.value);
+      } else {
+        console.error(usageResult.reason);
+        setUsageError("No pudimos cargar el uso general. Revisa que el esquema actualizado esté aplicado.");
+      }
     } catch (err) {
       console.error(err);
       setError("No pudimos cargar la cartera de clientes.");
     } finally {
       setLoading(false);
+      setUsageLoading(false);
+    }
+  };
+
+  const handleUsageDays = async (nextDays) => {
+    setUsageDays(nextDays);
+    setUsageLoading(true);
+    setUsageError("");
+    try {
+      setPortfolioUsage(await getPortfolioUsage(nextDays));
+    } catch (err) {
+      console.error(err);
+      setUsageError("No pudimos actualizar la ventana de uso.");
+    } finally {
+      setUsageLoading(false);
     }
   };
 
@@ -88,6 +127,7 @@ export default function SuperAdminClientes() {
 
   const filtered = useMemo(() => {
     const search = (filters.search ?? "").toLowerCase().trim();
+    const usageByEleam = indexPortfolioUsage(portfolioUsage);
     return eleams.filter((e) => {
       if (search) {
         const hay = `${e.nombre} ${e.email_admin ?? ""}`.toLowerCase();
@@ -98,9 +138,17 @@ export default function SuperAdminClientes() {
       if (filters.riesgo && e.riesgo_churn !== filters.riesgo) return false;
       if (filters.pagoActivo === "si" && !e.pago_activo) return false;
       if (filters.pagoActivo === "no" && e.pago_activo) return false;
+      if (filters.uso) {
+        const usage = usageByEleam[e.id];
+        const lastDays = usageDaysSince(usage?.ultimaActividad);
+        if (filters.uso === "con_uso" && !(usage?.registros > 0)) return false;
+        if (filters.uso === "sin_uso" && !(usage?.usuariosTotales > 0 && usage?.registros === 0)) return false;
+        if (filters.uso === "activos_7d" && !(lastDays != null && lastDays <= 7)) return false;
+        if (filters.uso === "sin_activar" && !(usage?.usuariosSinPrimerIngreso > 0)) return false;
+      }
       return true;
     });
-  }, [eleams, filters]);
+  }, [eleams, filters, portfolioUsage]);
 
   const taskOverdueByEleam = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -148,6 +196,29 @@ export default function SuperAdminClientes() {
     return created;
   };
 
+  const handleResendDemoAccess = async (eleam) => {
+    if (!eleam?.id || resendingDemoId) return;
+    setResendingDemoId(eleam.id);
+    try {
+      const result = await resendDemoAccessForEleam(eleam.id);
+      if (result._email_sent) {
+        toast(`Instrucciones de acceso reenviadas a ${result.email}.`, "success");
+      } else {
+        toast(
+          result._email_error
+            ? `El enlace se renovó, pero el correo no pudo enviarse: ${result._email_error}`
+            : "El enlace se renovó, pero el servicio de correo no confirmó el envío.",
+          "warning",
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast(err.message || "No se pudieron reenviar las instrucciones del demo.", "error");
+    } finally {
+      setResendingDemoId(null);
+    }
+  };
+
   if (loading) return <Loading message="Cargando clientes..." />;
 
   return (
@@ -167,9 +238,31 @@ export default function SuperAdminClientes() {
         }
       />
       {error && <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
-      <EleamFilters filters={filters} setFilters={setFilters} count={filtered.length} />
       <div className="mt-4">
-        <EleamTable eleams={filtered} onEdit={setEditEleam} onOpen={openDrawer} taskCountByEleam={taskOverdueByEleam} />
+        <EleamFilters filters={filters} setFilters={setFilters} count={filtered.length} />
+      </div>
+      <PortfolioUsageOverview
+        eleams={filtered}
+        usage={portfolioUsage}
+        days={usageDays}
+        loading={usageLoading}
+        error={usageError}
+        onDaysChange={handleUsageDays}
+        onOpen={openDrawer}
+        onResendDemoAccess={handleResendDemoAccess}
+        resendingDemoId={resendingDemoId}
+      />
+      <div className="mt-4">
+        <EleamTable
+          eleams={filtered}
+          onEdit={setEditEleam}
+          onOpen={openDrawer}
+          taskCountByEleam={taskOverdueByEleam}
+          portfolioUsage={portfolioUsage}
+          usageDays={usageDays}
+          onResendDemoAccess={handleResendDemoAccess}
+          resendingDemoId={resendingDemoId}
+        />
       </div>
       <EleamEditModal eleam={editEleam} onClose={() => setEditEleam(null)} onSave={handleUpdateEleam} />
       <PaymentModal isOpen={showPay} onClose={() => setShowPay(false)} eleams={eleams} defaultEleamId={payForEleamId} onRegister={handleRegisterPayment} />

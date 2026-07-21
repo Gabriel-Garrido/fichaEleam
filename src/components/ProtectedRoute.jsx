@@ -23,7 +23,7 @@ function ProtectedRoute({
   const location = useLocation();
   const {
     user, profile, authLoading, profileLoading, pagoActivo,
-    supabaseError, homePath, isSuperadmin, isFamiliar, mustResetPassword, canFeature,
+    supabaseError, homePath, isSuperadmin, mustResetPassword, canFeature,
   } = useAuth();
 
   if (authLoading || (profileLoading && !profile)) return <Loading message="Verificando sesión..." />;
@@ -66,20 +66,14 @@ function ProtectedRoute({
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-          <h1 className="text-2xl font-semibold text-slate-950">Sin acceso a esta feature</h1>
+          <h1 className="text-2xl font-semibold text-slate-950">Área no habilitada</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Tu cuenta no tiene habilitado este módulo. Pide al administrador que revise los permisos.
+            Tu cuenta no tiene habilitada esta área. Pide al administrador que revise los permisos.
           </p>
           <NavigateButton to={homePath} />
         </div>
       </div>
     );
-  }
-
-  // El familiar nunca debe entrar a rutas operativas del staff: si la
-  // ruta no lo declara explícitamente, lo devolvemos a su portal.
-  if (isFamiliar && !allowedRoles?.includes("familiar")) {
-    return <Navigate to="/familiar" replace />;
   }
 
   return children;

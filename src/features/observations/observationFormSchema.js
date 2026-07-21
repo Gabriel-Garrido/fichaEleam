@@ -69,8 +69,6 @@ const observationSchema = z.object({
   requiere_seguimiento: z.boolean().default(false),
   seguimiento_fecha: z.string().optional().nullable().transform((value) => nullIfBlank(value)),
   seguimiento_turno: z.string().optional().nullable().transform((value) => nullIfBlank(value)),
-  visible_familiar: z.boolean().default(false),
-  resumen_familiar: z.string().optional().nullable().transform((value) => nullIfBlank(value, 240)),
 }).superRefine((data, ctx) => {
   if (data.requiere_seguimiento) {
     if (!data.seguimiento_fecha) {
@@ -82,13 +80,6 @@ const observationSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["seguimiento_turno"], message: "Indica el turno del seguimiento." });
     }
   }
-  if (data.visible_familiar && !data.resumen_familiar) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["resumen_familiar"],
-      message: "Escribe un resumen para familia antes de publicar esta observación.",
-    });
-  }
 });
 
 export function normalizeObservationForm(form) {
@@ -98,8 +89,6 @@ export function normalizeObservationForm(form) {
     seguimiento_fecha: parsed.requiere_seguimiento ? parsed.seguimiento_fecha : null,
     seguimiento_turno: parsed.requiere_seguimiento ? parsed.seguimiento_turno : null,
     seguimiento_estado: "pendiente",
-    visible_familiar: parsed.visible_familiar,
-    resumen_familiar: parsed.visible_familiar ? parsed.resumen_familiar : null,
   };
 }
 

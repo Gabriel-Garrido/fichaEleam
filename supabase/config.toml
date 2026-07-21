@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.track-landing-event]
 verify_jwt = false
 
+[functions.crm-unsubscribe]
+verify_jwt = false
+
 [functions.mp-create-subscription]
 verify_jwt = true
 
@@ -25,4 +28,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.delete-staff-user]
+verify_jwt = true
+
+[functions.send-crm-email-campaign]
 verify_jwt = true

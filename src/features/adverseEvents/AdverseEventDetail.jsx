@@ -270,15 +270,6 @@ export default function AdverseEventDetail() {
               ) : (
                 <p className="text-xs text-slate-500">Aún sin registro de contacto con la familia.</p>
               )}
-              <hr className="border-slate-100" />
-              {event.visible_familiar ? (
-                <>
-                  <p className="text-teal-700 font-semibold">Visible en portal familiar</p>
-                  <p className="text-xs text-slate-600 italic">{event.resumen_familiar || "Sin resumen."}</p>
-                </>
-              ) : (
-                <p className="text-xs text-slate-500">No visible para el familiar.</p>
-              )}
             </div>
           </section>
 

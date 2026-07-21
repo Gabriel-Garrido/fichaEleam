@@ -4,7 +4,7 @@ export const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 export const GMAIL_RE = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i;
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export type ProvisionRole = "admin_eleam" | "funcionario" | "familiar";
+export type ProvisionRole = "admin_eleam" | "funcionario";
 export type ProvisionSource =
   | "demo_approved"
   | "superadmin_created"
@@ -33,13 +33,11 @@ export async function createAuthProvisionRequest(
     eleamId,
     rol,
     accountSource,
-    residenteId = null,
   }: {
     email: string;
     eleamId: string;
     rol: ProvisionRole;
     accountSource: ProvisionSource;
-    residenteId?: string | null;
   },
 ): Promise<{ id: string | null; error: unknown }> {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -50,7 +48,6 @@ export async function createAuthProvisionRequest(
       account_source: accountSource,
       eleam_id: eleamId,
       rol,
-      residente_id: residenteId,
       expira_en: expiresAt,
     })
     .select("id")
@@ -74,7 +71,20 @@ export async function generateAccessLink(
     options: { redirectTo: `${getAppUrl()}/reset-password` },
   });
   if (error) return { link: null, error: String(error.message ?? error) };
-  const link = data?.properties?.action_link ?? null;
+  const tokenHash = data?.properties?.hashed_token?.trim() ?? "";
+  let link: string | null = null;
+
+  if (tokenHash) {
+    const setupUrl = new URL(`${getAppUrl()}/reset-password`);
+    // El fragmento no viaja al servidor web ni al header Referer. Solo la SPA
+    // lo lee para canjear el token una vez mediante verifyOtp.
+    setupUrl.hash = new URLSearchParams({ token_hash: tokenHash, type: "recovery" }).toString();
+    link = setupUrl.toString();
+  } else {
+    // Compatibilidad con versiones anteriores de GoTrue que no entregan
+    // hashed_token. Este fallback aún requiere tener redirectTo autorizado.
+    link = data?.properties?.action_link ?? null;
+  }
   if (!link) return { link: null, error: "No se pudo generar el enlace de acceso" };
   return { link, error: null };
 }

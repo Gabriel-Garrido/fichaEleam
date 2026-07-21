@@ -21,9 +21,11 @@ const PRODUCT_NAV = [
 ];
 
 const RESOURCE_NAV = [
-  { to: "/blog", label: "Blog", description: "Guías prácticas para operar y fiscalizar mejor." },
-  { to: "/calculadora-dotacion-eleam", label: "Calculadora", description: "Dotación referencial según Decreto N°20." },
+  { to: "/autoevaluacion-decreto-20", label: "Autoevaluación Decreto N°20", description: "Test gratuito: mide tu preparación en 3 minutos." },
+  { to: "/calculadora-dotacion-eleam", label: "Calculadora de dotación", description: "Cuidadores mínimos por turno según el decreto." },
+  { to: "/plazos-decreto-20", label: "Plazos del Decreto N°20", description: "Cuánto tiempo queda para adecuarse (2028 y 2030)." },
   { to: "/acreditacion-seremi", label: "Guía acreditación SEREMI", description: "Requisitos DS 20 ordenados por ámbito." },
+  { to: "/blog", label: "Blog", description: "Guías prácticas para operar y fiscalizar mejor." },
 ];
 
 const MOBILE_PRIMARY_NAV = [
@@ -83,24 +85,49 @@ function Brand({ onClick, dark = false }) {
 function ResourceDropdown({ path }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const closeTimer = useRef(null);
   const active = resourcesActive(path);
+
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const openMenu = useCallback(() => {
+    clearCloseTimer();
+    setOpen(true);
+  }, [clearCloseTimer]);
+
+  const queueClose = useCallback(() => {
+    clearCloseTimer();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 140);
+  }, [clearCloseTimer]);
 
   useEffect(() => {
     if (!open) return undefined;
     const onPointerDown = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+      if (ref.current && !ref.current.contains(event.target)) {
+        clearCloseTimer();
+        setOpen(false);
+      }
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
+  }, [clearCloseTimer, open]);
 
   useEffect(() => {
+    clearCloseTimer();
     setOpen(false);
-  }, [path]);
+  }, [clearCloseTimer, path]);
+
+  useEffect(() => clearCloseTimer, [clearCloseTimer]);
 
   const closeOnEscape = (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      clearCloseTimer();
       setOpen(false);
     }
   };
@@ -109,8 +136,8 @@ function ResourceDropdown({ path }) {
     <div
       ref={ref}
       className="relative hidden md:inline-flex"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={openMenu}
+      onMouseLeave={queueClose}
       onKeyDown={closeOnEscape}
     >
       <button
@@ -118,8 +145,11 @@ function ResourceDropdown({ path }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls="public-resource-menu"
-        onClick={() => setOpen((value) => !value)}
-        onFocus={() => setOpen(true)}
+        onClick={() => {
+          clearCloseTimer();
+          setOpen((value) => !value);
+        }}
+        onFocus={openMenu}
         className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
           active
             ? "bg-teal-50 text-teal-800"
@@ -134,33 +164,39 @@ function ResourceDropdown({ path }) {
       {open && (
         <div
           id="public-resource-menu"
-          role="menu"
-          className="absolute right-0 top-full mt-2 w-[320px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10"
+          className="absolute right-0 top-full z-50 w-[320px] pt-2"
+          onMouseEnter={openMenu}
         >
-          {RESOURCE_NAV.map((item) => {
-            const itemActive = activeFor(path, item.to);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                role="menuitem"
-                onMouseEnter={() => prefetchPublicRoute(item.to)}
-                onFocus={() => prefetchPublicRoute(item.to)}
-                onClick={() => {
-                  setOpen(false);
-                  trackEvent("nav_click", item.to);
-                }}
-                className={`block rounded-xl px-3 py-3 transition-colors ${
-                  itemActive ? "bg-teal-50" : "hover:bg-slate-50"
-                }`}
-              >
-                <span className={`block text-sm font-semibold ${itemActive ? "text-teal-800" : "text-slate-950"}`}>
-                  {item.label}
-                </span>
-                <span className="mt-0.5 block text-xs leading-5 text-slate-500">{item.description}</span>
-              </Link>
-            );
-          })}
+          <div
+            role="menu"
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10"
+          >
+            {RESOURCE_NAV.map((item) => {
+              const itemActive = activeFor(path, item.to);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  role="menuitem"
+                  onMouseEnter={() => prefetchPublicRoute(item.to)}
+                  onFocus={() => prefetchPublicRoute(item.to)}
+                  onClick={() => {
+                    clearCloseTimer();
+                    setOpen(false);
+                    trackEvent("nav_click", item.to);
+                  }}
+                  className={`block rounded-xl px-3 py-3 transition-colors ${
+                    itemActive ? "bg-teal-50" : "hover:bg-slate-50"
+                  }`}
+                >
+                  <span className={`block text-sm font-semibold ${itemActive ? "text-teal-800" : "text-slate-950"}`}>
+                    {item.label}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-slate-500">{item.description}</span>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -459,6 +495,7 @@ export default function PublicShell({ children, current }) {
                 <li><FooterLink to="/software-eleam">Software ELEAM</FooterLink></li>
                 <li><FooterLink to="/pago">Planes y precios</FooterLink></li>
                 <li><FooterLink to="/preguntas-frecuentes">Preguntas frecuentes</FooterLink></li>
+                <li><FooterLink to="/contacto">Contacto</FooterLink></li>
                 <li><FooterLink to="/login">Iniciar sesión</FooterLink></li>
               </ul>
             </nav>
@@ -466,10 +503,11 @@ export default function PublicShell({ children, current }) {
             <nav aria-label="Recursos gratuitos">
               <h4 className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-white">Recursos gratuitos</h4>
               <ul className="space-y-3">
-                <li><FooterLink to="/blog" event="footer_blog">Blog</FooterLink></li>
+                <li><FooterLink to="/autoevaluacion-decreto-20" event="footer_autoevaluacion">Autoevaluación Decreto N°20</FooterLink></li>
                 <li><FooterLink to="/calculadora-dotacion-eleam" event="footer_calculadora">Calculadora de dotación</FooterLink></li>
+                <li><FooterLink to="/plazos-decreto-20" event="footer_plazos">Plazos del Decreto N°20</FooterLink></li>
                 <li><FooterLink to="/acreditacion-seremi" event="footer_seremi">Guía acreditación SEREMI</FooterLink></li>
-                <li><FooterLink to="/contacto">Contacto</FooterLink></li>
+                <li><FooterLink to="/blog" event="footer_blog">Blog</FooterLink></li>
               </ul>
             </nav>
 
@@ -504,13 +542,16 @@ export default function PublicShell({ children, current }) {
                 { label: "Ficha clínica persona mayor", to: "/software-eleam" },
                 { label: "Signos vitales geriatría", to: "/software-eleam" },
                 { label: "Entrega de turno residencia", to: "/software-eleam" },
-                { label: "Portal familiar ELEAM", to: "/software-eleam" },
+                { label: "Ficha clínica ELEAM", to: "/software-eleam" },
                 { label: "eMAR persona mayor", to: "/software-eleam" },
                 { label: "Plan de cuidado ELEAM", to: "/software-eleam" },
                 { label: "Software residencia persona mayor", to: "/software-eleam" },
                 { label: "Sistema acreditación SEREMI", to: "/acreditacion-seremi" },
                 { label: "Calculadora dotación ELEAM", to: "/calculadora-dotacion-eleam" },
                 { label: "Dotación de personal Decreto 20", to: "/calculadora-dotacion-eleam" },
+                { label: "Autoevaluación Decreto 20", to: "/autoevaluacion-decreto-20" },
+                { label: "Plazos período transitorio ELEAM", to: "/plazos-decreto-20" },
+                { label: "Decreto 20 cuándo entra en vigencia", to: "/plazos-decreto-20" },
                 { label: "Software geriátrico Chile", to: "/software-eleam" },
                 { label: "Habitaciones y camas ELEAM", to: "/software-eleam" },
                 { label: "Permisos por rol ELEAM", to: "/software-eleam" },

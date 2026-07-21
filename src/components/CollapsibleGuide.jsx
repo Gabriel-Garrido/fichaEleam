@@ -67,7 +67,7 @@ export default function CollapsibleGuide({
         <ol className={`mt-3 grid gap-3 ${cols}`}>
           {steps.map((step, index) => (
             <li key={step.title} className={`flex gap-3 rounded-xl border p-3 ${step.tone ?? "border-slate-100 bg-slate-50"}`}>
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-teal-50 text-xs font-semibold text-teal-700 ring-1 ring-teal-100">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-teal-700 text-xs font-bold text-white shadow-sm tabular-nums">
                 {index + 1}
               </span>
               <div className="min-w-0">

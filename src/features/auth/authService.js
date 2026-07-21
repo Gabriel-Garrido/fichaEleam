@@ -29,7 +29,7 @@ export function authErrorMessage(error, fallback = "No pudimos completar la oper
         ? raw
         : "La invitación no es válida, ya fue usada o expiró. Pide al administrador que genere una nueva.";
     case "unauthorized_account":
-      return "No encontramos una cuenta habilitada para ese correo. Si solicitaste una demo, espera la aprobación; si eres funcionario o familiar, pide que creen tu usuario.";
+      return "No encontramos una cuenta habilitada para ese correo. Pide al administrador del ELEAM que cree tu acceso.";
     case "network":
       return "No pudimos conectar con Supabase. Revisa tu conexión e intenta nuevamente.";
     case "session_missing":
@@ -97,18 +97,6 @@ export const login = async ({ email, password }) => {
   return data.user;
 };
 
-// Estado de la solicitud de demo de un correo: "aprobado" | "pendiente" | "none".
-// Permite que el login muestre un aviso claro cuando alguien intenta entrar
-// con un correo cuya demo todavía no fue habilitada por el equipo.
-export const getDemoRequestStatus = async (email) => {
-  const client = requireSupabase();
-  const { data, error } = await client.rpc("demo_lead_status", {
-    p_email: String(email ?? "").trim(),
-  });
-  if (error) return "none";
-  return data ?? "none";
-};
-
 export function subscribePasswordRecovery(onRecovery) {
   const client = requireSupabase();
   const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
@@ -127,6 +115,20 @@ export async function getCurrentAuthSession() {
   const { data, error } = await client.auth.getSession();
   if (error) throw error;
   return data?.session ?? null;
+}
+
+export async function verifyPasswordRecoveryToken(tokenHash) {
+  const client = requireSupabase();
+  const cleanToken = String(tokenHash ?? "").trim();
+  if (!cleanToken) throw new Error("El enlace de recuperación no contiene un token válido.");
+
+  const { data, error } = await client.auth.verifyOtp({
+    type: "recovery",
+    token_hash: cleanToken,
+  });
+  if (error) throw error;
+  if (!data?.session) throw new Error("El enlace no logró iniciar una sesión válida.");
+  return data.session;
 }
 
 export async function requestPasswordReset(email, redirectTo) {
@@ -175,8 +177,8 @@ function googleOAuthOptions(redirectTo) {
 export const loginWithGoogle = async ({ redirectTo } = {}) => {
   const client = requireSupabase();
   // Volvemos a /login: AuthContext detectará la sesión y el componente
-  // Login redirigirá al homePath del rol. Esto evita que un familiar
-  // o superadmin caiga en /dashboard, donde no le corresponde.
+  // Login redirigirá al homePath del rol. Esto evita que un superadmin
+  // caiga en /dashboard, donde no le corresponde.
   const { data, error } = await client.auth.signInWithOAuth({
     provider: "google",
     options: googleOAuthOptions(redirectTo),

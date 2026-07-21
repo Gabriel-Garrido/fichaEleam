@@ -17,9 +17,9 @@ export function getDemoLeadAccessState(lead = {}) {
       key: "account_demo",
       label: "Cuenta demo aprobada",
       tone: "emerald",
-      canGrant: false,
-      actionLabel: "Acceso ya aprobado",
-      description: "El lead ya tiene una cuenta real para iniciar sesion.",
+      canGrant: true,
+      actionLabel: "Reenviar acceso",
+      description: "El lead ya tiene una cuenta real. Puedes enviarle un nuevo enlace de acceso.",
     };
   }
 
@@ -36,19 +36,27 @@ export function getDemoLeadAccessState(lead = {}) {
 export function demoGrantResultMessage(result = {}) {
   const emailFailed = result.email_error || result.email_sent === false;
 
-  if (result.code === "already_active" || result.already_active) {
+  if (result.code === "access_resent" || result.already_active) {
     return {
       title: "Demo ya aprobado",
-      toast: "Este lead ya tenia acceso demo aprobado",
-      body: "No se creo una cuenta nueva. Si el usuario no recuerda su acceso, debe usar recuperar acceso.",
+      toast: emailFailed
+        ? "El demo ya estaba aprobado; no se pudo reenviar el acceso"
+        : "Nuevo enlace de acceso enviado",
+      body: emailFailed
+        ? "La cuenta sigue activa, pero no se pudo enviar el nuevo enlace. Revisa el error de correo."
+        : "La cuenta ya existia y se envio un nuevo enlace para crear o restablecer la contrasena.",
     };
   }
 
   if (result.code === "reused_demo" || result.reused_existing_user) {
     return {
       title: "Demo reutilizado",
-      toast: "Demo activado usando una cuenta existente",
-      body: "El correo ya tenia una cuenta compatible. El usuario debe entrar con su metodo de acceso actual o recuperar acceso.",
+      toast: emailFailed
+        ? "Demo activado; el correo de acceso no se pudo enviar"
+        : "Demo activado y enlace de acceso enviado",
+      body: emailFailed
+        ? "El correo ya tenia una cuenta compatible, pero no se pudo enviar el enlace de acceso."
+        : "El correo ya tenia una cuenta compatible y recibira un enlace para crear o restablecer su contrasena.",
     };
   }
 

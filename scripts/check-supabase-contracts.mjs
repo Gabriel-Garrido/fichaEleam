@@ -120,6 +120,11 @@ const storageBuckets = collect(
   schemaNoComments,
 );
 
+const rlsEnabledTables = collect(
+  /alter\s+table\s+public\.([a-zA-Z0-9_]+)\s+enable\s+row\s+level\s+security/gi,
+  schemaNoComments,
+);
+
 const edgeFunctions = new Set(
   exists(functionsDir)
     ? fs
@@ -160,6 +165,21 @@ for (const entry of sourceEntries) {
 for (const [tableOrBucket, files] of frontendTables) {
   if (!publicTables.has(tableOrBucket) && !storageBuckets.has(tableOrBucket)) {
     fail(`El frontend usa .from("${tableOrBucket}") pero no existe como tabla pública ni bucket. Archivos: ${[...files].join(", ")}`);
+  }
+}
+
+for (const table of publicTables) {
+  if (!rlsEnabledTables.has(table)) {
+    fail(`public.${table} debe tener RLS habilitado en supabase_schema.sql.`);
+  }
+}
+
+for (const bucket of ["documentos-acreditacion", "documentos-eleam"]) {
+  if (!storageBuckets.has(bucket)) {
+    fail(`supabase_schema.sql debe crear el bucket privado ${bucket}.`);
+  }
+  if (!new RegExp(`bucket_id\\s*=\\s*'${escapeRegExp(bucket)}'`, "i").test(schemaNoComments)) {
+    fail(`supabase_schema.sql debe definir políticas Storage para el bucket ${bucket}.`);
   }
 }
 
@@ -466,13 +486,24 @@ if (!permisosTableMatch) {
   }
 }
 
-const funcionarioCanMatch = schemaNoComments.match(
-  /create\s+or\s+replace\s+function\s+public\.funcionario_can[\s\S]*?\$\$;/i,
-);
-const funcionarioCanCases = funcionarioCanMatch
-  ? collect(/when\s+'([^']+)'\s+then/gi, funcionarioCanMatch[0])
-  : new Set();
-if (!funcionarioCanMatch) {
+for (const match of schemaNoComments.matchAll(
+  /alter\s+table\s+public\.funcionario_permisos[\s\S]*?;/gi,
+)) {
+  for (const column of match[0].matchAll(/add\s+column\s+if\s+not\s+exists\s+([a-zA-Z0-9_]+)\s+boolean\s+not\s+null\s+default\s+(?:true|false)/gim)) {
+    dbPermColumns.add(column[1]);
+  }
+}
+
+const funcionarioCanMatches = [...schemaNoComments.matchAll(
+  /create\s+or\s+replace\s+function\s+public\.funcionario_can[\s\S]*?\$\$;/gi,
+)];
+const funcionarioCanCases = new Set();
+for (const match of funcionarioCanMatches) {
+  for (const key of collect(/when\s+'([^']+)'\s+then/gi, match[0])) {
+    funcionarioCanCases.add(key);
+  }
+}
+if (funcionarioCanMatches.length === 0) {
   fail("No se encontró public.funcionario_can en supabase_schema.sql.");
 }
 
@@ -482,7 +513,7 @@ for (const entry of sourceEntries) {
   for (const match of entry.text.matchAll(/["']([a-z]+_[a-z0-9_]+)["']/g)) {
     const key = match[1];
     if (
-      /^(crear|editar|eliminar|completar|administrar|validar|ajustar|subir|archivar|registrar|asignar|aplicar|cerrar)_/.test(key)
+      /^(crear|editar|eliminar|completar|administrar|validar|ajustar|subir|archivar|registrar|asignar|aplicar|cerrar|gestionar)_/.test(key)
     ) {
       frontendPermKeys.add(key);
     }
@@ -498,9 +529,51 @@ for (const key of frontendPermKeys) {
   }
 }
 
+const requiredDs20Permissions = [
+  "editar_inventario_bienes",
+  "gestionar_reclamos",
+  "gestionar_emergencias",
+  "registrar_simulacros",
+  "gestionar_cumplimiento",
+];
+
+for (const key of requiredDs20Permissions) {
+  if (!dbPermColumns.has(key)) {
+    fail(`Permiso DS20 requerido "${key}" no existe como columna boolean en funcionario_permisos.`);
+  }
+  if (!funcionarioCanCases.has(key)) {
+    fail(`Permiso DS20 requerido "${key}" no existe en public.funcionario_can.`);
+  }
+  if (!frontendPermKeys.has(key)) {
+    fail(`Permiso DS20 requerido "${key}" no está declarado en AuthContext/teamConstants.`);
+  }
+}
+
 for (const key of dbPermColumns) {
   if (!frontendPermKeys.has(key)) {
     warn(`Permiso backend "${key}" no está referenciado en AuthContext/teamConstants.`);
+  }
+}
+
+const ds20PolicyContracts = [
+  ["inventario_bienes", "editar_inventario_bienes"],
+  ["plan_emergencias", "gestionar_emergencias"],
+  ["escenarios_emergencia", "gestionar_emergencias"],
+  ["simulacros", "registrar_simulacros"],
+  ["reclamos_sugerencias", "gestionar_reclamos"],
+  ["transitorio_brechas", "gestionar_cumplimiento"],
+  ["protocolos_eleam", "gestionar_cumplimiento"],
+  ["reportes_senama", "gestionar_cumplimiento"],
+];
+
+for (const [table, permission] of ds20PolicyContracts) {
+  if (!publicTables.has(table)) {
+    fail(`Tabla DS20 requerida public.${table} no existe en supabase_schema.sql.`);
+    continue;
+  }
+  const policyPattern = new RegExp(`create\\s+policy[\\s\\S]*?on\\s+public\\.${escapeRegExp(table)}[\\s\\S]*?funcionario_can\\('${escapeRegExp(permission)}'\\)`, "i");
+  if (!policyPattern.test(schemaNoComments)) {
+    fail(`public.${table} debe proteger escritura con public.funcionario_can('${permission}').`);
   }
 }
 

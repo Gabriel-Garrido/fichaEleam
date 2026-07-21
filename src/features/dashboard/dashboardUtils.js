@@ -7,6 +7,7 @@ export const TIPO_LABEL = {
 };
 
 export const DEPENDENCIA_TONE = {
+  autovalente:     { bg: "bg-sky-500",     text: "text-sky-700",       label: "Autovalente" },
   leve:           { bg: "bg-emerald-500", text: "text-emerald-700",  label: "Leve" },
   moderado:       { bg: "bg-amber-500",   text: "text-amber-700",    label: "Moderado" },
   severo:         { bg: "bg-orange-500",  text: "text-orange-700",   label: "Severo" },
@@ -27,6 +28,8 @@ export const KPI_TONE = {
 export const ALERT_TONE = {
   rose:  { bg: "bg-white", text: "text-rose-700",  border: "border-rose-200",  dot: "bg-rose-500"  },
   amber: { bg: "bg-white", text: "text-amber-800", border: "border-amber-200", dot: "bg-amber-500" },
+  // Chips en cero: neutros para que las alertas activas destaquen.
+  slate: { bg: "bg-white", text: "text-slate-500", border: "border-slate-200", dot: "bg-slate-300" },
 };
 
 export const FILTER_TONE = {

@@ -77,7 +77,7 @@ export default function ResidentList() {
     const created = results.filter((r) => r.ok).length;
     const failed = results.length - created;
     if (created > 0) {
-      toast(`${created} residente${created !== 1 ? "s" : ""} con familiar creado${created !== 1 ? "s" : ""}${failed ? `; ${failed} fila${failed !== 1 ? "s" : ""} con error` : ""}.`, failed ? "warning" : "success");
+      toast(`${created} residente${created !== 1 ? "s" : ""} creado${created !== 1 ? "s" : ""}${failed ? `; ${failed} fila${failed !== 1 ? "s" : ""} con error` : ""}.`, failed ? "warning" : "success");
       await fetchResidents();
     }
   };

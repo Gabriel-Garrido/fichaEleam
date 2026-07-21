@@ -328,7 +328,7 @@ export default function LandingMetrics({ metrics }) {
             </div>
             <MetricHelp
               title="Visitas por página pública"
-              description="Distribución de los eventos page_view por página: inicio, software, acreditación SEREMI, calculadora de dotación, FAQ, contacto, planes y blog (lista y artículo)."
+              description="Distribución de los eventos page_view por página: inicio, software, acreditación SEREMI, calculadora de dotación, autoevaluación DS 20, plazos del decreto, FAQ, contacto, planes y blog (lista y artículo)."
               source="landing_events: campo 'elemento' enviado por usePageView() en cada página, normalizado a etiquetas legibles. /pago solo cuenta visitas anónimas."
               action="Compara qué páginas atraen más tráfico y cuáles generan CTAs/leads. Una página con muchas visitas y pocos CTAs es candidata a reforzar su llamado a la acción."
             />
@@ -387,6 +387,68 @@ export default function LandingMetrics({ metrics }) {
                 description: "Clics en el botón de demo dentro de la calculadora durante los últimos 30 días. Es la conversión directa de la herramienta a solicitud de demo.",
                 source: "landing_events: COUNT(*) WHERE tipo = 'cta_click' AND elemento = 'calculadora_demo'.",
                 action: "Si hay muchos cálculos pero pocos clics, reforzar el CTA dentro de la herramienta o el copy del resultado.",
+              }}
+            />
+          </div>
+        </section>
+      )}
+
+      {/* ── Uso de la autoevaluación DS 20 ─────────────────────── */}
+      {toolUsage && (
+        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Autoevaluación Decreto N°20</h3>
+              <p className="text-xs text-slate-500">Uso del test público /autoevaluacion-decreto-20 — 30 días.</p>
+            </div>
+            <MetricHelp
+              title="Autoevaluación Decreto N°20"
+              description="Mide cuántas personas completan el test de preparación de 10 preguntas, qué porcentaje de cumplimiento promedian, cuántas quedan bajo el 50% (alto riesgo ante fiscalización) y cuántas piden demo desde el resultado."
+              source="landing_events: tipo 'tool_use' con elemento 'autoevaluacion_ds20'; el campo 'valor' guarda el puntaje en formato s:síes|t:total|p:porcentaje. Clics a demo: cta_click con elemento 'autoevaluacion_demo'."
+              action="Quien completa el test ya reconoce que el decreto le aplica: es el lead más calificado del sitio. Un promedio bajo confirma que el mercado tiene brechas reales que FichaEleam resuelve."
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+              label="Tests completados"
+              value={toolUsage.autoevalUsos.toLocaleString("es-CL")}
+              tone="border-teal-200 text-teal-700"
+              help={{
+                description: "Personas que respondieron las 10 preguntas del test en los últimos 30 días. Se registra un evento por resultado distinto, con un pequeño retraso para no contar correcciones.",
+                source: "landing_events: COUNT(*) WHERE tipo = 'tool_use' AND elemento = 'autoevaluacion_ds20'.",
+                action: "Es el indicador de interés más fuerte del sitio: quien termina el test está evaluando activamente su cumplimiento.",
+              }}
+            />
+            <KpiCard
+              label="Preparación promedio"
+              value={toolUsage.autoevalPromedioPct != null ? `${toolUsage.autoevalPromedioPct}%` : "—"}
+              tone="border-sky-200 text-sky-700"
+              help={{
+                description: "Promedio del porcentaje de preparación que obtienen quienes completan el test (0 a 100%). Refleja qué tan preparado se autodeclara el mercado.",
+                source: "landing_events: promedio del componente 'p:' del campo 'valor' en los eventos del test.",
+                action: "Un promedio bajo es un argumento comercial directo: el mercado sabe que tiene brechas. Útil para campañas y contenido del blog.",
+              }}
+            />
+            <KpiCard
+              label="Bajo 50% (alto riesgo)"
+              value={toolUsage.autoevalBajoCumplimiento.toLocaleString("es-CL")}
+              tone="border-rose-200 text-rose-700"
+              sub={toolUsage.autoevalUsos > 0 ? `${pct(toolUsage.autoevalBajoCumplimiento, toolUsage.autoevalUsos)}% de los tests` : undefined}
+              help={{
+                description: "Tests cuyo resultado quedó bajo el 50% de preparación: ELEAM con riesgo alto ante una fiscalización SEREMI.",
+                source: "landing_events: eventos del test cuyo 'valor' tiene p menor a 50.",
+                action: "Este segmento tiene la mayor urgencia de compra. Si crece, priorizar contenido y campañas orientadas a 'plan de adecuación'.",
+              }}
+            />
+            <KpiCard
+              label="Clics a demo"
+              value={toolUsage.autoevalDemoClicks.toLocaleString("es-CL")}
+              tone="border-emerald-200 text-emerald-700"
+              sub={toolUsage.autoevalUsos > 0 ? `${pct(toolUsage.autoevalDemoClicks, toolUsage.autoevalUsos)}% de conversión a demo` : undefined}
+              help={{
+                description: "Clics en 'Cerrar estas brechas con FichaEleam' dentro del resultado del test, en los últimos 30 días.",
+                source: "landing_events: COUNT(*) WHERE tipo = 'cta_click' AND elemento = 'autoevaluacion_demo'.",
+                action: "Si hay muchos tests pero pocos clics, revisar el copy del resultado: debe conectar cada brecha con cómo la resuelve el producto.",
               }}
             />
           </div>

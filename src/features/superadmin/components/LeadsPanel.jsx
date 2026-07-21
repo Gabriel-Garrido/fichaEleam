@@ -185,6 +185,7 @@ export default function LeadsPanel({
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Buscar leads"
             placeholder="Buscar por nombre, email o ELEAM…"
             className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 bg-slate-50"
           />
@@ -192,6 +193,7 @@ export default function LeadsPanel({
         <select
           value={filterEstado}
           onChange={(e) => setFilter(e.target.value)}
+          aria-label="Filtrar por estado"
           className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
         >
           <option value="">Todos los estados</option>
@@ -285,7 +287,9 @@ export default function LeadsPanel({
                         { label: "Residentes", value: lead.num_residentes ?? "—" },
                         { label: "Origen", value: lead.utm_source ?? lead.referrer ?? "Directo" },
                         { label: "Acceso demo", value: accessState.label },
-                        { label: "Demo expira", value: formatDate(lead.demo_expires_at) },
+                        ...(lead.demo_expires_at
+                          ? [{ label: "Demo expira", value: formatDate(lead.demo_expires_at) }]
+                          : []),
                       ].map(({ label, value }) => (
                         <div key={label} className="bg-white rounded-xl border border-slate-100 px-2.5 py-2">
                           <p className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">{label}</p>
@@ -296,10 +300,11 @@ export default function LeadsPanel({
 
                     {/* Notes */}
                     <div>
-                      <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-1">
+                      <label htmlFor={`lead-notes-${lead.id}`} className="block text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-1">
                         Notas internas
                       </label>
                       <textarea
+                        id={`lead-notes-${lead.id}`}
                         rows={2}
                         value={notesVal}
                         onChange={(e) => setEditNotes((p) => ({ ...p, [lead.id]: e.target.value }))}
@@ -313,6 +318,7 @@ export default function LeadsPanel({
                       <select
                         value={lead.estado}
                         onChange={(e) => handleEstadoChange(lead.id, e.target.value)}
+                        aria-label="Cambiar estado del lead"
                         className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-teal-400"
                       >
                         {ESTADOS.map((e) => (
@@ -327,7 +333,9 @@ export default function LeadsPanel({
                           disabled={isGranting || Boolean(grantingLeadId)}
                           className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 font-semibold transition-colors disabled:opacity-60"
                         >
-                          {isGranting ? "Aprobando..." : accessState.actionLabel}
+                          {isGranting
+                            ? (accessState.key === "account_demo" ? "Enviando..." : "Aprobando...")
+                            : accessState.actionLabel}
                         </button>
                       ) : (
                         <span className={`inline-flex items-center gap-1.5 text-xs border px-3 py-2 rounded-xl font-medium ${demoAccessToneClasses(accessState.tone)}`}>

@@ -13,7 +13,9 @@ import {
   estadoMeta,
   diasHasta,
 } from "./accreditationService";
-import { formatDate } from "../../utils/dateUtils";
+import { formatDate, todayIso } from "../../utils/dateUtils";
+import { getDs20ResidentCompliance } from "../ds20/ds20Service";
+import { getStaffingCompliance } from "../ds20/staffingService";
 
 function Bar({ pct, tone = "emerald" }) {
   const colorClass =
@@ -92,7 +94,7 @@ function AlertItem({ requisito_eleam, kind = "vencido" }) {
   return (
     <button
       type="button"
-      onClick={() => navigate(`/accreditation/requisito/${requisito_eleam.id}`)}
+      onClick={() => navigate(`/cumplimiento/seremi/requisito/${requisito_eleam.id}`)}
       className={`w-full text-left ${tone.box} border rounded-xl p-3 hover:shadow-sm transition-all flex items-center justify-between gap-3`}
     >
       <div className="min-w-0">
@@ -119,8 +121,8 @@ function ObservacionItem({ obs }) {
     <button
       type="button"
       onClick={() => obs.requisito_eleam_id
-        ? navigate(`/accreditation/requisito/${obs.requisito_eleam_id}`)
-        : navigate(`/accreditation/observaciones`)}
+        ? navigate(`/cumplimiento/seremi/requisito/${obs.requisito_eleam_id}`)
+        : navigate(`/cumplimiento/seremi/observaciones`)}
       className="w-full text-left bg-orange-50 border border-orange-200 rounded-xl p-3 hover:shadow-sm transition-all"
     >
       <div className="flex items-center gap-2 mb-1">
@@ -145,7 +147,7 @@ function ObservacionItem({ obs }) {
 
 function firstRequirementPath(items) {
   const item = items?.[0];
-  return item?.id ? `/accreditation/requisito/${item.id}` : "/accreditation";
+  return item?.id ? `/cumplimiento/seremi/requisito/${item.id}` : "/cumplimiento/seremi";
 }
 
 function AccreditationNextStep({ resumen, observaciones, navigate, onReload, busy }) {
@@ -180,7 +182,7 @@ function AccreditationNextStep({ resumen, observaciones, navigate, onReload, bus
           title: "Cierra observaciones abiertas",
           text: `${observaciones.length} observación${observaciones.length === 1 ? "" : "es"} pendiente${observaciones.length === 1 ? "" : "s"} de subsanación.`,
           action: "Ver observaciones",
-          path: "/accreditation/observaciones",
+          path: "/cumplimiento/seremi/observaciones",
         }
       : resumen.evidenciasVigentes === 0
         ? {
@@ -211,7 +213,7 @@ function AccreditationNextStep({ resumen, observaciones, navigate, onReload, bus
                 title: "Carpeta ordenada",
                 text: "Los requisitos están al día, con evidencia cargada y sin observaciones abiertas.",
                 action: "Generar carpeta",
-                path: "/accreditation/carpeta",
+                path: "/cumplimiento/seremi/carpeta",
               };
 
   const toneClass = {
@@ -273,7 +275,7 @@ function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
           </button>
           <button
             type="button"
-            onClick={() => navigate("/accreditation")}
+            onClick={() => navigate("/cumplimiento/seremi")}
             className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3 text-left"
           >
             <p className="text-2xl font-black text-amber-700 tabular-nums">{pendienteTotal}</p>
@@ -281,7 +283,7 @@ function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
           </button>
           <button
             type="button"
-            onClick={() => navigate("/accreditation")}
+            onClick={() => navigate("/cumplimiento/seremi")}
             className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3 text-left"
           >
             <p className="text-2xl font-black text-rose-700 tabular-nums">{resumen.vencidos.length}</p>
@@ -289,7 +291,7 @@ function ComplianceOverview({ resumen, observacionesCount, tone, navigate }) {
           </button>
           <button
             type="button"
-            onClick={() => navigate("/accreditation/observaciones")}
+            onClick={() => navigate("/cumplimiento/seremi/observaciones")}
             className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-3 text-left"
           >
             <p className="text-2xl font-black text-orange-700 tabular-nums">{observacionesCount}</p>
@@ -335,6 +337,36 @@ function AccreditationLoading() {
   );
 }
 
+function OperationalDs20Card({ residents = [], staffing = [], navigate }) {
+  const pendingResidents = residents.filter((item) => (item.pendientes ?? 0) > 0);
+  const staffingIssues = staffing.filter((item) => item.incumple);
+  const ok = pendingResidents.length === 0 && staffingIssues.length === 0;
+
+  return (
+    <section className={`rounded-2xl border p-4 shadow-sm sm:p-5 ${ok ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Controles operacionales DS20</p>
+          <h2 className="mt-1 text-base font-bold text-slate-900">{ok ? "Sin brechas operacionales críticas" : "Hay brechas operacionales por resolver"}</h2>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            Ingreso, evaluaciones, red de salud y dotación se calculan desde registros vivos de la app.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <button type="button" onClick={() => pendingResidents[0] ? navigate(`/residents/${pendingResidents[0].residente_id}`) : navigate("/residents")} className="rounded-xl border border-white/70 bg-white px-3 py-2 text-left">
+            <p className="text-2xl font-black tabular-nums text-amber-700">{pendingResidents.length}</p>
+            <p className="text-[11px] font-semibold text-slate-600">Ingresos pendientes</p>
+          </button>
+          <button type="button" onClick={() => navigate("/personal/dotacion")} className="rounded-xl border border-white/70 bg-white px-3 py-2 text-left">
+            <p className="text-2xl font-black tabular-nums text-rose-700">{staffingIssues.length}</p>
+            <p className="text-[11px] font-semibold text-slate-600">Turnos con brecha</p>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ambitoPriorityScore(ambito) {
   return (
     (ambito.vencido ?? 0) * 100 +
@@ -354,6 +386,8 @@ export default function AccreditationDashboard() {
   const { eleam, isAdminEleam, profile } = useAuth();
   const [requisitos, setRequisitos] = useState([]);
   const [observaciones, setObservaciones] = useState([]);
+  const [ds20Residents, setDs20Residents] = useState([]);
+  const [ds20Staffing, setDs20Staffing] = useState([]);
   const [loading, setLoading] = useState(true);
   const [provisioning, setProvisioning] = useState(false);
 
@@ -376,13 +410,18 @@ export default function AccreditationDashboard() {
         await provisionAccreditationRequirements();
       }
 
-      const [r, o] = await Promise.all([
+      const today = todayIso();
+      const [r, o, ds20R, ds20S] = await Promise.all([
         getRequisitosEleam(),
         getObservaciones({ soloAbiertas: true }),
+        getDs20ResidentCompliance().catch(() => []),
+        getStaffingCompliance({ from: today, to: today }).catch(() => []),
       ]);
 
       setRequisitos(r);
       setObservaciones(o);
+      setDs20Residents(ds20R);
+      setDs20Staffing(ds20S);
 
       if (forceProvision) {
         toast((r ?? []).length > 0
@@ -442,14 +481,14 @@ export default function AccreditationDashboard() {
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto">
           <button
             type="button"
-            onClick={() => navigate("/accreditation/observaciones")}
+            onClick={() => navigate("/cumplimiento/seremi/observaciones")}
             className="border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl hover:bg-slate-50 text-sm"
           >
             Observaciones
           </button>
           <button
             type="button"
-            onClick={() => navigate("/accreditation/carpeta")}
+            onClick={() => navigate("/cumplimiento/seremi/carpeta")}
             className="bg-teal-700 text-white font-semibold px-4 py-2 rounded-xl hover:bg-teal-800 text-sm"
           >
             Generar Carpeta SEREMI
@@ -471,6 +510,12 @@ export default function AccreditationDashboard() {
         resumen={resumen}
         observacionesCount={observaciones.length}
         tone={cumplimientoTone}
+        navigate={navigate}
+      />
+
+      <OperationalDs20Card
+        residents={ds20Residents}
+        staffing={ds20Staffing}
         navigate={navigate}
       />
 
@@ -535,7 +580,7 @@ export default function AccreditationDashboard() {
                   {observaciones.length > 5 && (
                     <button
                       type="button"
-                      onClick={() => navigate("/accreditation/observaciones")}
+                      onClick={() => navigate("/cumplimiento/seremi/observaciones")}
                       className="text-xs text-teal-700 hover:underline"
                     >
                       Ver todas →
@@ -560,7 +605,7 @@ export default function AccreditationDashboard() {
           {isAdminEleam && (
             <button
               type="button"
-              onClick={() => navigate("/accreditation/observaciones?nuevo=1")}
+              onClick={() => navigate("/cumplimiento/seremi/observaciones?nuevo=1")}
               className="text-sm text-teal-700 hover:underline font-semibold"
             >
               + Registrar observación
@@ -573,7 +618,7 @@ export default function AccreditationDashboard() {
               <AmbitoCard
                 key={a.codigo}
                 ambito={a}
-                onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
+                onClick={() => navigate(`/cumplimiento/seremi/ambito/${a.codigo}`)}
               />
             ))}
           </div>
@@ -607,7 +652,7 @@ export default function AccreditationDashboard() {
               <AmbitoCard
                 key={a.codigo}
                 ambito={a}
-                onClick={() => navigate(`/accreditation/ambito/${a.codigo}`)}
+                onClick={() => navigate(`/cumplimiento/seremi/ambito/${a.codigo}`)}
               />
             ))}
           </div>
