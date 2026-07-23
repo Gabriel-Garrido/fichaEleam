@@ -7,6 +7,7 @@ import {
   currentTurno,
   isCareTaskOverdue,
   nextFollowUpSlot,
+  preferredAssignedTurno,
   normalizeSchedule,
   normalizeSchedules,
   requireFollowUpSlot,
@@ -17,6 +18,12 @@ describe("carePlansService helpers", () => {
     expect(currentTurno(new Date("2026-05-14T08:00:00"))).toBe("mañana");
     expect(currentTurno(new Date("2026-05-14T16:00:00"))).toBe("tarde");
     expect(currentTurno(new Date("2026-05-14T23:30:00"))).toBe("noche");
+  });
+
+  it("prefers the user's scheduled shift over the device clock", () => {
+    expect(preferredAssignedTurno([{ turno: "noche" }], "tarde")).toBe("noche");
+    expect(preferredAssignedTurno([{ turno: "mañana" }, { turno: "tarde" }], "tarde")).toBe("tarde");
+    expect(preferredAssignedTurno([], "mañana")).toBeNull();
   });
 
   it("normalizes weekly schedules and clamps tolerance", () => {

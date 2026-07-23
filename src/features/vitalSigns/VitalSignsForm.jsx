@@ -10,6 +10,7 @@ import { ErrorSummary } from "../../components/forms/FormKit";
 import Button from "../../components/Button";
 import { FeatureCoach } from "../featureCoach";
 import { validateVitalSignsForm } from "./vitalSignsFormSchema";
+import { useAuth } from "../../context/AuthContext";
 import {
   STATUS,
   systolicStatus,
@@ -58,6 +59,7 @@ const INPUT_CLS = "w-full min-h-11 sm:min-h-10 border rounded-xl px-3 py-2.5 sm:
 const SELECT_CLS = INPUT_CLS + " appearance-none";
 
 function VitalSignsForm() {
+  const { can } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [searchParams] = useSearchParams();
@@ -230,10 +232,10 @@ function VitalSignsForm() {
           <p className="text-xs text-amber-800 mt-1">
             Agrega un residente activo o cambia el estado de una ficha existente antes de registrar controles.
           </p>
-          <button type="button" onClick={() => navigate("/residents/new")}
+          {can("crear_residentes") && <button type="button" onClick={() => navigate("/residents/new")}
             className="tap-highlight-none mt-3 text-sm bg-white border border-amber-200 text-amber-800 px-4 py-2 rounded-xl hover:bg-amber-100">
             Agregar residente
-          </button>
+          </button>}
         </div>
       )}
 

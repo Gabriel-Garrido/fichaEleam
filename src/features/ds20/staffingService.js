@@ -26,7 +26,8 @@ export const COMPETENCY_CATALOG = [
 
 const STAFF_SELECT = `
   id, eleam_id, profile_id, nombre, email, telefono, cargo, tipo_dotacion,
-  activo, creado_en, actualizado_en
+  activo, creado_en, actualizado_en,
+  profile:profiles!staff_members_profile_id_fkey(rol)
 `;
 
 const COMPETENCY_SELECT = `
@@ -151,6 +152,8 @@ export async function updateStaffMember(id, payload) {
   const { data, error } = await sb
     .from("staff_members")
     .update({
+      nombre: payload.nombre?.trim() || undefined,
+      telefono: payload.telefono?.trim() || null,
       cargo: payload.cargo || null,
       tipo_dotacion: payload.tipo_dotacion || "cuidador",
       activo: payload.activo !== false,

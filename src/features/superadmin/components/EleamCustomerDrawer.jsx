@@ -85,6 +85,7 @@ export default function EleamCustomerDrawer({
   eleamId, slot, loading,
   onClose, onEdit, onRegisterPayment,
   onCreateTask, onCompleteTask, onCreateInteraction,
+  usageDays = 30,
 }) {
   if (!eleamId) return null;
 
@@ -105,13 +106,13 @@ export default function EleamCustomerDrawer({
       labelledById="eleam-customer-drawer-title"
       showCloseButton={false}
       backdropClassName="fixed inset-0 z-50 flex justify-end bg-black/30"
-      panelClassName="h-full max-h-full sm:max-h-full max-w-none w-full sm:w-[660px] rounded-none sm:rounded-none bg-slate-50 border-l border-slate-200 shadow-2xl"
+      panelClassName="h-full max-h-full sm:max-h-full max-w-none w-full sm:w-[760px] rounded-none sm:rounded-none bg-slate-50 border-l border-slate-200 shadow-2xl"
     >
         {/* Header */}
         <header className="sticky top-0 bg-white border-b border-slate-100 p-4 flex items-start justify-between gap-3 z-10">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
-              Ficha 360 · CRM
+              Detalle del ELEAM
             </p>
             <h2 id="eleam-customer-drawer-title" className="text-xl font-black text-slate-800 truncate">
               {eleam?.nombre ?? (loading ? "Cargando…" : "—")}
@@ -151,6 +152,10 @@ export default function EleamCustomerDrawer({
           </div>
         ) : (
           <div className="p-4 space-y-4">
+            <section className="rounded-xl border border-slate-100 bg-white p-4">
+              <EleamUsagePanel eleamId={eleam.id} initialDays={usageDays} />
+            </section>
+
             {/* Banner demo activo */}
             {eleam.plan === "demo" && (() => {
               const d = daysUntil(eleam.fecha_vencimiento_suscripcion);
@@ -256,11 +261,6 @@ export default function EleamCustomerDrawer({
                   value={formatDate(eleam.creado_en)}
                 />
               </SectionBlock>
-            </section>
-
-            {/* Uso de la app */}
-            <section className="bg-white border border-slate-100 rounded-xl p-4">
-              <EleamUsagePanel eleamId={eleam.id} />
             </section>
 
             {/* CRM */}

@@ -913,7 +913,7 @@ export default function AccreditationRequisito() {
         <h1 className="text-xl font-bold mb-2">Requisito no encontrado</h1>
         <button
           type="button"
-          onClick={() => navigate("/cumplimiento/seremi")}
+          onClick={() => navigate("/cumplimiento")}
           className="text-sm text-teal-700 hover:underline"
         >
           Volver
@@ -932,7 +932,7 @@ export default function AccreditationRequisito() {
       <FeatureCoach featureId="accreditation-requisito" standalone />
       <button
         type="button"
-        onClick={() => navigate(`/cumplimiento/seremi/ambito/${a.codigo}`)}
+        onClick={() => navigate("/cumplimiento")}
         className="text-sm text-slate-500 hover:text-slate-800"
       >
         ← {a.nombre}

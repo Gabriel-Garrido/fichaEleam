@@ -8,7 +8,7 @@ La aplicación actual parte desde una base vacía. No se deben reintroducir ruta
 
 ## Principio de producto
 
-Toda funcionalidad debe pertenecer a una de estas cinco áreas:
+La operación regulatoria se organiza en estas cinco áreas:
 
 | Feature ID | Área | Responsabilidad |
 |---|---|---|
@@ -18,7 +18,7 @@ Toda funcionalidad debe pertenecer a una de estas cinco áreas:
 | `personnel` | Personal | Usuarios, dotación, competencias y capacitación |
 | `compliance` | Cumplimiento SEREMI | Requisitos, evidencia, protocolos y fiscalización |
 
-No crear un sexto módulo principal sin una decisión explícita de producto. Las pantallas especializadas deben colgar de una de estas áreas.
+Las pantallas especializadas deben colgar de una de estas áreas, salvo una decisión explícita de producto. `resident_payments` es la excepción vigente: es un módulo administrativo independiente de cobranza interna, restringido a cada ELEAM y separado de los pagos comerciales del superadministrador.
 
 ## Alcance vigente
 
@@ -60,7 +60,6 @@ No dupliques listas de roles, features o rutas en nuevos archivos si ya existe u
 ```text
 /dashboard
 /establecimiento
-└── /establecimiento/camas
 /residents
 ├── /residents/new
 ├── /residents/:id
@@ -69,12 +68,10 @@ No dupliques listas de roles, features o rutas en nuevos archivos si ya existe u
 ├── /personal/equipo
 └── /personal/dotacion
 /cumplimiento
-├── /cumplimiento/seremi
-├── /cumplimiento/seremi/ambito/:codigo
-├── /cumplimiento/seremi/requisito/:id
-├── /cumplimiento/seremi/observaciones
-├── /cumplimiento/seremi/carpeta
-├── /cumplimiento/obligaciones
+├── /cumplimiento/requisito/:id
+├── /cumplimiento/observaciones
+├── /cumplimiento/reporte
+├── /cumplimiento/protocolos
 ├── /cumplimiento/emergencias
 └── /cumplimiento/reclamos
 ```
@@ -220,9 +217,11 @@ Funciones autenticadas:
 - `create-demo-user`
 - `create-staff-user`
 - `delete-staff-user`
+- `update-staff-user`
 - `mp-create-subscription`
 - `mp-cancel-subscription`
 - `send-crm-email-campaign`
+- `send-resident-payment-receipt`
 
 Funciones públicas con validación propia:
 
@@ -234,11 +233,11 @@ Toda función pública debe limitar origen, validar entrada, evitar exposición 
 
 ## Storage
 
-`documentos-acreditacion` es privado. La ruta debe quedar bajo el ELEAM y requisito correspondiente. Validar tipo, tamaño, propiedad y permisos antes de guardar metadatos.
+`documentos-acreditacion` y `pagos-residentes` son privados. Cada ruta debe quedar bajo el ELEAM y su entidad correspondiente. Validar tipo, tamaño, propiedad y permisos antes de guardar metadatos; en cobranza la Edge Function debe comprobar además la firma binaria antes de confirmar el pago.
 
 ## UI y rendimiento
 
-- Mantener las cinco áreas en desktop y navegación móvil.
+- Mantener las cinco áreas operativas en desktop y navegación móvil. Los módulos administrativos independientes deben aparecer solo cuando rol, área y acción lo permitan.
 - Reutilizar `AreaCard`, `PageLayout`, `FormKit`, `EmptyState`, `Notice` y `FeatureCoach`.
 - Cargar pantallas pesadas con `lazy`.
 - Evitar tours globales, confeti, animaciones pesadas y polling innecesario.
@@ -290,7 +289,7 @@ El esquema todavía puede contener campos de comunicación familiar requeridos p
 
 ## Checklist de cambio
 
-- [ ] Pertenece a una de las cinco áreas.
+- [ ] Pertenece a una de las cinco áreas o documenta una excepción explícita de producto.
 - [ ] Resuelve una obligación o tarea frecuente.
 - [ ] No duplica datos existentes.
 - [ ] Rutas y navegación coinciden.

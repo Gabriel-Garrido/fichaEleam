@@ -428,7 +428,7 @@ function ReleaseModal({ bed, onClose, onSubmit, saving }) {
   );
 }
 
-function BedCard({ bed, canAdmin, canAssign, onAssign, onEdit, onDelete, onTransfer, onRelease }) {
+function BedCard({ bed, canAdmin, canAssign, canViewResident, onAssign, onEdit, onDelete, onTransfer, onRelease }) {
   const assignment = bed.assignment;
   const resident = assignment?.residente;
   const unavailable = bed.estado !== "operativa" || (bed.habitacion?.estado ?? "operativa") !== "operativa";
@@ -447,10 +447,12 @@ function BedCard({ bed, canAdmin, canAssign, onAssign, onEdit, onDelete, onTrans
 
       {assignment ? (
         <div className="mt-4 rounded-xl bg-slate-50 p-3">
-          <div className="text-sm font-semibold text-slate-900">{occupantName(resident)}</div>
+          <div className="text-sm font-semibold text-slate-900">
+            {canViewResident ? occupantName(resident) : "Residente asignado"}
+          </div>
           <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-            {resident?.estado && <span>{resident.estado}</span>}
-            {resident?.nivel_dependencia && <span>Dependencia {resident.nivel_dependencia}</span>}
+            {canViewResident && resident?.estado && <span>{resident.estado}</span>}
+            {canViewResident && resident?.nivel_dependencia && <span>Dependencia {resident.nivel_dependencia}</span>}
             {assignment.fecha_inicio && <span>Desde {new Date(assignment.fecha_inicio).toLocaleDateString("es-CL")}</span>}
           </div>
           {reserved && (
@@ -469,7 +471,7 @@ function BedCard({ bed, canAdmin, canAssign, onAssign, onEdit, onDelete, onTrans
         {!assignment && !unavailable && canAssign && (
           <Button className="bg-teal-600 text-white hover:bg-teal-700" onClick={() => onAssign(bed)}>Asignar</Button>
         )}
-        {assignment && (
+        {assignment && canViewResident && (
           <Link
             to={`/residents/${assignment.residente_id}`}
             className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -524,6 +526,7 @@ export default function BedsPage() {
 
   const canAdminBeds = auth.isAdminEleam || (auth.isSuperadmin && !!auth.profile?.eleam_id);
   const canAssignBeds = auth.can("asignar_camas");
+  const canViewResidents = auth.canFeature("residents");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -856,6 +859,7 @@ export default function BedsPage() {
                       bed={bed}
                       canAdmin={canAdminBeds}
                       canAssign={canAssignBeds}
+                      canViewResident={canViewResidents}
                       onAssign={setAssignModal}
                       onEdit={setBedModal}
                       onDelete={handleDeleteBed}

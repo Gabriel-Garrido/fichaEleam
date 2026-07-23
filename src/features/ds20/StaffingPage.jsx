@@ -191,7 +191,7 @@ export default function StaffingPage() {
       </div>
 
       {loading ? <Loading message="Cargando dotación..." /> : activeStaff.length === 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Primero agrega personas en “Equipo” y completa su tipo de dotación en “Antecedentes SEREMI”.</div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Primero agrega personas y completa su tipo de dotación desde “Equipo”.</div>
       ) : (
         <section className="grid gap-4 lg:grid-cols-3">
           {TURNOS_DS20.map((turno) => {

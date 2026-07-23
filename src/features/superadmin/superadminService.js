@@ -53,7 +53,6 @@ const DEMO_LEAD_SELECT = `
 const ELEAM_USAGE_SOURCES = [
   { table: "signos_vitales",                who: "registrado_por",  ts: "creado_en",       scope: "residente" },
   { table: "observaciones_diarias",         who: "registrado_por",  ts: "creado_en",       scope: "residente" },
-  { table: "visitas_familiar",              who: "registrado_por",  ts: "creado_en",       scope: "residente" },
   { table: "medicamentos_administraciones", who: "administrado_por", ts: "administrado_en", scope: "eleam" },
   { table: "tareas_cuidado",                who: "cumplida_por",    ts: "cumplida_en",     scope: "eleam" },
   { table: "turno_entregas",                who: "creado_por",      ts: "creado_en",       scope: "eleam" },

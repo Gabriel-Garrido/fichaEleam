@@ -27,25 +27,31 @@ export function CriticalAlerts({
   adverseEvents = { total: 0, gravesOCriticos: 0 },
   loading,
   navigate,
+  canFeature,
 }) {
   if (loading) return null;
 
-  const critical = latestVitals.filter(
+  const canResidents = canFeature("residents");
+  const canPersonnel = canFeature("personnel");
+  const canCompliance = canFeature("compliance");
+
+  const critical = canResidents ? latestVitals.filter(
     (r) => r.ultimoSigno && recordOverallStatus(r.ultimoSigno) === "critical"
-  );
-  const docs7d = expiring.filter((d) => {
+  ) : [];
+  const docs7d = canCompliance ? expiring.filter((d) => {
     const days = daysUntil(d.fecha_vencimiento);
     return days != null && days <= 7;
-  });
-  const emarUrgent = (operational?.emar?.pendiente_validacion ?? 0) + (operational?.emar?.vencidas ?? 0);
-  const careUrgent = operational?.care?.vencidas ?? 0;
-  const overdueAssessments = assessments.filter((a) => a.dias_restantes == null || a.dias_restantes < 0);
+  }) : [];
+  const emarUrgent = canResidents ? (operational?.emar?.pendiente_validacion ?? 0) + (operational?.emar?.vencidas ?? 0) : 0;
+  const careUrgent = canResidents ? operational?.care?.vencidas ?? 0 : 0;
+  const overdueAssessments = canResidents ? assessments.filter((a) => a.dias_restantes == null || a.dias_restantes < 0) : [];
   const assessmentsCount = overdueAssessments.length;
-  const ds20ResidentPending = ds20Residents.filter((item) => (item.pendientes ?? 0) > 0);
-  const ds20StaffingIssues = ds20Staffing.filter((item) => item.incumple);
-  const adverseOpen = adverseEvents?.total ?? 0;
-  const adverseSerious = adverseEvents?.gravesOCriticos ?? 0;
-  const totalAlertas = critical.length + followUps.length + docs7d.length + emarUrgent + careUrgent + assessmentsCount + ds20ResidentPending.length + ds20StaffingIssues.length + adverseOpen;
+  const ds20ResidentPending = canResidents ? ds20Residents.filter((item) => (item.pendientes ?? 0) > 0) : [];
+  const ds20StaffingIssues = canPersonnel ? ds20Staffing.filter((item) => item.incumple) : [];
+  const visibleFollowUps = canResidents ? followUps : [];
+  const adverseOpen = canResidents ? adverseEvents?.total ?? 0 : 0;
+  const adverseSerious = canResidents ? adverseEvents?.gravesOCriticos ?? 0 : 0;
+  const totalAlertas = critical.length + visibleFollowUps.length + docs7d.length + emarUrgent + careUrgent + assessmentsCount + ds20ResidentPending.length + ds20StaffingIssues.length + adverseOpen;
 
   if (!totalAlertas) {
     return (
@@ -54,9 +60,9 @@ export function CriticalAlerts({
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div>
-          <p className="text-sm font-semibold text-emerald-800">Sin alertas críticas</p>
+          <p className="text-sm font-semibold text-emerald-800">Sin alertas en tus áreas</p>
           <p className="text-xs text-emerald-700/80">
-            Todos los residentes están en rango y no hay tareas urgentes pendientes.
+            No hay pendientes urgentes entre las áreas que tienes habilitadas.
           </p>
         </div>
       </div>
@@ -77,6 +83,7 @@ export function CriticalAlerts({
         {[
           {
             label: "Medicamentos urgentes",
+            visible: canResidents,
             value: emarUrgent,
             tone: "rose",
             onClick: emarUrgent ? () => navigate("/operacion/medicamentos") : null,
@@ -84,6 +91,7 @@ export function CriticalAlerts({
           },
           {
             label: "Signos vitales críticos",
+            visible: canResidents,
             value: critical.length,
             tone: "rose",
             onClick: critical.length ? () => navigate("/vital-signs") : null,
@@ -91,6 +99,7 @@ export function CriticalAlerts({
           },
           {
             label: "Eventos adversos abiertos",
+            visible: canResidents,
             value: adverseOpen,
             tone: adverseSerious > 0 ? "rose" : "amber",
             onClick: adverseOpen ? () => navigate("/eventos-adversos") : null,
@@ -102,6 +111,7 @@ export function CriticalAlerts({
           },
           {
             label: "Brechas de dotación",
+            visible: canPersonnel,
             value: ds20StaffingIssues.length,
             tone: "rose",
             onClick: ds20StaffingIssues.length ? () => navigate("/personal/dotacion") : null,
@@ -111,6 +121,7 @@ export function CriticalAlerts({
           },
           {
             label: "Evaluaciones DS20 pendientes",
+            visible: canResidents,
             value: assessmentsCount,
             tone: "rose",
             onClick: assessmentsCount ? () => navigate(`/residents/${overdueAssessments[0].residente_id}`) : null,
@@ -120,6 +131,7 @@ export function CriticalAlerts({
           },
           {
             label: "Tareas vencidas",
+            visible: canResidents,
             value: careUrgent,
             tone: "amber",
             onClick: careUrgent ? () => navigate("/operacion/cuidados") : null,
@@ -127,20 +139,23 @@ export function CriticalAlerts({
           },
           {
             label: "Seguimientos pendientes",
-            value: followUps.length,
+            visible: canResidents,
+            value: visibleFollowUps.length,
             tone: "amber",
-            onClick: followUps.length ? () => navigate("/observations") : null,
-            hint: followUps.length ? "Observaciones marcadas para seguimiento" : "Al día",
+            onClick: visibleFollowUps.length ? () => navigate("/observations") : null,
+            hint: visibleFollowUps.length ? "Observaciones marcadas para seguimiento" : "Al día",
           },
           {
             label: "Documentos por vencer ≤ 7d",
+            visible: canCompliance,
             value: docs7d.length,
             tone: "amber",
-            onClick: docs7d.length ? () => navigate("/cumplimiento/seremi") : null,
+            onClick: docs7d.length ? () => navigate("/cumplimiento") : null,
             hint: docs7d.length ? "Renovar antes del vencimiento" : "Sin urgencias",
           },
           {
             label: "Ingreso DS20 incompleto",
+            visible: canResidents,
             value: ds20ResidentPending.length,
             tone: "amber",
             onClick: ds20ResidentPending.length ? () => navigate(`/residents/${ds20ResidentPending[0].residente_id}`) : null,
@@ -148,7 +163,7 @@ export function CriticalAlerts({
               ? ds20ResidentPending.slice(0, 2).map((a) => `${a.residente_nombre}`).join(" · ")
               : "Ingresos completos",
           },
-        ]
+        ].filter((chip) => chip.visible)
           // Activas primero (rojas antes que ámbar); las que están al día quedan
           // al final en gris para no competir visualmente.
           .sort((a, b) => {
@@ -212,7 +227,7 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
   } else if (followUps.length) {
     nextAction = { label: "Cerrar seguimientos", hint: `${followUps.length} observaci${followUps.length === 1 ? "ón" : "ones"} por revisar`, path: "/observations", tone: "amber" };
   } else if (expiring7) {
-    nextAction = { label: "Renovar documentos", hint: `${expiring7} vencen en 7 días o menos`, path: "/cumplimiento/seremi", tone: "amber" };
+    nextAction = { label: "Renovar documentos", hint: `${expiring7} vencen en 7 días o menos`, path: "/cumplimiento", tone: "amber" };
   } else {
     nextAction = { label: "Mantener seguimiento", hint: "Sin bloqueos urgentes; revisa el panel clínico si necesitas detalle", path: "/vital-signs", tone: "emerald" };
   }
@@ -597,7 +612,7 @@ export function ExpiringDocsCard({ items, navigate }) {
       tone="amber"
       action={items.length > 0 && (
         <button type="button"
- onClick={() => navigate("/cumplimiento/seremi")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
+ onClick={() => navigate("/cumplimiento")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
       )}
     >
       {items.length === 0 ? (
@@ -609,7 +624,7 @@ export function ExpiringDocsCard({ items, navigate }) {
             const urgent = daysLeft <= 7;
             const r = re.requisito;
             return (
-              <li key={re.id} onClick={() => navigate(`/cumplimiento/seremi/requisito/${re.id}`)}
+              <li key={re.id} onClick={() => navigate(`/cumplimiento/requisito/${re.id}`)}
                 className="bg-white rounded-xl border border-slate-100 px-3 py-2 cursor-pointer hover:bg-amber-50/50 transition-colors flex justify-between items-center gap-3"
               >
                 <div className="flex-1 min-w-0">
@@ -658,7 +673,7 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
                                               "border-rose-200 bg-rose-50";
             return (
               <button type="button"
- key={a.codigo} onClick={() => navigate(`/cumplimiento/seremi/ambito/${a.codigo}`)}
+ key={a.codigo} onClick={() => navigate("/cumplimiento")}
                 className={`text-left rounded-xl border p-2 hover:shadow-sm transition-all ${tone}`}
               >
                 <p className="text-[10px] font-mono text-slate-500">{a.codigo}</p>
@@ -671,11 +686,11 @@ export function AccreditationCard({ acreditacion, navigate, loading }) {
       )}
       <div className="flex items-center justify-between mt-4">
         <button type="button"
- onClick={() => navigate("/cumplimiento/seremi")} className="text-xs font-semibold text-teal-700 hover:underline">
+ onClick={() => navigate("/cumplimiento")} className="text-xs font-semibold text-teal-700 hover:underline">
           Abrir Carpeta SEREMI →
         </button>
         <button type="button"
- onClick={() => navigate("/cumplimiento/seremi/observaciones")} className="text-xs text-slate-500 hover:underline">
+ onClick={() => navigate("/cumplimiento/observaciones")} className="text-xs text-slate-500 hover:underline">
           Observaciones
         </button>
       </div>

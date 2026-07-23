@@ -283,7 +283,7 @@ export default function ReclamosPage() {
               onChange={fn("canal")}
               disabled={saving}
               placeholder={null}
-              options={Object.entries(RECLAMO_CANAL_LABEL).filter(([k]) => k !== "familiar_portal")}
+              options={Object.entries(RECLAMO_CANAL_LABEL)}
             />
             <TextField
               id="nr-nombre"

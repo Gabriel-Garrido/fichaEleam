@@ -9,16 +9,29 @@ describe("featureCatalog", () => {
       "residents",
       "personnel",
       "compliance",
+      "resident_payments",
     ]);
   });
 
-  it("keeps features enabled by default and honors explicit false values", () => {
-    expect(featureDefaultMap("funcionario", { personnel: false })).toEqual({
+  it("requires explicit area access for employees", () => {
+    expect(featureDefaultMap("funcionario", { residents: true, personnel: false })).toEqual({
+      dashboard: false,
+      establishment: false,
+      residents: true,
+      personnel: false,
+      compliance: false,
+      resident_payments: false,
+    });
+  });
+
+  it("keeps administrator areas enabled unless the organization disables one", () => {
+    expect(featureDefaultMap("admin_eleam", { compliance: false })).toEqual({
       dashboard: true,
       establishment: true,
       residents: true,
-      personnel: false,
-      compliance: true,
+      personnel: true,
+      compliance: false,
+      resident_payments: true,
     });
   });
 });

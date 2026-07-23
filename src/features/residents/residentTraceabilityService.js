@@ -6,7 +6,6 @@ export const TRACE_TYPE_LABEL = {
   signos: "Signos",
   observaciones: "Observaciones",
   seguimientos: "Seguimientos",
-  visitas: "Visitas",
   cama: "Cama",
   auditoria: "Registro interno",
 };
@@ -35,7 +34,6 @@ export const TRACE_TYPE_TONE = {
   signos: "violet",
   observaciones: "slate",
   seguimientos: "amber",
-  visitas: "emerald",
   cama: "indigo",
   auditoria: "rose",
 };
@@ -67,7 +65,6 @@ const TECHNICAL_ENTITY_LABEL = {
   medicamentos_administraciones: "Administración de medicamento",
   signos_vitales: "Signos vitales",
   observaciones_diarias: "Observación",
-  visitas_familiar: "Visita",
   cama_asignaciones: "Asignación de cama",
   plan_cuidado_audit: "Registro de plan de cuidado",
   medicamentos_audit: "Registro de medicamentos",

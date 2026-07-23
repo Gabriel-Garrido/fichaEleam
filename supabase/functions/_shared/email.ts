@@ -9,6 +9,7 @@ interface EmailPayload {
   // Overrides opcionales. Si no se pasan, se usan los defaults globales.
   from?: string;
   replyTo?: string;
+  attachments?: Array<{ filename: string; content: string }>;
 }
 
 export interface EmailResult {
@@ -58,6 +59,12 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
     };
     if (payload.replyTo?.trim()) {
       body.reply_to = payload.replyTo.trim();
+    }
+    if (payload.attachments?.length) {
+      body.attachments = payload.attachments.map((attachment) => ({
+        filename: attachment.filename.slice(0, 255),
+        content: attachment.content,
+      }));
     }
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -150,6 +157,44 @@ export function staffWelcomeEmail({
         El enlace es personal y caduca por seguridad. Si expira, solicita uno nuevo desde
         "¿Olvidaste tu contraseña?" en la página de inicio de sesión.
         Si no esperabas este correo, ignóralo. Para soporte: soporte@fichaeleam.cl
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export function staffPasswordRecoveryEmail({
+  nombre,
+  eleamNombre,
+  recoveryUrl,
+}: {
+  nombre: string;
+  eleamNombre: string;
+  recoveryUrl: string;
+}): string {
+  const safeNombre = escapeHtml(nombre);
+  const safeEleamNombre = escapeHtml(eleamNombre);
+  const safeRecoveryUrl = escapeHtml(recoveryUrl);
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden">
+    <div style="background:#0f766e;padding:32px 40px">
+      <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700">FichaEleam</h1>
+    </div>
+    <div style="padding:32px 40px">
+      <p style="color:#1e293b;font-size:16px;margin:0 0 8px">Hola, <strong>${safeNombre}</strong></p>
+      <p style="color:#475569;font-size:14px;margin:0 0 24px">
+        El administrador de <strong>${safeEleamNombre}</strong> solicitó restablecer la contraseña de tu cuenta.
+      </p>
+      <a href="${safeRecoveryUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px">
+        Crear una nueva contraseña
+      </a>
+      <p style="color:#94a3b8;font-size:12px;margin:24px 0 0">
+        El enlace es personal, se puede usar una sola vez y caduca por seguridad. Si no esperabas este correo, ignóralo y tu contraseña seguirá igual.
       </p>
     </div>
   </div>

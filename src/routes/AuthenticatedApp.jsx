@@ -12,11 +12,8 @@ const ResetPassword = lazy(() => import("../features/auth/ResetPassword"));
 const PaymentPage = lazy(() => import("../features/payment/PaymentPage"));
 const PaymentReturn = lazy(() => import("../features/payment/PaymentReturn"));
 const StaffDirectory = lazy(() => import("../features/team/StaffDirectory"));
-const StaffRecordsPage = lazy(() => import("../features/personnel/StaffRecordsPage"));
 const ChangePasswordPage = lazy(() => import("../features/team/ChangePasswordPage"));
-const EstablishmentPage = lazy(() => import("../features/establishment/EstablishmentPage"));
 const PersonnelPage = lazy(() => import("../features/personnel/PersonnelPage"));
-const ComplianceHub = lazy(() => import("../features/compliance/ComplianceHub"));
 
 const ResidentList = lazy(() => import("../features/residents/ResidentList"));
 const ResidentForm = lazy(() => import("../features/residents/ResidentForm"));
@@ -36,9 +33,9 @@ const TurnoPrintable = lazy(() => import("../features/turnos/TurnoPrintable"));
 const CareTasksPage = lazy(() => import("../features/carePlans/CareTasksPage"));
 const EmarTurnPage = lazy(() => import("../features/emar/EmarTurnPage"));
 const StaffingPage = lazy(() => import("../features/ds20/StaffingPage"));
+const ResidentPaymentsPage = lazy(() => import("../features/residentPayments/ResidentPaymentsPage"));
 
 const AccreditationDashboard = lazy(() => import("../features/accreditation/AccreditationDashboard"));
-const AccreditationAmbito = lazy(() => import("../features/accreditation/AccreditationAmbito"));
 const AccreditationRequisito = lazy(() => import("../features/accreditation/AccreditationRequisito"));
 const AccreditationObservaciones = lazy(() => import("../features/accreditation/AccreditationObservaciones"));
 const AccreditationCarpeta = lazy(() => import("../features/accreditation/AccreditationCarpeta"));
@@ -85,14 +82,14 @@ function AuthenticatedRoutes() {
         } />
 
         <Route element={<AppShell />}>
+          <Route path="/sin-permisos" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF}><NoPermissionsPage /></ProtectedRoute>
+          } />
           <Route path="/dashboard" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="dashboard"><AdminDashboard /></ProtectedRoute>
           } />
 
           <Route path="/establecimiento" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="establishment"><EstablishmentPage /></ProtectedRoute>
-          } />
-          <Route path="/establecimiento/camas" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="establishment"><BedsPage /></ProtectedRoute>
           } />
 
@@ -100,26 +97,23 @@ function AuthenticatedRoutes() {
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="personnel"><PersonnelPage /></ProtectedRoute>
           } />
           <Route path="/personal/equipo" element={
-            <ProtectedRoute allowedRoles={ADMIN} requiredFeature="personnel"><StaffDirectory /></ProtectedRoute>
-          } />
-          <Route path="/personal/antecedentes" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="personnel"><StaffRecordsPage /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="personnel"><StaffDirectory /></ProtectedRoute>
           } />
           <Route path="/personal/dotacion" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="personnel"><StaffingPage /></ProtectedRoute>
           } />
 
           <Route path="/cumplimiento" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><ComplianceHub /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationDashboard /></ProtectedRoute>
           } />
-          <Route path="/cumplimiento/obligaciones" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><CumplimientoPage /></ProtectedRoute>
+          <Route path="/cumplimiento/protocolos" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance" requiredPermission="gestionar_cumplimiento"><CumplimientoPage /></ProtectedRoute>
           } />
           <Route path="/cumplimiento/emergencias" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><EmergenciasPage /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance" requiredAnyPermission={["gestionar_emergencias", "registrar_simulacros"]}><EmergenciasPage /></ProtectedRoute>
           } />
           <Route path="/cumplimiento/reclamos" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><ReclamosPage /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance" requiredPermission="gestionar_reclamos"><ReclamosPage /></ProtectedRoute>
           } />
 
           <Route path="/operacion/turnos" element={
@@ -142,55 +136,53 @@ function AuthenticatedRoutes() {
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ResidentList /></ProtectedRoute>
           } />
           <Route path="/residents/new" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ResidentForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="crear_residentes"><ResidentForm /></ProtectedRoute>
           } />
           <Route path="/residents/:id" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ResidentDetails /></ProtectedRoute>
           } />
           <Route path="/residents/:id/edit" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ResidentForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="editar_residentes"><ResidentForm /></ProtectedRoute>
+          } />
+
+          <Route path="/cobranza" element={
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="resident_payments" requiredPermission="ver_pagos_residentes" allowSuperadmin={false}><ResidentPaymentsPage /></ProtectedRoute>
           } />
 
           <Route path="/vital-signs" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><VitalSignsList /></ProtectedRoute>
           } />
           <Route path="/vital-signs/new" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><VitalSignsForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="crear_signos_vitales"><VitalSignsForm /></ProtectedRoute>
           } />
 
           <Route path="/observations" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ObservationList /></ProtectedRoute>
           } />
           <Route path="/observations/new" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ObservationForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="crear_observaciones"><ObservationForm /></ProtectedRoute>
           } />
 
           <Route path="/eventos-adversos" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><AdverseEventsList /></ProtectedRoute>
           } />
           <Route path="/eventos-adversos/nuevo" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><AdverseEventForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="crear_eventos_adversos"><AdverseEventForm /></ProtectedRoute>
           } />
           <Route path="/eventos-adversos/:id" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><AdverseEventDetail /></ProtectedRoute>
           } />
           <Route path="/eventos-adversos/:id/edit" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><AdverseEventForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="editar_eventos_adversos"><AdverseEventForm /></ProtectedRoute>
           } />
 
-          <Route path="/cumplimiento/seremi" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationDashboard /></ProtectedRoute>
-          } />
-          <Route path="/cumplimiento/seremi/ambito/:codigo" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationAmbito /></ProtectedRoute>
-          } />
-          <Route path="/cumplimiento/seremi/requisito/:id" element={
+          <Route path="/cumplimiento/requisito/:id" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationRequisito /></ProtectedRoute>
           } />
-          <Route path="/cumplimiento/seremi/observaciones" element={
+          <Route path="/cumplimiento/observaciones" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationObservaciones /></ProtectedRoute>
           } />
-          <Route path="/cumplimiento/seremi/carpeta" element={
+          <Route path="/cumplimiento/reporte" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="compliance"><AccreditationCarpeta /></ProtectedRoute>
           } />
 
@@ -207,6 +199,19 @@ function AuthenticatedRoutes() {
         <Route path="*" element={<Navigate to={fallbackPath} replace />} />
       </Routes>
     </Suspense>
+  );
+}
+
+function NoPermissionsPage() {
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-16 text-center">
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <h1 className="text-2xl font-semibold text-slate-950">Aún no tienes áreas asignadas</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Tu cuenta está activa, pero el administrador todavía no ha definido qué puedes ver o modificar.
+        </p>
+      </div>
+    </main>
   );
 }
 

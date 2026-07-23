@@ -1,27 +1,11 @@
 import React, { createContext, useState, useEffect, useContext, useCallback, useMemo, useRef } from "react";
 import { supabase, isSupabaseConfigured } from "../services/supabaseConfig";
 import Loading from "../components/Loading";
-import { computeCanFeature } from "./featureAccess";
+import { computeCanFeature, resolveFeatureHomePath } from "./featureAccess";
+import { FEATURE_CATALOG } from "../features/permissions/featureCatalog";
 
 const AuthContext = createContext();
 
-// Permisos que deben negar acceso por defecto cuando no hay row en funcionario_permisos.
-// Coincide con los campos que tienen DEFAULT FALSE en BD.
-const FAIL_CLOSED_PERMS = new Set([
-  "eliminar_residentes",
-  "eliminar_signos_vitales",
-  "eliminar_observaciones",
-  "archivar_acreditacion",
-  "validar_medicamentos_controlados",
-  "ajustar_stock_medicamentos",
-  "crear_indicaciones_medicamentos",
-  "editar_indicaciones_medicamentos",
-  "editar_indicaciones_cuidado",
-  "cerrar_eventos_adversos",
-  "editar_inventario_bienes",
-  "gestionar_emergencias",
-  "gestionar_cumplimiento",
-]);
 const AUTH_NOTICE_STORAGE_KEY = "fichaeleam_auth_notice";
 
 function takeStoredAuthNotice() {
@@ -163,8 +147,8 @@ export function AuthProvider({ children }) {
         setPermisos(null);
       }
 
-      // Permisos por feature: controlan sidebar y acceso directo a rutas.
-      // Una fila ausente significa feature habilitada por defecto.
+      // Permisos por área: controlan menú, enlaces, rutas y RLS. Para un
+      // funcionario cada área debe tener una fila explícita habilitada.
       try {
         if (data.eleam_id && data.rol !== "superadmin") {
           const profileFeatureQuery = data.rol === "funcionario"
@@ -186,9 +170,18 @@ export function AuthProvider({ children }) {
           if (eleamFeatures.error) throw eleamFeatures.error;
           if (profileFeatures.error) throw profileFeatures.error;
 
-          const featureMap = {};
-          for (const row of eleamFeatures.data ?? []) featureMap[row.feature_id] = row.enabled !== false;
-          for (const row of profileFeatures.data ?? []) featureMap[row.feature_id] = row.enabled !== false;
+          const eleamMap = Object.fromEntries(
+            (eleamFeatures.data ?? []).map((row) => [row.feature_id, row.enabled !== false]),
+          );
+          const featureMap = data.rol === "funcionario"
+            ? Object.fromEntries(FEATURE_CATALOG.map((feature) => [feature.id, false]))
+            : { ...eleamMap };
+          for (const row of profileFeatures.data ?? []) {
+            featureMap[row.feature_id] = row.enabled === true;
+          }
+          for (const [featureId, enabled] of Object.entries(eleamMap)) {
+            if (!enabled) featureMap[featureId] = false;
+          }
           setFeaturePermissions(featureMap);
         } else {
           setFeaturePermissions({});
@@ -298,9 +291,7 @@ export function AuthProvider({ children }) {
   const can = useCallback((perm) => {
     if (isSuperadmin || isAdminEleam) return true;
     if (!isFuncionario) return false;
-    if (!permisos) {
-      return !FAIL_CLOSED_PERMS.has(perm);
-    }
+    if (!permisos) return false;
     return permisos[perm] === true;
   }, [isSuperadmin, isAdminEleam, isFuncionario, permisos]);
 
@@ -310,10 +301,12 @@ export function AuthProvider({ children }) {
     (featureId) => computeCanFeature({
       featureId,
       isSuperadmin,
+      isAdminEleam,
+      isFuncionario,
       featurePermissions,
       featurePermissionsError,
     }),
-    [featurePermissions, featurePermissionsError, isSuperadmin],
+    [featurePermissions, featurePermissionsError, isAdminEleam, isFuncionario, isSuperadmin],
   );
 
   const refetchProfile = useCallback(() => {
@@ -328,7 +321,7 @@ export function AuthProvider({ children }) {
   let homePath = "/";
   if (user) {
     if (isSuperadmin)            homePath = profile?.eleam_id ? "/dashboard" : "/superadmin";
-    else if (pagoActivo)         homePath = "/dashboard";
+    else if (pagoActivo) homePath = resolveFeatureHomePath(canFeature);
     else                         homePath = "/pago?sinAcceso=1";
   }
 

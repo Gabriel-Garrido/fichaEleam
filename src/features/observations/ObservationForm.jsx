@@ -164,7 +164,7 @@ function ObservationForm() {
           <Notice
             tone="amber"
             title="No hay residentes activos para registrar observaciones"
-            action={(
+            action={can("crear_residentes") ? (
               <Button
                 type="button"
                 onClick={() => navigate("/residents/new")}
@@ -172,7 +172,7 @@ function ObservationForm() {
               >
                 Agregar residente
               </Button>
-            )}
+            ) : null}
           >
             Primero agrega un residente activo para asociar el registro de turno.
           </Notice>

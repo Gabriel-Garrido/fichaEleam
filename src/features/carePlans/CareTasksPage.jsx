@@ -12,9 +12,10 @@ import {
   OMISSION_REASONS as CARE_OMISSION_REASONS,
   completeCareTask,
   currentTurno,
+  listMyShiftAssignments,
   listCareTasks,
   nextFollowUpSlot,
-  rescheduleCareTask,
+  preferredAssignedTurno,
   todayIso,
 } from "./carePlansService";
 import {
@@ -26,15 +27,13 @@ import {
 } from "../emar/emarService";
 import { getStockLotStatus } from "../emar/emarUi";
 import {
-  PRIORITY_LABEL,
-  PRIORITY_TONE,
   SEGUIMIENTO_TIPO_LABEL,
   VITALS_TURN_HOUR,
   buildTaskMetrics,
-  getTurnFocus,
   getTaskProgress,
   matchesFilter,
   normalizeTaskView,
+  matchesTaskSearch,
   normalizeCareTask,
   normalizeMedication,
   normalizeSeguimiento,
@@ -77,13 +76,6 @@ const STATUS_TONE = {
   cancelado: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
-const FOCUS_TONE = {
-  teal: "border-teal-200 bg-teal-50 text-teal-900",
-  emerald: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  rose: "border-rose-200 bg-rose-50 text-rose-900",
-  sky: "border-sky-200 bg-sky-50 text-sky-900",
-};
-
 const TASK_VIEWS = [
   ["pendientes", "Por hacer"],
   ["cerradas", "Hechas"],
@@ -115,10 +107,10 @@ export default function CareTasksPage() {
   const [error, setError] = useState("");
   const [lastLoaded, setLastLoaded] = useState(null);
   const [careModal, setCareModal] = useState(null);
-  const [rescheduleModal, setRescheduleModal] = useState(null);
   const [medModal, setMedModal] = useState(null);
   const [vitalsModal, setVitalsModal] = useState(null);
   const [seguimientoModal, setSeguimientoModal] = useState(null);
+  const [assignedTurnos, setAssignedTurnos] = useState([]);
 
   const canComplete = can("completar_tareas_cuidado");
   const canAdminister = can("administrar_medicamentos");
@@ -126,6 +118,29 @@ export default function CareTasksPage() {
   const canCreateVitals = can("crear_signos_vitales");
   const canResolveSeguimiento = can("crear_observaciones");
   const currentUserId = profile?.id ?? null;
+
+  useEffect(() => {
+    let active = true;
+    async function resolveAssignedShift() {
+      if (!currentUserId) return;
+      try {
+        const assignments = await listMyShiftAssignments({ fecha, profileId: currentUserId });
+        if (!active) return;
+        const assigned = new Set(assignments.map((row) => row.turno));
+        const turnos = CARE_TURNOS.filter((item) => assigned.has(item));
+        setAssignedTurnos(turnos);
+        const preferred = preferredAssignedTurno(assignments, currentTurno());
+        if (preferred) setPageFilter("turno", preferred);
+      } catch (assignmentError) {
+        console.warn("No se pudo resolver el turno asignado:", assignmentError);
+        if (active) setAssignedTurnos([]);
+      }
+    }
+    resolveAssignedShift();
+    return () => { active = false; };
+    // El turno se resuelve una vez por usuario y fecha; después puede cambiarse manualmente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId, fecha]);
 
   const load = async () => {
     setLoading(true);
@@ -160,27 +175,14 @@ export default function CareTasksPage() {
   }, [fecha, turno]);
 
   const items = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase();
-    const matchesQuery = q
-      ? (item) => {
-          const residente = item.residente ?? item.residentes;
-          const text = [
-            residente?.nombre, residente?.apellido,
-            item.titulo, item.descripcion, item.medicamento?.nombre,
-          ].filter(Boolean).join(" ").toLowerCase();
-          return text.includes(q);
-        }
-      : () => true;
     return sortWorkItemsByUrgency(
       allItems
         .filter((item) => matchesFilter(item, view))
-        .filter(matchesQuery)
+        .filter((item) => matchesTaskSearch(item, debouncedQuery))
     );
   }, [allItems, view, debouncedQuery]);
 
   const metrics = useMemo(() => buildTaskMetrics(allItems), [allItems]);
-  const focus = useMemo(() => getTurnFocus(metrics), [metrics]);
-
   const handleCareClose = async ({ action, notas, motivo, seguimiento, seguimientoFecha, seguimientoTurno }) => {
     if (!careModal) return;
     setSaving(true);
@@ -200,31 +202,6 @@ export default function CareTasksPage() {
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo cerrar la tarea.", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCareReschedule = async ({ fecha: nextFecha, turno: nextTurno, hora, notas, seguimiento, seguimientoFecha, seguimientoTurno }) => {
-    if (!rescheduleModal) return;
-    setSaving(true);
-    try {
-      await rescheduleCareTask({
-        id: rescheduleModal.row.id,
-        fecha: nextFecha,
-        turno: nextTurno,
-        hora,
-        notas,
-        requiereSeguimiento: seguimiento,
-        seguimientoFecha,
-        seguimientoTurno,
-      });
-      toast("Tarea reprogramada.", "success");
-      setRescheduleModal(null);
-      await load();
-    } catch (err) {
-      console.error(err);
-      toast(err.message || "No se pudo reprogramar la tarea.", "error");
     } finally {
       setSaving(false);
     }
@@ -320,8 +297,8 @@ export default function CareTasksPage() {
     <PageLayout
       coachFeatureId="care-tasks"
       title="Tareas del turno"
-      eyebrow="Bandeja del turno"
-      description="Plan de cuidado y medicamentos programados, generados automáticamente por recurrencia."
+      eyebrow="Trabajo diario"
+      description="Revisa y completa en un solo lugar lo pendiente de tu turno."
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           {lastLoaded && (
@@ -345,14 +322,9 @@ export default function CareTasksPage() {
       className="space-y-5"
     >
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className={`rounded-2xl border p-4 ${FOCUS_TONE[focus.tone] ?? FOCUS_TONE.teal}`}>
-            <div className="text-xs font-semibold uppercase text-current opacity-70">Siguiente prioridad</div>
-            <div className="mt-1 text-lg font-semibold">{focus.title}</div>
-            <p className="mt-1 text-sm leading-5 opacity-80">{focus.detail}</p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0"><h2 className="text-base font-bold text-slate-900">Tu bandeja de trabajo</h2><p className="mt-1 text-xs leading-5 text-slate-500">Mostramos primero el turno que tienes asignado en Personal.</p>{assignedTurnos.length > 0 ? <div className="mt-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold capitalize text-teal-800">Tu turno: {assignedTurnos.join(" y ")}</span>{!assignedTurnos.includes(turno) && <button type="button" onClick={() => setTurno(assignedTurnos[0])} className="text-xs font-bold text-teal-700 hover:underline">Volver a mi turno</button>}</div> : <p className="mt-2 text-xs font-medium text-amber-700">No tienes un turno asignado para esta fecha. Puedes consultar cualquier turno.</p>}</div>
+          <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-md">
             <label className="text-sm font-medium text-slate-700">
               Fecha
               <input
@@ -375,7 +347,7 @@ export default function CareTasksPage() {
           </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-4 border-t border-slate-100 pt-4">
           <label htmlFor="careTasks-search" className="sr-only">Buscar residente o tarea</label>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -389,7 +361,7 @@ export default function CareTasksPage() {
               type="search"
               value={searchQuery}
               onChange={(e) => setPageFilter("q", e.target.value)}
-              placeholder="Buscar por residente, medicamento o título de tarea..."
+              placeholder="Buscar residente o tarea..."
               className="w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-300 bg-white pl-9 pr-9 py-2 text-base sm:text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             {searchQuery && (
@@ -434,8 +406,6 @@ export default function CareTasksPage() {
         <TaskMetric label="Progreso" value={`${getTaskProgress(metrics).completed}/${getTaskProgress(metrics).total}`} tone="teal" />
       </section>
 
-      <TurnProgressStrip metrics={metrics} />
-
       {error && (
         <div className="flex flex-col gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between">
           <span>{error}</span>
@@ -450,7 +420,11 @@ export default function CareTasksPage() {
         </div>
       )}
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-1 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><h2 className="text-sm font-bold text-slate-900">{view === "pendientes" ? "Pendientes del turno" : view === "cerradas" ? "Registros terminados" : "Todas las tareas"}</h2><p className="mt-0.5 text-xs text-slate-500">{searchQuery ? `Resultados para “${searchQuery}”` : "Ordenadas por urgencia y hora programada."}</p></div>
+          {!loading && <span className="text-xs font-bold text-slate-500">{items.length} {items.length === 1 ? "registro" : "registros"}</span>}
+        </div>
         {loading ? (
           <div className="space-y-3 p-4" role="status" aria-live="polite">
             <p className="text-xs font-medium text-slate-500">Cargando tareas del turno…</p>
@@ -459,10 +433,12 @@ export default function CareTasksPage() {
         ) : items.length === 0 ? (
           <div className="p-4 sm:p-6">
             <EmptyState
-              tone={view === "pendientes" && metrics.total > 0 ? "emerald" : "teal"}
-              title={view === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
+              tone={searchQuery ? "slate" : view === "pendientes" && metrics.total > 0 ? "emerald" : "teal"}
+              title={searchQuery ? "No encontramos coincidencias" : view === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
               description={
-                view === "pendientes" && metrics.total > 0
+                searchQuery
+                  ? `No hay residentes ni tareas que coincidan con “${searchQuery}” en este turno.`
+                  : view === "pendientes" && metrics.total > 0
                   ? "No quedan pendientes ni vencidas para este turno."
                   : metrics.total > 0
                     ? "El turno tiene tareas cargadas, pero ninguna coincide con el filtro seleccionado."
@@ -474,14 +450,16 @@ export default function CareTasksPage() {
                 </svg>
               }
               action={
-                metrics.total > 0 && view !== "pendientes"
+                searchQuery
+                  ? { label: "Limpiar búsqueda", onClick: () => setPageFilter("q", "") }
+                  : metrics.total > 0 && view !== "pendientes"
                   ? { label: "Ver tareas por hacer", onClick: () => setView("pendientes") }
                   : null
               }
             />
           </div>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="space-y-2 bg-slate-50/70 p-3 sm:p-4">
             {items.map((item) => (
               <WorkItemRow
                 key={item.key}
@@ -493,7 +471,6 @@ export default function CareTasksPage() {
                 canResolveSeguimiento={canResolveSeguimiento}
                 currentUserId={currentUserId}
                 onCareAction={(action) => setCareModal({ action, row: item.row })}
-                onCareReschedule={() => setRescheduleModal({ row: item.row })}
                 onMedicationAction={(action) => setMedModal({ action, row: item.row })}
                 onVitalsAction={() => setVitalsModal({ row: item.row })}
                 onSeguimientoAction={() => setSeguimientoModal({ obs: item.row })}
@@ -508,12 +485,6 @@ export default function CareTasksPage() {
         saving={saving}
         onClose={() => !saving && setCareModal(null)}
         onSubmit={handleCareClose}
-      />
-      <RescheduleCareTaskModal
-        modal={rescheduleModal}
-        saving={saving}
-        onClose={() => !saving && setRescheduleModal(null)}
-        onSubmit={handleCareReschedule}
       />
       <MedicationTaskModal
         modal={medModal}
@@ -537,36 +508,6 @@ export default function CareTasksPage() {
   );
 }
 
-function TurnProgressStrip({ metrics }) {
-  if (metrics.total === 0) return null;
-  const { completed, pct } = getTaskProgress(metrics);
-  const tone =
-    pct >= 80 ? { bar: "bg-emerald-500", pill: "bg-emerald-100 text-emerald-700" } :
-    pct >= 40 ? { bar: "bg-amber-400",   pill: "bg-amber-100 text-amber-800"    } :
-                { bar: "bg-rose-400",    pill: "bg-rose-100 text-rose-700"      };
-  return (
-    <div
-      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
-      title={`${completed} de ${metrics.total} tareas completadas en el turno`}
-    >
-      <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Progreso del turno</span>
-      <div
-        className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`${completed} de ${metrics.total} tareas completadas`}
-      >
-        <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full tabular-nums ${tone.pill}`}>
-        {completed}/{metrics.total} ({pct}%)
-      </span>
-    </div>
-  );
-}
-
 function TaskMetric({ label, value, tone }) {
   const colors = tone === "rose"
     ? "border-rose-200 bg-rose-50 text-rose-700"
@@ -576,7 +517,7 @@ function TaskMetric({ label, value, tone }) {
   return <div className={`rounded-2xl border p-3 text-center sm:p-4 ${colors}`}><p className="text-xs font-semibold">{label}</p><p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl">{value}</p></div>;
 }
 
-export function WorkItemRow({ item, canComplete, canAdminister, canValidate, canCreateVitals, canResolveSeguimiento, currentUserId, onCareAction, onCareReschedule, onMedicationAction, onVitalsAction, onSeguimientoAction }) {
+export function WorkItemRow({ item, canComplete, canAdminister, canValidate, canCreateVitals, canResolveSeguimiento, currentUserId, onCareAction, onMedicationAction, onVitalsAction, onSeguimientoAction }) {
   const isCare = item.source === "care";
   const isMed = item.source === "med";
   const isVitals = item.source === "vitals";
@@ -592,16 +533,19 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
         : "border-sky-200 bg-sky-50 text-sky-700";
 
   return (
-    <li className="p-3 sm:p-4">
+    <li className={`rounded-xl border bg-white p-3 shadow-sm sm:p-4 ${item.overdue ? "border-rose-200" : "border-slate-200"}`}>
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="w-12 shrink-0 text-center"><p className="text-base font-bold tabular-nums text-slate-900">{item.hora?.slice(0, 5) || "—"}</p><p className="mt-0.5 text-[10px] font-bold uppercase text-slate-400">Hora</p></div>
+          <div className="min-w-0 border-l border-slate-100 pl-3">
+            <p className="truncate text-sm font-bold text-slate-950">{residentName(item.resident)}</p>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{item.resident?.ubicacion_label || "Ubicación no registrada"}</p>
+            <h3 className="mt-2 min-w-0 text-sm font-semibold text-slate-800">{item.title}</h3>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${typeBadgeClass}`}>
               {item.typeLabel}
             </span>
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[item.estado] ?? STATUS_TONE.pendiente}`}>
-              {item.statusLabel}
-            </span>
+            {(!item.open || item.estado === "pendiente_validacion" || item.estado === "reprogramada") && <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[item.estado] ?? STATUS_TONE.pendiente}`}>{item.statusLabel}</span>}
             {item.overdue && (
               <span
                 className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
@@ -618,17 +562,8 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
                 Requiere doble firma
               </span>
             )}
-            {isCare && (
-              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PRIORITY_TONE[item.priority] ?? PRIORITY_TONE.media}`}>
-                {PRIORITY_LABEL[item.priority] ?? "Media"}
-              </span>
-            )}
-            <span className="text-xs font-medium text-slate-500">{item.hora?.slice(0, 5)}</span>
           </div>
-          <h3 className="mt-2 min-w-0 text-sm font-semibold text-slate-950">{item.title}</h3>
-          <p className="mt-1 text-sm text-slate-600">
-            {residentName(item.resident)}{item.meta ? ` · ${item.meta}` : ""}
-          </p>
+          {item.meta && <p className="mt-2 text-xs font-medium text-slate-600">{item.meta}</p>}
           {item.detail && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.detail}</p>}
           {isCare && item.dueWindow && item.open && (
             <p className="mt-1 text-xs text-slate-500">Ventana hasta {item.dueWindow}</p>
@@ -648,6 +583,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
             <p className="mt-1 text-xs text-sky-700">Requiere validación de un segundo usuario autorizado.</p>
           )}
           {item.row.notas && <p className="mt-1 text-xs text-slate-400">Notas: {item.row.notas}</p>}
+        </div>
         </div>
         <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:shrink-0 lg:flex-wrap lg:justify-end">
           {isVitals && item.open && canCreateVitals && (
@@ -675,13 +611,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
               >
                 Marcar hecha
               </button>
-              <details className="relative">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:min-w-[7rem]">Otra acción</summary>
-                <div className="mt-2 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 lg:absolute lg:right-0 lg:z-10 lg:min-w-40 lg:shadow-lg">
-                  <button type="button" onClick={onCareReschedule} className="min-h-11 rounded-lg bg-white px-3 text-sm font-semibold text-sky-700">Reprogramar</button>
-                  <button type="button" onClick={() => onCareAction("omitida")} className="min-h-11 rounded-lg bg-white px-3 text-sm font-semibold text-rose-700">Registrar omisión</button>
-                </div>
-              </details>
+              <button type="button" onClick={() => onCareAction("omitida")} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:min-w-[7rem]">No realizada</button>
             </>
           )}
           {isMed && item.estado === "pendiente" && canAdminister && (
@@ -694,10 +624,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
               >
                 Administrar
               </button>
-              <details>
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:min-w-[7rem]">Otra acción</summary>
-                <button type="button" onClick={() => onMedicationAction("omitido")} className="mt-2 min-h-11 w-full rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-700">Registrar omisión</button>
-              </details>
+              <button type="button" onClick={() => onMedicationAction("omitido")} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:min-w-[7rem]">No administrado</button>
             </>
           )}
           {isMed && item.estado === "pendiente_validacion" && canValidateThis && (

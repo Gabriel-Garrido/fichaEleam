@@ -8,7 +8,7 @@ const schema = readFileSync(join(cwd(), "supabase_schema.sql"), "utf8");
 describe("resident and staff schema contracts", () => {
   it("stores staff contact data on profiles and invitations", () => {
     expect(schema).toContain("telefono   text");
-    expect(schema).toContain("add column if not exists telefono text");
+    expect(schema).not.toContain("add column if not exists telefono text");
     expect(schema).toContain("nombre        text check");
     expect(schema).toContain("telefono      text check");
     expect(schema).not.toContain("parentesco    text check");
@@ -17,13 +17,13 @@ describe("resident and staff schema contracts", () => {
   it("keeps emergency contact columns out of resident creation", () => {
     const residentTable = schema.slice(
       schema.indexOf("create table if not exists public.residentes"),
-      schema.indexOf("alter table public.residentes", schema.indexOf("create table if not exists public.residentes")),
+      schema.indexOf("create table if not exists public.habitaciones"),
     );
 
     expect(residentTable).not.toContain("nombre_contacto");
     expect(residentTable).not.toContain("telefono_contacto");
     expect(residentTable).not.toContain("parentesco_contacto");
-    expect(schema).toContain("drop column if exists nombre_contacto");
+    expect(schema).not.toContain("drop column if exists nombre_contacto");
   });
 
   it("keeps Barthel and Katz only as resident cache fields", () => {

@@ -416,28 +416,37 @@ const crmProspectImportTypes = {
   notas: "text",
 };
 
-const crmRebuildOrder = [
-  "crm_email_sends",
-  "crm_campaign_members",
-  "crm_stage_history",
-  "crm_tasks",
-  "crm_interactions",
-  "crm_email_campaigns",
-  "crm_prospects",
-  "crm_prospect_lists",
+if (/drop\s+table\b/i.test(schemaNoComments)) {
+  fail("El esquema de instalación limpia no debe contener DROP TABLE ni reconstrucciones históricas.");
+}
+
+const obsoleteSchemaTokens = [
+  "familiar_residentes",
+  "visitas_familiar",
+  "get_familiar_resident_snapshot",
+  "my_familiar_residente_ids",
+  "familiar_can_view_residente",
+  "familiar_can_view_cama",
+  "familiar_can_view_habitacion",
+  "visita_familiar_origen",
+  "familiar_portal",
 ];
-let crmDropOffset = -1;
-for (const table of crmRebuildOrder) {
-  const dropPattern = new RegExp(`drop\\s+table\\s+if\\s+exists\\s+public\\.${escapeRegExp(table)}\\s+cascade\\s*;`, "i");
-  const match = schemaNoComments.match(dropPattern);
-  if (!match || match.index == null) {
-    fail(`supabase_schema.sql debe reconstruir public.${table} antes de crear el contrato CRM definitivo.`);
-    continue;
+
+for (const token of obsoleteSchemaTokens) {
+  if (new RegExp(`\\b${escapeRegExp(token)}\\b`, "i").test(schemaNoComments)) {
+    fail(`El esquema conserva el objeto obsoleto ${token}.`);
   }
-  if (match.index <= crmDropOffset) {
-    fail(`El drop de public.${table} debe respetar el orden de dependencias CRM.`);
-  }
-  crmDropOffset = match.index;
+}
+
+const functionDefinitions = [...schemaNoComments.matchAll(
+  /create\s+(?:or\s+replace\s+)?function\s+public\.([a-zA-Z0-9_]+)\s*\(/gi,
+)];
+const functionDefinitionCount = new Map();
+for (const match of functionDefinitions) {
+  functionDefinitionCount.set(match[1], (functionDefinitionCount.get(match[1]) ?? 0) + 1);
+}
+for (const [name, count] of functionDefinitionCount) {
+  if (count > 1) fail(`public.${name} se define ${count} veces; el esquema limpio exige una sola definición final.`);
 }
 
 for (const [column, expectedType] of Object.entries(crmProspectImportTypes)) {
@@ -506,6 +515,9 @@ for (const match of funcionarioCanMatches) {
 if (funcionarioCanMatches.length === 0) {
   fail("No se encontró public.funcionario_can en supabase_schema.sql.");
 }
+if (funcionarioCanMatches.length > 1) {
+  fail("public.funcionario_can debe tener una única definición consolidada.");
+}
 
 const frontendPermKeys = new Set();
 for (const entry of sourceEntries) {
@@ -513,7 +525,7 @@ for (const entry of sourceEntries) {
   for (const match of entry.text.matchAll(/["']([a-z]+_[a-z0-9_]+)["']/g)) {
     const key = match[1];
     if (
-      /^(crear|editar|eliminar|completar|administrar|validar|ajustar|subir|archivar|registrar|asignar|aplicar|cerrar|gestionar)_/.test(key)
+      /^(crear|editar|eliminar|completar|administrar|validar|ajustar|subir|archivar|registrar|asignar|aplicar|cerrar|gestionar|ver|enviar|anular)_/.test(key)
     ) {
       frontendPermKeys.add(key);
     }
@@ -561,9 +573,7 @@ const ds20PolicyContracts = [
   ["escenarios_emergencia", "gestionar_emergencias"],
   ["simulacros", "registrar_simulacros"],
   ["reclamos_sugerencias", "gestionar_reclamos"],
-  ["transitorio_brechas", "gestionar_cumplimiento"],
   ["protocolos_eleam", "gestionar_cumplimiento"],
-  ["reportes_senama", "gestionar_cumplimiento"],
 ];
 
 for (const [table, permission] of ds20PolicyContracts) {
@@ -575,6 +585,55 @@ for (const [table, permission] of ds20PolicyContracts) {
   if (!policyPattern.test(schemaNoComments)) {
     fail(`public.${table} debe proteger escritura con public.funcionario_can('${permission}').`);
   }
+}
+
+// Un permiso de acción nunca debe abrir un área por accidente y una petición
+// directa a Supabase tampoco debe saltarse la navegación protegida.
+if (!/return\s+coalesce\(v_profile_enabled,\s*false\)/i.test(schemaNoComments)) {
+  fail("can_access_feature debe denegar a funcionarios cuando no existe una autorización explícita para el área.");
+}
+
+if (!/v_feature_id\s*:=\s*case[\s\S]*?not\s+public\.can_access_feature\(v_feature_id\)/i.test(schemaNoComments)) {
+  fail("funcionario_can debe comprobar el área correspondiente antes del permiso de acción.");
+}
+
+const featureTableGates = {
+  establishment: ["habitaciones", "camas", "cama_asignaciones", "camas_audit", "inventario_bienes"],
+  residents: [
+    "residentes", "signos_vitales", "observaciones_diarias", "evaluaciones_clinicas",
+    "resident_consents", "health_centers", "resident_health_network", "health_controls",
+    "turno_entregas", "eventos_adversos", "eventos_adversos_acciones", "eventos_adversos_audit",
+    "planes_cuidado", "plan_cuidado_actividades", "plan_cuidado_horarios", "tareas_cuidado",
+    "plan_cuidado_audit", "medicamentos_indicaciones", "medicamentos_horarios",
+    "medicamentos_stock_lotes", "medicamentos_administraciones", "medicamentos_stock_movimientos",
+    "medicamentos_conciliaciones", "medicamentos_audit", "persona_significativa", "actividades_sociales",
+  ],
+  personnel: ["staff_members", "staff_competencies", "staff_training_records", "staff_shift_assignments"],
+  resident_payments: [
+    "resident_payment_contacts", "resident_billing_profiles", "resident_charges", "resident_payments",
+    "resident_payment_deliveries", "resident_payment_audit",
+  ],
+  compliance: [
+    "acred_requisitos_eleam", "acred_documentos", "acred_observaciones", "acred_audit",
+    "protocolos_eleam", "plan_emergencias", "escenarios_emergencia", "simulacros", "reclamos_sugerencias",
+  ],
+};
+
+if (!/create\s+policy\s+feature_access_gate[\s\S]*?as\s+restrictive[\s\S]*?can_access_feature/i.test(schemaNoComments)) {
+  fail("El esquema debe crear una política RLS restrictiva y transversal para las áreas funcionales.");
+}
+
+for (const [feature, tables] of Object.entries(featureTableGates)) {
+  for (const table of tables) {
+    const gateTuple = new RegExp(`\\(\\s*'${escapeRegExp(table)}'\\s*,\\s*'${escapeRegExp(feature)}'\\s*\\)`, "i");
+    if (!gateTuple.test(schemaNoComments)) {
+      fail(`public.${table} debe quedar detrás de la puerta RLS del área ${feature}.`);
+    }
+  }
+}
+
+if (!/bucket_id\s*=\s*'documentos-eleam'[\s\S]*?can_access_feature\('residents'\)/i.test(schemaNoComments)) {
+  fail("El bucket documentos-eleam debe exigir acceso al área residents.");
 }
 
 const allowedSupabaseAccess = (relativePath) => (

@@ -159,13 +159,21 @@ export async function getRequisitosEleam() {
         obligatorio, permite_no_aplica, requiere_vencimiento,
         vigencia_dias_sugerida, norma_codigo, articulo_ref, fuente_url,
         criticidad, tipo_evidencia, origen_evidencia, requisito_operacional, orden,
-        ambito:acred_ambitos!inner(id, codigo, nombre, icono, norma_codigo, articulo_ref, fuente_url, orden)
+        ambito:acred_ambitos!inner(id, codigo, nombre, descripcion, icono, norma_codigo, articulo_ref, fuente_url, orden)
       ),
       responsable:profiles!acred_requisitos_eleam_responsable_id_fkey(id, nombre, email, rol),
       documentos:acred_documentos!acred_documentos_requisito_eleam_id_fkey(id, vigente, fecha_vencimiento)
     `)
     .eq("eleam_id", eleamId)
     .order("creado_en", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Calcula cobertura directamente desde los registros operativos. El servidor
+// decide qué métricas pueden completar un requisito y cuáles son solo apoyo.
+export async function getOperationalEvidence() {
+  const { data, error } = await supabase.rpc("ds20_operational_evidence_summary");
   if (error) throw error;
   return data ?? [];
 }
@@ -185,7 +193,7 @@ export async function getRequisitoEleam(reId) {
         obligatorio, permite_no_aplica, requiere_vencimiento,
         vigencia_dias_sugerida, norma_codigo, articulo_ref, fuente_url,
         criticidad, tipo_evidencia, origen_evidencia, requisito_operacional, orden,
-        ambito:acred_ambitos!inner(id, codigo, nombre, icono, norma_codigo, articulo_ref, fuente_url, orden)
+        ambito:acred_ambitos!inner(id, codigo, nombre, descripcion, icono, norma_codigo, articulo_ref, fuente_url, orden)
       ),
       responsable:profiles!acred_requisitos_eleam_responsable_id_fkey(id, nombre, email, rol)
     `)

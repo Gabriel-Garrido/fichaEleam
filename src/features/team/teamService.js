@@ -82,3 +82,83 @@ export async function updateFuncionarioPermisos(profileId, permisos) {
     .upsert({ profile_id: profileId, ...permisos, actualizado_en: new Date().toISOString() });
   if (error) throw error;
 }
+
+export async function updateStaffUser(profileId, details) {
+  const sb = ensureSupabase();
+  const { data, error } = await sb.functions.invoke("update-staff-user", {
+    body: { action: "update", profile_id: profileId, ...details },
+  });
+  if (error) await throwEdgeFunctionError(error, "No se pudieron guardar los datos");
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function sendStaffPasswordRecovery(profileId) {
+  const sb = ensureSupabase();
+  const { data, error } = await sb.functions.invoke("update-staff-user", {
+    body: { action: "reset_password", profile_id: profileId },
+  });
+  if (error) await throwEdgeFunctionError(error, "No se pudo enviar el correo de recuperación");
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function getProfileFeaturePermissions(profileId) {
+  const sb = ensureSupabase();
+  const { data, error } = await sb
+    .from("profile_feature_permissions")
+    .select("feature_id, enabled")
+    .eq("profile_id", profileId);
+  if (error) throw error;
+  return Object.fromEntries((data ?? []).map((row) => [row.feature_id, row.enabled !== false]));
+}
+
+export async function updateProfileFeaturePermissions(profileId, permissions) {
+  const sb = ensureSupabase();
+  const rows = Object.entries(permissions).map(([feature_id, enabled]) => ({
+    profile_id: profileId,
+    feature_id,
+    enabled: enabled === true,
+    actualizado_en: new Date().toISOString(),
+  }));
+  if (rows.length) {
+    const { error } = await sb
+      .from("profile_feature_permissions")
+      .upsert(rows, { onConflict: "profile_id,feature_id" });
+    if (error) throw error;
+  }
+}
+
+export async function saveStaffMemberDetails(profileId, { nombre, email, telefono, cargo, tipo_dotacion }) {
+  const sb = ensureSupabase();
+  const { data: profile, error: profileError } = await sb
+    .from("profiles")
+    .select("eleam_id")
+    .eq("id", profileId)
+    .single();
+  if (profileError) throw profileError;
+
+  const row = {
+    eleam_id: profile.eleam_id,
+    profile_id: profileId,
+    nombre,
+    email,
+    telefono: telefono || null,
+    cargo: cargo || null,
+    tipo_dotacion,
+    activo: true,
+    actualizado_en: new Date().toISOString(),
+  };
+  const { data: existing, error: lookupError } = await sb
+    .from("staff_members")
+    .select("id")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+
+  const query = existing
+    ? sb.from("staff_members").update(row).eq("id", existing.id)
+    : sb.from("staff_members").insert(row);
+  const { error } = await query;
+  if (error) throw error;
+}

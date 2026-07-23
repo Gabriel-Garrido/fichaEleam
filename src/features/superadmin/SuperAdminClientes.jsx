@@ -30,7 +30,6 @@ export default function SuperAdminClientes() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [eleams, setEleams] = useState([]);
-  const [tasks, setTasks] = useState([]);
   // Mapeo bidireccional URL ↔ filtros (claves cortas en URL, mismo shape para EleamFilters).
   const [urlFilters, setUrlFilter] = useFilterParams({
     schema: { search: "string", crmEstado: "string", plan: "string", riesgo: "string", pagoActivo: "string", uso: "string" },
@@ -75,15 +74,12 @@ export default function SuperAdminClientes() {
     setError("");
     setUsageError("");
     try {
-      const [eleamsResult, tasksResult, usageResult] = await Promise.allSettled([
+      const [eleamsResult, usageResult] = await Promise.allSettled([
         getAllEleams(),
-        getCrmTasks({ soloPendientes: false, limit: 200 }),
         getPortfolioUsage(usageDays),
       ]);
       if (eleamsResult.status === "rejected") throw eleamsResult.reason;
-      if (tasksResult.status === "rejected") throw tasksResult.reason;
       setEleams(eleamsResult.value);
-      setTasks(tasksResult.value);
       if (usageResult.status === "fulfilled") {
         setPortfolioUsage(usageResult.value);
       } else {
@@ -150,16 +146,6 @@ export default function SuperAdminClientes() {
     });
   }, [eleams, filters, portfolioUsage]);
 
-  const taskOverdueByEleam = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const out = {};
-    for (const task of tasks) {
-      if (!task.eleam_id || task.estado === "completada" || task.estado === "cancelada" || !task.fecha_vencimiento) continue;
-      if (task.fecha_vencimiento < todayStr) out[task.eleam_id] = (out[task.eleam_id] ?? 0) + 1;
-    }
-    return out;
-  }, [tasks]);
-
   const openDrawer = async (eleam) => {
     setDrawerEleam(eleam.id);
     if (byEleam[eleam.id]) return;
@@ -172,6 +158,10 @@ export default function SuperAdminClientes() {
         getCrmTasks({ eleamId: eleam.id, limit: 100 }),
       ]);
       setByEleam((prev) => ({ ...prev, [eleam.id]: { detail, payments, interactions, tasks: eleamTasks } }));
+    } catch (err) {
+      console.error(err);
+      toast("No pudimos cargar el detalle de este ELEAM.", "error");
+      setDrawerEleam(null);
     } finally {
       setLoadingEleam(false);
     }
@@ -191,9 +181,7 @@ export default function SuperAdminClientes() {
   };
 
   const handleCreateTask = async (payload) => {
-    const created = await createCrmTask(payload);
-    setTasks((prev) => [created, ...prev]);
-    return created;
+    return createCrmTask(payload);
   };
 
   const handleResendDemoAccess = async (eleam) => {
@@ -224,8 +212,8 @@ export default function SuperAdminClientes() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <SuperAdminPageHeader
-        title="Clientes"
-        description="Cartera ELEAM, salud comercial, tareas pendientes e historial por establecimiento."
+        title="Uso por ELEAM"
+        description="Compara el uso de la app en todos los establecimientos. Selecciona uno para ver sus usuarios y actividad en detalle."
         actions={
           <>
             <button type="button" onClick={refresh} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
@@ -248,16 +236,11 @@ export default function SuperAdminClientes() {
         loading={usageLoading}
         error={usageError}
         onDaysChange={handleUsageDays}
-        onOpen={openDrawer}
-        onResendDemoAccess={handleResendDemoAccess}
-        resendingDemoId={resendingDemoId}
       />
       <div className="mt-4">
         <EleamTable
           eleams={filtered}
-          onEdit={setEditEleam}
           onOpen={openDrawer}
-          taskCountByEleam={taskOverdueByEleam}
           portfolioUsage={portfolioUsage}
           usageDays={usageDays}
           onResendDemoAccess={handleResendDemoAccess}
@@ -276,6 +259,7 @@ export default function SuperAdminClientes() {
         onCreateTask={handleCreateTask}
         onCompleteTask={completeCrmTask}
         onCreateInteraction={createEleamInteraction}
+        usageDays={usageDays}
       />
     </div>
   );

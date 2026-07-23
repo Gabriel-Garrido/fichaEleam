@@ -14,6 +14,8 @@ La navegación principal contiene solamente:
 4. **Personal**: equipo, competencias, capacitación, turnos y dotación.
 5. **Cumplimiento SEREMI**: requisitos, evidencias, protocolos, emergencias, reclamos y carpeta exportable.
 
+Además existe **Cobranza**, un módulo administrativo opcional para mensualidades y otros cobros de residentes. Solo aparece a administradores y funcionarios autorizados y no forma parte de los pagos comerciales de la plataforma.
+
 El portal familiar, el registro de visitas y el onboarding modal anterior no forman parte de la experiencia vigente. La comunicación con familiares o persona significativa se conserva únicamente donde representa un antecedente clínico o reglamentario, por ejemplo en consentimientos, reclamos y eventos adversos.
 
 ## Tecnologías
@@ -74,6 +76,17 @@ La fuente canónica es [`supabase_schema.sql`](./supabase_schema.sql). Para esta
 
 No se incluye una migración de datos heredados porque el producto se está reiniciando desde cero.
 
+El esquema canónico está consolidado: no contiene reconstrucciones `DROP TABLE`, migraciones históricas ni definiciones sucesivas de una misma función. Actualmente crea 68 tablas públicas con RLS y 60 funciones/RPC. El portal familiar y el registro de visitas fueron retirados también del modelo de datos; los antecedentes de familiares y personas significativas exigibles se registran en los módulos clínicos y de cumplimiento correspondientes.
+
+Antes de desplegar cambios de base de datos ejecuta:
+
+```bash
+npm run test:contracts
+npm run verify
+```
+
+El primer comando contrasta tablas, columnas, RPC, permisos, RLS, Storage y referencias del frontend, y además impide reintroducir objetos obsoletos o funciones duplicadas. El detalle de la consolidación está en [`AUDITORIA_ESQUEMA_SUPABASE_2026-07-21.md`](./AUDITORIA_ESQUEMA_SUPABASE_2026-07-21.md).
+
 ## Roles
 
 | Rol | Propósito | Inicio |
@@ -103,18 +116,18 @@ El acceso operativo requiere:
 | Ruta | Contenido |
 |---|---|
 | `/dashboard` | Inicio y prioridades |
-| `/establecimiento` | Centro del establecimiento |
-| `/establecimiento/camas` | Habitaciones, camas y asignaciones |
+| `/establecimiento` | Habitaciones, camas, ocupación y asignaciones |
 | `/residents` | Lista e importación de residentes |
 | `/residents/new` | Ingreso simplificado |
 | `/residents/:id` | Ficha integral del residente |
 | `/personal` | Centro de personal |
-| `/personal/equipo` | Funcionarios; solo administrador |
+| `/personal/equipo` | Equipo, antecedentes SEREMI y permisos; funcionarios en lectura y administración exclusiva del administrador |
+| `/cobranza` | Mensualidades, otros cobros, abonos y comprobantes de residentes |
 | `/personal/dotacion` | Turnos y cumplimiento de dotación |
-| `/cumplimiento` | Centro de cumplimiento |
-| `/cumplimiento/seremi` | Matriz de requisitos y evidencia |
-| `/cumplimiento/seremi/carpeta` | Carpeta imprimible/exportable |
-| `/cumplimiento/obligaciones` | Protocolos, brechas y reportes |
+| `/cumplimiento` | Ámbitos, requisitos y evidencia en una sola vista |
+| `/cumplimiento/reporte` | Reporte imprimible/exportable |
+| `/cumplimiento/requisito/:id` | Detalle y respaldo de un requisito |
+| `/cumplimiento/protocolos` | Protocolos obligatorios de ingreso/egreso, urgencias y fallecimiento |
 | `/cumplimiento/emergencias` | Plan, escenarios y simulacros |
 | `/cumplimiento/reclamos` | Reclamos y sugerencias |
 | `/operacion/cuidados` | Tareas de cuidado del turno |
@@ -127,12 +140,14 @@ Signos vitales, observaciones y eventos adversos se consideran flujos internos d
 
 | Ruta | Contenido |
 |---|---|
-| `/superadmin` | Resumen de cartera |
-| `/superadmin/clientes` | ELEAM y suscripciones |
+| `/superadmin` | Resumen general de uso y operación de la plataforma |
+| `/superadmin/clientes` | Uso general por ELEAM y detalle por usuario |
 | `/superadmin/leads` | CRM y solicitudes de demo |
 | `/superadmin/pagos` | Pagos registrados |
 | `/superadmin/tareas` | Tareas comerciales |
 | `/superadmin/blog` | Gestión editorial |
+
+La vista **Uso por ELEAM** entrega una comparación responsive de todos los establecimientos para 7, 30 o 90 días. Resume usuarios activos, registros operativos, áreas utilizadas y última actividad. Al seleccionar un ELEAM, el panel lateral carga automáticamente el detalle de uso por usuario; la suscripción, contacto, pagos y seguimiento comercial permanecen disponibles en secciones secundarias. Los conteos provienen de agregaciones autorizadas para `superadmin` y no exponen el contenido clínico de los registros.
 
 ### Sitio público
 
@@ -158,9 +173,16 @@ Hay dos niveles complementarios:
    - `residents`
    - `personnel`
    - `compliance`
+   - `resident_payments`
 2. **Acciones sensibles** mediante `funcionario_can`, por ejemplo crear residentes, registrar signos vitales, administrar medicamentos o modificar evidencia.
 
 El catálogo frontend está en `src/features/permissions/featureCatalog.js`. Las reglas de base de datos están en `funcionario_permisos`, `eleam_feature_permissions`, `profile_feature_permissions`, RLS y funciones `security definer`.
+
+Para funcionarios, los permisos de área son **explícitos y cerrados por defecto**: si no existe una autorización habilitada, el área no aparece en la navegación, no se ofrecen enlaces ni tarjetas relacionadas, sus rutas rechazan el acceso directo y Supabase bloquea sus tablas y archivos con RLS. Si ninguna área está habilitada, la sesión abre `/sin-permisos` con una explicación clara, sin redirigir a una pantalla no autorizada.
+
+El editor de permisos mantiene consistencia automáticamente: habilitar una acción habilita su área; deshabilitar el área elimina sus acciones asociadas. Los permisos de acción también se validan en las rutas sensibles y nuevamente en PostgreSQL/RPC. Solo `admin_eleam` puede cambiar permisos de funcionarios. Los administradores mantienen las áreas disponibles salvo que una configuración del establecimiento las deshabilite expresamente; `superadmin` conserva el acceso global de plataforma.
+
+La feature `resident_payments` es una excepción intencional al acceso global de plataforma: corresponde a la administración interna de cada ELEAM y permanece separada de `/superadmin/pagos`. Los funcionarios necesitan autorización explícita para verla y permisos independientes para registrar, enviar o anular. La función `administrativo` propone lectura, registro y envío; la anulación queda desactivada por defecto.
 
 ## Flujos principales
 
@@ -190,18 +212,22 @@ Las indicaciones contienen dosis, vía, horarios y reglas de stock. Los medicame
 
 La evidencia puede ser documental u operacional. La carpeta SEREMI reúne documentos cargados y registros producidos en Residentes, Personal y Establecimiento. Los módulos de emergencias, reclamos, protocolos y reportes complementan la matriz DS20.
 
+El RPC `ds20_operational_evidence_summary()` calcula automáticamente verificadores que sí pueden demostrarse con datos estructurados: consentimientos firmados, evaluaciones geriátricas vigentes, red de salud con controles, 22 horas anuales de capacitación y cobertura de cuidadores/TENS para siete días. Si no existen residentes o personal, informa **Sin datos** y nunca presume cumplimiento. Los verificadores físicos o documentales incompletos —planes individuales, habitaciones, medicamentos, protocolos, emergencias y carpeta personal— muestran avance, pero requieren revisión de sus respaldos restantes.
+
 ## Edge Functions
 
 | Función | Uso |
 |---|---|
 | `create-demo-user` | Aprueba una solicitud y crea el administrador demo |
 | `create-staff-user` | Crea o invita a un funcionario |
+| `update-staff-user` | Edita datos de un funcionario y envía su recuperación de contraseña |
 | `delete-staff-user` | Elimina un funcionario desde Auth y datos asociados |
 | `mp-create-subscription` | Inicia una suscripción MercadoPago |
 | `mp-cancel-subscription` | Cancela la renovación |
 | `mp-webhook` | Procesa eventos firmados de MercadoPago |
 | `track-landing-event` | Registra analítica pública limitada |
 | `send-crm-email-campaign` | Envía campañas autorizadas |
+| `send-resident-payment-receipt` | Envía la confirmación no tributaria y el documento externo de un pago de residente |
 | `crm-unsubscribe` | Procesa la baja de correo |
 
 Despliegue de ejemplo:
@@ -217,6 +243,7 @@ npx supabase functions deploy mp-cancel-subscription
 npx supabase functions deploy mp-webhook --no-verify-jwt
 npx supabase functions deploy track-landing-event --no-verify-jwt
 npx supabase functions deploy send-crm-email-campaign
+npx supabase functions deploy send-resident-payment-receipt
 npx supabase functions deploy crm-unsubscribe --no-verify-jwt
 ```
 
@@ -232,13 +259,14 @@ El bucket `documentos-acreditacion` debe ser privado. Los archivos se organizan 
 src/
 ├── components/          componentes compartidos
 ├── context/             sesión, perfil y permisos
-├── navigation/          cinco áreas y acciones rápidas
+├── navigation/          cinco áreas operativas, módulos administrativos y acciones rápidas
 ├── routes/              rutas públicas y autenticadas
 ├── features/
 │   ├── establishment/   centro del establecimiento
 │   ├── residents/       ficha integral
 │   ├── personnel/       centro de personal
 │   ├── compliance/      centro SEREMI
+│   ├── residentPayments/ cobranza interna por ELEAM
 │   ├── beds/            habitaciones y camas
 │   ├── carePlans/       planes y tareas de cuidado
 │   ├── emar/            medicamentos y stock
@@ -286,7 +314,7 @@ npm run seo:check
 Antes de agregar una pantalla o campo:
 
 - debe resolver una obligación SEREMI o una tarea cotidiana verificable;
-- debe ubicarse dentro de una de las cinco áreas;
+- debe ubicarse dentro de una de las cinco áreas operativas o justificar explícitamente un módulo administrativo independiente;
 - no debe duplicar información que ya existe en la ficha o carpeta;
 - los campos infrecuentes deben ir en secciones opcionales;
 - una nueva acción sensible necesita permiso, validación y RLS;
@@ -299,6 +327,8 @@ Antes de agregar una pantalla o campo:
 - [`FICHA_RESIDENTE_SIMPLE.md`](./FICHA_RESIDENTE_SIMPLE.md): portada, navegación, permisos y alcance normativo de la ficha individual.
 - [`PERSONAL_TURNOS_SIMPLE.md`](./PERSONAL_TURNOS_SIMPLE.md): planta, antecedentes SEREMI, dotación semanal y entrega de turno simplificadas.
 - [`TAREAS_DIARIAS_SIMPLE.md`](./TAREAS_DIARIAS_SIMPLE.md): bandeja priorizada del turno, estados, permisos y comportamiento responsive.
+- [`COBRANZA_RESIDENTES.md`](./COBRANZA_RESIDENTES.md): mensualidades, otros cobros, abonos, documentos externos, permisos y envío de comprobantes.
+- [`AUDITORIA_COBRANZA_RESIDENTES_2026-07-22.md`](./AUDITORIA_COBRANZA_RESIDENTES_2026-07-22.md): hallazgos y correcciones de integridad, seguridad, permisos, correo y UX responsive.
 - [`CLAUDE.md`](./CLAUDE.md): guía técnica y arquitectura para agentes y mantenedores.
 - [`codex.md`](./codex.md): reglas rápidas de colaboración y cambios.
 - [`LIBRETO_VIDEO_TUTORIAL.md`](./LIBRETO_VIDEO_TUTORIAL.md): tutorial actualizado del producto.
@@ -306,3 +336,4 @@ Antes de agregar una pantalla o campo:
 - [`decreto_20_fichaeleam_actualizacion.md`](./decreto_20_fichaeleam_actualizacion.md): análisis normativo.
 - [`INFORME_AUDITORIA_DECRETO20_SEO.md`](./INFORME_AUDITORIA_DECRETO20_SEO.md): auditoría de contenido y SEO.
 - [`INFORME_AUDITORIA_TECNICA_2026-07-20.md`](./INFORME_AUDITORIA_TECNICA_2026-07-20.md): hallazgos, remediaciones, validación y riesgos técnicos.
+- [`CUMPLIMIENTO_SIMPLE.md`](./CUMPLIMIENTO_SIMPLE.md): flujo mínimo de documentos, protocolos, fiscalización y reglas de acceso.

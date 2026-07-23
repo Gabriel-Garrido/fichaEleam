@@ -7,6 +7,7 @@ export const ROLE_LABEL = {
 export const PERM_GROUPS = [
   {
     label: "Residentes",
+    featureId: "residents",
     perms: [
       { key: "crear_residentes",    label: "Crear" },
       { key: "editar_residentes",   label: "Editar" },
@@ -14,13 +15,16 @@ export const PERM_GROUPS = [
     ],
   },
   {
-    label: "Camas",
+    label: "Establecimiento",
+    featureId: "establishment",
     perms: [
       { key: "asignar_camas", label: "Asignar y liberar" },
+      { key: "editar_inventario_bienes", label: "Editar inventario de bienes" },
     ],
   },
   {
     label: "Signos Vitales",
+    featureId: "residents",
     perms: [
       { key: "crear_signos_vitales",    label: "Registrar" },
       { key: "editar_signos_vitales",   label: "Editar" },
@@ -29,6 +33,7 @@ export const PERM_GROUPS = [
   },
   {
     label: "Observaciones",
+    featureId: "residents",
     perms: [
       { key: "crear_observaciones",    label: "Registrar" },
       { key: "editar_observaciones",   label: "Editar" },
@@ -37,6 +42,7 @@ export const PERM_GROUPS = [
   },
   {
     label: "Eventos adversos",
+    featureId: "residents",
     perms: [
       { key: "crear_eventos_adversos",  label: "Registrar evento" },
       { key: "editar_eventos_adversos", label: "Editar y agregar acciones" },
@@ -45,6 +51,7 @@ export const PERM_GROUPS = [
   },
   {
     label: "Plan de cuidado",
+    featureId: "residents",
     perms: [
       { key: "crear_planes_cuidado",         label: "Crear plan" },
       { key: "editar_planes_cuidado",        label: "Editar plan" },
@@ -54,22 +61,27 @@ export const PERM_GROUPS = [
   },
   {
     label: "Evaluaciones geriátricas",
+    featureId: "residents",
     perms: [
       { key: "aplicar_evaluaciones_clinicas", label: "Aplicar Barthel, Katz, MNA, MMSE y Tinetti" },
     ],
   },
   {
-    label: "Documentos DS20",
+    label: "Cumplimiento",
+    featureId: "compliance",
     perms: [
-      { key: "editar_inventario_bienes", label: "Editar inventario de bienes" },
-      { key: "gestionar_reclamos",       label: "Gestionar reclamos y sugerencias" },
-      { key: "gestionar_emergencias",    label: "Editar plan de emergencias" },
-      { key: "registrar_simulacros",     label: "Registrar simulacros" },
-      { key: "gestionar_cumplimiento",   label: "Gestionar cumplimiento DS20 (brechas, protocolos, SENAMA)" },
+      { key: "subir_acreditacion",      label: "Subir documentos" },
+      { key: "editar_acreditacion",     label: "Revisar documentos y estados" },
+      { key: "archivar_acreditacion",   label: "Archivar documentos" },
+      { key: "gestionar_cumplimiento",  label: "Editar protocolos" },
+      { key: "gestionar_emergencias",   label: "Editar plan de emergencias" },
+      { key: "registrar_simulacros",    label: "Registrar simulacros" },
+      { key: "gestionar_reclamos",      label: "Gestionar reclamos" },
     ],
   },
   {
     label: "Medicamentos",
+    featureId: "residents",
     perms: [
       { key: "crear_indicaciones_medicamentos",  label: "Crear indicaciones" },
       { key: "editar_indicaciones_medicamentos", label: "Editar indicaciones" },
@@ -79,14 +91,46 @@ export const PERM_GROUPS = [
     ],
   },
   {
-    label: "Acreditación",
+    label: "Cobranza",
+    featureId: "resident_payments",
     perms: [
-      { key: "subir_acreditacion",    label: "Subir documentos" },
-      { key: "editar_acreditacion",   label: "Editar estado" },
-      { key: "archivar_acreditacion", label: "Archivar" },
+      { key: "ver_pagos_residentes", label: "Ver cobros e historial" },
+      { key: "registrar_pagos_residentes", label: "Crear cobros y registrar pagos" },
+      { key: "enviar_comprobantes_pagos", label: "Enviar y reenviar comprobantes" },
+      { key: "anular_pagos_residentes", label: "Anular cobros y pagos" },
     ],
   },
 ];
+
+export const FEATURE_ACTION_PERMISSIONS = Object.fromEntries(
+  ["dashboard", "establishment", "residents", "personnel", "compliance", "resident_payments"].map((featureId) => [
+    featureId,
+    PERM_GROUPS
+      .filter((group) => group.featureId === featureId)
+      .flatMap((group) => group.perms.map((permission) => permission.key)),
+  ]),
+);
+
+export function normalizePaymentAccess(areas, actions) {
+  const paymentVisible = areas.resident_payments === true && actions.ver_pagos_residentes === true;
+  return {
+    areas: { ...areas, resident_payments: paymentVisible },
+    actions: paymentVisible
+      ? actions
+      : {
+          ...actions,
+          ver_pagos_residentes: false,
+          registrar_pagos_residentes: false,
+          enviar_comprobantes_pagos: false,
+          anular_pagos_residentes: false,
+        },
+  };
+}
+
+export const PERMISSION_FEATURE = Object.fromEntries(
+  Object.entries(FEATURE_ACTION_PERMISSIONS)
+    .flatMap(([featureId, permissions]) => permissions.map((permission) => [permission, featureId])),
+);
 
 export const DEFAULT_PERMS = {
   crear_residentes: true,    editar_residentes: true,    eliminar_residentes: false,
@@ -103,6 +147,8 @@ export const DEFAULT_PERMS = {
   editar_inventario_bienes: false, gestionar_reclamos: true,
   gestionar_emergencias: false, registrar_simulacros: true,
   gestionar_cumplimiento: false,
+  ver_pagos_residentes: false, registrar_pagos_residentes: false,
+  enviar_comprobantes_pagos: false, anular_pagos_residentes: false,
 };
 
 export const PLANTILLAS_CARGO = {
@@ -185,5 +231,37 @@ export const PLANTILLAS_CARGO = {
     editar_inventario_bienes: true, gestionar_reclamos: true,
     gestionar_emergencias: true, registrar_simulacros: true,
     gestionar_cumplimiento: true,
+    ver_pagos_residentes: true, registrar_pagos_residentes: true,
+    enviar_comprobantes_pagos: true, anular_pagos_residentes: false,
   },
 };
+
+const EMPTY_PERMS = Object.fromEntries(Object.keys(DEFAULT_PERMS).map((key) => [key, false]));
+
+export const PERMISOS_POR_FUNCION = {
+  cuidador: PLANTILLAS_CARGO["Auxiliar ATD"],
+  tens: {
+    ...PLANTILLAS_CARGO["Auxiliar ATD"],
+    editar_signos_vitales: true,
+    editar_observaciones: true,
+    aplicar_evaluaciones_clinicas: true,
+  },
+  profesional: PLANTILLAS_CARGO["Kinesiólogo/a"],
+  manipulador: EMPTY_PERMS,
+  aseo: EMPTY_PERMS,
+  administrativo: PLANTILLAS_CARGO["Administrativo/a"],
+  otro: EMPTY_PERMS,
+};
+
+export function defaultPermissionsForFunction(functionId) {
+  const actions = { ...EMPTY_PERMS, ...(PERMISOS_POR_FUNCION[functionId] ?? {}) };
+  const areas = {
+    dashboard: true,
+    establishment: ["administrativo", "aseo"].includes(functionId),
+    residents: ["cuidador", "tens", "profesional"].includes(functionId),
+    personnel: true,
+    compliance: functionId === "administrativo",
+    resident_payments: functionId === "administrativo",
+  };
+  return { actions, areas };
+}

@@ -157,7 +157,7 @@ export default function AdminDashboard() {
     canUse("residents", "administrar_medicamentos") && { iconId: "meds", label: "Medicamentos", route: "/operacion/medicamentos" },
     canUse("residents", "crear_signos_vitales") && { iconId: "vitals", label: "Registrar signos vitales", route: "/vital-signs/new" },
     canUse("residents", "crear_observaciones") && { iconId: "observations", label: "Nueva observación", route: "/observations/new" },
-    rol !== "funcionario" && canUse("compliance") && { iconId: "accreditation", label: "Preparar carpeta", route: "/cumplimiento/seremi/carpeta" },
+    rol !== "funcionario" && canUse("compliance") && { iconId: "accreditation", label: "Preparar carpeta", route: "/cumplimiento/reporte" },
     rol === "funcionario" && canUse("residents") && { iconId: "residents", label: "Ver residentes", route: "/residents" },
   ].filter(Boolean);
 
@@ -207,7 +207,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <ManagementBrief
+      {canUse("residents") && <ManagementBrief
         loading={loading}
         score={management.score}
         scoreTone={management.scoreTone}
@@ -218,20 +218,20 @@ export default function AdminDashboard() {
         operational={operational}
         turno={turno}
         navigate={navigate}
-      />
+      />}
 
-      <OperationalTurnPanel
+      {canUse("residents") && <OperationalTurnPanel
         loading={loading}
         summary={operational}
         navigate={navigate}
-      />
+      />}
 
       {/* Top KPIs — orden según rol */}
       {!errors.residentStats && (
         <section className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {rol === "funcionario" ? (
             <>
-              <KpiCard
+              {canUse("residents") && <KpiCard
                 title="Alertas críticas"
                 help="Residentes con signos vitales en rango crítico en su último control. Atender primero."
                 value={loading ? "…" : clinicalSummary.critical || 0}
@@ -239,17 +239,17 @@ export default function AdminDashboard() {
                 icon="vitals"
                 tone={clinicalSummary.critical > 0 ? "rose" : clinicalSummary.warning > 0 ? "amber" : "emerald"}
                 onClick={() => navigate("/vital-signs")}
-              />
-              <KpiCard
+              />}
+              {canUse("residents") && <KpiCard
                 title="Sin control hoy"
                 help="Residentes activos sin ningún signo vital registrado durante el día de hoy."
                 value={loading ? "…" : management.stale.length}
                 sub={cobertura ? `${cobertura.hoy} de ${cobertura.total} con cobertura (${cobertura.pct}%)` : "Sin residentes activos"}
                 icon="observations"
                 tone={management.stale.length > 0 ? "amber" : "emerald"}
-                onClick={() => navigate("/vital-signs/new")}
-              />
-              <KpiCard
+                onClick={() => navigate(can("crear_signos_vitales") ? "/vital-signs/new" : "/vital-signs")}
+              />}
+              {canUse("residents") && <KpiCard
                 title="Residentes activos"
                 help="Residentes que hoy forman parte de la operación del ELEAM."
                 value={loading ? "…" : stats?.activos ?? 0}
@@ -257,29 +257,29 @@ export default function AdminDashboard() {
                 icon="residents"
                 tone="primary"
                 onClick={() => navigate("/residents")}
-              />
-              <KpiCard
+              />}
+              {canUse("establishment") && <KpiCard
                 title="Ocupación camas"
                 help="Camas operativas ocupadas o reservadas por hospitalización."
                 value={loading || errors.beds ? "…" : `${beds?.porcentajeOcupacion ?? 0}%`}
                 sub={beds ? `${beds.disponibles} disponibles · ${beds.residentesSinCama} residentes sin cama` : "Sin inventario de camas"}
                 icon="beds"
                 tone={(beds?.disponibles ?? 0) > 0 ? "emerald" : "amber"}
-                onClick={() => navigate("/establecimiento/camas")}
-              />
-              <KpiCard
+                onClick={() => navigate("/establecimiento")}
+              />}
+              {canUse("compliance") && <KpiCard
                 title="Carpeta SEREMI DS 20"
                 help="Avance de requisitos con evidencia vigente, sin contar los que no aplican."
                 value={loading ? "…" : `${acreditacion.porcentaje}%`}
                 sub={`${acreditacion.vigente} de ${acreditacion.total} requisitos vigentes${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
                 icon="accreditation"
                 tone={acreditacion.porcentaje >= 80 ? "emerald" : acreditacion.porcentaje >= 40 ? "amber" : "rose"}
-                onClick={() => navigate("/cumplimiento/seremi")}
-              />
+                onClick={() => navigate("/cumplimiento")}
+              />}
             </>
           ) : (
             <>
-              <KpiCard
+              {canUse("residents") && <KpiCard
                 title="Residentes activos"
                 help="Residentes que hoy forman parte de la operación del ELEAM. Los egresados y fallecidos quedan en historial."
                 value={loading ? "…" : stats?.activos ?? 0}
@@ -287,17 +287,17 @@ export default function AdminDashboard() {
                 icon="residents"
                 tone="primary"
                 onClick={() => navigate("/residents")}
-              />
-              <KpiCard
+              />}
+              {canUse("establishment") && <KpiCard
                 title="Ocupación camas"
                 help="Camas operativas ocupadas o reservadas por hospitalización."
                 value={loading || errors.beds ? "…" : `${beds?.porcentajeOcupacion ?? 0}%`}
                 sub={beds ? `${beds.disponibles} disponibles · ${beds.residentesSinCama} residentes sin cama` : "Sin inventario de camas"}
                 icon="beds"
                 tone={(beds?.disponibles ?? 0) > 0 ? "emerald" : "amber"}
-                onClick={() => navigate("/establecimiento/camas")}
-              />
-              <KpiCard
+                onClick={() => navigate("/establecimiento")}
+              />}
+              {canUse("residents") && <KpiCard
                 title="Estado clínico"
                 help="Cuenta residentes cuyo último control vital está fuera de rango. Entra aquí para priorizar controles."
                 value={loading ? "…" : (clinicalSummary.critical + clinicalSummary.warning) || 0}
@@ -305,25 +305,25 @@ export default function AdminDashboard() {
                 icon="vitals"
                 tone={clinicalSummary.critical > 0 ? "rose" : clinicalSummary.warning > 0 ? "amber" : "emerald"}
                 onClick={() => navigate("/vital-signs")}
-              />
-              <KpiCard
+              />}
+              {canUse("residents") && <KpiCard
                 title="Cobertura signos hoy"
                 help="Porcentaje de residentes activos con al menos un registro de signos vitales durante el día actual."
                 value={cobertura ? `${cobertura.pct}%` : "—"}
                 sub={cobertura ? `${cobertura.hoy} de ${cobertura.total} residentes` : "Sin residentes activos"}
                 icon="observations"
                 tone={!cobertura ? "slate" : cobertura.pct >= 80 ? "emerald" : cobertura.pct >= 40 ? "amber" : "rose"}
-                onClick={() => navigate("/vital-signs/new")}
-              />
-              <KpiCard
+                onClick={() => navigate(can("crear_signos_vitales") ? "/vital-signs/new" : "/vital-signs")}
+              />}
+              {canUse("compliance") && <KpiCard
                 title="Carpeta SEREMI DS 20"
                 help="Avance de requisitos con evidencia vigente, sin contar los que no aplican."
                 value={loading ? "…" : `${acreditacion.porcentaje}%`}
                 sub={`${acreditacion.vigente} de ${acreditacion.total} requisitos vigentes${acreditacion.vencidos ? ` · ${acreditacion.vencidos} vencido${acreditacion.vencidos === 1 ? "" : "s"}` : ""}`}
                 icon="accreditation"
                 tone={acreditacion.porcentaje >= 80 ? "emerald" : acreditacion.porcentaje >= 40 ? "amber" : "rose"}
-                onClick={() => navigate("/cumplimiento/seremi")}
-              />
+                onClick={() => navigate("/cumplimiento")}
+              />}
             </>
           )}
         </section>
@@ -340,16 +340,18 @@ export default function AdminDashboard() {
         adverseEvents={adverseCount}
         loading={loading}
         navigate={navigate}
+        canFeature={canFeature}
+        can={can}
       />
 
-      <ClinicalBoard
+      {canUse("residents") && <ClinicalBoard
         list={data?.latestVitalsByResident ?? []}
         loading={loading}
         error={errors.latestVitals}
         navigate={navigate}
-      />
+      />}
 
-      <details className="group bg-white rounded-2xl border border-slate-100 shadow-sm">
+      {(canUse("residents") || canUse("compliance")) && <details className="group bg-white rounded-2xl border border-slate-100 shadow-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
           <div>
             <h2 className="text-sm font-bold text-slate-800">Contexto adicional</h2>
@@ -359,7 +361,7 @@ export default function AdminDashboard() {
           <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 group-open:inline-flex">Ocultar</span>
         </summary>
         <div className="space-y-6 border-t border-slate-100 p-4 sm:p-5">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {canUse("residents") && <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <RiskMatrix
               clinicalSummary={clinicalSummary}
               highDependency={management.highDependency}
@@ -368,20 +370,20 @@ export default function AdminDashboard() {
             />
             <DependencyChart dist={stats?.dependencia} total={stats?.activos ?? 0} />
             <ShiftActivity activity={data?.activityByShift} turno={turno} />
+          </div>}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {canUse("residents") && <FollowUpsCard  items={data?.pendingFollowUps ?? []}  navigate={navigate} />}
+            {canUse("residents") && <IncidentsCard  items={data?.recentIncidents ?? []}   navigate={navigate} />}
+            {canUse("compliance") && <ExpiringDocsCard items={data?.expiringDocuments ?? []} navigate={navigate} />}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <FollowUpsCard  items={data?.pendingFollowUps ?? []}  navigate={navigate} />
-            <IncidentsCard  items={data?.recentIncidents ?? []}   navigate={navigate} />
-            <ExpiringDocsCard items={data?.expiringDocuments ?? []} navigate={navigate} />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Demographics stats={stats} />
-            <AccreditationCard acreditacion={acreditacion} navigate={navigate} loading={loading} />
+            {canUse("residents") && <Demographics stats={stats} />}
+            {canUse("compliance") && <AccreditationCard acreditacion={acreditacion} navigate={navigate} loading={loading} />}
           </div>
         </div>
-      </details>
+      </details>}
 
       {mainQuickActions.length > 0 && (
         <section>

@@ -249,6 +249,26 @@ export function currentTurno(date = new Date()) {
   return "noche";
 }
 
+export function preferredAssignedTurno(assignments = [], clockTurno = currentTurno()) {
+  const assigned = new Set(assignments.map((row) => row?.turno));
+  const turnos = CARE_TURNOS.filter((turno) => assigned.has(turno));
+  if (turnos.includes(clockTurno)) return clockTurno;
+  return turnos[0] ?? null;
+}
+
+export async function listMyShiftAssignments({ fecha = todayIso(), profileId } = {}) {
+  if (!profileId) return [];
+  const { data, error } = await supabase
+    .from("staff_shift_assignments")
+    .select("id, fecha, turno, rol_turno, estado, staff:staff_members!inner(profile_id)")
+    .eq("fecha", fecha)
+    .eq("staff.profile_id", profileId)
+    .in("estado", ["programado", "confirmado"])
+    .order("turno", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export function nextFollowUpSlot(fecha = todayIso(), turno = currentTurno()) {
   const base = new Date(`${fecha || todayIso()}T12:00:00`);
   if (Number.isNaN(base.valueOf())) return { fecha: todayIso(), turno: currentTurno() };

@@ -278,7 +278,7 @@ export default function AccreditationObservaciones() {
       <FeatureCoach featureId="accreditation-observaciones" standalone />
       <button
         type="button"
-        onClick={() => navigate("/cumplimiento/seremi")}
+        onClick={() => navigate("/cumplimiento")}
         className="text-sm text-slate-500 hover:text-slate-800"
       >
         ← Carpeta SEREMI
@@ -372,7 +372,7 @@ export default function AccreditationObservaciones() {
               key={o.id}
               obs={o}
               onCerrar={handleCerrar}
-              onIr={(reId) => navigate(`/cumplimiento/seremi/requisito/${reId}`)}
+              onIr={(reId) => navigate(`/cumplimiento/requisito/${reId}`)}
               isAdmin={isAdminEleam}
             />
           ))}

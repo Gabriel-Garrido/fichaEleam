@@ -2,10 +2,7 @@
 //
 // Body: { nombre: string, email: string, telefono?: string, rol?: 'funcionario' }
 //
-// Para correos Gmail (@gmail.com): crea una invitación en funcionario_invitaciones
-// y el usuario puede ingresar directamente con Google OAuth. No necesita contraseña.
-//
-// Para otros correos: crea el usuario con una contraseña aleatoria interna y le
+// Crea el usuario con una contraseña aleatoria interna y le
 // envía por correo un enlace para definir su propia contraseña. La contraseña
 // interna nunca se devuelve. El trigger handle_new_user valida la app_metadata
 // firmada por Admin API; esta función provisiona el profile y permite rollback.
@@ -19,19 +16,17 @@
 
 import { preflight, jsonResponse, internalErrorResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
-import { sendEmail, staffWelcomeEmail, gmailStaffWelcomeEmail, type EmailResult } from "../_shared/email.ts";
+import { sendEmail, staffWelcomeEmail, type EmailResult } from "../_shared/email.ts";
 import {
   findAuthUserByEmail,
   isDuplicateAuthUserError,
 } from "../_shared/authUsers.ts";
 import {
   EMAIL_RE,
-  GMAIL_RE,
   createAuthProvisionRequest,
   deleteAuthProvisionRequest,
   generateAccessLink,
   generatePassword,
-  getAppUrl,
 } from "../_shared/provisioning.ts";
 
 
@@ -84,30 +79,6 @@ async function sendStaffAccessLink({
   });
 }
 
-async function sendGmailInvite({
-  email,
-  nombre,
-  eleamNombre,
-  rol,
-}: {
-  email: string;
-  nombre: string;
-  eleamNombre: string;
-  rol: string;
-}) {
-  return await sendEmail({
-    to: email,
-    subject: `Tu acceso a FichaEleam — ${eleamNombre}`,
-    html: gmailStaffWelcomeEmail({
-      nombre,
-      email,
-      eleamNombre,
-      rol,
-      loginUrl: `${getAppUrl()}/login`,
-    }),
-  });
-}
-
 Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
@@ -156,8 +127,6 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "Teléfono inválido. Usa un número chileno, por ejemplo +56 9 1234 5678." }, 400);
     }
 
-    const isGmail = GMAIL_RE.test(cleanEmail);
-
     const sb = adminClient();
 
     // Verificar estado del ELEAM
@@ -170,61 +139,6 @@ Deno.serve(async (req) => {
 
     if (!eleamHasAccess(eleam)) {
       return jsonResponse(req, { error: "El ELEAM no tiene acceso activo" }, 403);
-    }
-
-    // Dedupe de invitaciones Gmail antes de contar límites: reintentar el alta
-    // de la misma persona no debe consumir cupos ni crear invitaciones paralelas.
-    if (isGmail) {
-      const nowIso = new Date().toISOString();
-      const { data: existingInvite, error: inviteLookupErr } = await sb
-        .from("funcionario_invitaciones")
-        .select("id")
-        .eq("eleam_id", eleam.id)
-        .ilike("email", cleanEmail)
-        .eq("usado", false)
-        .gt("expira_en", nowIso)
-        .order("creado_en", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (inviteLookupErr) {
-        console.error("gmail invitation lookup", inviteLookupErr);
-        return jsonResponse(req, { error: "No se pudo validar si ya existe una invitación pendiente." }, 500);
-      }
-
-      if (existingInvite) {
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        const { error: inviteUpdateErr } = await sb
-          .from("funcionario_invitaciones")
-          .update({
-            nombre,
-            telefono: telefono || null,
-            rol,
-            expira_en: expiresAt,
-            creado_por: user.id,
-          })
-          .eq("id", existingInvite.id);
-
-        if (inviteUpdateErr) {
-          console.error("gmail invitation refresh", inviteUpdateErr);
-          return jsonResponse(req, { error: "No se pudo actualizar la invitación pendiente." }, 500);
-        }
-
-        const emailResult = await sendGmailInvite({ email: cleanEmail, nombre, eleamNombre: eleam.nombre, rol });
-
-        return jsonResponse(req, {
-          ok: true,
-          is_gmail: true,
-          google_only: true,
-          pending_invitation: true,
-          profile_id: null,
-          email: cleanEmail,
-          rol,
-          email_sent: emailResult.sent,
-          email_skipped: emailResult.skipped === true,
-          ...(emailResult.error ? { email_error: emailResult.error } : {}),
-        });
-      }
     }
 
     // Verificar límite de funcionarios del plan
@@ -273,109 +187,6 @@ Deno.serve(async (req) => {
       return jsonResponse(req, {
         error: "Este correo ya tiene una cuenta registrada en FichaEleam.",
       }, 409);
-    }
-
-    // ── Flujo Gmail: invitación para login con Google ────────────────────────
-    if (isGmail) {
-      const { user: existingAuthUser, error: authLookupErr } = await findAuthUserByEmail(sb, cleanEmail);
-      if (authLookupErr) {
-        console.error("gmail auth user lookup", authLookupErr);
-        return jsonResponse(req, { error: "No se pudo validar si el correo ya existe en Auth." }, 500);
-      }
-
-      if (existingAuthUser) {
-        // Verificar si ya usa Google OAuth
-        const identities = (existingAuthUser as { identities?: Array<{ provider?: string }> }).identities ?? [];
-        const hasGoogle = identities.some((i) => i.provider === "google");
-
-        if (!hasGoogle) {
-          return jsonResponse(req, {
-            error: "Este correo ya tiene una cuenta con contraseña. El usuario debe usar su correo y contraseña para ingresar.",
-          }, 409);
-        }
-
-        // Usuario Google existente sin perfil: insertar perfil directamente
-        const { error: profileInsertErr } = await sb.from("profiles").insert({
-          id: existingAuthUser.id,
-          nombre,
-          email: cleanEmail,
-          telefono: telefono || null,
-          rol,
-          eleam_id: profile.eleam_id,
-          must_reset_password: false,
-        });
-
-        if (profileInsertErr) {
-          console.error("gmail profile insert for existing google user", profileInsertErr);
-          return jsonResponse(req, {
-            error: "No se pudo crear el perfil para el usuario de Google existente.",
-          }, 500);
-        }
-
-        const currentAppMeta =
-          existingAuthUser.app_metadata && typeof existingAuthUser.app_metadata === "object"
-            ? existingAuthUser.app_metadata
-            : {};
-
-        await sb.auth.admin.updateUserById(existingAuthUser.id, {
-          app_metadata: {
-            ...currentAppMeta,
-            fichaeleam_account_source: "admin_created_google",
-            eleam_id_direct: profile.eleam_id,
-            rol_direct: rol,
-          },
-        });
-
-        const emailResult = await sendGmailInvite({ email: cleanEmail, nombre, eleamNombre: eleam.nombre, rol });
-
-        return jsonResponse(req, {
-          ok: true,
-          is_gmail: true,
-          google_only: true,
-          existing_google_user: true,
-          profile_id: existingAuthUser.id,
-          email: cleanEmail,
-          rol,
-          email_sent: emailResult.sent,
-          email_skipped: emailResult.skipped === true,
-          ...(emailResult.error ? { email_error: emailResult.error } : {}),
-        });
-      }
-
-      // No hay cuenta en Auth: crear invitación para que el usuario entre con Google
-      // El token es requerido por la tabla pero no se usa en el flujo Google OAuth
-      const invToken = crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 días
-
-      const { error: invError } = await sb.from("funcionario_invitaciones").insert({
-        eleam_id: profile.eleam_id,
-        nombre,
-        email: cleanEmail,
-        telefono: telefono || null,
-        token: invToken,
-        expira_en: expiresAt,
-        rol,
-        creado_por: user.id,
-      });
-
-      if (invError) {
-        console.error("gmail invitation insert", invError);
-        return jsonResponse(req, { error: "No se pudo preparar el acceso de Google." }, 500);
-      }
-
-      const emailResult = await sendGmailInvite({ email: cleanEmail, nombre, eleamNombre: eleam.nombre, rol });
-
-      return jsonResponse(req, {
-        ok: true,
-        is_gmail: true,
-        google_only: true,
-        profile_id: null,
-        email: cleanEmail,
-        rol,
-        email_sent: emailResult.sent,
-        email_skipped: emailResult.skipped === true,
-        ...(emailResult.error ? { email_error: emailResult.error } : {}),
-      });
     }
 
     // ── Flujo estándar: contraseña temporal ──────────────────────────────────

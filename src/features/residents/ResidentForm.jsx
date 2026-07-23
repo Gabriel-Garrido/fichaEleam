@@ -33,7 +33,7 @@ export default function ResidentForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const { eleam, can } = useAuth();
+  const { eleam, can, canFeature } = useAuth();
   const isEditing = Boolean(id);
   const [form, setForm] = useState(RESIDENT_EMPTY);
   const [original, setOriginal] = useState(null);
@@ -145,7 +145,7 @@ export default function ResidentForm() {
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-2xl text-emerald-700">✓</div>
           <h1 className="mt-4 text-xl font-bold text-slate-950">Residente creado</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">La carpeta de {created.nombre} {created.apellido} está lista. Continúa con ingreso DS20, evaluaciones y plan de cuidado.</p>
-          <div className="mt-6 grid gap-2 sm:grid-cols-2"><Button onClick={() => navigate("/establecimiento/camas")} className="border border-slate-200 bg-white text-slate-700">Asignar cama</Button><Button onClick={() => navigate(`/residents/${created.id}?tab=ds20`)} className="bg-teal-700 text-white">Completar ingreso DS20</Button></div>
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">{canFeature("establishment") && can("asignar_camas") && <Button onClick={() => navigate("/establecimiento")} className="border border-slate-200 bg-white text-slate-700">Asignar cama</Button>}<Button onClick={() => navigate(`/residents/${created.id}?tab=ds20`)} className="bg-teal-700 text-white">Completar ingreso DS20</Button></div>
         </div>
       </div>
     );
@@ -191,7 +191,7 @@ export default function ResidentForm() {
 
         <FormSection icon={<Icon type="calendar" />} title="Ingreso y estado" description="Fecha de ingreso y situación actual.">
           <div className="grid gap-4 sm:grid-cols-2"><TextField id="fecha_ingreso" name="fecha_ingreso" type="date" label="Fecha de ingreso" required value={form.fecha_ingreso} onChange={change} error={errors.fecha_ingreso} /><SelectField id="estado" name="estado" label="Estado" required value={form.estado} onChange={change} options={isEditing ? OPTIONS.estadoEdit : OPTIONS.estadoCreate} error={errors.estado} /></div>
-          {isEditing && <div className="mt-4 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold text-slate-500">Ubicación actual</p><p className="mt-1 text-sm font-semibold text-slate-900">{form.cama_actual_id ? form.ubicacion_label : "Sin cama asignada"}</p></div><Button type="button" onClick={() => navigate("/establecimiento/camas")} className="border border-slate-200 bg-white text-slate-700">Gestionar cama</Button></div>}
+          {isEditing && <div className="mt-4 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold text-slate-500">Ubicación actual</p><p className="mt-1 text-sm font-semibold text-slate-900">{form.cama_actual_id ? form.ubicacion_label : "Sin cama asignada"}</p></div>{canFeature("establishment") && can("asignar_camas") && <Button type="button" onClick={() => navigate("/establecimiento")} className="border border-slate-200 bg-white text-slate-700">Gestionar cama</Button>}</div>}
           {showEgreso && <div className="mt-4 grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2"><TextField id="fecha_egreso" name="fecha_egreso" type="date" label="Fecha de egreso" required value={form.fecha_egreso} onChange={change} error={errors.fecha_egreso} /><TextField id="motivo_egreso" name="motivo_egreso" label="Motivo" required value={form.motivo_egreso} onChange={change} error={errors.motivo_egreso} /></div>}
         </FormSection>
 

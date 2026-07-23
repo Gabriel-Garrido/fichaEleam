@@ -889,11 +889,11 @@ export const PRIVATE_NOINDEX_ROUTES = [
   "/dashboard",
   "/operacion/turnos",
   "/residents",
-  "/establecimiento/camas",
+  "/establecimiento",
   "/vital-signs",
   "/observations",
   "/eventos-adversos",
-  "/cumplimiento/seremi",
+  "/cumplimiento",
   "/personal/equipo",
   "/superadmin",
 ];

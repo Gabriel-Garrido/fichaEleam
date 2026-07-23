@@ -39,7 +39,6 @@ export async function createReclamo(payload) {
     prioridad: payload.prioridad || "normal",
     categoria: payload.categoria || null,
     fecha_compromiso: payload.fecha_compromiso || null,
-    visita_familiar_origen: payload.visita_familiar_origen === true,
     registrado_por: userId,
   };
 
@@ -79,37 +78,6 @@ export async function updateReclamoEstado(id, payload) {
   return data;
 }
 
-// Usado por FamiliarPortal. visita_familiar_origen=true es requerido por la
-// RLS para que un familiar pueda insertar y luego leer su propio mensaje.
-export async function createReclamoFamiliar(payload) {
-  const { sb, userId, eleamId } = await getCtx();
-  const folio = await nextFolio(sb, eleamId);
-
-  const row = {
-    eleam_id: eleamId,
-    folio,
-    tipo: payload.tipo,
-    canal: "familiar_portal",
-    descripcion: payload.descripcion?.trim(),
-    solicitante_nombre: payload.solicitante_nombre?.trim() || null,
-    solicitante_tipo: "familiar",
-    residente_id: payload.residente_id || null,
-    estado: "abierto",
-    prioridad: "normal",
-    categoria: payload.categoria || null,
-    visita_familiar_origen: true,
-    registrado_por: userId,
-  };
-
-  const { data, error } = await sb
-    .from("reclamos_sugerencias")
-    .insert(row)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
 // ── Constantes ─────────────────────────────────────────────────────────────
 
 export const RECLAMO_TIPO_LABEL = {
@@ -132,7 +100,6 @@ export const RECLAMO_CANAL_LABEL = {
   telefonico: "Telefónico",
   email: "Email",
   libro_reclamos: "Libro de reclamos",
-  familiar_portal: "Portal familiar",
 };
 
 export const RECLAMO_ESTADO_LABEL = {

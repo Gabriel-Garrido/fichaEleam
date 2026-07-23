@@ -1,255 +1,143 @@
-import {
-  CRM_STATE_MAP, RIESGO_MAP, PLAN_LABEL, PLAN_BADGE,
-  formatDate, daysUntil,
-} from "../utils/superadminFormatters";
-import CustomerHealthBadge from "./CustomerHealthBadge";
 import HelpTooltip from "../../../components/HelpTooltip";
-import { canResendDemoAccess, indexPortfolioUsage, portfolioUsageState, usageDaysSince } from "../utils/portfolioUsage";
+import { PLAN_LABEL } from "../utils/superadminFormatters";
+import {
+  canResendDemoAccess,
+  indexPortfolioUsage,
+  portfolioUsageState,
+  usageDaysSince,
+} from "../utils/portfolioUsage";
 
-// Tooltips de columna: solo en campos que no son auto-evidentes.
-// Cada texto especifica la columna exacta en BD y cómo interpretarla.
-const COL_TIPS = {
-  crmEstado:
-    "eleams.crm_estado — Etapa del ciclo comercial, editable desde 'Editar ELEAM'.\nPipeline: Lead → Contactado → Demo agendada → Demo realizada → En prueba → Pago pendiente → Cliente activo → En riesgo → Perdido.",
-  plan:
-    "eleams.plan — Plan contratado: demo | mensual | anual. Se actualiza al registrar un pago manual o vía MercadoPago.",
-  pago:
-    "eleams.pago_activo — Calculado automáticamente por el trigger sync_pago_activo. Activo cuando subscription_status es 'activo' o 'en_gracia' y la fecha de vencimiento no ha pasado.",
-  riesgo:
-    "eleams.riesgo_churn — Evaluación manual: bajo | medio | alto | desconocido. Se edita en 'Editar ELEAM'. Alto = requiere atención inmediata para retener.",
-  salud:
-    "Indicador calculado en el cliente combinando:\n• eleams.pago_activo y subscription_status\n• Días hasta eleams.fecha_vencimiento_suscripcion (≤14d = alerta)\n• Días desde eleams.ultimo_contacto (>60d sin contacto = alerta)\n• eleams.riesgo_churn\n• Tareas CRM vencidas (crm_tasks con fecha_vencimiento pasada)\nPasa el cursor sobre el badge para ver los motivos detallados.",
-  vencimiento:
-    "eleams.fecha_vencimiento_suscripcion — Fecha límite del acceso.\nVerde: vigente · Ámbar: vence en ≤14 días · Rojo: ya venció.",
-  ultimoContacto:
-    "eleams.ultimo_contacto — Se actualiza automáticamente al crear una interacción CRM. Sin contacto en más de 60 días hace que 'Salud' baje a 'Atención'. 'Sin contacto' en rojo = nunca hubo interacción registrada.",
-  proxAccion:
-    "eleams.proxima_accion_fecha — Fecha programada para el próximo seguimiento comercial. Se define manualmente en 'Editar ELEAM'.",
-  uso:
-    "Actividad operativa agregada en la ventana seleccionada: signos, observaciones, visitas, medicamentos, cuidados, turnos, residentes, eventos adversos, camas y acreditación.",
-  ultimaActividad:
-    "Último registro operativo conocido del ELEAM, independiente de la ventana seleccionada. No corresponde al último login.",
+const STATE_STYLE = {
+  emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  amber: "border-amber-200 bg-amber-50 text-amber-800",
+  rose: "border-rose-200 bg-rose-50 text-rose-800",
+  slate: "border-slate-200 bg-slate-100 text-slate-700",
 };
 
-function ThTip({ children, tip, center, className = "" }) {
-  return (
-    <th className={`px-3 py-2.5 text-left ${center ? "text-center" : ""} ${className}`}>
-      <span className={`inline-flex items-center gap-1 ${center ? "justify-center" : ""}`}>
-        {children}
-        {tip && <HelpTooltip label={String(children)}>{tip}</HelpTooltip>}
-      </span>
-    </th>
-  );
-}
-
-function VencimientoCell({ fecha, pagoActivo, isDemo }) {
-  const d = daysUntil(fecha);
-  if (!fecha) return <span className="text-xs text-slate-400">—</span>;
-  let cls = isDemo ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-emerald-50 text-emerald-700";
-  if (d != null && d < 0)        cls = "bg-rose-100 text-rose-700";
-  else if (d != null && d <= 7)  cls = "bg-rose-100 text-rose-700";
-  else if (d != null && d <= 14) cls = "bg-amber-100 text-amber-800";
-  if (!pagoActivo && !isDemo)    cls = "bg-slate-100 text-slate-500";
-  const title = d == null ? "" : d < 0
-    ? `${isDemo ? "Demo venció" : "Venció"} hace ${Math.abs(d)} días`
-    : d === 0 ? `${isDemo ? "Demo vence" : "Vence"} hoy`
-    : `${isDemo ? "Demo vence" : "Vence"} en ${d} días`;
-  return (
-    <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${cls}`} title={title}>
-      {formatDate(fecha)}
-      {isDemo && d != null && d >= 0 && (
-        <span className="ml-1 opacity-70">({d}d)</span>
-      )}
-    </span>
-  );
-}
-
-const USAGE_TONE = {
-  emerald: "bg-emerald-100 text-emerald-700",
-  amber: "bg-amber-100 text-amber-800",
-  rose: "bg-rose-100 text-rose-700",
-  slate: "bg-slate-100 text-slate-600",
-};
-
-function lastUsageLabel(value) {
+function lastActivityLabel(value) {
   const days = usageDaysSince(value);
   if (days == null) return "Sin actividad";
   if (days === 0) return "Hoy";
   if (days === 1) return "Ayer";
-  return `Hace ${days}d`;
+  if (days < 30) return `Hace ${days} días`;
+  const months = Math.floor(days / 30);
+  return `Hace ${months} ${months === 1 ? "mes" : "meses"}`;
+}
+
+function usageForEleam(eleam, usageByEleam) {
+  return usageByEleam[eleam.id] ?? {
+    eleamId: eleam.id,
+    usuariosTotales: 0,
+    usuariosActivos: 0,
+    usuariosSinPrimerIngreso: 0,
+    registros: 0,
+    modulosActivos: 0,
+    ultimaActividad: null,
+  };
+}
+
+function UsageBadge({ usage }) {
+  const state = portfolioUsageState(usage);
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${STATE_STYLE[state.tone]}`}>{state.label}</span>;
+}
+
+function UsageProgress({ active, total }) {
+  const percentage = total > 0 ? Math.round((active / total) * 100) : 0;
+  return (
+    <div className="mt-1.5 flex items-center gap-2">
+      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="Usuarios activos" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percentage}>
+        <div className="h-full rounded-full bg-teal-600" style={{ width: `${percentage}%` }} />
+      </div>
+      <span className="text-[11px] text-slate-500">{percentage}%</span>
+    </div>
+  );
 }
 
 export default function EleamTable({
   eleams,
-  onEdit,
   onOpen,
-  taskCountByEleam = {},
   portfolioUsage = [],
   usageDays = 30,
   onResendDemoAccess,
   resendingDemoId,
 }) {
   const usageByEleam = indexPortfolioUsage(portfolioUsage);
+  const rows = eleams.map((eleam) => ({ eleam, usage: usageForEleam(eleam, usageByEleam) }));
+
+  if (rows.length === 0) {
+    return <div className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm text-slate-500">No hay ELEAM que coincidan con los filtros.</div>;
+  }
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden w-full">
-      <div className="overflow-x-auto w-full">
-        <table className="w-full min-w-[1150px] text-sm">
-          <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-100">
-            <tr>
-              <ThTip className="font-bold w-40">ELEAM</ThTip>
-              <ThTip className="font-bold">Email admin</ThTip>
-              <ThTip tip={COL_TIPS.crmEstado} center className="font-bold">Estado CRM</ThTip>
-              <ThTip tip={COL_TIPS.plan} center className="font-bold">Plan</ThTip>
-              <ThTip tip={COL_TIPS.uso} center className="font-bold whitespace-nowrap">Uso {usageDays}d</ThTip>
-              <ThTip tip={COL_TIPS.ultimaActividad} center className="font-bold whitespace-nowrap">Última actividad</ThTip>
-              <ThTip tip={COL_TIPS.pago} center className="font-bold">Pago</ThTip>
-              <ThTip tip={COL_TIPS.riesgo} center className="font-bold">Riesgo</ThTip>
-              <ThTip tip={COL_TIPS.salud} center className="font-bold">Salud</ThTip>
-              <ThTip tip={COL_TIPS.vencimiento} center className="font-bold">Vencimiento</ThTip>
-              <ThTip tip={COL_TIPS.ultimoContacto} center className="font-bold whitespace-nowrap">Último contacto</ThTip>
-              <ThTip tip={COL_TIPS.proxAccion} center className="font-bold whitespace-nowrap">Próx. acción</ThTip>
-              <th className="px-3 py-2.5" />
-            </tr>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
+        <div>
+          <h2 className="flex items-center gap-2 font-bold text-slate-950">
+            Uso por ELEAM
+            <HelpTooltip label="Cómo leer el listado">Compara actividad operativa de los últimos {usageDays} días. Los registros incluyen cuidados, medicamentos, signos, observaciones, turnos, residentes, camas, eventos y documentos; no corresponden a aperturas de pantalla.</HelpTooltip>
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">Selecciona una fila para revisar usuarios y actividad en detalle.</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{rows.length} ELEAM</span>
+      </header>
+
+      <div className="divide-y divide-slate-100 md:hidden">
+        {rows.map(({ eleam, usage }) => {
+          const canResend = canResendDemoAccess(eleam, usage);
+          return (
+            <article key={eleam.id} className="p-4">
+              <button type="button" onClick={() => onOpen(eleam)} className="w-full text-left">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><h3 className="truncate font-bold text-slate-950">{eleam.nombre}</h3><p className="mt-0.5 truncate text-xs text-slate-500">{eleam.email_admin || "Sin correo administrador"}</p></div>
+                  <UsageBadge usage={usage} />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <MobileMetric label="Usuarios activos" value={`${usage.usuariosActivos}/${usage.usuariosTotales}`} />
+                  <MobileMetric label={`Registros ${usageDays}d`} value={usage.registros.toLocaleString("es-CL")} />
+                  <MobileMetric label="Áreas usadas" value={`${usage.modulosActivos}/9`} />
+                  <MobileMetric label="Última actividad" value={lastActivityLabel(usage.ultimaActividad)} />
+                </div>
+                {usage.usuariosSinPrimerIngreso > 0 && <p className="mt-3 text-xs font-semibold text-amber-700">{usage.usuariosSinPrimerIngreso} usuario{usage.usuariosSinPrimerIngreso === 1 ? "" : "s"} sin activar</p>}
+                <span className="mt-4 inline-flex min-h-10 items-center text-sm font-bold text-teal-700">Ver detalle →</span>
+              </button>
+              {canResend && <ResendButton eleam={eleam} onResend={onResendDemoAccess} disabled={Boolean(resendingDemoId)} loading={resendingDemoId === eleam.id} />}
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[850px] text-sm">
+          <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
+            <tr><th className="px-4 py-3 font-bold">ELEAM</th><th className="px-3 py-3 font-bold">Nivel de uso</th><th className="px-3 py-3 font-bold">Usuarios</th><th className="px-3 py-3 text-right font-bold">Registros</th><th className="px-3 py-3 text-center font-bold">Áreas</th><th className="px-3 py-3 font-bold">Última actividad</th><th className="px-3 py-3 font-bold">Plan y acceso</th><th className="px-4 py-3" /></tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
-            {eleams.length === 0 ? (
-              <tr>
-                <td colSpan={13} className="px-4 py-10 text-center text-slate-400 text-sm">
-                  No hay ELEAMs que coincidan con el filtro.
-                </td>
-              </tr>
-            ) : eleams.map((e) => {
-              const crm    = CRM_STATE_MAP[e.crm_estado] ?? CRM_STATE_MAP.lead;
-              const riesgo = RIESGO_MAP[e.riesgo_churn] ?? RIESGO_MAP.desconocido;
-              const overdue = taskCountByEleam[e.id] ?? 0;
-              const isDemo = e.plan === "demo";
-              const usage = usageByEleam[e.id] ?? null;
-              const usageState = usage ? portfolioUsageState(usage) : null;
-              const canResend = canResendDemoAccess(e, usage);
-              const isResending = resendingDemoId === e.id;
+          <tbody className="divide-y divide-slate-100">
+            {rows.map(({ eleam, usage }) => {
+              const canResend = canResendDemoAccess(eleam, usage);
               return (
-                <tr key={e.id} className={`transition-colors ${isDemo ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-slate-50"}`}>
-                  <td className="px-3 py-2.5 font-semibold text-slate-800 w-40">
-                    <button
-                      type="button"
-                      onClick={() => onOpen(e)}
-                      className="hover:underline text-left hover:text-teal-700 transition-colors leading-tight"
-                    >
-                      {e.nombre}
-                    </button>
-                    {isDemo && (
-                      <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold border border-amber-200">
-                        Demo
-                      </span>
-                    )}
-                    {overdue > 0 && (
-                      <span
-                        className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded-full font-bold"
-                        title={`${overdue} tarea(s) CRM vencida(s)`}
-                        aria-label={`${overdue} tareas vencidas`}
-                      >
-                        {overdue}
-                        <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                          <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                        </svg>
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-500 text-xs truncate max-w-[180px]">
-                    {e.email_admin ?? "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${crm.color}`}>
-                      <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle ${crm.dot}`} />
-                      {crm.label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full ${PLAN_BADGE[e.plan] ?? "bg-slate-100 text-slate-600"}`}>
-                      {PLAN_LABEL[e.plan] ?? e.plan ?? "—"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                    {usage ? (
-                      <>
-                        <span className="block text-sm font-bold tabular-nums text-slate-800">{usage.registros.toLocaleString("es-CL")}</span>
-                        <span className="text-[10px] text-slate-400">{usage.usuariosActivos}/{usage.usuariosTotales} usuarios</span>
-                      </>
-                    ) : <span className="text-xs text-slate-300">—</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                    {usage && usageState ? (
-                      <>
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${USAGE_TONE[usageState.tone]}`}>
-                          {usageState.label}
-                        </span>
-                        <span className="mt-0.5 block text-[10px] text-slate-400">{lastUsageLabel(usage.ultimaActividad)}</span>
-                      </>
-                    ) : <span className="text-xs text-slate-300">—</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                      e.pago_activo
-                        ? "bg-emerald-100 text-emerald-700"
-                        : isDemo
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-rose-100 text-rose-600"
-                    }`}>
-                      {e.pago_activo ? "Activo" : isDemo ? "Demo" : "Inactivo"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border ${riesgo.color}`}>
-                      {riesgo.label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <CustomerHealthBadge eleam={e} tasksOverdue={overdue} />
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <VencimientoCell fecha={e.fecha_vencimiento_suscripcion} pagoActivo={e.pago_activo} isDemo={isDemo} />
-                  </td>
-                  <td className="px-3 py-2.5 text-center text-xs whitespace-nowrap">
-                    {e.ultimo_contacto
-                      ? <span className="text-slate-500">{formatDate(e.ultimo_contacto)}</span>
-                      : <span className="text-rose-500 font-medium">Sin contacto</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-center text-slate-500 text-xs whitespace-nowrap">
-                    {e.proxima_accion_fecha ? formatDate(e.proxima_accion_fecha) : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                    {canResend && (
-                      <button
-                        type="button"
-                        onClick={() => onResendDemoAccess?.(e)}
-                        disabled={Boolean(resendingDemoId)}
-                        title="Genera un enlace nuevo y reenvía las instrucciones para iniciar el demo"
-                        className="mr-3 rounded-md bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-200 disabled:cursor-wait disabled:opacity-50"
-                      >
-                        {isResending ? "Enviando…" : "Reenviar demo"}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onOpen(e)}
-                      className="text-teal-700 hover:underline text-xs mr-3 font-medium"
-                    >
-                      Ficha
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onEdit(e)}
-                      className="text-slate-500 hover:underline text-xs"
-                    >
-                      Editar
-                    </button>
-                  </td>
+                <tr key={eleam.id} className="group cursor-pointer hover:bg-teal-50/40" onClick={() => onOpen(eleam)}>
+                  <td className="px-4 py-4"><p className="max-w-56 truncate font-bold text-slate-950">{eleam.nombre}</p><p className="mt-0.5 max-w-56 truncate text-xs text-slate-500">{eleam.email_admin || "Sin correo administrador"}</p></td>
+                  <td className="px-3 py-4"><UsageBadge usage={usage} />{usage.usuariosSinPrimerIngreso > 0 && <p className="mt-1.5 text-[11px] font-semibold text-amber-700">{usage.usuariosSinPrimerIngreso} sin activar</p>}</td>
+                  <td className="px-3 py-4"><p className="font-bold tabular-nums text-slate-800">{usage.usuariosActivos}/{usage.usuariosTotales}</p><UsageProgress active={usage.usuariosActivos} total={usage.usuariosTotales} /></td>
+                  <td className="px-3 py-4 text-right"><p className="text-base font-black tabular-nums text-slate-900">{usage.registros.toLocaleString("es-CL")}</p><p className="text-[11px] text-slate-400">últimos {usageDays} días</p></td>
+                  <td className="px-3 py-4 text-center"><p className="font-bold tabular-nums text-slate-800">{usage.modulosActivos}/9</p><p className="text-[11px] text-slate-400">con actividad</p></td>
+                  <td className="px-3 py-4"><p className="font-semibold text-slate-700">{lastActivityLabel(usage.ultimaActividad)}</p></td>
+                  <td className="px-3 py-4"><p className="font-semibold text-slate-700">{PLAN_LABEL[eleam.plan] ?? eleam.plan ?? "Sin plan"}</p><p className={`mt-0.5 text-xs font-semibold ${eleam.pago_activo ? "text-emerald-700" : eleam.plan === "demo" ? "text-amber-700" : "text-rose-700"}`}>{eleam.pago_activo ? "Acceso activo" : eleam.plan === "demo" ? "Demo sin acceso" : "Sin acceso"}</p></td>
+                  <td className="px-4 py-4 text-right" onClick={(event) => event.stopPropagation()}>{canResend && <ResendButton eleam={eleam} onResend={onResendDemoAccess} disabled={Boolean(resendingDemoId)} loading={resendingDemoId === eleam.id} compact />}<button type="button" onClick={() => onOpen(eleam)} className="ml-2 min-h-10 rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-50">Ver detalle</button></td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
+}
+
+function MobileMetric({ label, value }) {
+  return <div className="rounded-xl bg-slate-50 p-3"><p className="text-sm font-black tabular-nums text-slate-900">{value}</p><p className="mt-0.5 text-[11px] text-slate-500">{label}</p></div>;
+}
+
+function ResendButton({ eleam, onResend, disabled, loading, compact = false }) {
+  return <button type="button" onClick={() => onResend?.(eleam)} disabled={disabled} className={`${compact ? "min-h-10 px-2.5" : "min-h-10 px-3"} rounded-xl border border-amber-200 bg-amber-50 text-xs font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50`}>{loading ? "Enviando…" : compact ? "Reenviar" : "Reenviar acceso demo"}</button>;
 }

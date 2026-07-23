@@ -19,11 +19,14 @@ function ProtectedRoute({
   requireActive = true,
   allowedRoles = null,
   requiredFeature = null,
+  requiredPermission = null,
+  requiredAnyPermission = null,
+  allowSuperadmin = true,
 }) {
   const location = useLocation();
   const {
     user, profile, authLoading, profileLoading, pagoActivo,
-    supabaseError, homePath, isSuperadmin, mustResetPassword, canFeature,
+    supabaseError, homePath, isSuperadmin, mustResetPassword, canFeature, can,
   } = useAuth();
 
   if (authLoading || (profileLoading && !profile)) return <Loading message="Verificando sesión..." />;
@@ -69,6 +72,27 @@ function ProtectedRoute({
           <h1 className="text-2xl font-semibold text-slate-950">Área no habilitada</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Tu cuenta no tiene habilitada esta área. Pide al administrador que revise los permisos.
+          </p>
+          <NavigateButton to={homePath} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!allowSuperadmin && isSuperadmin) {
+    return <Navigate to={homePath} replace />;
+  }
+
+  const missingActionPermission = requiredPermission && !can(requiredPermission);
+  const missingAnyPermission = requiredAnyPermission?.length
+    && !requiredAnyPermission.some((permission) => can(permission));
+  if (missingActionPermission || missingAnyPermission) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-semibold text-slate-950">Acción no autorizada</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Puedes usar el área, pero tu cuenta no tiene permiso para abrir esta acción.
           </p>
           <NavigateButton to={homePath} />
         </div>

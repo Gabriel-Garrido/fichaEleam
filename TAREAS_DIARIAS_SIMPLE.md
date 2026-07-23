@@ -2,6 +2,8 @@
 
 La bandeja de tareas diarias reúne el trabajo que el equipo debe ejecutar durante un turno sin obligarlo a recorrer cada ficha de residente.
 
+Su alcance se limita a los registros operativos que respaldan la continuidad del cuidado: plan integral, medicamentos, signos vitales y seguimientos. La bandeja no reemplaza la planificación clínica ni agrega tareas administrativas generales.
+
 ## Qué aparece en la bandeja
 
 - actividades vigentes del plan de cuidado;
@@ -13,14 +15,14 @@ Los registros se generan de forma idempotente: actualizar la pantalla no duplica
 
 ## Flujo de uso
 
-1. Confirmar fecha y turno.
+1. Confirmar la fecha. El sistema abre automáticamente el turno asignado al usuario en Personal.
 2. Abrir `Por hacer`, que es la vista predeterminada.
 3. Atender la primera tarea de la lista; el orden prioriza atrasos, urgencia y hora.
 4. Usar la acción principal de cada tipo: `Marcar hecha`, `Administrar`, `Registrar`, `Validar` o `Resolver`.
-5. Abrir `Otra acción` sólo para reprogramar o registrar una omisión.
+5. Si la acción no se realizó, usar `No realizada` o `No administrado`, indicar el motivo y dejar seguimiento cuando corresponda.
 6. Consultar `Hechas` cuando sea necesario revisar el cierre del turno.
 
-La búsqueda por residente o tarea se mantiene disponible. Se eliminaron los filtros cruzados por tipo y el tablero de nueve métricas porque generaban demasiadas combinaciones sin mejorar la ejecución diaria.
+La búsqueda por residente o tarea se mantiene disponible. Busca nombre y apellido en cualquier orden, ignora tildes y también reconoce medicamento, tipo, dosis e instrucciones. Cuando no hay coincidencias muestra un estado vacío específico y permite limpiar la búsqueda en un toque. Se eliminaron los filtros cruzados por tipo y el tablero de nueve métricas porque generaban demasiadas combinaciones sin mejorar la ejecución diaria.
 
 ## Estados y trazabilidad
 
@@ -28,7 +30,9 @@ La búsqueda por residente o tarea se mantiene disponible. Se eliminaron los fil
 - **Hechas:** incluye actividades cumplidas, medicamentos administrados o validados, y omisiones registradas.
 - **Todas:** vista de auditoría del turno.
 
-Una omisión siempre exige motivo. La reprogramación registra el nuevo momento. Los medicamentos controlados conservan doble firma, y el mismo usuario no puede validar su propia administración. Las acciones continúan protegidas por permisos y funciones/RLS de Supabase.
+Una omisión siempre exige motivo. Los medicamentos controlados conservan doble firma, y el mismo usuario no puede validar su propia administración. Las acciones continúan protegidas por permisos y funciones/RLS de Supabase.
+
+Las tareas corresponden al equipo que cubre el turno, no se reparten individualmente. Cada resultado queda firmado por el usuario que lo registra. Si una persona no tiene turno asignado para la fecha, puede seleccionar manualmente la bandeja que necesita consultar.
 
 ## Uso por perfil
 
@@ -52,6 +56,7 @@ Una omisión siempre exige motivo. La reprogramación registra el nuevo momento.
 - Las URLs con el filtro histórico `vencidas` se normalizan a `Por hacer`, donde los atrasos aparecen primero.
 - Se corrigió el cálculo de progreso: las tareas reprogramadas abiertas ya forman parte de los pendientes y no deben descontarse dos veces.
 - Fecha, turno y búsqueda continúan representados en la URL para permitir enlaces y recuperación de contexto.
+- El filtro trabaja sobre el modelo normalizado de la bandeja (`item.resident`, `title`, `meta` y `detail`) para que cuidados, medicamentos, signos y seguimientos se busquen de forma consistente.
 
 ## Verificación funcional mínima
 

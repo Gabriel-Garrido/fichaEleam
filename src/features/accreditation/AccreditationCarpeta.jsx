@@ -7,11 +7,11 @@ import { friendlyError } from "../../utils/errorMessages";
 import {
   getRequisitosEleam,
   getObservaciones,
-  buildResumen,
-  estadoMeta,
+  getOperationalEvidence,
 } from "./accreditationService";
 import { formatDate } from "../../utils/dateUtils";
 import { FeatureCoach } from "../featureCoach";
+import { buildComplianceAreas, simpleRequirementStatus } from "./accreditationOverview";
 
 // Carpeta SEREMI imprimible. La idea es ser una vista limpia, sin nav,
 // optimizada para impresión a PDF (Ctrl+P → Guardar como PDF).
@@ -22,43 +22,42 @@ export default function AccreditationCarpeta() {
   const { eleam } = useAuth();
   const [requisitos, setRequisitos] = useState([]);
   const [observaciones, setObservaciones] = useState([]);
+  const [operationalEvidence, setOperationalEvidence] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([getRequisitosEleam(), getObservaciones()])
-      .then(([r, o]) => {
+    Promise.all([getRequisitosEleam(), getObservaciones(), getOperationalEvidence()])
+      .then(([r, o, evidence]) => {
         if (!mounted) return;
         setRequisitos(r);
         setObservaciones(o);
+        setOperationalEvidence(evidence);
       })
       .catch((e) => mounted && toast(friendlyError(e, "No se pudo cargar la carpeta SEREMI. Recarga la página."), "error"))
       .finally(() => mounted && setLoading(false));
     return () => { mounted = false; };
   }, [toast]);
 
-  const resumen = useMemo(() => buildResumen(requisitos), [requisitos]);
-
-  const requisitosPorAmbito = useMemo(() => {
-    const map = {};
-    for (const r of requisitos) {
-      const code = r.requisito?.ambito?.codigo;
-      if (!code) continue;
-      if (!map[code]) {
-        map[code] = {
-          ambito: r.requisito.ambito,
-          items: [],
-        };
-      }
-      map[code].items.push(r);
-    }
-    return Object.values(map)
-      .sort((a, b) => (a.ambito.orden ?? 0) - (b.ambito.orden ?? 0))
-      .map((g) => ({
-        ...g,
-        items: g.items.sort((a, b) => (a.requisito.orden ?? 0) - (b.requisito.orden ?? 0)),
-      }));
-  }, [requisitos]);
+  const requisitosPorAmbito = useMemo(
+    () => buildComplianceAreas(requisitos, observaciones, operationalEvidence),
+    [requisitos, observaciones, operationalEvidence],
+  );
+  const resumen = useMemo(() => {
+    const totals = requisitosPorAmbito.reduce((acc, group) => ({
+      total: acc.total + group.items.length,
+      vigente: acc.vigente + group.compliant,
+      noAplica: acc.noAplica + group.notApplicable,
+      pendientes: acc.pendientes + group.pending,
+    }), { total: 0, vigente: 0, noAplica: 0, pendientes: 0 });
+    const evaluables = totals.total - totals.noAplica;
+    return {
+      ...totals,
+      porcentaje: totals.total === 0 ? 0 : evaluables > 0 ? Math.round((totals.vigente / evaluables) * 100) : 100,
+      evidenciasVigentes: requisitos.reduce((count, item) => count + (item.documentos ?? []).filter((doc) => doc.vigente).length, 0),
+      ambitos: requisitosPorAmbito,
+    };
+  }, [requisitos, requisitosPorAmbito]);
 
   if (loading) return <Loading message="Generando Carpeta SEREMI..." />;
 
@@ -71,7 +70,7 @@ export default function AccreditationCarpeta() {
       <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <button type="button"
- onClick={() => navigate("/cumplimiento/seremi")} className="text-sm text-slate-500 hover:text-slate-800">
+ onClick={() => navigate("/cumplimiento")} className="text-sm text-slate-500 hover:text-slate-800">
             ← Volver
           </button>
           <div className="flex gap-2">
@@ -150,13 +149,13 @@ export default function AccreditationCarpeta() {
             </thead>
             <tbody>
               {resumen.ambitos.map((a) => (
-                <tr key={a.codigo} className="border-b">
-                  <td className="py-2 pr-3 font-mono text-xs">{a.codigo}</td>
-                  <td className="py-2">{a.nombre}</td>
-                  <td className="text-center px-2">{a.total}</td>
-                  <td className="text-center px-2 text-emerald-700">{a.vigente ?? 0}</td>
-                  <td className="text-center px-2 text-amber-700">{(a.pendiente ?? 0) + (a.en_revision ?? 0) + (a.requiere_actualizacion ?? 0) + (a.observado ?? 0) + (a.no_cumple ?? 0) + (a.vencido ?? 0)}</td>
-                  <td className="text-center px-2 font-semibold">{a.porcentaje}%</td>
+                <tr key={a.area.codigo} className="border-b">
+                  <td className="py-2 pr-3 font-mono text-xs">{a.area.codigo}</td>
+                  <td className="py-2">{a.area.nombre}</td>
+                  <td className="text-center px-2">{a.items.length}</td>
+                  <td className="text-center px-2 text-emerald-700">{a.compliant}</td>
+                  <td className="text-center px-2 text-amber-700">{a.pending}</td>
+                  <td className="text-center px-2 font-semibold">{a.percentage}%</td>
                 </tr>
               ))}
             </tbody>
@@ -197,9 +196,9 @@ export default function AccreditationCarpeta() {
             <p className="text-sm text-slate-500">No hay requisitos para listar.</p>
           )}
           {requisitosPorAmbito.map((g) => (
-            <div key={g.ambito.codigo} className="break-inside-avoid">
+            <div key={g.area.codigo} className="break-inside-avoid">
               <h3 className="text-base font-bold text-teal-700 mt-4 mb-2">
-                {g.ambito.codigo} · {g.ambito.nombre}
+                {g.area.codigo} · {g.area.nombre}
               </h3>
               <table className="w-full text-xs">
                 <thead>
@@ -212,7 +211,16 @@ export default function AccreditationCarpeta() {
                 </thead>
                 <tbody>
                   {g.items.map((re) => {
-                    const m = estadoMeta(re.estado);
+                    const m = simpleRequirementStatus(re);
+                    const tone = {
+                      emerald: "bg-emerald-100 text-emerald-800 border-emerald-200",
+                      slate: "bg-slate-100 text-slate-700 border-slate-200",
+                      rose: "bg-rose-100 text-rose-800 border-rose-200",
+                      orange: "bg-orange-100 text-orange-800 border-orange-200",
+                      violet: "bg-violet-100 text-violet-800 border-violet-200",
+                      sky: "bg-sky-100 text-sky-800 border-sky-200",
+                      amber: "bg-amber-100 text-amber-800 border-amber-200",
+                    }[m.tone];
                     return (
                       <tr key={re.id} className="border-b align-top">
                         <td className="py-1 pr-2 font-mono">{re.requisito.codigo}</td>
@@ -224,12 +232,19 @@ export default function AccreditationCarpeta() {
                           {re.requisito.articulo_ref && (
                             <p className="text-slate-500 text-[10px]">Referencia: {re.requisito.articulo_ref}</p>
                           )}
+                          {re.operationalEvidence && (
+                            <p className="mt-1 text-[10px] font-semibold text-teal-800">
+                              {re.operationalEvidence.completa_requisito ? "Cálculo automático" : "Avance registrado"}: {re.operationalEvidence.denominador > 0
+                                ? `${re.operationalEvidence.numerador}/${re.operationalEvidence.denominador} (${re.operationalEvidence.porcentaje}%)`
+                                : "sin datos"} · {re.operationalEvidence.resumen}
+                            </p>
+                          )}
                           {re.no_aplica_motivo && (
                             <p className="text-slate-500 italic text-[10px]">No aplica: {re.no_aplica_motivo}</p>
                           )}
                         </td>
                         <td className="text-center px-2">
-                          <span className={`inline-block text-[10px] font-semibold rounded-full px-2 py-0.5 border ${m.cls}`}>
+                          <span className={`inline-block text-[10px] font-semibold rounded-full px-2 py-0.5 border ${tone}`}>
                             {m.label}
                           </span>
                         </td>

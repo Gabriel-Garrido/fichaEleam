@@ -1,52 +1,41 @@
 import { describe, expect, it } from "vitest";
-import {
-  PROTOCOLOS_REQUERIDOS,
-  currentPeriodo,
-  hitoTone,
-  isValidPeriodoSenama,
-  protocolosFaltantes,
-} from "./cumplimientoService";
+import { PROTOCOLOS_REQUERIDOS, protocolosFaltantes, validateProtocolPayload } from "./cumplimientoService";
 
-describe("cumplimiento DS20 helpers", () => {
-  it("calcula el período trimestral SENAMA", () => {
-    expect(currentPeriodo(new Date("2026-01-15T12:00:00Z"))).toBe("2026-T1");
-    expect(currentPeriodo(new Date("2026-04-01T12:00:00Z"))).toBe("2026-T2");
-    expect(currentPeriodo(new Date("2026-09-30T12:00:00Z"))).toBe("2026-T3");
-    expect(currentPeriodo(new Date("2026-12-31T12:00:00Z"))).toBe("2026-T4");
-  });
-
-  it("valida el formato del período SENAMA", () => {
-    expect(isValidPeriodoSenama("2026-T1")).toBe(true);
-    expect(isValidPeriodoSenama("2026-T4")).toBe(true);
-    expect(isValidPeriodoSenama("2026-T0")).toBe(false);
-    expect(isValidPeriodoSenama("2026-Q1")).toBe(false);
-  });
-
-  it("exige los protocolos operativos base para una carpeta fiscalizable", () => {
+describe("protocolos mínimos de cumplimiento", () => {
+  it("conserva solo los tres protocolos documentales exigidos en esta sección", () => {
     expect(PROTOCOLOS_REQUERIDOS).toEqual([
+      "ingreso_egreso",
       "urgencias_medicas",
       "fallecimiento",
-      "ingreso",
-      "egreso",
-      "aseo_desinfeccion",
-    ]);
-
-    const faltantes = protocolosFaltantes([
-      { tipo: "urgencias_medicas", estado: "vigente" },
-      { tipo: "fallecimiento", estado: "revision" },
-      { tipo: "ingreso", estado: "vigente" },
-    ]);
-
-    expect(faltantes).toEqual([
-      "fallecimiento",
-      "egreso",
-      "aseo_desinfeccion",
     ]);
   });
 
-  it("marca hitos vencidos, cercanos y lejanos con tono consistente", () => {
-    expect(hitoTone(-1)).toBe("rose");
-    expect(hitoTone(180)).toBe("amber");
-    expect(hitoTone(181)).toBe("emerald");
+  it("considera completo únicamente un protocolo vigente", () => {
+    expect(protocolosFaltantes([
+      { tipo: "ingreso_egreso", estado: "vigente" },
+      { tipo: "urgencias_medicas", estado: "revision" },
+      { tipo: "fallecimiento", estado: "vigente" },
+    ])).toEqual(["urgencias_medicas"]);
+  });
+
+  it("valida contenido, estados y fechas antes de guardar", () => {
+    expect(validateProtocolPayload({
+      tipo: "ingreso_egreso",
+      contenido: "  Pasos claros y responsables.  ",
+      estado: "vigente",
+      fecha_aprobacion: "2026-07-01",
+      fecha_revision: "2027-07-01",
+    })).toMatchObject({ contenido: "Pasos claros y responsables.", estado: "vigente" });
+
+    expect(() => validateProtocolPayload({ tipo: "otro", contenido: "Texto" })).toThrow(/válido/i);
+    expect(() => validateProtocolPayload({ tipo: "fallecimiento", contenido: "Texto", estado: "publicado" })).toThrow(/estado válido/i);
+    expect(() => validateProtocolPayload({ tipo: "fallecimiento", contenido: "Texto", fecha_revision: "2026-02-31" })).toThrow(/fecha de revisión/i);
+    expect(() => validateProtocolPayload({ tipo: "fallecimiento", contenido: "Texto", estado: "vigente" })).toThrow(/aprobación/i);
+    expect(() => validateProtocolPayload({
+      tipo: "urgencias_medicas",
+      contenido: "Texto suficiente",
+      fecha_aprobacion: "2026-08-01",
+      fecha_revision: "2026-07-01",
+    })).toThrow(/posterior/i);
   });
 });

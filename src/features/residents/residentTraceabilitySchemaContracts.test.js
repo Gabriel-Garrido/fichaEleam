@@ -31,7 +31,6 @@ describe("resident traceability schema contracts", () => {
       "medicamentos_administraciones",
       "signos_vitales",
       "observaciones_diarias",
-      "visitas_familiar",
       "cama_asignaciones",
       "plan_cuidado_audit",
       "medicamentos_audit",
@@ -45,7 +44,6 @@ describe("resident traceability schema contracts", () => {
     expect(schema).toContain("idx_signos_residente_fecha");
     expect(schema).toContain("idx_tareas_cuidado_residente_fecha");
     expect(schema).toContain("idx_med_admin_residente_fecha");
-    expect(schema).toContain("idx_visitas_residente_fecha");
     expect(schema).toContain("idx_cama_asignaciones_residente_hist");
     expect(schema).toContain("idx_plan_cuidado_audit_residente_fecha");
     expect(schema).toContain("idx_medicamentos_audit_residente_fecha");

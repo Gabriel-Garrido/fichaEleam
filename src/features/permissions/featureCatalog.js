@@ -31,8 +31,15 @@ export const FEATURE_CATALOG = [
   },
   {
     id: "compliance",
-    label: "Cumplimiento SEREMI",
-    description: "Requisitos, documentos, protocolos, reclamos y fiscalización.",
+    label: "Cumplimiento",
+    description: "Documentos, protocolos y pendientes para una fiscalización.",
+    group: "FichaEleam",
+    roles: ["admin_eleam", "funcionario"],
+  },
+  {
+    id: "resident_payments",
+    label: "Cobranza",
+    description: "Mensualidades, otros cobros, pagos y comprobantes de residentes.",
     group: "FichaEleam",
     roles: ["admin_eleam", "funcionario"],
   },
@@ -48,7 +55,7 @@ export function featuresForRole(role) {
 export function featureDefaultMap(role, base = {}) {
   return Object.fromEntries(featuresForRole(role).map((feature) => [
     feature.id,
-    base[feature.id] !== false,
+    role === "funcionario" ? base[feature.id] === true : base[feature.id] !== false,
   ]));
 }
 

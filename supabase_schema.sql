@@ -20,6 +20,7 @@ create table if not exists public.profiles (
   telefono   text,
   rol        text not null default 'admin_eleam'
              check (rol in ('admin_eleam','funcionario','superadmin')),
+  must_reset_password boolean not null default false,
   creado_en  timestamptz not null default now()
 );
 
@@ -38,10 +39,6 @@ create table if not exists public.planes (
   destacado         boolean not null default false,
   creado_en         timestamptz not null default now()
 );
-
--- Ensure frequency columns exist (safe to run if already present).
-alter table public.planes add column if not exists frequency      integer not null default 1 check (frequency > 0);
-alter table public.planes add column if not exists frequency_type text    not null default 'months' check (frequency_type in ('days','months'));
 
 create table if not exists public.eleams (
   id                              uuid primary key default gen_random_uuid(),
@@ -80,12 +77,6 @@ create table if not exists public.eleams (
 
 alter table public.profiles
   add column if not exists eleam_id uuid references public.eleams(id) on delete set null;
-
-alter table public.profiles
-  add column if not exists must_reset_password boolean not null default false;
-
-alter table public.profiles
-  add column if not exists telefono text;
 
 create index if not exists idx_profiles_eleam_id on public.profiles(eleam_id);
 create index if not exists idx_profiles_eleam_rol on public.profiles(eleam_id, rol);
@@ -127,30 +118,15 @@ create table if not exists public.residentes (
   condicion_salud_grave_detalle text,
   creado_por               uuid references auth.users(id) on delete set null,
   creado_en                timestamptz not null default now(),
-  actualizado_en           timestamptz not null default now()
+  actualizado_en           timestamptz not null default now(),
+  unique (id, eleam_id)
 );
-
-alter table public.residentes
-  drop column if exists nombre_contacto,
-  drop column if exists telefono_contacto,
-  drop column if exists parentesco_contacto;
 
 create unique index if not exists residentes_rut_eleam_unique
   on public.residentes(rut, eleam_id)
   where rut is not null;
 create index if not exists idx_residentes_eleam_estado on public.residentes(eleam_id, estado);
 create index if not exists idx_residentes_nombre on public.residentes(apellido, nombre);
-
-alter table public.residentes
-  add column if not exists condicion_salud_grave boolean not null default false,
-  add column if not exists condicion_salud_grave_detalle text;
-
-alter table public.residentes
-  drop constraint if exists residentes_nivel_dependencia_check;
-
-alter table public.residentes
-  add constraint residentes_nivel_dependencia_check
-  check (nivel_dependencia in ('autovalente','leve','moderado','severo','total'));
 
 create table if not exists public.habitaciones (
   id              uuid primary key default gen_random_uuid(),
@@ -324,7 +300,7 @@ create table if not exists public.evaluaciones_clinicas (
   id                  uuid primary key default gen_random_uuid(),
   eleam_id            uuid not null references public.eleams(id) on delete cascade,
   residente_id        uuid not null references public.residentes(id) on delete cascade,
-  tipo                text not null check (tipo in ('barthel','katz','mna','mmse')),
+  tipo                text not null check (tipo in ('barthel','katz','mna','mmse','tinetti')),
   fecha_evaluacion    date not null default current_date,
   motivo              text not null default 'rutina'
                        check (motivo in ('ingreso','rutina','post_hospitalizacion','caida','cambio_clinico','solicitud_medica')),
@@ -344,13 +320,6 @@ create index if not exists idx_eval_eleam_proxima
   on public.evaluaciones_clinicas(eleam_id, proxima_evaluacion);
 create index if not exists idx_eval_residente_proxima
   on public.evaluaciones_clinicas(residente_id, proxima_evaluacion);
-
-alter table public.evaluaciones_clinicas
-  drop constraint if exists evaluaciones_clinicas_tipo_check;
-
-alter table public.evaluaciones_clinicas
-  add constraint evaluaciones_clinicas_tipo_check
-  check (tipo in ('barthel','katz','mna','mmse'));
 
 create table if not exists public.resident_consents (
   id                       uuid primary key default gen_random_uuid(),
@@ -655,6 +624,12 @@ create table if not exists public.planes_cuidado (
   pauta_alimentacion    text constraint planes_cuidado_pauta_alimentacion_len check (pauta_alimentacion is null or char_length(pauta_alimentacion) <= 2000),
   pauta_hidratacion     text constraint planes_cuidado_pauta_hidratacion_len check (pauta_hidratacion is null or char_length(pauta_hidratacion) <= 2000),
   restricciones         text constraint planes_cuidado_restricciones_len check (restricciones is null or char_length(restricciones) <= 2000),
+  objetivo_biopsicosocial text constraint planes_cuidado_obj_bio_len check (objetivo_biopsicosocial is null or char_length(objetivo_biopsicosocial) <= 2000),
+  valoracion_social     text constraint planes_cuidado_val_social_len check (valoracion_social is null or char_length(valoracion_social) <= 2000),
+  intereses_actividades text constraint planes_cuidado_intereses_len check (intereses_actividades is null or char_length(intereses_actividades) <= 2000),
+  necesidades_espirituales text constraint planes_cuidado_nec_esp_len check (necesidades_espirituales is null or char_length(necesidades_espirituales) <= 2000),
+  meta_rehabilitacion   text constraint planes_cuidado_meta_rehab_len check (meta_rehabilitacion is null or char_length(meta_rehabilitacion) <= 2000),
+  restricciones_actividad text constraint planes_cuidado_rest_act_len check (restricciones_actividad is null or char_length(restricciones_actividad) <= 2000),
   riesgo_caidas         text constraint planes_cuidado_riesgo_caidas_check check (riesgo_caidas in ('bajo','medio','alto') or riesgo_caidas is null),
   riesgo_up             text constraint planes_cuidado_riesgo_up_check check (riesgo_up in ('bajo','medio','alto') or riesgo_up is null),
   estado                text not null default 'activo'
@@ -663,6 +638,8 @@ create table if not exists public.planes_cuidado (
                         constraint planes_cuidado_version_positive check (version > 0),
   creado_por            uuid references auth.users(id) on delete set null,
   actualizado_por       uuid references auth.users(id) on delete set null,
+  validado_por_dt       uuid references public.profiles(id) on delete set null,
+  validado_en           timestamptz,
   creado_en             timestamptz not null default now(),
   actualizado_en        timestamptz not null default now()
 );
@@ -681,7 +658,8 @@ create table if not exists public.plan_cuidado_actividades (
   categoria             text not null constraint plan_cuidado_actividades_categoria_check check (categoria in (
                           'alimentacion','hidratacion','higiene','bano','movilidad',
                           'cambios_posicion','eliminacion','prevencion_caidas',
-                          'prevencion_up','actividad','controles','otro'
+                          'prevencion_up','actividad','controles','otro',
+                          'psicologico','social','preventivo','recreativo'
                         )),
   titulo                text not null constraint plan_cuidado_actividades_titulo_len check (char_length(trim(titulo)) between 3 and 140),
   descripcion           text constraint plan_cuidado_actividades_descripcion_len check (descripcion is null or char_length(descripcion) <= 1000),
@@ -1147,18 +1125,6 @@ create index if not exists idx_auth_provision_active
 create index if not exists idx_auth_provision_email
   on public.auth_provision_requests(lower(email), creado_en desc);
 
-create table if not exists public.familiar_residentes (
-  profile_id    uuid not null references public.profiles(id) on delete cascade,
-  residente_id  uuid not null references public.residentes(id) on delete cascade,
-  parentesco    text,
-  creado_por    uuid references auth.users(id) on delete set null,
-  creado_en     timestamptz not null default now(),
-  primary key (profile_id, residente_id)
-);
-
-create index if not exists idx_familiar_residentes_profile on public.familiar_residentes(profile_id);
-create index if not exists idx_familiar_residentes_residente on public.familiar_residentes(residente_id);
-
 create table if not exists public.funcionario_permisos (
   profile_id              uuid primary key references public.profiles(id) on delete cascade,
   crear_residentes        boolean not null default true,
@@ -1192,39 +1158,20 @@ create table if not exists public.funcionario_permisos (
   gestionar_emergencias         boolean not null default false,
   registrar_simulacros          boolean not null default true,
   gestionar_cumplimiento        boolean not null default false,
+  ver_pagos_residentes          boolean not null default false,
+  registrar_pagos_residentes    boolean not null default false,
+  enviar_comprobantes_pagos     boolean not null default false,
+  anular_pagos_residentes       boolean not null default false,
   actualizado_en               timestamptz not null default now()
 );
 
 create index if not exists idx_func_permisos_profile on public.funcionario_permisos(profile_id);
 
--- Migraciones: columnas añadidas después de la creación inicial de la tabla.
--- ADD COLUMN IF NOT EXISTS es idempotente: seguro de re-ejecutar en cualquier BD.
-alter table public.funcionario_permisos
-  add column if not exists crear_planes_cuidado            boolean not null default true,
-  add column if not exists editar_planes_cuidado           boolean not null default true,
-  add column if not exists completar_tareas_cuidado        boolean not null default true,
-  add column if not exists crear_indicaciones_medicamentos boolean not null default false,
-  add column if not exists editar_indicaciones_medicamentos boolean not null default false,
-  add column if not exists administrar_medicamentos        boolean not null default true,
-  add column if not exists validar_medicamentos_controlados boolean not null default false,
-  add column if not exists ajustar_stock_medicamentos      boolean not null default false,
-  add column if not exists asignar_camas                   boolean not null default true,
-  add column if not exists editar_indicaciones_cuidado     boolean not null default false,
-  add column if not exists aplicar_evaluaciones_clinicas   boolean not null default true,
-  add column if not exists crear_eventos_adversos          boolean not null default true,
-  add column if not exists editar_eventos_adversos         boolean not null default true,
-  add column if not exists cerrar_eventos_adversos         boolean not null default false,
-  add column if not exists editar_inventario_bienes        boolean not null default false,
-  add column if not exists gestionar_reclamos              boolean not null default true,
-  add column if not exists gestionar_emergencias           boolean not null default false,
-  add column if not exists registrar_simulacros            boolean not null default true,
-  add column if not exists gestionar_cumplimiento          boolean not null default false;
-
 create table if not exists public.eleam_feature_permissions (
   id              uuid primary key default gen_random_uuid(),
   eleam_id        uuid not null references public.eleams(id) on delete cascade,
   rol             text not null check (rol in ('admin_eleam','funcionario')),
-  feature_id      text not null check (feature_id in ('dashboard','establishment','residents','personnel','compliance')),
+  feature_id      text not null check (feature_id in ('dashboard','establishment','residents','personnel','compliance','resident_payments')),
   enabled         boolean not null default true,
   actualizado_por uuid references public.profiles(id) on delete set null,
   actualizado_en  timestamptz not null default now(),
@@ -1237,7 +1184,7 @@ create index if not exists idx_eleam_feature_permissions_eleam
 create table if not exists public.profile_feature_permissions (
   id              uuid primary key default gen_random_uuid(),
   profile_id      uuid not null references public.profiles(id) on delete cascade,
-  feature_id      text not null check (feature_id in ('dashboard','establishment','residents','personnel','compliance')),
+  feature_id      text not null check (feature_id in ('dashboard','establishment','residents','personnel','compliance','resident_payments')),
   enabled         boolean not null default true,
   actualizado_por uuid references public.profiles(id) on delete set null,
   actualizado_en  timestamptz not null default now(),
@@ -1247,33 +1194,158 @@ create table if not exists public.profile_feature_permissions (
 create index if not exists idx_profile_feature_permissions_profile
   on public.profile_feature_permissions(profile_id);
 
-create table if not exists public.visitas_familiar (
-  id              uuid primary key default gen_random_uuid(),
-  residente_id    uuid not null references public.residentes(id) on delete cascade,
-  profile_id      uuid references public.profiles(id) on delete set null,
-  fecha_hora      timestamptz not null default now(),
-  duracion_min    integer check (duracion_min is null or duracion_min between 1 and 1440),
-  notas           text,
-  registrado_por  uuid references auth.users(id) on delete set null,
-  estado          text not null default 'completada'
-                  check (estado in ('pendiente','activa','salida_pendiente','completada','cancelada')),
-  validado_por    uuid references public.profiles(id) on delete set null,
-  validado_en     timestamptz,
-  salida_anunciada_en timestamptz,
-  salida_hora     timestamptz,
-  salida_validada_por uuid references public.profiles(id) on delete set null,
-  salida_validada_en timestamptz,
-  creado_en       timestamptz not null default now()
+-- ============================================================
+-- 4. Cobranza de residentes (independiente de pagos de plataforma)
+-- ============================================================
+
+create table if not exists public.resident_payment_contacts (
+  residente_id       uuid primary key,
+  eleam_id           uuid not null references public.eleams(id) on delete cascade,
+  nombre             text not null check (char_length(trim(nombre)) between 2 and 120),
+  relacion           text not null check (char_length(trim(relacion)) between 2 and 80),
+  email              text not null check (char_length(email) <= 254 and email ~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'),
+  telefono           text check (telefono is null or char_length(telefono) <= 40),
+  creado_por         uuid references public.profiles(id) on delete set null,
+  actualizado_por    uuid references public.profiles(id) on delete set null,
+  creado_en          timestamptz not null default now(),
+  actualizado_en     timestamptz not null default now(),
+  foreign key (residente_id, eleam_id) references public.residentes(id, eleam_id) on delete cascade
 );
 
-create index if not exists idx_visitas_residente_fecha
-  on public.visitas_familiar(residente_id, fecha_hora desc);
-create index if not exists idx_visitas_estado
-  on public.visitas_familiar(residente_id, estado)
-  where estado in ('pendiente','activa','salida_pendiente');
+create index if not exists idx_resident_payment_contacts_eleam
+  on public.resident_payment_contacts(eleam_id, nombre);
+
+create table if not exists public.resident_billing_profiles (
+  residente_id       uuid primary key,
+  eleam_id           uuid not null references public.eleams(id) on delete cascade,
+  monto_mensual      integer not null check (monto_mensual > 0 and monto_mensual <= 100000000),
+  dia_vencimiento    integer not null check (dia_vencimiento between 1 and 28),
+  concepto           text not null default 'Mensualidad' check (char_length(trim(concepto)) between 2 and 160),
+  mes_inicio         date not null check (extract(day from mes_inicio) = 1),
+  activo             boolean not null default true,
+  creado_por         uuid references public.profiles(id) on delete set null,
+  actualizado_por    uuid references public.profiles(id) on delete set null,
+  creado_en          timestamptz not null default now(),
+  actualizado_en     timestamptz not null default now(),
+  foreign key (residente_id, eleam_id) references public.residentes(id, eleam_id) on delete cascade
+);
+
+create index if not exists idx_resident_billing_profiles_eleam
+  on public.resident_billing_profiles(eleam_id, activo);
+
+create table if not exists public.resident_charges (
+  id                  uuid primary key default gen_random_uuid(),
+  eleam_id            uuid not null references public.eleams(id) on delete cascade,
+  residente_id        uuid not null,
+  tipo                text not null default 'mensualidad' check (tipo in ('mensualidad','otro')),
+  concepto            text not null check (char_length(trim(concepto)) between 2 and 160),
+  periodo             date,
+  fecha_vencimiento   date not null,
+  monto               integer not null check (monto > 0 and monto <= 100000000),
+  observacion         text check (observacion is null or char_length(observacion) <= 1000),
+  estado              text not null default 'activo' check (estado in ('activo','anulado')),
+  anulado_motivo      text check (anulado_motivo is null or char_length(anulado_motivo) <= 500),
+  anulado_en          timestamptz,
+  anulado_por         uuid references public.profiles(id) on delete set null,
+  creado_por          uuid references public.profiles(id) on delete set null,
+  creado_en           timestamptz not null default now(),
+  actualizado_en      timestamptz not null default now(),
+  unique (id, eleam_id, residente_id),
+  foreign key (residente_id, eleam_id) references public.residentes(id, eleam_id) on delete restrict,
+  check (periodo is null or extract(day from periodo) = 1),
+  check ((tipo = 'mensualidad' and periodo is not null) or tipo = 'otro'),
+  check (
+    (estado = 'activo' and anulado_en is null and anulado_por is null and anulado_motivo is null)
+    or (estado = 'anulado' and anulado_en is not null and anulado_por is not null and nullif(trim(anulado_motivo), '') is not null)
+  )
+);
+
+drop index if exists public.resident_charges_month_unique;
+create unique index resident_charges_month_unique
+  on public.resident_charges(eleam_id, residente_id, periodo)
+  where tipo = 'mensualidad';
+create index if not exists idx_resident_charges_eleam_due
+  on public.resident_charges(eleam_id, fecha_vencimiento desc);
+create index if not exists idx_resident_charges_resident
+  on public.resident_charges(residente_id, fecha_vencimiento desc);
+
+create table if not exists public.resident_payments (
+  id                  uuid primary key default gen_random_uuid(),
+  eleam_id            uuid not null references public.eleams(id) on delete cascade,
+  residente_id        uuid not null references public.residentes(id) on delete restrict,
+  charge_id           uuid not null,
+  monto               integer not null check (monto > 0 and monto <= 100000000),
+  fecha_pago          date not null default current_date,
+  metodo_pago         text not null check (metodo_pago in ('transferencia','efectivo','tarjeta','cheque','otro')),
+  referencia          text check (referencia is null or char_length(referencia) <= 120),
+  observacion         text check (observacion is null or char_length(observacion) <= 1000),
+  estado              text not null default 'pendiente_documento' check (estado in ('pendiente_documento','registrado','anulado')),
+  documento_tipo      text check (documento_tipo is null or documento_tipo in ('boleta','factura','comprobante_pago','otro')),
+  documento_path      text,
+  documento_nombre    text check (documento_nombre is null or char_length(documento_nombre) <= 255),
+  documento_mime      text check (documento_mime is null or documento_mime in ('application/pdf','image/jpeg','image/png')),
+  documento_tamano    integer check (documento_tamano is null or documento_tamano between 1 and 5242880),
+  anulado_motivo      text check (anulado_motivo is null or char_length(anulado_motivo) <= 500),
+  anulado_en          timestamptz,
+  anulado_por         uuid references public.profiles(id) on delete set null,
+  registrado_por      uuid not null references public.profiles(id) on delete restrict,
+  creado_en           timestamptz not null default now(),
+  actualizado_en      timestamptz not null default now(),
+  unique (id, eleam_id),
+  constraint resident_payments_charge_fkey
+    foreign key (charge_id, eleam_id, residente_id)
+    references public.resident_charges(id, eleam_id, residente_id) on delete restrict,
+  check (
+    (estado = 'pendiente_documento' and documento_path is null and anulado_en is null)
+    or (estado = 'registrado' and documento_path is not null and documento_tipo is not null and documento_nombre is not null and documento_mime is not null and documento_tamano is not null and anulado_en is null)
+    or (estado = 'anulado' and anulado_en is not null and anulado_por is not null and nullif(trim(anulado_motivo), '') is not null)
+  )
+);
+
+create index if not exists idx_resident_payments_eleam_date
+  on public.resident_payments(eleam_id, fecha_pago desc, creado_en desc);
+create index if not exists idx_resident_payments_charge
+  on public.resident_payments(charge_id, estado);
+create index if not exists idx_resident_payments_resident
+  on public.resident_payments(residente_id, fecha_pago desc);
+
+create table if not exists public.resident_payment_deliveries (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  payment_id            uuid not null,
+  destinatario_nombre   text not null,
+  destinatario_email    text not null,
+  estado                text not null check (estado in ('enviado','fallido')),
+  proveedor_id          text,
+  error                 text check (error is null or char_length(error) <= 1000),
+  solicitado_por        uuid not null references public.profiles(id) on delete restrict,
+  enviado_en            timestamptz,
+  creado_en             timestamptz not null default now(),
+  foreign key (payment_id, eleam_id) references public.resident_payments(id, eleam_id) on delete cascade,
+  check ((estado = 'enviado' and enviado_en is not null and error is null) or estado = 'fallido')
+);
+
+create index if not exists idx_resident_payment_deliveries_payment
+  on public.resident_payment_deliveries(payment_id, creado_en desc);
+create index if not exists idx_resident_payment_deliveries_eleam
+  on public.resident_payment_deliveries(eleam_id, creado_en desc);
+
+create table if not exists public.resident_payment_audit (
+  id              uuid primary key default gen_random_uuid(),
+  eleam_id        uuid not null references public.eleams(id) on delete cascade,
+  entidad         text not null check (entidad in ('contacto','configuracion','cobro','pago','envio')),
+  entidad_id      uuid not null,
+  accion          text not null check (accion in ('crear','actualizar','adjuntar','enviar','reintentar','anular')),
+  detalle         jsonb,
+  realizado_por   uuid references public.profiles(id) on delete set null,
+  realizado_en    timestamptz not null default now()
+);
+
+create index if not exists idx_resident_payment_audit_eleam
+  on public.resident_payment_audit(eleam_id, realizado_en desc);
 
 -- ============================================================
--- 4. Pagos, MercadoPago y webhooks
+-- 5. Pagos de plataforma, MercadoPago y webhooks
 -- ============================================================
 
 create table if not exists public.pagos (
@@ -1360,20 +1432,6 @@ create table if not exists public.acred_requisitos (
   requisito_operacional    boolean not null default false,
   orden                    integer not null default 0
 );
-
-alter table public.acred_ambitos
-  add column if not exists norma_codigo text not null default 'DS20',
-  add column if not exists articulo_ref text,
-  add column if not exists fuente_url text;
-
-alter table public.acred_requisitos
-  add column if not exists norma_codigo text not null default 'DS20',
-  add column if not exists articulo_ref text,
-  add column if not exists fuente_url text,
-  add column if not exists criticidad text not null default 'media',
-  add column if not exists tipo_evidencia text not null default 'documento',
-  add column if not exists origen_evidencia text not null default 'documental',
-  add column if not exists requisito_operacional boolean not null default false;
 
 create index if not exists idx_acred_requisitos_ambito on public.acred_requisitos(ambito_id, orden);
 
@@ -1534,15 +1592,6 @@ alter table public.demo_lead_throttle enable row level security;
 
 -- CRM se define sin compatibilidad ni migraciones: si estas tablas existen,
 -- se reconstruyen para evitar contratos vacios con tipos anteriores.
-drop table if exists public.crm_email_sends cascade;
-drop table if exists public.crm_campaign_members cascade;
-drop table if exists public.crm_stage_history cascade;
-drop table if exists public.crm_tasks cascade;
-drop table if exists public.crm_interactions cascade;
-drop table if exists public.crm_email_campaigns cascade;
-drop table if exists public.crm_prospects cascade;
-drop table if exists public.crm_prospect_lists cascade;
-
 create table if not exists public.crm_prospect_lists (
   id              uuid primary key default gen_random_uuid(),
   nombre          text not null check (char_length(nombre) <= 120),
@@ -2083,10 +2132,6 @@ begin
     from public.observaciones_diarias od
     join public.residentes r on r.id = od.residente_id
     union all
-    select r.eleam_id, vf.registrado_por, vf.creado_en, 'visitas'
-    from public.visitas_familiar vf
-    join public.residentes r on r.id = vf.residente_id
-    union all
     select ma.eleam_id, ma.administrado_por, ma.administrado_en, 'medicamentos'
     from public.medicamentos_administraciones ma
     where ma.administrado_en is not null
@@ -2490,7 +2535,9 @@ begin
       and feature_id = p_feature_id
     limit 1;
 
-    return coalesce(v_profile_enabled, true);
+    -- Cerrado por defecto: el funcionario necesita una autorización de
+    -- lectura explícita para cada área. Una fila ausente nunca concede acceso.
+    return coalesce(v_profile_enabled, false);
   end if;
 
   return true;
@@ -2523,72 +2570,6 @@ as $$
           and e.fecha_vencimiento_suscripcion > now()
         )
       )
-  );
-$$;
-
-create or replace function public.familiar_can_view_residente(rid uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.familiar_residentes fr
-    join public.residentes r on r.id = fr.residente_id
-    where fr.profile_id = (select auth.uid())
-      and fr.residente_id = rid
-      and public.eleam_has_access(r.eleam_id)
-  );
-$$;
-
-create or replace function public.my_familiar_residente_ids()
-returns setof uuid
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select fr.residente_id
-  from public.familiar_residentes fr
-  join public.residentes r on r.id = fr.residente_id
-  where fr.profile_id = (select auth.uid())
-    and public.eleam_has_access(r.eleam_id);
-$$;
-
-create or replace function public.familiar_can_view_cama(p_cama_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.familiar_residentes fr
-    join public.residentes r on r.id = fr.residente_id
-    where fr.profile_id = (select auth.uid())
-      and r.cama_actual_id = p_cama_id
-      and public.eleam_has_access(r.eleam_id)
-  );
-$$;
-
-create or replace function public.familiar_can_view_habitacion(p_habitacion_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.familiar_residentes fr
-    join public.residentes r on r.id = fr.residente_id
-    join public.camas c on c.id = r.cama_actual_id
-    where fr.profile_id = (select auth.uid())
-      and c.habitacion_id = p_habitacion_id
-      and public.eleam_has_access(r.eleam_id)
   );
 $$;
 
@@ -2628,235 +2609,6 @@ as $$
   );
 $$;
 
-create or replace function public.get_familiar_resident_snapshot(
-  p_residente_id uuid,
-  p_fecha date default current_date
-)
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = public
-as $$
-declare
-  v_fecha date := coalesce(p_fecha, current_date);
-  v_residente jsonb;
-  v_vitales jsonb;
-  v_observaciones jsonb;
-  v_visitas jsonb;
-  v_cuidados jsonb;
-  v_medicacion jsonb;
-  v_plan_cuidado jsonb;
-  v_evaluaciones jsonb;
-begin
-  if p_residente_id is null or not public.familiar_can_view_residente(p_residente_id) then
-    raise exception 'No autorizado a ver este residente' using errcode = '42501';
-  end if;
-
-  select jsonb_build_object(
-    'id', r.id,
-    'nombre', r.nombre,
-    'apellido', r.apellido,
-    'fecha_nacimiento', r.fecha_nacimiento,
-    'estado', r.estado,
-    'habitacion', h.codigo,
-    'cama', c.codigo,
-    'ubicacion_label', case
-      when h.codigo is not null and c.codigo is not null then 'Hab. ' || h.codigo || ' · Cama ' || c.codigo
-      when h.codigo is not null then 'Hab. ' || h.codigo
-      when c.codigo is not null then 'Cama ' || c.codigo
-      else null
-    end,
-    'cama_actual_id', r.cama_actual_id,
-    'ubicacion', case
-      when c.id is null then null
-      else jsonb_build_object(
-        'cama_id', c.id,
-        'cama_codigo', c.codigo,
-        'cama_nombre', c.nombre,
-        'cama_estado', c.estado,
-        'habitacion_id', h.id,
-        'habitacion_codigo', h.codigo,
-        'habitacion_nombre', h.nombre,
-        'piso', h.piso,
-        'sector', h.sector
-      )
-    end,
-    'nivel_dependencia', r.nivel_dependencia,
-    'fecha_ingreso', r.fecha_ingreso,
-    'prevision', r.prevision,
-    'diagnostico_principal', r.diagnostico_principal,
-    'diagnosticos_secundarios', coalesce(to_jsonb(r.diagnosticos_secundarios), '[]'::jsonb),
-    'alergias', coalesce(to_jsonb(r.alergias), '[]'::jsonb),
-    'grupo_sanguineo', r.grupo_sanguineo,
-    'indice_barthel', r.indice_barthel,
-    'escala_katz', r.escala_katz,
-    'parentesco', fr.parentesco
-  )
-  into v_residente
-  from public.residentes r
-  left join public.camas c on c.id = r.cama_actual_id
-  left join public.habitaciones h on h.id = c.habitacion_id
-  left join public.familiar_residentes fr
-    on fr.residente_id = r.id
-   and fr.profile_id = (select auth.uid())
-  where r.id = p_residente_id;
-
-  select coalesce(jsonb_agg(to_jsonb(v) order by v.fecha_hora desc), '[]'::jsonb)
-  into v_vitales
-  from (
-    select
-      id, fecha_hora, turno, presion_sistolica, presion_diastolica,
-      frecuencia_cardiaca, frecuencia_respiratoria, temperatura,
-      saturacion_oxigeno, glucosa, peso, dolor_escala, estado_conciencia,
-      observaciones
-    from public.signos_vitales
-    where residente_id = p_residente_id
-      and (fecha_hora at time zone 'America/Santiago')::date = v_fecha
-    order by fecha_hora desc
-    limit 12
-  ) v;
-
-  select coalesce(jsonb_agg(to_jsonb(o) order by o.fecha_hora desc), '[]'::jsonb)
-  into v_observaciones
-  from (
-    select
-      id,
-      fecha_hora,
-      turno,
-      tipo,
-      nullif(trim(resumen_familiar), '') as resumen,
-      requiere_seguimiento,
-      seguimiento_fecha,
-      seguimiento_turno,
-      seguimiento_estado
-    from public.observaciones_diarias
-    where residente_id = p_residente_id
-      and visible_familiar = true
-      and (fecha_hora at time zone 'America/Santiago')::date = v_fecha
-    order by fecha_hora desc
-    limit 30
-  ) o;
-
-  select coalesce(jsonb_agg(to_jsonb(c) order by c.hora asc), '[]'::jsonb)
-  into v_cuidados
-  from (
-    select
-      t.id,
-      t.fecha,
-      t.turno,
-      t.hora,
-      t.estado,
-      t.motivo_omision,
-      t.requiere_seguimiento,
-      t.reprogramada_para,
-      a.categoria,
-      nullif(trim(a.resumen_familiar), '') as titulo,
-      nullif(trim(a.resumen_familiar), '') as resumen
-    from public.tareas_cuidado t
-    join public.plan_cuidado_actividades a on a.id = t.actividad_id
-    where t.residente_id = p_residente_id
-      and a.visible_familiar = true
-      and t.fecha = v_fecha
-    order by t.hora asc
-    limit 40
-  ) c;
-
-  select coalesce(jsonb_agg(to_jsonb(m) order by m.hora asc), '[]'::jsonb)
-  into v_medicacion
-  from (
-    select
-      ma.id,
-      ma.fecha,
-      ma.turno,
-      ma.hora,
-      ma.estado,
-      ma.motivo_omision,
-      ma.requiere_seguimiento,
-      i.via,
-      nullif(trim(i.resumen_familiar), '') as resumen
-    from public.medicamentos_administraciones ma
-    join public.medicamentos_indicaciones i on i.id = ma.indicacion_id
-    where ma.residente_id = p_residente_id
-      and i.visible_familiar = true
-      and ma.fecha = v_fecha
-    order by ma.hora asc
-    limit 40
-  ) m;
-
-  select coalesce(jsonb_agg(to_jsonb(vis) order by vis.fecha_hora desc), '[]'::jsonb)
-  into v_visitas
-  from (
-    select
-      id,
-      fecha_hora,
-      duracion_min,
-      notas,
-      estado,
-      validado_en,
-      salida_anunciada_en,
-      salida_hora,
-      salida_validada_en
-    from public.visitas_familiar
-    where residente_id = p_residente_id
-      and profile_id = (select auth.uid())
-      and (fecha_hora at time zone 'America/Santiago')::date = v_fecha
-    order by fecha_hora desc
-    limit 20
-  ) vis;
-
-  select jsonb_build_object(
-    'titulo',             titulo,
-    'objetivos',          objetivos,
-    'pauta_alimentacion', pauta_alimentacion,
-    'pauta_hidratacion',  pauta_hidratacion,
-    'restricciones',      restricciones,
-    'riesgo_caidas',      riesgo_caidas,
-    'riesgo_up',          riesgo_up,
-    'version',            version,
-    'actualizado_en',     actualizado_en
-  )
-  into v_plan_cuidado
-  from public.planes_cuidado
-  where residente_id = p_residente_id
-    and estado = 'activo'
-  limit 1;
-
-  select coalesce(
-    jsonb_object_agg(tipo, jsonb_build_object(
-      'fecha_evaluacion', fecha_evaluacion,
-      'proxima_evaluacion', proxima_evaluacion,
-      'puntaje', puntaje,
-      'resultado', resultado
-    )),
-    '{}'::jsonb
-  )
-  into v_evaluaciones
-  from (
-    select distinct on (tipo) tipo, fecha_evaluacion, proxima_evaluacion, puntaje, resultado
-    from public.evaluaciones_clinicas
-    where residente_id = p_residente_id
-    order by tipo, fecha_evaluacion desc
-  ) ultimas;
-
-  return jsonb_build_object(
-    'date', v_fecha,
-    'resident', v_residente,
-    'vitals', v_vitales,
-    'observations', v_observaciones,
-    'care', v_cuidados,
-    'medications', v_medicacion,
-    'visits', v_visitas,
-    'care_plan', v_plan_cuidado,
-    'evaluaciones', coalesce(v_evaluaciones, '{}'::jsonb),
-    'generated_at', now()
-  );
-end;
-$$;
-
-revoke all on function public.get_familiar_resident_snapshot(uuid, date) from public;
-grant execute on function public.get_familiar_resident_snapshot(uuid, date) to authenticated;
-
 create or replace function public.listar_trazabilidad_residente(
   p_residente_id uuid,
   p_desde date default null,
@@ -2891,7 +2643,8 @@ begin
 
   if public.my_rol() not in ('admin_eleam','funcionario','superadmin')
      or not public.eleam_has_access(v_eleam_id)
-     or (public.my_rol() <> 'superadmin' and public.my_eleam_id() is distinct from v_eleam_id) then
+     or (public.my_rol() <> 'superadmin' and public.my_eleam_id() is distinct from v_eleam_id)
+     or not public.can_access_feature('residents') then
     raise exception 'No autorizado a ver trazabilidad de este residente' using errcode = '42501';
   end if;
 
@@ -2985,22 +2738,6 @@ begin
       left join public.profiles p on p.id = o.registrado_por
       where o.residente_id = p_residente_id
 
-      union all
-
-      select
-        vf.id,
-        'visitas'::text,
-        vf.fecha_hora,
-        vf.estado,
-        'Visita'::text,
-        concat_ws(' · ', case when vf.duracion_min is not null then vf.duracion_min || ' min' end, nullif(vf.notas, '')),
-        'visitas_familiar'::text,
-        vf.id,
-        coalesce(vf.salida_validada_por, vf.validado_por, vf.registrado_por, vf.profile_id),
-        p.nombre
-      from public.visitas_familiar vf
-      left join public.profiles p on p.id = coalesce(vf.salida_validada_por, vf.validado_por, vf.registrado_por, vf.profile_id)
-      where vf.residente_id = p_residente_id
 
       union all
 
@@ -3087,12 +2824,6 @@ $$;
 revoke all on function public.listar_trazabilidad_residente(uuid, date, date, text[], text, integer) from public;
 grant execute on function public.listar_trazabilidad_residente(uuid, date, date, text[], text, integer) to authenticated;
 
-revoke all on function public.familiar_can_view_cama(uuid) from public;
-grant execute on function public.familiar_can_view_cama(uuid) to authenticated;
-
-revoke all on function public.familiar_can_view_habitacion(uuid) from public;
-grant execute on function public.familiar_can_view_habitacion(uuid) to authenticated;
-
 revoke all on function public.habitacion_belongs_to_eleam(uuid, uuid) from public;
 grant execute on function public.habitacion_belongs_to_eleam(uuid, uuid) to authenticated;
 
@@ -3109,11 +2840,41 @@ as $$
 declare
   v_rol    text := public.my_rol();
   v_result boolean;
+  v_feature_id text;
 begin
   if v_rol in ('admin_eleam', 'superadmin') then return true; end if;
   if v_rol <> 'funcionario' then return false; end if;
 
   if not public.eleam_has_access(public.my_eleam_id()) then
+    return false;
+  end if;
+
+  v_feature_id := case
+    when perm in ('asignar_camas', 'editar_inventario_bienes') then 'establishment'
+    when perm in (
+      'crear_residentes', 'editar_residentes', 'eliminar_residentes',
+      'crear_signos_vitales', 'editar_signos_vitales', 'eliminar_signos_vitales',
+      'crear_observaciones', 'editar_observaciones', 'eliminar_observaciones',
+      'crear_planes_cuidado', 'editar_planes_cuidado', 'completar_tareas_cuidado',
+      'editar_indicaciones_cuidado', 'aplicar_evaluaciones_clinicas',
+      'crear_eventos_adversos', 'editar_eventos_adversos', 'cerrar_eventos_adversos',
+      'crear_indicaciones_medicamentos', 'editar_indicaciones_medicamentos',
+      'administrar_medicamentos', 'validar_medicamentos_controlados',
+      'ajustar_stock_medicamentos'
+    ) then 'residents'
+    when perm in (
+      'subir_acreditacion', 'editar_acreditacion', 'archivar_acreditacion',
+      'gestionar_reclamos', 'gestionar_emergencias', 'registrar_simulacros',
+      'gestionar_cumplimiento'
+    ) then 'compliance'
+    when perm in (
+      'ver_pagos_residentes', 'registrar_pagos_residentes',
+      'enviar_comprobantes_pagos', 'anular_pagos_residentes'
+    ) then 'resident_payments'
+    else null
+  end;
+
+  if v_feature_id is null or not public.can_access_feature(v_feature_id) then
     return false;
   end if;
 
@@ -3149,6 +2910,10 @@ begin
     when 'gestionar_emergencias'         then gestionar_emergencias
     when 'registrar_simulacros'          then registrar_simulacros
     when 'gestionar_cumplimiento'        then gestionar_cumplimiento
+    when 'ver_pagos_residentes'          then ver_pagos_residentes
+    when 'registrar_pagos_residentes'    then registrar_pagos_residentes and ver_pagos_residentes
+    when 'enviar_comprobantes_pagos'     then enviar_comprobantes_pagos and ver_pagos_residentes
+    when 'anular_pagos_residentes'       then anular_pagos_residentes and ver_pagos_residentes
     else false
   end
   into v_result
@@ -3167,6 +2932,412 @@ $$;
 
 revoke all on function public.funcionario_can(text) from public;
 grant execute on function public.funcionario_can(text) to authenticated;
+
+create or replace function public.guardar_contacto_pago_residente(
+  p_residente_id uuid,
+  p_nombre text,
+  p_relacion text,
+  p_email text,
+  p_telefono text default null
+)
+returns public.resident_payment_contacts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_eleam_id uuid := public.my_eleam_id();
+  v_result public.resident_payment_contacts;
+begin
+  if v_uid is null or v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario')
+     or not public.eleam_has_access(v_eleam_id)
+     or not public.funcionario_can('registrar_pagos_residentes') then
+    raise exception 'No autorizado para guardar contactos de pago' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.residentes where id = p_residente_id and eleam_id = v_eleam_id) then
+    raise exception 'Residente no encontrado' using errcode = 'P0001';
+  end if;
+
+  insert into public.resident_payment_contacts (
+    residente_id, eleam_id, nombre, relacion, email, telefono,
+    creado_por, actualizado_por
+  ) values (
+    p_residente_id, v_eleam_id, trim(p_nombre), trim(p_relacion), lower(trim(p_email)),
+    nullif(trim(coalesce(p_telefono, '')), ''), v_uid, v_uid
+  )
+  on conflict (residente_id) do update set
+    nombre = excluded.nombre,
+    relacion = excluded.relacion,
+    email = excluded.email,
+    telefono = excluded.telefono,
+    actualizado_por = v_uid,
+    actualizado_en = now()
+  returning * into v_result;
+
+  insert into public.resident_payment_audit (eleam_id, entidad, entidad_id, accion, realizado_por)
+  values (v_eleam_id, 'contacto', p_residente_id,
+    case when v_result.creado_en = v_result.actualizado_en then 'crear' else 'actualizar' end,
+    v_uid);
+  return v_result;
+end;
+$$;
+
+create or replace function public.actualizar_mensualidad_residente(
+  p_residente_id uuid,
+  p_monto_mensual integer,
+  p_dia_vencimiento integer,
+  p_concepto text,
+  p_mes_inicio date,
+  p_activo boolean
+)
+returns public.resident_billing_profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_eleam_id uuid := public.my_eleam_id();
+  v_result public.resident_billing_profiles;
+begin
+  if v_uid is null or v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario')
+     or not public.eleam_has_access(v_eleam_id)
+     or not public.funcionario_can('registrar_pagos_residentes') then
+    raise exception 'No autorizado para configurar mensualidades' using errcode = '42501';
+  end if;
+  if p_monto_mensual not between 1 and 100000000 or p_dia_vencimiento not between 1 and 28
+     or p_mes_inicio is null or char_length(trim(coalesce(p_concepto, ''))) < 2 then
+    raise exception 'Configuracion mensual invalida' using errcode = 'P0001';
+  end if;
+  update public.resident_billing_profiles set
+    monto_mensual = p_monto_mensual, dia_vencimiento = p_dia_vencimiento,
+    concepto = trim(p_concepto), mes_inicio = date_trunc('month', p_mes_inicio)::date,
+    activo = coalesce(p_activo, false), actualizado_por = v_uid, actualizado_en = now()
+  where residente_id = p_residente_id and eleam_id = v_eleam_id
+  returning * into v_result;
+  if v_result.residente_id is null then raise exception 'Mensualidad no encontrada' using errcode = 'P0001'; end if;
+  insert into public.resident_payment_audit (eleam_id, entidad, entidad_id, accion, detalle, realizado_por)
+  values (v_eleam_id, 'configuracion', p_residente_id, 'actualizar', jsonb_build_object('activo', p_activo), v_uid);
+  return v_result;
+end;
+$$;
+
+create or replace function public.resident_payment_snapshot()
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid := public.my_eleam_id();
+begin
+  if (select auth.uid()) is null or v_eleam_id is null
+     or public.my_rol() not in ('admin_eleam','funcionario')
+     or not public.eleam_has_access(v_eleam_id)
+     or not public.funcionario_can('ver_pagos_residentes') then
+    raise exception 'No autorizado para ver cobranza' using errcode = '42501';
+  end if;
+
+  insert into public.resident_charges (
+    eleam_id, residente_id, tipo, concepto, periodo, fecha_vencimiento,
+    monto, observacion, creado_por
+  )
+  select
+    bp.eleam_id, bp.residente_id, 'mensualidad', bp.concepto, month_value::date,
+    make_date(extract(year from month_value)::integer, extract(month from month_value)::integer, bp.dia_vencimiento),
+    bp.monto_mensual, 'Generado desde la mensualidad configurada', null
+  from public.resident_billing_profiles bp
+  join public.residentes r on r.id = bp.residente_id and r.eleam_id = bp.eleam_id
+  cross join lateral generate_series(
+    greatest(bp.mes_inicio, (date_trunc('month', current_date) - interval '23 months')::date),
+    date_trunc('month', current_date)::date,
+    interval '1 month'
+  ) month_value
+  where bp.eleam_id = v_eleam_id and bp.activo = true
+    and r.estado in ('activo','hospitalizado')
+  on conflict (eleam_id, residente_id, periodo)
+    where tipo = 'mensualidad'
+  do nothing;
+
+  return jsonb_build_object(
+    'eleamId', v_eleam_id,
+    'residents', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id, 'nombre', r.nombre, 'apellido', r.apellido, 'estado', r.estado
+      ) order by r.apellido, r.nombre)
+      from public.residentes r
+      where r.eleam_id = v_eleam_id
+        and (r.estado in ('activo','hospitalizado') or exists (
+          select 1 from public.resident_charges c where c.residente_id = r.id
+        ))
+    ), '[]'::jsonb),
+    'contacts', coalesce((
+      select jsonb_agg(to_jsonb(c) - 'creado_por' - 'actualizado_por')
+      from public.resident_payment_contacts c where c.eleam_id = v_eleam_id
+    ), '[]'::jsonb),
+    'billingProfiles', coalesce((
+      select jsonb_agg(to_jsonb(bp) - 'creado_por' - 'actualizado_por' order by bp.actualizado_en desc)
+      from public.resident_billing_profiles bp where bp.eleam_id = v_eleam_id
+    ), '[]'::jsonb),
+    'charges', coalesce((
+      select jsonb_agg(to_jsonb(c) order by c.fecha_vencimiento desc, c.creado_en desc)
+      from public.resident_charges c where c.eleam_id = v_eleam_id
+    ), '[]'::jsonb),
+    'payments', coalesce((
+      select jsonb_agg(to_jsonb(p) order by p.fecha_pago desc, p.creado_en desc)
+      from public.resident_payments p where p.eleam_id = v_eleam_id
+    ), '[]'::jsonb),
+    'deliveries', coalesce((
+      select jsonb_agg(to_jsonb(d) order by d.creado_en desc)
+      from public.resident_payment_deliveries d where d.eleam_id = v_eleam_id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.crear_cobro_residente(
+  p_residente_id uuid,
+  p_tipo text,
+  p_concepto text,
+  p_periodo date,
+  p_fecha_vencimiento date,
+  p_monto integer,
+  p_observacion text default null,
+  p_repetir_mensual boolean default false
+)
+returns public.resident_charges
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_eleam_id uuid := public.my_eleam_id();
+  v_result public.resident_charges;
+begin
+  if v_uid is null or v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario')
+     or not public.eleam_has_access(v_eleam_id)
+     or not public.funcionario_can('registrar_pagos_residentes') then
+    raise exception 'No autorizado para crear cobros' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.residentes
+    where id = p_residente_id and eleam_id = v_eleam_id
+      and estado in ('activo','hospitalizado')
+  ) then
+    raise exception 'Solo puedes crear cobros para residentes activos' using errcode = 'P0001';
+  end if;
+  if p_tipo not in ('mensualidad','otro') then raise exception 'Tipo de cobro invalido' using errcode = 'P0001'; end if;
+  if p_tipo = 'mensualidad' and p_periodo is null then raise exception 'Periodo requerido' using errcode = 'P0001'; end if;
+  if p_monto is null or p_monto <= 0 or p_monto > 100000000 then raise exception 'Monto invalido' using errcode = 'P0001'; end if;
+  if p_fecha_vencimiento is null then raise exception 'Fecha de vencimiento requerida' using errcode = 'P0001'; end if;
+  if p_tipo = 'mensualidad'
+     and date_trunc('month', p_fecha_vencimiento)::date <> date_trunc('month', p_periodo)::date then
+    raise exception 'El vencimiento debe pertenecer al periodo de la mensualidad' using errcode = 'P0001';
+  end if;
+
+  -- Un cobro mensual único no debe crear, sobrescribir ni pausar una
+  -- configuración recurrente que ya exista para el residente.
+  if p_tipo = 'mensualidad' and coalesce(p_repetir_mensual, false) then
+    insert into public.resident_billing_profiles (
+      residente_id, eleam_id, monto_mensual, dia_vencimiento, concepto,
+      mes_inicio, activo, creado_por, actualizado_por
+    ) values (
+      p_residente_id, v_eleam_id, p_monto, least(extract(day from p_fecha_vencimiento)::integer, 28),
+      trim(p_concepto), date_trunc('month', p_periodo)::date, true, v_uid, v_uid
+    )
+    on conflict (residente_id) do update set
+      monto_mensual = excluded.monto_mensual,
+      dia_vencimiento = excluded.dia_vencimiento,
+      concepto = excluded.concepto,
+      mes_inicio = excluded.mes_inicio,
+      activo = excluded.activo,
+      actualizado_por = v_uid,
+      actualizado_en = now();
+  end if;
+
+  insert into public.resident_charges (
+    eleam_id, residente_id, tipo, concepto, periodo, fecha_vencimiento,
+    monto, observacion, creado_por
+  ) values (
+    v_eleam_id, p_residente_id, p_tipo, trim(p_concepto),
+    case when p_tipo = 'mensualidad' then date_trunc('month', p_periodo)::date else null end,
+    p_fecha_vencimiento, p_monto, nullif(trim(coalesce(p_observacion, '')), ''), v_uid
+  ) returning * into v_result;
+
+  insert into public.resident_payment_audit (eleam_id, entidad, entidad_id, accion, detalle, realizado_por)
+  values (v_eleam_id, 'cobro', v_result.id, 'crear', jsonb_build_object('monto', p_monto, 'tipo', p_tipo), v_uid);
+  return v_result;
+end;
+$$;
+
+create or replace function public.iniciar_pago_residente(
+  p_charge_id uuid,
+  p_monto integer,
+  p_fecha_pago date,
+  p_metodo_pago text,
+  p_referencia text default null,
+  p_observacion text default null
+)
+returns public.resident_payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_eleam_id uuid := public.my_eleam_id();
+  v_charge public.resident_charges;
+  v_used bigint;
+  v_result public.resident_payments;
+begin
+  if v_uid is null or v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario')
+     or not public.eleam_has_access(v_eleam_id)
+     or not public.funcionario_can('registrar_pagos_residentes') then
+    raise exception 'No autorizado para registrar pagos' using errcode = '42501';
+  end if;
+  select * into v_charge from public.resident_charges
+  where id = p_charge_id and eleam_id = v_eleam_id for update;
+  if v_charge.id is null or v_charge.estado <> 'activo' then
+    raise exception 'Cobro no disponible' using errcode = 'P0001';
+  end if;
+  if not exists (select 1 from public.resident_payment_contacts where residente_id = v_charge.residente_id and eleam_id = v_eleam_id) then
+    raise exception 'Falta el contacto de pagos del residente' using errcode = 'P0001';
+  end if;
+  if p_monto is null or p_monto <= 0 then raise exception 'Monto invalido' using errcode = 'P0001'; end if;
+  if p_fecha_pago is null or p_fecha_pago > current_date then raise exception 'Fecha de pago invalida' using errcode = 'P0001'; end if;
+  if p_metodo_pago not in ('transferencia','efectivo','tarjeta','cheque','otro') then raise exception 'Medio de pago invalido' using errcode = 'P0001'; end if;
+
+  update public.resident_payments set
+    estado = 'anulado', anulado_motivo = 'Registro incompleto expirado',
+    anulado_en = now(), anulado_por = registrado_por, actualizado_en = now()
+  where charge_id = p_charge_id and estado = 'pendiente_documento'
+    and creado_en < now() - interval '1 hour';
+
+  select coalesce(sum(monto), 0) into v_used
+  from public.resident_payments
+  where charge_id = p_charge_id and estado in ('pendiente_documento','registrado');
+  if (
+    select count(*) from public.resident_payments
+    where charge_id = p_charge_id and estado = 'pendiente_documento'
+  ) >= 3 then
+    raise exception 'Completa o cancela los pagos pendientes antes de iniciar otro' using errcode = 'P0001';
+  end if;
+  if v_used + p_monto > v_charge.monto then
+    raise exception 'El monto supera el saldo pendiente' using errcode = 'P0001';
+  end if;
+
+  insert into public.resident_payments (
+    eleam_id, residente_id, charge_id, monto, fecha_pago, metodo_pago,
+    referencia, observacion, registrado_por
+  ) values (
+    v_eleam_id, v_charge.residente_id, v_charge.id, p_monto, p_fecha_pago,
+    p_metodo_pago, nullif(trim(coalesce(p_referencia, '')), ''),
+    nullif(trim(coalesce(p_observacion, '')), ''), v_uid
+  ) returning * into v_result;
+
+  insert into public.resident_payment_audit (eleam_id, entidad, entidad_id, accion, detalle, realizado_por)
+  values (v_eleam_id, 'pago', v_result.id, 'crear', jsonb_build_object('monto', p_monto, 'charge_id', p_charge_id), v_uid);
+  return v_result;
+end;
+$$;
+
+-- La asociación final del archivo se realiza exclusivamente en la Edge
+-- Function, después de validar la firma binaria real. Eliminar cualquier
+-- versión previa evita que un cliente marque como seguro un MIME declarado.
+drop function if exists public.adjuntar_documento_pago_residente(uuid, text, text, text, text, integer);
+
+create or replace function public.anular_pago_residente(p_payment_id uuid, p_motivo text)
+returns public.resident_payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_eleam_id uuid := public.my_eleam_id();
+  v_result public.resident_payments;
+begin
+  if v_uid is null or v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario') or not public.eleam_has_access(v_eleam_id)
+     or not (
+       public.funcionario_can('anular_pagos_residentes')
+       or exists (select 1 from public.resident_payments where id = p_payment_id and estado = 'pendiente_documento' and registrado_por = v_uid)
+     ) then
+    raise exception 'No autorizado para anular pagos' using errcode = '42501';
+  end if;
+  if char_length(trim(coalesce(p_motivo, ''))) < 5 then raise exception 'Indica un motivo de anulacion' using errcode = 'P0001'; end if;
+  update public.resident_payments set estado = 'anulado', anulado_motivo = trim(p_motivo),
+    anulado_en = now(), anulado_por = v_uid, actualizado_en = now()
+  where id = p_payment_id and eleam_id = v_eleam_id and estado <> 'anulado'
+  returning * into v_result;
+  if v_result.id is null then raise exception 'Pago no encontrado' using errcode = 'P0001'; end if;
+  insert into public.resident_payment_audit (eleam_id, entidad, entidad_id, accion, detalle, realizado_por)
+  values (v_eleam_id, 'pago', p_payment_id, 'anular', jsonb_build_object('motivo', trim(p_motivo)), v_uid);
+  return v_result;
+end;
+$$;
+
+create or replace function public.anular_cobro_residente(p_charge_id uuid, p_motivo text)
+returns public.resident_charges
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_eleam_id uuid := public.my_eleam_id();
+  v_result public.resident_charges;
+begin
+  if v_uid is null or v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario') or not public.eleam_has_access(v_eleam_id)
+     or not public.funcionario_can('anular_pagos_residentes') then
+    raise exception 'No autorizado para anular cobros' using errcode = '42501';
+  end if;
+  if char_length(trim(coalesce(p_motivo, ''))) < 5 then raise exception 'Indica un motivo de anulacion' using errcode = 'P0001'; end if;
+  if exists (select 1 from public.resident_payments where charge_id = p_charge_id and estado = 'registrado') then
+    raise exception 'Anula primero los pagos registrados para este cobro' using errcode = 'P0001';
+  end if;
+  update public.resident_charges set estado = 'anulado', anulado_motivo = trim(p_motivo),
+    anulado_en = now(), anulado_por = v_uid, actualizado_en = now()
+  where id = p_charge_id and eleam_id = v_eleam_id and estado = 'activo'
+  returning * into v_result;
+  if v_result.id is null then raise exception 'Cobro no encontrado' using errcode = 'P0001'; end if;
+  insert into public.resident_payment_audit (eleam_id, entidad, entidad_id, accion, detalle, realizado_por)
+  values (v_eleam_id, 'cobro', p_charge_id, 'anular', jsonb_build_object('motivo', trim(p_motivo)), v_uid);
+  return v_result;
+end;
+$$;
+
+revoke all on function public.guardar_contacto_pago_residente(uuid, text, text, text, text) from public;
+revoke all on function public.resident_payment_snapshot() from public;
+revoke all on function public.actualizar_mensualidad_residente(uuid, integer, integer, text, date, boolean) from public;
+revoke all on function public.crear_cobro_residente(uuid, text, text, date, date, integer, text, boolean) from public;
+revoke all on function public.iniciar_pago_residente(uuid, integer, date, text, text, text) from public;
+revoke all on function public.anular_pago_residente(uuid, text) from public;
+revoke all on function public.anular_cobro_residente(uuid, text) from public;
+grant execute on function public.guardar_contacto_pago_residente(uuid, text, text, text, text) to authenticated;
+grant execute on function public.resident_payment_snapshot() to authenticated;
+grant execute on function public.actualizar_mensualidad_residente(uuid, integer, integer, text, date, boolean) to authenticated;
+grant execute on function public.crear_cobro_residente(uuid, text, text, date, date, integer, text, boolean) to authenticated;
+grant execute on function public.iniciar_pago_residente(uuid, integer, date, text, text, text) to authenticated;
+grant execute on function public.anular_pago_residente(uuid, text) to authenticated;
+grant execute on function public.anular_cobro_residente(uuid, text) to authenticated;
+
+create or replace function public.can_access_compliance()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.my_rol() = 'superadmin'
+    or public.can_access_feature('compliance');
+$$;
+
+revoke all on function public.can_access_compliance() from public;
+grant execute on function public.can_access_compliance() to authenticated;
 
 revoke all on function public.can_access_feature(text) from public;
 grant execute on function public.can_access_feature(text) to authenticated;
@@ -3668,7 +3839,10 @@ begin
 
   if (select auth.uid()) is not null
      and not public.is_superadmin()
-     and p_eleam_id is distinct from public.my_eleam_id() then
+     and (
+       p_eleam_id is distinct from public.my_eleam_id()
+       or not public.can_access_compliance()
+     ) then
     raise exception 'No autorizado a provisionar requisitos para este ELEAM'
       using errcode = '42501';
   end if;
@@ -3730,7 +3904,10 @@ begin
   end if;
 
   if not public.is_superadmin()
-     and p_eleam_id is distinct from public.my_eleam_id() then
+     and (
+       p_eleam_id is distinct from public.my_eleam_id()
+       or not public.can_access_compliance()
+     ) then
     raise exception 'No autorizado a marcar vencidos para este ELEAM'
       using errcode = '42501';
   end if;
@@ -4415,6 +4592,10 @@ begin
     return;
   end if;
 
+  if not public.can_access_feature('residents') then
+    return;
+  end if;
+
   return query
   with tipos(tipo) as (
     values ('barthel'::text), ('katz'::text), ('mna'::text), ('mmse'::text)
@@ -4498,6 +4679,10 @@ begin
   end if;
 
   if not public.is_superadmin() and not public.eleam_has_access(v_eleam_id) then
+    return;
+  end if;
+
+  if not public.can_access_feature('personnel') then
     return;
   end if;
 
@@ -4656,20 +4841,24 @@ begin
     return;
   end if;
 
+  if not public.can_access_feature('residents') then
+    return;
+  end if;
+
   return query
   with latest_consent as (
-    select distinct on (residente_id)
-      residente_id, fecha_consentimiento
-    from public.resident_consents
-    where eleam_id = v_eleam_id
-    order by residente_id, fecha_consentimiento desc, creado_en desc
+    select distinct on (rc.residente_id)
+      rc.residente_id, rc.fecha_consentimiento
+    from public.resident_consents rc
+    where rc.eleam_id = v_eleam_id
+    order by rc.residente_id, rc.fecha_consentimiento desc, rc.creado_en desc
   ),
   latest_eval as (
-    select distinct on (residente_id, tipo)
-      residente_id, tipo, fecha_evaluacion
-    from public.evaluaciones_clinicas
-    where eleam_id = v_eleam_id
-    order by residente_id, tipo, fecha_evaluacion desc
+    select distinct on (ec.residente_id, ec.tipo)
+      ec.residente_id, ec.tipo, ec.fecha_evaluacion
+    from public.evaluaciones_clinicas ec
+    where ec.eleam_id = v_eleam_id
+    order by ec.residente_id, ec.tipo, ec.fecha_evaluacion desc
   ),
   health as (
     select
@@ -4714,12 +4903,333 @@ begin
   left join health h on h.residente_id = r.id
   where r.eleam_id = v_eleam_id
     and r.estado in ('activo','hospitalizado')
-  order by pendientes desc, r.apellido asc, r.nombre asc;
+  order by 15 desc, r.apellido asc, r.nombre asc;
 end;
 $$;
 
 revoke all on function public.ds20_resident_compliance_summary() from public;
 grant execute on function public.ds20_resident_compliance_summary() to authenticated;
+
+-- Evidencia operacional calculada desde los registros del ELEAM.
+-- Solo las reglas cuyo medio verificador queda completamente demostrado por
+-- datos estructurados pueden reemplazar el estado manual en la interfaz.
+-- Las reglas parciales informan avance, pero nunca certifican cumplimiento.
+create or replace function public.ds20_operational_evidence_summary()
+returns table (
+  requisito_codigo text,
+  tipo_calculo text,
+  estado_calculado text,
+  numerador integer,
+  denominador integer,
+  porcentaje integer,
+  resumen text,
+  detalle text,
+  ruta_origen text,
+  completa_requisito boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_eleam_id uuid;
+  v_residentes integer := 0;
+  v_consentimientos integer := 0;
+  v_evaluaciones integer := 0;
+  v_red_salud integer := 0;
+  v_planes integer := 0;
+  v_carpetas integer := 0;
+  v_personal integer := 0;
+  v_capacitados integer := 0;
+  v_turnos integer := 0;
+  v_turnos_dotacion integer := 0;
+  v_turnos_tens integer := 0;
+  v_protocolos_ingreso integer := 0;
+  v_protocolos_clinicos integer := 0;
+  v_plan_emergencia integer := 0;
+  v_habitaciones integer := 0;
+  v_habitaciones_max_camas integer := 0;
+  v_lotes_medicamentos integer := 0;
+  v_lotes_medicamentos_trazables integer := 0;
+begin
+  if (select auth.uid()) is null then
+    return;
+  end if;
+
+  v_eleam_id := public.my_eleam_id();
+  if v_eleam_id is null then
+    return;
+  end if;
+
+  if not public.is_superadmin() and (
+    not public.eleam_has_access(v_eleam_id)
+    or not public.can_access_compliance()
+  ) then
+    return;
+  end if;
+
+  select count(*)::integer
+    into v_residentes
+  from public.residentes r
+  where r.eleam_id = v_eleam_id
+    and r.estado in ('activo', 'hospitalizado');
+
+  select count(*)::integer
+    into v_consentimientos
+  from public.residentes r
+  where r.eleam_id = v_eleam_id
+    and r.estado in ('activo', 'hospitalizado')
+    and exists (
+      select 1
+      from public.resident_consents rc
+      where rc.eleam_id = v_eleam_id
+        and rc.residente_id = r.id
+        and rc.acepta_ingreso_voluntario
+        and rc.acepta_derechos_deberes
+        and rc.acepta_reglamento_interno
+        and (
+          nullif(trim(coalesce(rc.firma_data_url, '')), '') is not null
+          or nullif(trim(coalesce(rc.pdf_storage_path, '')), '') is not null
+        )
+    );
+
+  select count(*)::integer
+    into v_evaluaciones
+  from public.residentes r
+  where r.eleam_id = v_eleam_id
+    and r.estado in ('activo', 'hospitalizado')
+    and (
+      exists (
+        select 1 from public.evaluaciones_clinicas ec
+        where ec.eleam_id = v_eleam_id and ec.residente_id = r.id
+          and ec.tipo in ('barthel', 'katz') and ec.proxima_evaluacion >= current_date
+      )
+      and exists (
+        select 1 from public.evaluaciones_clinicas ec
+        where ec.eleam_id = v_eleam_id and ec.residente_id = r.id
+          and ec.tipo = 'mna' and ec.proxima_evaluacion >= current_date
+      )
+      and exists (
+        select 1 from public.evaluaciones_clinicas ec
+        where ec.eleam_id = v_eleam_id and ec.residente_id = r.id
+          and ec.tipo = 'mmse' and ec.proxima_evaluacion >= current_date
+      )
+    );
+
+  select count(*)::integer
+    into v_red_salud
+  from public.residentes r
+  where r.eleam_id = v_eleam_id
+    and r.estado in ('activo', 'hospitalizado')
+    and exists (
+      select 1
+      from public.resident_health_network rn
+      where rn.eleam_id = v_eleam_id
+        and rn.residente_id = r.id
+        and (
+          rn.health_center_id is not null
+          or nullif(trim(coalesce(rn.sistema_salud, '')), '') is not null
+        )
+    )
+    and exists (
+      select 1
+      from public.health_controls hc
+      where hc.eleam_id = v_eleam_id
+        and hc.residente_id = r.id
+        and (
+          (hc.estado = 'programado' and hc.fecha_programada >= current_date)
+          or (
+            hc.estado = 'realizado'
+            and coalesce(hc.fecha_realizada, hc.fecha_programada) >= current_date - 365
+          )
+        )
+    );
+
+  select count(*)::integer
+    into v_planes
+  from public.residentes r
+  where r.eleam_id = v_eleam_id
+    and r.estado in ('activo', 'hospitalizado')
+    and exists (
+      select 1
+      from public.planes_cuidado pc
+      where pc.eleam_id = v_eleam_id
+        and pc.residente_id = r.id
+        and pc.estado = 'activo'
+        and pc.validado_por_dt is not null
+        and pc.validado_en is not null
+        and exists (
+          select 1 from public.plan_cuidado_actividades pca
+          where pca.plan_id = pc.id and pca.eleam_id = v_eleam_id and pca.activo
+        )
+    );
+
+  select count(*)::integer
+    into v_carpetas
+  from public.residentes r
+  where r.eleam_id = v_eleam_id
+    and r.estado in ('activo', 'hospitalizado')
+    and exists (
+      select 1 from public.resident_consents rc
+      where rc.eleam_id = v_eleam_id and rc.residente_id = r.id
+    )
+    and exists (
+      select 1 from public.evaluaciones_clinicas ec
+      where ec.eleam_id = v_eleam_id and ec.residente_id = r.id
+    )
+    and exists (
+      select 1 from public.resident_health_network rn
+      where rn.eleam_id = v_eleam_id and rn.residente_id = r.id
+    )
+    and exists (
+      select 1 from public.planes_cuidado pc
+      where pc.eleam_id = v_eleam_id and pc.residente_id = r.id and pc.estado = 'activo'
+    );
+
+  select count(*)::integer
+    into v_personal
+  from public.staff_members sm
+  where sm.eleam_id = v_eleam_id and sm.activo;
+
+  select count(*)::integer
+    into v_capacitados
+  from public.staff_members sm
+  where sm.eleam_id = v_eleam_id
+    and sm.activo
+    and coalesce((
+      select sum(str.horas)
+      from public.staff_training_records str
+      where str.eleam_id = v_eleam_id
+        and str.staff_member_id = sm.id
+        and str.fecha >= date_trunc('year', current_date)::date
+        and str.fecha < (date_trunc('year', current_date) + interval '1 year')::date
+    ), 0) >= 22;
+
+  if v_residentes > 0 then
+    select
+      count(*)::integer,
+      count(*) filter (
+        where d.asignados_cuidadores >= d.requerido_cuidadores
+          and d.residentes_sin_clasificar = 0
+      )::integer,
+      count(*) filter (
+        where d.asignados_tens >= 1
+          and d.residentes_sin_clasificar = 0
+      )::integer
+      into v_turnos, v_turnos_dotacion, v_turnos_tens
+    from public.ds20_staffing_compliance(current_date, current_date + 6) d;
+  end if;
+
+  select count(*)::integer
+    into v_protocolos_ingreso
+  from public.protocolos_eleam p
+  where p.eleam_id = v_eleam_id
+    and p.tipo = 'ingreso_egreso'
+    and p.estado = 'vigente'
+    and nullif(trim(coalesce(p.contenido, '')), '') is not null
+    and (p.fecha_revision is null or p.fecha_revision >= current_date);
+
+  select count(distinct p.tipo)::integer
+    into v_protocolos_clinicos
+  from public.protocolos_eleam p
+  where p.eleam_id = v_eleam_id
+    and p.tipo in ('urgencias_medicas', 'fallecimiento')
+    and p.estado = 'vigente'
+    and nullif(trim(coalesce(p.contenido, '')), '') is not null
+    and (p.fecha_revision is null or p.fecha_revision >= current_date);
+
+  select count(*)::integer
+    into v_plan_emergencia
+  from public.plan_emergencias pe
+  where pe.eleam_id = v_eleam_id
+    and pe.estado = 'vigente'
+    and (pe.fecha_revision is null or pe.fecha_revision >= current_date)
+    and exists (
+      select 1 from public.escenarios_emergencia ee
+      where ee.eleam_id = v_eleam_id and ee.plan_id = pe.id
+    );
+
+  select count(*)::integer
+    into v_habitaciones
+  from public.habitaciones h
+  where h.eleam_id = v_eleam_id and h.estado = 'operativa';
+
+  select count(*)::integer
+    into v_habitaciones_max_camas
+  from public.habitaciones h
+  where h.eleam_id = v_eleam_id
+    and h.estado = 'operativa'
+    and (
+      select count(*) from public.camas c
+      where c.eleam_id = v_eleam_id and c.habitacion_id = h.id and c.estado <> 'inactiva'
+    ) <= 4;
+
+  select
+    count(*)::integer,
+    count(*) filter (
+      where nullif(trim(coalesce(msl.lote, '')), '') is not null
+        and nullif(trim(coalesce(msl.ubicacion, '')), '') is not null
+        and msl.fecha_vencimiento is not null
+        and msl.fecha_vencimiento >= current_date
+    )::integer
+    into v_lotes_medicamentos, v_lotes_medicamentos_trazables
+  from public.medicamentos_stock_lotes msl
+  where msl.eleam_id = v_eleam_id
+    and msl.estado = 'activo';
+
+  return query
+  with metricas(codigo, tipo, num, den, titulo, explicacion, ruta, completa) as (values
+    ('DS20-A23-CONSENTIMIENTO-INGRESO', 'cobertura', v_consentimientos, v_residentes,
+      'Consentimientos de ingreso firmados', 'Residentes actuales con consentimiento firmado sobre el total de residentes actuales.', '/residents', true),
+    ('DS20-A23-EVALUACIONES-GERIATRICAS', 'cobertura', v_evaluaciones, v_residentes,
+      'Evaluaciones vigentes', 'Requiere evaluación funcional (Barthel o Katz), nutricional (MNA) y cognitiva (MMSE), todas vigentes.', '/residents', true),
+    ('DS20-A26-RED-SALUD-APS-PRIVADA', 'cobertura', v_red_salud, v_residentes,
+      'Residentes vinculados a salud', 'Residentes con centro o sistema de salud registrado sobre el total de residentes actuales.', '/residents', true),
+    ('DS20-A25-PROGRAMA-INTEGRAL-USUARIA', 'avance_parcial', v_planes, v_residentes,
+      'Planes individuales vigentes', 'Residentes con plan activo, actividades y validación de dirección técnica. El programa general y su seguimiento también deben revisarse.', '/residents', false),
+    ('DS20-A25-CAPACITACION-ANUAL-22H', 'cobertura', v_capacitados, v_personal,
+      'Personal con 22 horas anuales', 'Funcionarios activos que acumulan al menos 22 horas de capacitación durante el año actual.', '/personal/equipo', true),
+    ('DS20-A15-CALCULADORA-DOTACION-DEPENDENCIA', 'cobertura_7_dias', v_turnos_dotacion, v_turnos,
+      'Turnos con dotación suficiente', 'Cobertura de cuidadores calculada para hoy y los próximos 6 días, según residentes y dependencia.', '/personal/dotacion', true),
+    ('DS20-A15-TENS-AUXILIAR', 'cobertura_7_dias', v_turnos_tens, v_turnos,
+      'Turnos con cobertura TENS', 'Cobertura TENS o auxiliar registrada para hoy y los próximos 6 días.', '/personal/dotacion', true),
+    ('DS20-A29-DERECHOS-ENTREGADOS', 'cobertura', v_consentimientos, v_residentes,
+      'Entrega de derechos registrada', 'La entrega queda consignada en el consentimiento firmado de cada residente.', '/residents', true),
+    ('DS20-A23-CARPETA-PERSONAL-ACTUALIZADA', 'avance_parcial', v_carpetas, v_residentes,
+      'Carpetas con registros básicos', 'Mide consentimiento, evaluaciones, red de salud y plan de cuidado. Otros antecedentes de la carpeta requieren revisión.', '/residents', false),
+    ('DS20-A25-PROTOCOLO-INGRESO-EGRESO', 'avance_parcial', v_protocolos_ingreso, 1,
+      'Protocolo vigente en el sistema', 'La vigencia y el contenido se verifican aquí; la socialización y aplicación deben respaldarse aparte.', '/cumplimiento/protocolos', false),
+    ('DS20-A25-URGENCIAS-FALLECIMIENTO', 'avance_parcial', v_protocolos_clinicos, 2,
+      'Protocolos clínicos vigentes', 'Se revisan los protocolos de urgencias y fallecimiento; la socialización y aplicación requieren respaldo.', '/cumplimiento/protocolos', false),
+    ('DS20-A25-PLAN-EMERGENCIAS', 'avance_parcial', v_plan_emergencia, 1,
+      'Plan de emergencias registrado', 'Se verifica un plan vigente con escenarios. Simulacros, responsables y socialización deben revisarse por separado.', '/cumplimiento/emergencias', false),
+    ('DS20-A10-HABITACIONES-CAMAS', 'avance_parcial', v_habitaciones_max_camas, v_habitaciones,
+      'Habitaciones dentro del máximo de camas', 'Solo verifica hasta 4 camas por habitación; circulación, equipamiento y llamado requieren inspección.', '/establecimiento', false),
+    ('DS20-A10-MEDICAMENTOS-ALMACENAMIENTO', 'avance_parcial', v_lotes_medicamentos_trazables, v_lotes_medicamentos,
+      'Lotes con trazabilidad básica', 'Verifica lote, ubicación y vencimiento. Temperatura, acceso restringido, gavetas y cadena de frío requieren control físico.', '/operacion/medicamentos', false)
+  ), calculos as (
+    select
+      metricas.*,
+      case
+        when metricas.den = 0 then 'sin_datos'
+        when metricas.num >= metricas.den then 'completo'
+        else 'incompleto'
+      end::text as estado,
+      case
+        when metricas.den = 0 then 0
+        else round((least(metricas.num, metricas.den)::numeric / metricas.den::numeric) * 100)::integer
+      end as pct
+    from metricas
+  )
+  select calculos.codigo, calculos.tipo, calculos.estado, calculos.num, calculos.den,
+    calculos.pct, calculos.titulo, calculos.explicacion, calculos.ruta, calculos.completa
+  from calculos;
+end;
+$$;
+
+revoke all on function public.ds20_operational_evidence_summary() from public;
+grant execute on function public.ds20_operational_evidence_summary() to authenticated;
 
 create or replace function public.generar_tareas_cuidado(
   p_fecha date default current_date,
@@ -6665,6 +7175,26 @@ create trigger trg_func_permisos_updated_at
   before update on public.funcionario_permisos
   for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_resident_payment_contacts_updated_at on public.resident_payment_contacts;
+create trigger trg_resident_payment_contacts_updated_at
+  before update on public.resident_payment_contacts
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_resident_billing_profiles_updated_at on public.resident_billing_profiles;
+create trigger trg_resident_billing_profiles_updated_at
+  before update on public.resident_billing_profiles
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_resident_charges_updated_at on public.resident_charges;
+create trigger trg_resident_charges_updated_at
+  before update on public.resident_charges
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_resident_payments_updated_at on public.resident_payments;
+create trigger trg_resident_payments_updated_at
+  before update on public.resident_payments
+  for each row execute function public.set_updated_at();
+
 drop trigger if exists trg_acred_re_updated_at on public.acred_requisitos_eleam;
 create trigger trg_acred_re_updated_at
   before update on public.acred_requisitos_eleam
@@ -6863,10 +7393,14 @@ alter table public.medicamentos_conciliaciones enable row level security;
 alter table public.medicamentos_audit enable row level security;
 alter table public.funcionario_invitaciones enable row level security;
 alter table public.auth_provision_requests enable row level security;
-alter table public.familiar_residentes enable row level security;
-alter table public.visitas_familiar enable row level security;
 alter table public.eleam_feature_permissions enable row level security;
 alter table public.profile_feature_permissions enable row level security;
+alter table public.resident_payment_contacts enable row level security;
+alter table public.resident_billing_profiles enable row level security;
+alter table public.resident_charges enable row level security;
+alter table public.resident_payments enable row level security;
+alter table public.resident_payment_deliveries enable row level security;
+alter table public.resident_payment_audit enable row level security;
 alter table public.pagos enable row level security;
 alter table public.mp_webhook_events enable row level security;
 alter table public.acred_ambitos enable row level security;
@@ -6968,11 +7502,6 @@ create policy "residentes_select" on public.residentes
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
-    or (
-      public.my_rol() = 'familiar'
-      and public.eleam_has_access(eleam_id)
-      and id in (select public.my_familiar_residente_ids())
-    )
   );
 
 create policy "residentes_insert" on public.residentes
@@ -7023,10 +7552,6 @@ create policy "habitaciones_select" on public.habitaciones
       public.my_rol() in ('admin_eleam','funcionario')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
-    )
-    or (
-      public.my_rol() = 'familiar'
-      and public.familiar_can_view_habitacion(id)
     )
   );
 
@@ -7080,10 +7605,6 @@ create policy "camas_select" on public.camas
       public.my_rol() in ('admin_eleam','funcionario')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
-    )
-    or (
-      public.my_rol() = 'familiar'
-      and public.familiar_can_view_cama(id)
     )
   );
 
@@ -7204,10 +7725,6 @@ create policy "sv_select" on public.signos_vitales
       public.my_rol() in ('admin_eleam','funcionario')
       and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
-    or (
-      public.my_rol() = 'familiar'
-      and residente_id in (select public.my_familiar_residente_ids())
-    )
   );
 
 create policy "sv_insert" on public.signos_vitales
@@ -7255,10 +7772,6 @@ create policy "eval_select" on public.evaluaciones_clinicas
     or (
       public.my_rol() in ('admin_eleam','funcionario')
       and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
-    )
-    or (
-      public.my_rol() = 'familiar'
-      and residente_id in (select public.my_familiar_residente_ids())
     )
   );
 
@@ -7655,11 +8168,6 @@ create policy "obs_select" on public.observaciones_diarias
       public.my_rol() in ('admin_eleam','funcionario')
       and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
     )
-    or (
-      public.my_rol() = 'familiar'
-      and visible_familiar = true
-      and residente_id in (select public.my_familiar_residente_ids())
-    )
   );
 
 create policy "obs_insert" on public.observaciones_diarias
@@ -7769,11 +8277,6 @@ create policy "eventos_adv_select" on public.eventos_adversos
       public.my_rol() in ('admin_eleam','funcionario')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
-    )
-    or (
-      visible_familiar = true
-      and residente_id is not null
-      and public.familiar_can_view_residente(residente_id)
     )
   );
 
@@ -8405,44 +8908,6 @@ create policy "inv_admin_delete" on public.funcionario_invitaciones
     )
   );
 
-drop policy if exists "fr_select_self_or_admin" on public.familiar_residentes;
-drop policy if exists "fr_insert_admin" on public.familiar_residentes;
-drop policy if exists "fr_delete_admin" on public.familiar_residentes;
-
-create policy "fr_select_self_or_admin" on public.familiar_residentes
-  for select using (
-    (
-      profile_id = (select auth.uid())
-      and residente_id in (select public.my_familiar_residente_ids())
-    )
-    or public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
-    )
-  );
-
-create policy "fr_insert_admin" on public.familiar_residentes
-  for insert with check (
-    (
-      public.my_rol() = 'admin_eleam'
-      or public.funcionario_can('editar_residentes')
-    )
-    and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
-  );
-
-create policy "fr_delete_admin" on public.familiar_residentes
-  for delete using (
-    public.is_superadmin()
-    or (
-      (
-        public.my_rol() = 'admin_eleam'
-        or public.funcionario_can('editar_residentes')
-      )
-      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
-    )
-  );
-
 -- Permisos granulares de funcionarios
 alter table public.funcionario_permisos enable row level security;
 
@@ -8451,23 +8916,17 @@ drop policy if exists "fp_self_select" on public.funcionario_permisos;
 
 create policy "fp_admin_all" on public.funcionario_permisos
   for all using (
-    public.is_superadmin()
-    or (
-      public.my_rol() = 'admin_eleam'
-      and profile_id in (
-        select id from public.profiles
-        where eleam_id = public.my_eleam_id() and rol = 'funcionario'
-      )
+    public.my_rol() = 'admin_eleam'
+    and profile_id in (
+      select id from public.profiles
+      where eleam_id = public.my_eleam_id() and rol = 'funcionario'
     )
   )
   with check (
-    public.is_superadmin()
-    or (
-      public.my_rol() = 'admin_eleam'
-      and profile_id in (
-        select id from public.profiles
-        where eleam_id = public.my_eleam_id() and rol = 'funcionario'
-      )
+    public.my_rol() = 'admin_eleam'
+    and profile_id in (
+      select id from public.profiles
+      where eleam_id = public.my_eleam_id() and rol = 'funcionario'
     )
   );
 
@@ -8515,134 +8974,92 @@ create policy "pfp_select" on public.profile_feature_permissions
 
 create policy "pfp_admin_all" on public.profile_feature_permissions
   for all using (
-    public.is_superadmin()
-    or (
-      public.my_rol() = 'admin_eleam'
-      and profile_id in (
-        select id from public.profiles
-        where eleam_id = public.my_eleam_id()
-          and rol = 'funcionario'
-      )
+    public.my_rol() = 'admin_eleam'
+    and profile_id in (
+      select id from public.profiles
+      where eleam_id = public.my_eleam_id()
+        and rol = 'funcionario'
     )
   )
   with check (
-    public.is_superadmin()
-    or (
-      public.my_rol() = 'admin_eleam'
-      and profile_id in (
-        select id from public.profiles
-        where eleam_id = public.my_eleam_id()
-          and rol = 'funcionario'
-      )
-      and (
-        enabled = false
-        or not exists (
-          select 1
-          from public.eleam_feature_permissions efp
-          join public.profiles p on p.id = profile_feature_permissions.profile_id
-          where efp.eleam_id = p.eleam_id
-            and efp.rol = p.rol
-            and efp.feature_id = profile_feature_permissions.feature_id
-            and efp.enabled = false
-        )
+    public.my_rol() = 'admin_eleam'
+    and profile_id in (
+      select id from public.profiles
+      where eleam_id = public.my_eleam_id()
+        and rol = 'funcionario'
+    )
+    and (
+      enabled = false
+      or not exists (
+        select 1
+        from public.eleam_feature_permissions efp
+        join public.profiles p on p.id = profile_feature_permissions.profile_id
+        where efp.eleam_id = p.eleam_id
+          and efp.rol = p.rol
+          and efp.feature_id = profile_feature_permissions.feature_id
+          and efp.enabled = false
       )
     )
   );
 
-drop policy if exists "vf_select" on public.visitas_familiar;
-drop policy if exists "vf_insert" on public.visitas_familiar;
-drop policy if exists "vf_update" on public.visitas_familiar;
-drop policy if exists "vf_update_familiar_salida" on public.visitas_familiar;
-drop policy if exists "vf_update_familiar_cancel_pending" on public.visitas_familiar;
-drop policy if exists "vf_delete" on public.visitas_familiar;
+-- Cobranza de residentes: solo lectura directa. Toda mutación pasa por RPC
+-- o Edge Function para validar saldo, trazabilidad y envío.
+drop policy if exists "resident_payment_contacts_select" on public.resident_payment_contacts;
+drop policy if exists "resident_billing_profiles_select" on public.resident_billing_profiles;
+drop policy if exists "resident_charges_select" on public.resident_charges;
+drop policy if exists "resident_payments_select" on public.resident_payments;
+drop policy if exists "resident_payment_deliveries_select" on public.resident_payment_deliveries;
+drop policy if exists "resident_payment_audit_select" on public.resident_payment_audit;
 
-create policy "vf_select" on public.visitas_familiar
+create policy "resident_payment_contacts_select" on public.resident_payment_contacts
   for select using (
-    public.is_superadmin()
-    or (
-      public.my_rol() = 'familiar'
-      and profile_id = (select auth.uid())
-      and residente_id in (select public.my_familiar_residente_ids())
-    )
-    or (
-      (
-        public.my_rol() = 'admin_eleam'
-      )
-      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
-    )
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('ver_pagos_residentes')
   );
 
-create policy "vf_insert" on public.visitas_familiar
-  for insert with check (
-    (
-      public.my_rol() = 'familiar'
-      and residente_id in (select public.my_familiar_residente_ids())
-      and profile_id = (select auth.uid())
-    )
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
-    )
+create policy "resident_billing_profiles_select" on public.resident_billing_profiles
+  for select using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('ver_pagos_residentes')
   );
 
-create policy "vf_update" on public.visitas_familiar
-  for update using (
-    public.is_superadmin()
-    or (
-      public.my_rol() = 'admin_eleam'
-      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
-    )
+create policy "resident_charges_select" on public.resident_charges
+  for select using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('ver_pagos_residentes')
   );
 
-create policy "vf_update_familiar_salida" on public.visitas_familiar
-  for update using (
-    public.my_rol() = 'familiar'
-    and profile_id = (select auth.uid())
-    and estado = 'activa'
-    and residente_id in (select public.my_familiar_residente_ids())
-  )
-  with check (
-    public.my_rol() = 'familiar'
-    and profile_id = (select auth.uid())
-    and estado = 'salida_pendiente'
-    and salida_anunciada_en is not null
-    and salida_hora is null
-    and salida_validada_por is null
-    and salida_validada_en is null
-    and residente_id in (select public.my_familiar_residente_ids())
+create policy "resident_payments_select" on public.resident_payments
+  for select using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('ver_pagos_residentes')
   );
 
-create policy "vf_update_familiar_cancel_pending" on public.visitas_familiar
-  for update using (
-    public.my_rol() = 'familiar'
-    and profile_id = (select auth.uid())
-    and estado = 'pendiente'
-    and validado_en is null
-    and residente_id in (select public.my_familiar_residente_ids())
-  )
-  with check (
-    public.my_rol() = 'familiar'
-    and profile_id = (select auth.uid())
-    and estado = 'cancelada'
-    and validado_en is null
-    and salida_anunciada_en is null
-    and salida_hora is null
-    and salida_validada_por is null
-    and salida_validada_en is null
-    and residente_id in (select public.my_familiar_residente_ids())
+create policy "resident_payment_deliveries_select" on public.resident_payment_deliveries
+  for select using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('ver_pagos_residentes')
   );
 
-create policy "vf_delete" on public.visitas_familiar
-  for delete using (
-    public.is_superadmin()
-    or profile_id = (select auth.uid())
-    or (
-      public.my_rol() = 'admin_eleam'
-      and public.residente_belongs_to_eleam(residente_id, public.my_eleam_id())
-    )
+create policy "resident_payment_audit_select" on public.resident_payment_audit
+  for select using (
+    public.my_rol() in ('admin_eleam','funcionario')
+    and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('ver_pagos_residentes')
   );
 
--- Pagos / Webhooks
+-- Pagos de plataforma / Webhooks
 drop policy if exists "superadmin_all_pagos" on public.pagos;
 drop policy if exists "eleam_select_pagos" on public.pagos;
 
@@ -8676,40 +9093,30 @@ drop policy if exists "acred_re_update" on public.acred_requisitos_eleam;
 
 create policy "acred_re_select" on public.acred_requisitos_eleam
   for select using (
-    public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and eleam_id = public.my_eleam_id()
-      and public.eleam_has_access(eleam_id)
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_compliance()
   );
 
 create policy "acred_re_insert" on public.acred_requisitos_eleam
   for insert with check (
-    public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and eleam_id = public.my_eleam_id()
-      and public.eleam_has_access(eleam_id)
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_compliance()
   );
 
 create policy "acred_re_update" on public.acred_requisitos_eleam
   for update using (
-    public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and eleam_id = public.my_eleam_id()
-      and public.eleam_has_access(eleam_id)
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
+    and public.funcionario_can('editar_acreditacion')
   )
   with check (
-    public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and eleam_id = public.my_eleam_id()
-      and public.eleam_has_access(eleam_id)
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
+    and public.funcionario_can('editar_acreditacion')
   );
 
 drop policy if exists "acred_docs_select" on public.acred_documentos;
@@ -8719,12 +9126,9 @@ drop policy if exists "acred_docs_delete" on public.acred_documentos;
 
 create policy "acred_docs_select" on public.acred_documentos
   for select using (
-    public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and eleam_id = public.my_eleam_id()
-      and public.eleam_has_access(eleam_id)
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_compliance()
   );
 
 create policy "acred_docs_insert" on public.acred_documentos
@@ -8732,6 +9136,7 @@ create policy "acred_docs_insert" on public.acred_documentos
     public.is_superadmin()
     or (
       public.funcionario_can('subir_acreditacion')
+      and public.can_access_feature('compliance')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
@@ -8742,6 +9147,7 @@ create policy "acred_docs_update" on public.acred_documentos
     public.is_superadmin()
     or (
       public.funcionario_can('editar_acreditacion')
+      and public.can_access_feature('compliance')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
@@ -8750,6 +9156,7 @@ create policy "acred_docs_update" on public.acred_documentos
     public.is_superadmin()
     or (
       public.funcionario_can('editar_acreditacion')
+      and public.can_access_feature('compliance')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
@@ -8760,6 +9167,7 @@ create policy "acred_docs_delete" on public.acred_documentos
     public.is_superadmin()
     or (
       public.funcionario_can('archivar_acreditacion')
+      and public.can_access_feature('compliance')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
@@ -8774,12 +9182,9 @@ drop policy if exists "acred_obs_delete" on public.acred_observaciones;
 
 create policy "acred_obs_select" on public.acred_observaciones
   for select using (
-    public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and eleam_id = public.my_eleam_id()
-      and public.eleam_has_access(eleam_id)
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_compliance()
   );
 
 create policy "acred_obs_insert_admin" on public.acred_observaciones
@@ -8787,6 +9192,7 @@ create policy "acred_obs_insert_admin" on public.acred_observaciones
     public.is_superadmin()
     or (
       public.my_rol() = 'admin_eleam'
+      and public.can_access_feature('compliance')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
@@ -8795,6 +9201,8 @@ create policy "acred_obs_insert_admin" on public.acred_observaciones
 create policy "acred_obs_insert_func_interna" on public.acred_observaciones
   for insert with check (
     public.my_rol() = 'funcionario'
+    and public.can_access_feature('compliance')
+    and public.funcionario_can('editar_acreditacion')
     and eleam_id = public.my_eleam_id()
     and public.eleam_has_access(eleam_id)
     and origen = 'interna'
@@ -8805,6 +9213,7 @@ create policy "acred_obs_update_admin" on public.acred_observaciones
     public.is_superadmin()
     or (
       public.my_rol() = 'admin_eleam'
+      and public.can_access_feature('compliance')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
@@ -8813,6 +9222,7 @@ create policy "acred_obs_update_admin" on public.acred_observaciones
     public.is_superadmin()
     or (
       public.my_rol() = 'admin_eleam'
+      and public.can_access_feature('compliance')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
@@ -8821,6 +9231,8 @@ create policy "acred_obs_update_admin" on public.acred_observaciones
 create policy "acred_obs_update_func" on public.acred_observaciones
   for update using (
     public.my_rol() = 'funcionario'
+    and public.can_access_feature('compliance')
+    and public.funcionario_can('editar_acreditacion')
     and eleam_id = public.my_eleam_id()
     and public.eleam_has_access(eleam_id)
     and origen = 'interna'
@@ -8828,6 +9240,8 @@ create policy "acred_obs_update_func" on public.acred_observaciones
   )
   with check (
     public.my_rol() = 'funcionario'
+    and public.can_access_feature('compliance')
+    and public.funcionario_can('editar_acreditacion')
     and eleam_id = public.my_eleam_id()
     and public.eleam_has_access(eleam_id)
     and origen = 'interna'
@@ -8839,6 +9253,7 @@ create policy "acred_obs_delete" on public.acred_observaciones
     public.is_superadmin()
     or (
       public.my_rol() = 'admin_eleam'
+      and public.can_access_feature('compliance')
       and eleam_id = public.my_eleam_id()
       and public.eleam_has_access(eleam_id)
     )
@@ -8849,22 +9264,16 @@ drop policy if exists "acred_audit_insert" on public.acred_audit;
 
 create policy "acred_audit_select" on public.acred_audit
   for select using (
-    public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and eleam_id = public.my_eleam_id()
-      and public.eleam_has_access(eleam_id)
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_compliance()
   );
 
 create policy "acred_audit_insert" on public.acred_audit
   for insert with check (
-    public.is_superadmin()
-    or (
-      public.my_rol() in ('admin_eleam','funcionario')
-      and eleam_id = public.my_eleam_id()
-      and public.eleam_has_access(eleam_id)
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_compliance()
   );
 
 -- CRM y blog
@@ -8972,8 +9381,8 @@ create policy "storage_acreditacion_select" on storage.objects
     and (
       public.is_superadmin()
       or (
-        public.my_rol() in ('admin_eleam','funcionario')
-        and public.eleam_has_access(public.my_eleam_id())
+        public.eleam_has_access(public.my_eleam_id())
+        and public.can_access_compliance()
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
     )
@@ -8986,6 +9395,7 @@ create policy "storage_acreditacion_insert" on storage.objects
       public.is_superadmin()
       or (
         public.funcionario_can('subir_acreditacion')
+        and public.can_access_feature('compliance')
         and public.eleam_has_access(public.my_eleam_id())
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
@@ -9036,6 +9446,7 @@ create policy "storage_documentos_eleam_select" on storage.objects
       or (
         public.my_rol() in ('admin_eleam','funcionario')
         and public.eleam_has_access(public.my_eleam_id())
+        and public.can_access_feature('residents')
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
     )
@@ -9049,6 +9460,7 @@ create policy "storage_documentos_eleam_insert" on storage.objects
       or (
         public.my_rol() in ('admin_eleam','funcionario')
         and public.eleam_has_access(public.my_eleam_id())
+        and public.can_access_feature('residents')
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
     )
@@ -9062,6 +9474,7 @@ create policy "storage_documentos_eleam_update" on storage.objects
       or (
         public.my_rol() in ('admin_eleam','funcionario')
         and public.eleam_has_access(public.my_eleam_id())
+        and public.can_access_feature('residents')
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
     )
@@ -9073,6 +9486,7 @@ create policy "storage_documentos_eleam_update" on storage.objects
       or (
         public.my_rol() in ('admin_eleam','funcionario')
         and public.eleam_has_access(public.my_eleam_id())
+        and public.can_access_feature('residents')
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
     )
@@ -9086,8 +9500,77 @@ create policy "storage_documentos_eleam_delete" on storage.objects
       or (
         public.my_rol() = 'admin_eleam'
         and public.eleam_has_access(public.my_eleam_id())
+        and public.can_access_feature('residents')
         and split_part(name, '/', 2) = public.my_eleam_id()::text
       )
+    )
+  );
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'pagos-residentes',
+  'pagos-residentes',
+  false,
+  5242880,
+  array['application/pdf', 'image/jpeg', 'image/png']
+)
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "storage_resident_payments_select" on storage.objects;
+drop policy if exists "storage_resident_payments_insert" on storage.objects;
+drop policy if exists "storage_resident_payments_delete_pending" on storage.objects;
+
+create policy "storage_resident_payments_select" on storage.objects
+  for select using (
+    bucket_id = 'pagos-residentes'
+    and public.my_rol() in ('admin_eleam','funcionario')
+    and public.eleam_has_access(public.my_eleam_id())
+    and public.funcionario_can('ver_pagos_residentes')
+    and split_part(name, '/', 1) = public.my_eleam_id()::text
+    and array_length(string_to_array(name, '/'), 1) = 3
+    and exists (
+      select 1 from public.resident_payments rp
+      where rp.eleam_id = public.my_eleam_id()
+        and rp.id::text = split_part(name, '/', 2)
+        and rp.documento_path = name
+        and rp.estado = 'registrado'
+    )
+  );
+
+create policy "storage_resident_payments_insert" on storage.objects
+  for insert with check (
+    bucket_id = 'pagos-residentes'
+    and public.my_rol() in ('admin_eleam','funcionario')
+    and public.eleam_has_access(public.my_eleam_id())
+    and public.funcionario_can('registrar_pagos_residentes')
+    and split_part(name, '/', 1) = public.my_eleam_id()::text
+    and array_length(string_to_array(name, '/'), 1) = 3
+    and split_part(name, '/', 3) <> ''
+    and exists (
+      select 1 from public.resident_payments rp
+      where rp.eleam_id = public.my_eleam_id()
+        and rp.id::text = split_part(name, '/', 2)
+        and rp.estado = 'pendiente_documento'
+        and rp.registrado_por = (select auth.uid())
+    )
+  );
+
+create policy "storage_resident_payments_delete_pending" on storage.objects
+  for delete using (
+    bucket_id = 'pagos-residentes'
+    and public.my_rol() in ('admin_eleam','funcionario')
+    and public.eleam_has_access(public.my_eleam_id())
+    and split_part(name, '/', 1) = public.my_eleam_id()::text
+    and array_length(string_to_array(name, '/'), 1) = 3
+    and exists (
+      select 1 from public.resident_payments rp
+      where rp.eleam_id = public.my_eleam_id()
+        and rp.id::text = split_part(name, '/', 2)
+        and rp.estado = 'pendiente_documento'
+        and rp.registrado_por = (select auth.uid())
     )
   );
 
@@ -9246,114 +9729,6 @@ where crm_estado = 'lead'
   and (pago_activo = true or subscription_status in ('activo','en_gracia'));
 
 -- El seed del blog publico vive en supabase_blog_seed.sql.
-
--- ============================================================
--- FASE 2 DS20: modificaciones a tablas existentes
--- ============================================================
-
--- 1. Tinetti en evaluaciones clínicas
-alter table public.evaluaciones_clinicas
-  drop constraint if exists evaluaciones_clinicas_tipo_check;
-alter table public.evaluaciones_clinicas
-  add constraint evaluaciones_clinicas_tipo_check
-  check (tipo in ('barthel','katz','mna','mmse','tinetti'));
-
--- 2. Columnas biopsicosociales en planes_cuidado
-alter table public.planes_cuidado
-  add column if not exists objetivo_biopsicosocial  text
-    constraint planes_cuidado_obj_bio_len check (objetivo_biopsicosocial is null or char_length(objetivo_biopsicosocial) <= 2000),
-  add column if not exists valoracion_social         text
-    constraint planes_cuidado_val_social_len check (valoracion_social is null or char_length(valoracion_social) <= 2000),
-  add column if not exists intereses_actividades     text
-    constraint planes_cuidado_intereses_len check (intereses_actividades is null or char_length(intereses_actividades) <= 2000),
-  add column if not exists necesidades_espirituales  text
-    constraint planes_cuidado_nec_esp_len check (necesidades_espirituales is null or char_length(necesidades_espirituales) <= 2000),
-  add column if not exists meta_rehabilitacion       text
-    constraint planes_cuidado_meta_rehab_len check (meta_rehabilitacion is null or char_length(meta_rehabilitacion) <= 2000),
-  add column if not exists restricciones_actividad   text
-    constraint planes_cuidado_rest_act_len check (restricciones_actividad is null or char_length(restricciones_actividad) <= 2000),
-  add column if not exists validado_por_dt           uuid references public.profiles(id) on delete set null,
-  add column if not exists validado_en               timestamptz;
-
--- 3. Categorías adicionales en actividades del plan de cuidado
-alter table public.plan_cuidado_actividades
-  drop constraint if exists plan_cuidado_actividades_categoria_check;
-alter table public.plan_cuidado_actividades
-  add constraint plan_cuidado_actividades_categoria_check
-  check (categoria in (
-    'alimentacion','hidratacion','higiene','bano','movilidad',
-    'cambios_posicion','eliminacion','prevencion_caidas',
-    'prevencion_up','actividad','controles','otro',
-    'psicologico','social','preventivo','recreativo'
-  ));
-
--- 4. Permisos DS20 fase 2 en funcionario_permisos
-alter table public.funcionario_permisos
-  add column if not exists editar_inventario_bienes boolean not null default false,
-  add column if not exists gestionar_reclamos        boolean not null default true,
-  add column if not exists gestionar_emergencias     boolean not null default false,
-  add column if not exists registrar_simulacros      boolean not null default true;
-
--- 5. Actualizar funcionario_can() con los nuevos permisos
-create or replace function public.funcionario_can(perm text)
-returns boolean
-language plpgsql
-stable
-security definer
-set search_path = public
-as $$
-declare
-  v_rol    text := public.my_rol();
-  v_result boolean;
-begin
-  if v_rol in ('admin_eleam', 'superadmin') then return true; end if;
-  if v_rol <> 'funcionario' then return false; end if;
-
-  if not public.eleam_has_access(public.my_eleam_id()) then
-    return false;
-  end if;
-
-  select case perm
-    when 'crear_residentes'               then crear_residentes
-    when 'editar_residentes'              then editar_residentes
-    when 'eliminar_residentes'            then eliminar_residentes
-    when 'crear_signos_vitales'           then crear_signos_vitales
-    when 'editar_signos_vitales'          then editar_signos_vitales
-    when 'eliminar_signos_vitales'        then eliminar_signos_vitales
-    when 'crear_observaciones'            then crear_observaciones
-    when 'editar_observaciones'           then editar_observaciones
-    when 'eliminar_observaciones'         then eliminar_observaciones
-    when 'subir_acreditacion'             then subir_acreditacion
-    when 'editar_acreditacion'            then editar_acreditacion
-    when 'archivar_acreditacion'          then archivar_acreditacion
-    when 'crear_planes_cuidado'           then crear_planes_cuidado
-    when 'editar_planes_cuidado'          then editar_planes_cuidado
-    when 'completar_tareas_cuidado'       then completar_tareas_cuidado
-    when 'crear_indicaciones_medicamentos'  then crear_indicaciones_medicamentos
-    when 'editar_indicaciones_medicamentos' then editar_indicaciones_medicamentos
-    when 'administrar_medicamentos'       then administrar_medicamentos
-    when 'validar_medicamentos_controlados' then validar_medicamentos_controlados
-    when 'ajustar_stock_medicamentos'     then ajustar_stock_medicamentos
-    when 'asignar_camas'                  then asignar_camas
-    when 'editar_indicaciones_cuidado'    then editar_indicaciones_cuidado
-    when 'aplicar_evaluaciones_clinicas'  then aplicar_evaluaciones_clinicas
-    when 'crear_eventos_adversos'         then crear_eventos_adversos
-    when 'editar_eventos_adversos'        then editar_eventos_adversos
-    when 'cerrar_eventos_adversos'        then cerrar_eventos_adversos
-    when 'editar_inventario_bienes'       then editar_inventario_bienes
-    when 'gestionar_reclamos'             then gestionar_reclamos
-    when 'gestionar_emergencias'          then gestionar_emergencias
-    when 'registrar_simulacros'           then registrar_simulacros
-    else false
-  end
-  into v_result
-  from public.funcionario_permisos
-  where profile_id = (select auth.uid());
-
-  if v_result is null then return false; end if;
-  return v_result;
-end;
-$$;
 
 -- ============================================================
 -- NUEVAS TABLAS DS20 FASE 2
@@ -9523,7 +9898,7 @@ create table if not exists public.reclamos_sugerencias (
     constraint reclamos_tipo_check check (tipo in ('reclamo','sugerencia','felicitacion','consulta')),
   canal                 text not null default 'presencial'
     constraint reclamos_canal_check check (canal in (
-      'presencial','escrito','telefonico','email','libro_reclamos','familiar_portal'
+      'presencial','escrito','telefonico','email','libro_reclamos'
     )),
   descripcion           text not null
     constraint reclamos_desc_len check (char_length(trim(descripcion)) between 10 and 5000),
@@ -9548,7 +9923,6 @@ create table if not exists public.reclamos_sugerencias (
   fecha_respuesta       timestamptz,
   respondido_por        uuid references public.profiles(id) on delete set null,
   fecha_compromiso      date,
-  visita_familiar_origen boolean not null default false,
   registrado_por        uuid references public.profiles(id) on delete set null,
   creado_en             timestamptz not null default now(),
   actualizado_en        timestamptz not null default now()
@@ -9570,6 +9944,16 @@ declare
   v_year text := to_char(current_date, 'YYYY');
   v_seq  int;
 begin
+  if (select auth.uid()) is null
+    or p_eleam_id is null
+    or p_eleam_id is distinct from public.my_eleam_id()
+    or not public.eleam_has_access(p_eleam_id)
+    or not public.can_access_feature('compliance')
+    or not public.funcionario_can('gestionar_reclamos') then
+    raise exception 'No autorizado para gestionar reclamos'
+      using errcode = '42501';
+  end if;
+
   select coalesce(
     max(cast(substring(folio from '\d+$') as integer)), 0
   ) + 1
@@ -9685,11 +10069,6 @@ create policy "persona_sig_select" on public.persona_significativa
   for select using (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     or public.is_superadmin()
-    or exists (
-      select 1 from public.familiar_residentes fr
-      where fr.profile_id = (select auth.uid())
-        and fr.residente_id = persona_significativa.residente_id
-    )
   );
 create policy "persona_sig_insert" on public.persona_significativa
   for insert with check (
@@ -9714,11 +10093,6 @@ create policy "actividades_soc_select" on public.actividades_sociales
   for select using (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     or public.is_superadmin()
-    or exists (
-      select 1 from public.familiar_residentes fr
-      where fr.profile_id = (select auth.uid())
-        and fr.residente_id = actividades_sociales.residente_id
-    )
   );
 create policy "actividades_soc_insert" on public.actividades_sociales
   for insert with check (
@@ -9741,19 +10115,23 @@ create policy "actividades_soc_delete" on public.actividades_sociales
 -- plan_emergencias
 create policy "plan_emerg_select" on public.plan_emergencias
   for select using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    or public.is_superadmin()
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
+    and (public.funcionario_can('gestionar_emergencias') or public.funcionario_can('registrar_simulacros'))
   );
 create policy "plan_emerg_insert" on public.plan_emergencias
   for insert with check (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
     and public.funcionario_can('gestionar_emergencias')
   );
 create policy "plan_emerg_update" on public.plan_emergencias
   for update using (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
     and public.funcionario_can('gestionar_emergencias')
   );
 create policy "plan_emerg_delete" on public.plan_emergencias
@@ -9765,32 +10143,39 @@ create policy "plan_emerg_delete" on public.plan_emergencias
 -- escenarios_emergencia
 create policy "escenarios_emerg_select" on public.escenarios_emergencia
   for select using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    or public.is_superadmin()
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
+    and (public.funcionario_can('gestionar_emergencias') or public.funcionario_can('registrar_simulacros'))
   );
 create policy "escenarios_emerg_write" on public.escenarios_emergencia
   for all using (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
     and public.funcionario_can('gestionar_emergencias')
   );
 
 -- simulacros
 create policy "simulacros_select" on public.simulacros
   for select using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    or public.is_superadmin()
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
+    and (public.funcionario_can('gestionar_emergencias') or public.funcionario_can('registrar_simulacros'))
   );
 create policy "simulacros_insert" on public.simulacros
   for insert with check (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
     and public.funcionario_can('registrar_simulacros')
   );
 create policy "simulacros_update" on public.simulacros
   for update using (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
     and public.funcionario_can('gestionar_emergencias')
   );
 create policy "simulacros_delete" on public.simulacros
@@ -9802,30 +10187,23 @@ create policy "simulacros_delete" on public.simulacros
 -- reclamos_sugerencias
 create policy "reclamos_select" on public.reclamos_sugerencias
   for select using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    or public.is_superadmin()
-    or (
-      public.my_rol() = 'familiar'
-      and visita_familiar_origen = true
-      and residente_id in (
-        select residente_id from public.familiar_residentes
-        where profile_id = (select auth.uid())
-      )
-    )
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
+    and public.funcionario_can('gestionar_reclamos')
   );
 create policy "reclamos_insert" on public.reclamos_sugerencias
   for insert with check (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     and public.eleam_has_access(eleam_id)
-    and (
-      public.my_rol() in ('admin_eleam','funcionario')
-      or (public.my_rol() = 'familiar' and visita_familiar_origen = true)
-    )
+    and public.can_access_feature('compliance')
+    and public.funcionario_can('gestionar_reclamos')
   );
 create policy "reclamos_update" on public.reclamos_sugerencias
   for update using (
     (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
     and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
     and public.funcionario_can('gestionar_reclamos')
   );
 create policy "reclamos_delete" on public.reclamos_sugerencias
@@ -9844,108 +10222,15 @@ grant select, insert, update, delete on public.simulacros                to auth
 grant select, insert, update, delete on public.reclamos_sugerencias      to authenticated;
 
 -- ============================================================
--- NUEVAS TABLAS DS20 FASE 3: TRANSITORIOS, PROTOCOLOS Y SENAMA
+-- PROTOCOLOS DOCUMENTALES MÍNIMOS (DS20 Art. 25)
 -- ============================================================
 
--- 1. Permiso DS20 fase 3 en funcionario_permisos
-alter table public.funcionario_permisos
-  add column if not exists gestionar_cumplimiento boolean not null default false;
-
--- 2. Actualizar funcionario_can() con el nuevo permiso
-create or replace function public.funcionario_can(perm text)
-returns boolean
-language plpgsql
-stable
-security definer
-set search_path = public
-as $$
-declare
-  v_rol    text := public.my_rol();
-  v_result boolean;
-begin
-  if v_rol in ('admin_eleam', 'superadmin') then return true; end if;
-  if v_rol <> 'funcionario' then return false; end if;
-
-  if not public.eleam_has_access(public.my_eleam_id()) then
-    return false;
-  end if;
-
-  select case perm
-    when 'crear_residentes'               then crear_residentes
-    when 'editar_residentes'              then editar_residentes
-    when 'eliminar_residentes'            then eliminar_residentes
-    when 'crear_signos_vitales'           then crear_signos_vitales
-    when 'editar_signos_vitales'          then editar_signos_vitales
-    when 'eliminar_signos_vitales'        then eliminar_signos_vitales
-    when 'crear_observaciones'            then crear_observaciones
-    when 'editar_observaciones'           then editar_observaciones
-    when 'eliminar_observaciones'         then eliminar_observaciones
-    when 'subir_acreditacion'             then subir_acreditacion
-    when 'editar_acreditacion'            then editar_acreditacion
-    when 'archivar_acreditacion'          then archivar_acreditacion
-    when 'crear_planes_cuidado'           then crear_planes_cuidado
-    when 'editar_planes_cuidado'          then editar_planes_cuidado
-    when 'completar_tareas_cuidado'       then completar_tareas_cuidado
-    when 'crear_indicaciones_medicamentos'  then crear_indicaciones_medicamentos
-    when 'editar_indicaciones_medicamentos' then editar_indicaciones_medicamentos
-    when 'administrar_medicamentos'       then administrar_medicamentos
-    when 'validar_medicamentos_controlados' then validar_medicamentos_controlados
-    when 'ajustar_stock_medicamentos'     then ajustar_stock_medicamentos
-    when 'asignar_camas'                  then asignar_camas
-    when 'editar_indicaciones_cuidado'    then editar_indicaciones_cuidado
-    when 'aplicar_evaluaciones_clinicas'  then aplicar_evaluaciones_clinicas
-    when 'crear_eventos_adversos'         then crear_eventos_adversos
-    when 'editar_eventos_adversos'        then editar_eventos_adversos
-    when 'cerrar_eventos_adversos'        then cerrar_eventos_adversos
-    when 'editar_inventario_bienes'       then editar_inventario_bienes
-    when 'gestionar_reclamos'             then gestionar_reclamos
-    when 'gestionar_emergencias'          then gestionar_emergencias
-    when 'registrar_simulacros'           then registrar_simulacros
-    when 'gestionar_cumplimiento'         then gestionar_cumplimiento
-    else false
-  end
-  into v_result
-  from public.funcionario_permisos
-  where profile_id = (select auth.uid());
-
-  if v_result is null then return false; end if;
-  return v_result;
-end;
-$$;
-
--- 3. Matriz de brechas del período transitorio (DS20 Arts. transitorios)
-create table if not exists public.transitorio_brechas (
-  id                 uuid primary key default gen_random_uuid(),
-  eleam_id           uuid not null references public.eleams(id) on delete cascade,
-  requisito          text not null
-    constraint trans_brechas_req_len check (char_length(trim(requisito)) between 3 and 200),
-  descripcion        text
-    constraint trans_brechas_desc_len check (descripcion is null or char_length(descripcion) <= 2000),
-  riesgo             text not null default 'medio'
-    constraint trans_brechas_riesgo_check check (riesgo in ('bajo','medio','alto','critico')),
-  estado             text not null default 'pendiente'
-    constraint trans_brechas_estado_check check (estado in ('pendiente','en_proceso','cerrada')),
-  plazo              date,
-  plan_accion        text
-    constraint trans_brechas_plan_len check (plan_accion is null or char_length(plan_accion) <= 2000),
-  responsable_id     uuid references public.profiles(id) on delete set null,
-  notas_seguimiento  text
-    constraint trans_brechas_notas_len check (notas_seguimiento is null or char_length(notas_seguimiento) <= 2000),
-  cerrado_en         timestamptz,
-  creado_por         uuid references public.profiles(id) on delete set null,
-  actualizado_por    uuid references public.profiles(id) on delete set null,
-  creado_en          timestamptz not null default now(),
-  actualizado_en     timestamptz not null default now()
-);
-create index if not exists idx_trans_brechas_eleam on public.transitorio_brechas(eleam_id, estado, plazo);
-
--- 4. Protocolos operativos del ELEAM (DS20 Art. 25 N°1 y N°4)
 create table if not exists public.protocolos_eleam (
   id               uuid primary key default gen_random_uuid(),
   eleam_id         uuid not null references public.eleams(id) on delete cascade,
   tipo             text not null
     constraint protocolos_tipo_check check (tipo in (
-      'urgencias_medicas','fallecimiento','ingreso','egreso','aseo_desinfeccion','otro'
+      'ingreso_egreso','urgencias_medicas','fallecimiento'
     )),
   titulo           text not null
     constraint protocolos_titulo_len check (char_length(trim(titulo)) between 3 and 200),
@@ -9961,254 +10246,143 @@ create table if not exists public.protocolos_eleam (
   creado_por       uuid references public.profiles(id) on delete set null,
   actualizado_por  uuid references public.profiles(id) on delete set null,
   creado_en        timestamptz not null default now(),
-  actualizado_en   timestamptz not null default now()
+  actualizado_en   timestamptz not null default now(),
+  unique (eleam_id, tipo)
 );
-create unique index if not exists protocolos_eleam_tipo_vigente_unique
-  on public.protocolos_eleam(eleam_id, tipo) where estado = 'vigente';
 create index if not exists idx_protocolos_eleam on public.protocolos_eleam(eleam_id, tipo, estado);
 
--- 5. Reportes trimestrales a SENAMA (DS20 Art. 31)
-create table if not exists public.reportes_senama (
-  id              uuid primary key default gen_random_uuid(),
-  eleam_id        uuid not null references public.eleams(id) on delete cascade,
-  periodo         text not null
-    constraint reportes_senama_periodo_check check (periodo ~ '^\d{4}-T[1-4]$'),
-  estado          text not null default 'generado'
-    constraint reportes_senama_estado_check check (estado in ('generado','enviado')),
-  datos           jsonb not null,
-  observaciones   text
-    constraint reportes_senama_obs_len check (observaciones is null or char_length(observaciones) <= 2000),
-  comprobante     text
-    constraint reportes_senama_comp_len check (comprobante is null or char_length(comprobante) <= 300),
-  generado_por    uuid references public.profiles(id) on delete set null,
-  enviado_por     uuid references public.profiles(id) on delete set null,
-  enviado_en      timestamptz,
-  creado_en       timestamptz not null default now(),
-  actualizado_en  timestamptz not null default now()
-);
-create unique index if not exists reportes_senama_periodo_unique on public.reportes_senama(eleam_id, periodo);
-create index if not exists idx_reportes_senama_eleam on public.reportes_senama(eleam_id, creado_en desc);
 
 -- ============================================================
--- FUNCIÓN: Consolidar datos del reporte SENAMA del ELEAM actual
+-- ACTUALIZACIÓN, RLS Y GRANTS: protocolos mínimos
 -- ============================================================
-create or replace function public.generate_senama_report_data()
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = public
-as $$
-declare
-  v_eleam_id uuid := public.my_eleam_id();
-  v_result   jsonb;
-begin
-  if v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario') then
-    raise exception 'No autorizado para generar el reporte SENAMA.';
-  end if;
-  if not public.eleam_has_access(v_eleam_id) then
-    raise exception 'El ELEAM no tiene acceso vigente.';
-  end if;
-
-  select jsonb_build_object(
-    'eleam', (
-      select jsonb_build_object(
-        'nombre', e.nombre,
-        'rut_empresa', e.rut_empresa,
-        'telefono', e.telefono,
-        'email_admin', e.email_admin
-      )
-      from public.eleams e where e.id = v_eleam_id
-    ),
-    'residentes', (
-      select jsonb_build_object(
-        'total', count(*),
-        'activos', count(*) filter (where estado = 'activo'),
-        'hospitalizados', count(*) filter (where estado = 'hospitalizado'),
-        'egresados', count(*) filter (where estado = 'egresado'),
-        'fallecidos', count(*) filter (where estado = 'fallecido'),
-        'por_dependencia', jsonb_build_object(
-          'leve', count(*) filter (where nivel_dependencia = 'leve' and estado in ('activo','hospitalizado')),
-          'moderado', count(*) filter (where nivel_dependencia = 'moderado' and estado in ('activo','hospitalizado')),
-          'severo', count(*) filter (where nivel_dependencia = 'severo' and estado in ('activo','hospitalizado')),
-          'total_dependencia', count(*) filter (where nivel_dependencia = 'total' and estado in ('activo','hospitalizado')),
-          'sin_clasificar', count(*) filter (where nivel_dependencia is null and estado in ('activo','hospitalizado'))
-        ),
-        'por_sexo', jsonb_build_object(
-          'femenino', count(*) filter (where sexo = 'femenino' and estado in ('activo','hospitalizado')),
-          'masculino', count(*) filter (where sexo = 'masculino' and estado in ('activo','hospitalizado')),
-          'otro', count(*) filter (where coalesce(sexo,'') not in ('femenino','masculino') and estado in ('activo','hospitalizado'))
-        )
-      )
-      from public.residentes where eleam_id = v_eleam_id
-    ),
-    'personal', (
-      select jsonb_build_object(
-        'total_activos', count(*) filter (where activo),
-        'por_tipo_dotacion', (
-          select coalesce(jsonb_object_agg(tipo_dotacion, cnt), '{}'::jsonb)
-          from (
-            select tipo_dotacion, count(*) as cnt
-            from public.staff_members
-            where eleam_id = v_eleam_id and activo
-            group by tipo_dotacion
-          ) t
-        )
-      )
-      from public.staff_members where eleam_id = v_eleam_id
-    ),
-    'capacitacion', (
-      select jsonb_build_object(
-        'horas_anio_actual', coalesce(sum(horas) filter (
-          where extract(year from fecha) = extract(year from current_date)
-        ), 0),
-        'registros_anio_actual', count(*) filter (
-          where extract(year from fecha) = extract(year from current_date)
-        )
-      )
-      from public.staff_training_records where eleam_id = v_eleam_id
-    ),
-    'simulacros', (
-      select jsonb_build_object(
-        'total_anio_actual', count(*) filter (
-          where extract(year from fecha_realizado) = extract(year from current_date)
-        ),
-        'ultimo', max(fecha_realizado)
-      )
-      from public.simulacros where eleam_id = v_eleam_id
-    ),
-    'reclamos', (
-      select jsonb_build_object(
-        'abiertos', count(*) filter (where estado in ('abierto','en_proceso')),
-        'resueltos_anio_actual', count(*) filter (
-          where estado = 'resuelto'
-            and extract(year from creado_en) = extract(year from current_date)
-        )
-      )
-      from public.reclamos_sugerencias where eleam_id = v_eleam_id
-    ),
-    'generado_en', now()
-  ) into v_result;
-
-  return v_result;
-end;
-$$;
-
-revoke all on function public.generate_senama_report_data() from public;
-grant execute on function public.generate_senama_report_data() to authenticated;
-
--- ============================================================
--- TRIGGERS: actualizado_en para tablas fase 3
--- ============================================================
-drop trigger if exists trg_trans_brechas_updated_at on public.transitorio_brechas;
-create trigger trg_trans_brechas_updated_at
-  before update on public.transitorio_brechas
-  for each row execute function public.set_updated_at();
-
 drop trigger if exists trg_protocolos_eleam_updated_at on public.protocolos_eleam;
 create trigger trg_protocolos_eleam_updated_at
   before update on public.protocolos_eleam
   for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_reportes_senama_updated_at on public.reportes_senama;
-create trigger trg_reportes_senama_updated_at
-  before update on public.reportes_senama
-  for each row execute function public.set_updated_at();
+alter table public.protocolos_eleam enable row level security;
 
--- ============================================================
--- RLS: Tablas DS20 Fase 3
--- ============================================================
-alter table public.transitorio_brechas enable row level security;
-alter table public.protocolos_eleam    enable row level security;
-alter table public.reportes_senama     enable row level security;
-
--- Idempotencia: re-ejecutar el esquema debe poder recrear estas politicas.
-drop policy if exists "trans_brechas_select" on public.transitorio_brechas;
-drop policy if exists "trans_brechas_insert" on public.transitorio_brechas;
-drop policy if exists "trans_brechas_update" on public.transitorio_brechas;
-drop policy if exists "trans_brechas_delete" on public.transitorio_brechas;
 drop policy if exists "protocolos_select" on public.protocolos_eleam;
 drop policy if exists "protocolos_insert" on public.protocolos_eleam;
 drop policy if exists "protocolos_update" on public.protocolos_eleam;
 drop policy if exists "protocolos_delete" on public.protocolos_eleam;
-drop policy if exists "reportes_senama_select" on public.reportes_senama;
-drop policy if exists "reportes_senama_insert" on public.reportes_senama;
-drop policy if exists "reportes_senama_update" on public.reportes_senama;
-drop policy if exists "reportes_senama_delete" on public.reportes_senama;
 
--- transitorio_brechas
-create policy "trans_brechas_select" on public.transitorio_brechas
-  for select using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    or public.is_superadmin()
-  );
-create policy "trans_brechas_insert" on public.transitorio_brechas
-  for insert with check (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    and public.eleam_has_access(eleam_id)
-    and public.funcionario_can('gestionar_cumplimiento')
-  );
-create policy "trans_brechas_update" on public.transitorio_brechas
-  for update using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    and public.eleam_has_access(eleam_id)
-    and public.funcionario_can('gestionar_cumplimiento')
-  );
-create policy "trans_brechas_delete" on public.transitorio_brechas
-  for delete using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    and public.my_rol() = 'admin_eleam'
-  );
-
--- protocolos_eleam
 create policy "protocolos_select" on public.protocolos_eleam
   for select using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    or public.is_superadmin()
+    public.is_superadmin()
+    or (
+      eleam_id = public.my_eleam_id()
+      and public.eleam_has_access(eleam_id)
+      and public.can_access_feature('compliance')
+      and public.funcionario_can('gestionar_cumplimiento')
+    )
   );
 create policy "protocolos_insert" on public.protocolos_eleam
   for insert with check (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    eleam_id = public.my_eleam_id()
     and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
     and public.funcionario_can('gestionar_cumplimiento')
   );
 create policy "protocolos_update" on public.protocolos_eleam
   for update using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    eleam_id = public.my_eleam_id()
     and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
+    and public.funcionario_can('gestionar_cumplimiento')
+  )
+  with check (
+    eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.can_access_feature('compliance')
     and public.funcionario_can('gestionar_cumplimiento')
   );
 create policy "protocolos_delete" on public.protocolos_eleam
   for delete using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
+    eleam_id = public.my_eleam_id()
     and public.my_rol() = 'admin_eleam'
+    and public.can_access_feature('compliance')
   );
 
--- reportes_senama
-create policy "reportes_senama_select" on public.reportes_senama
-  for select using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    or public.is_superadmin()
-  );
-create policy "reportes_senama_insert" on public.reportes_senama
-  for insert with check (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    and public.eleam_has_access(eleam_id)
-    and public.funcionario_can('gestionar_cumplimiento')
-  );
-create policy "reportes_senama_update" on public.reportes_senama
-  for update using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    and public.eleam_has_access(eleam_id)
-    and public.funcionario_can('gestionar_cumplimiento')
-  );
-create policy "reportes_senama_delete" on public.reportes_senama
-  for delete using (
-    (select eleam_id from public.profiles where id = (select auth.uid())) = eleam_id
-    and public.my_rol() = 'admin_eleam'
-  );
+grant select, insert, update, delete on public.protocolos_eleam to authenticated;
 
--- Grants para tablas fase 3
-grant select, insert, update, delete on public.transitorio_brechas to authenticated;
-grant select, insert, update, delete on public.protocolos_eleam    to authenticated;
-grant select, insert, update, delete on public.reportes_senama     to authenticated;
+-- ============================================================
+-- PUERTAS RLS POR ÁREA
+-- ============================================================
+-- Las políticas funcionales anteriores siguen decidiendo qué operación puede
+-- realizarse. Estas políticas RESTRICTIVE agregan una condición transversal:
+-- si el área no está explícitamente disponible, ninguna consulta o mutación
+-- directa sobre sus tablas puede atravesar RLS.
+do $$
+declare
+  v_table text;
+  v_feature text;
+begin
+  for v_table, v_feature in
+    select * from (values
+      ('habitaciones', 'establishment'),
+      ('camas', 'establishment'),
+      ('cama_asignaciones', 'establishment'),
+      ('camas_audit', 'establishment'),
+      ('inventario_bienes', 'establishment'),
+
+      ('residentes', 'residents'),
+      ('signos_vitales', 'residents'),
+      ('observaciones_diarias', 'residents'),
+      ('evaluaciones_clinicas', 'residents'),
+      ('resident_consents', 'residents'),
+      ('health_centers', 'residents'),
+      ('resident_health_network', 'residents'),
+      ('health_controls', 'residents'),
+      ('turno_entregas', 'residents'),
+      ('eventos_adversos', 'residents'),
+      ('eventos_adversos_acciones', 'residents'),
+      ('eventos_adversos_audit', 'residents'),
+      ('planes_cuidado', 'residents'),
+      ('plan_cuidado_actividades', 'residents'),
+      ('plan_cuidado_horarios', 'residents'),
+      ('tareas_cuidado', 'residents'),
+      ('plan_cuidado_audit', 'residents'),
+      ('medicamentos_indicaciones', 'residents'),
+      ('medicamentos_horarios', 'residents'),
+      ('medicamentos_stock_lotes', 'residents'),
+      ('medicamentos_administraciones', 'residents'),
+      ('medicamentos_stock_movimientos', 'residents'),
+      ('medicamentos_conciliaciones', 'residents'),
+      ('medicamentos_audit', 'residents'),
+      ('persona_significativa', 'residents'),
+      ('actividades_sociales', 'residents'),
+
+      ('staff_members', 'personnel'),
+      ('staff_competencies', 'personnel'),
+      ('staff_training_records', 'personnel'),
+      ('staff_shift_assignments', 'personnel'),
+
+      ('resident_payment_contacts', 'resident_payments'),
+      ('resident_billing_profiles', 'resident_payments'),
+      ('resident_charges', 'resident_payments'),
+      ('resident_payments', 'resident_payments'),
+      ('resident_payment_deliveries', 'resident_payments'),
+      ('resident_payment_audit', 'resident_payments'),
+
+      ('acred_requisitos_eleam', 'compliance'),
+      ('acred_documentos', 'compliance'),
+      ('acred_observaciones', 'compliance'),
+      ('acred_audit', 'compliance'),
+      ('protocolos_eleam', 'compliance'),
+      ('plan_emergencias', 'compliance'),
+      ('escenarios_emergencia', 'compliance'),
+      ('simulacros', 'compliance'),
+      ('reclamos_sugerencias', 'compliance')
+    ) gates(table_name, feature_id)
+  loop
+    execute format('drop policy if exists feature_access_gate on public.%I', v_table);
+    execute format(
+      'create policy feature_access_gate on public.%I as restrictive for all to authenticated using (public.is_superadmin() or public.can_access_feature(%L)) with check (public.is_superadmin() or public.can_access_feature(%L))',
+      v_table,
+      v_feature,
+      v_feature
+    );
+  end loop;
+end;
+$$;

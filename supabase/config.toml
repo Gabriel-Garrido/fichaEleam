@@ -30,5 +30,11 @@ verify_jwt = true
 [functions.delete-staff-user]
 verify_jwt = true
 
+[functions.update-staff-user]
+verify_jwt = true
+
 [functions.send-crm-email-campaign]
+verify_jwt = true
+
+[functions.send-resident-payment-receipt]
 verify_jwt = true

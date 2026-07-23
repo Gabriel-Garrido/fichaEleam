@@ -168,6 +168,39 @@ export function matchesFilter(item, filter) {
   return true;
 }
 
+function normalizeSearchText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase("es-CL")
+    .trim();
+}
+
+export function matchesTaskSearch(item, query) {
+  const terms = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return true;
+
+  const resident = item?.resident ?? item?.residente ?? item?.residentes ?? item?.row?.residentes;
+  const firstName = resident?.nombre ?? "";
+  const lastName = resident?.apellido ?? "";
+  const searchableText = normalizeSearchText([
+    firstName,
+    lastName,
+    `${firstName} ${lastName}`,
+    `${lastName} ${firstName}`,
+    item?.title,
+    item?.typeLabel,
+    item?.meta,
+    item?.detail,
+    item?.row?.actividad?.titulo,
+    item?.row?.actividad?.instrucciones,
+    item?.row?.indicacion?.medicamento_nombre,
+    item?.row?.indicacion?.dosis,
+  ].filter(Boolean).join(" "));
+
+  return terms.every((term) => searchableText.includes(term));
+}
+
 export function normalizeTaskView(value) {
   if (value === "cerradas" || value === "todas") return value;
   return "pendientes";

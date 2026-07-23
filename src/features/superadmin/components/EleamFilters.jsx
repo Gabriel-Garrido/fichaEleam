@@ -67,7 +67,7 @@ export default function EleamFilters({ filters, setFilters, count }) {
         {/* Estado CRM */}
         <div>
           <label htmlFor="filter-crm" className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">
-            Estado CRM
+            Estado comercial
           </label>
           <select
             id="filter-crm"
@@ -75,14 +75,14 @@ export default function EleamFilters({ filters, setFilters, count }) {
             onChange={(e) => set({ crmEstado: e.target.value || undefined })}
             className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
           >
-            <option value="">Todos los estados</option>
+            <option value="">Cualquier estado</option>
             {CRM_STATES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </div>
 
         <div>
           <label htmlFor="filter-usage" className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">
-            Uso de app
+            Nivel de uso
           </label>
           <select
             id="filter-usage"
@@ -90,11 +90,11 @@ export default function EleamFilters({ filters, setFilters, count }) {
             onChange={(e) => set({ uso: e.target.value || undefined })}
             className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
           >
-            <option value="">Todo uso</option>
-            <option value="con_uso">Con uso en ventana</option>
-            <option value="sin_uso">Sin uso en ventana</option>
-            <option value="activos_7d">Activos últimos 7d</option>
-            <option value="sin_activar">Usuarios sin activar</option>
+            <option value="">Todos</option>
+            <option value="con_uso">Con actividad</option>
+            <option value="sin_uso">Sin actividad</option>
+            <option value="activos_7d">Actividad reciente</option>
+            <option value="sin_activar">Con accesos pendientes</option>
           </select>
         </div>
 
@@ -117,7 +117,7 @@ export default function EleamFilters({ filters, setFilters, count }) {
         {/* Riesgo */}
         <div>
           <label htmlFor="filter-riesgo" className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">
-            Riesgo churn
+            Riesgo de baja
           </label>
           <select
             id="filter-riesgo"

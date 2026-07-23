@@ -50,9 +50,21 @@ describe("navigationConfig role workflows", () => {
     expect(actions).toContain("daily-care");
   });
 
-  it("reduce la navegación del ELEAM a cinco áreas", () => {
+  it.each(["dashboard", "establishment", "residents", "personnel", "compliance", "resident_payments"])(
+    "oculta %s en escritorio y móvil cuando el área está denegada",
+    (deniedFeature) => {
+      const auth = authFor("funcionario", {
+        canFeature: (featureId) => featureId !== deniedFeature,
+      });
+      const items = getNavigationSections(auth).flatMap((section) => section.items.map((item) => item.id));
+      expect(items).not.toContain(deniedFeature);
+      expect(slotIds(getMobileBottomNav(auth))).not.toContain(deniedFeature);
+    },
+  );
+
+  it("mantiene la cobranza separada de las cinco áreas operativas", () => {
     const sections = getNavigationSections(authFor("admin_eleam"));
     const items = sections.flatMap((section) => section.items.map((item) => item.id));
-    expect(items).toEqual(["dashboard", "establishment", "residents", "personnel", "compliance"]);
+    expect(items).toEqual(["dashboard", "establishment", "residents", "personnel", "compliance", "resident_payments"]);
   });
 });

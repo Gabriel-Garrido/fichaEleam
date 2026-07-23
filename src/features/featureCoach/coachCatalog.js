@@ -317,24 +317,24 @@ export const COACHES = {
 
   cumplimiento: {
     icon: "compliance",
-    eyebrow: "Cumplimiento DS20",
-    title: "El decreto, bajo control",
-    description: "Plazos transitorios, matriz de brechas, protocolos y reportes SENAMA en una sola vista.",
+    eyebrow: "Cumplimiento",
+    title: "Una carpeta fácil de revisar",
+    description: "Documentos, protocolos y registros ordenados para una fiscalización.",
     steps: [
-      { title: "Mira los plazos", text: "Los hitos legales del decreto, con días restantes." },
-      { title: "Cierra brechas", text: "Levanta cada requisito pendiente con riesgo, plazo y plan." },
-      { title: "Genera el reporte SENAMA", text: "Un resumen trimestral con los datos del ELEAM." },
+      { title: "Abre un ámbito", text: "Verás juntos todos los puntos que pertenecen al mismo tema." },
+      { title: "Completa lo pendiente", text: "Cada punto explica en palabras simples qué respaldo falta." },
+      { title: "Emite el reporte", text: "La vista para fiscalización conserva el mismo orden de la pantalla." },
     ],
-    benefit: "Llegas al fin del período transitorio con todo documentado.",
+    benefit: "Preparas la revisión sin mantener listas paralelas.",
     roleOverrides: {
       funcionario: {
-        title: "El decreto, siempre a la vista",
-        description: "Consulta plazos transitorios, brechas abiertas y protocolos vigentes del ELEAM.",
+        title: "La carpeta, siempre clara",
+        description: "Consulta los ámbitos y abre solo el tema que necesitas revisar.",
         steps: [
-          { title: "Mira los plazos", text: "Los hitos legales del decreto, con días restantes." },
-          { title: "Consulta los protocolos", text: "Urgencias, fallecimiento, ingreso y egreso, en su versión vigente." },
+          { title: "Abre un ámbito", text: "Cada tema muestra sus puntos en el orden del reporte." },
+          { title: "Revisa un respaldo", text: "El estado indica si está al día o necesita atención." },
         ],
-        benefit: "Trabajas alineado al decreto sin buscar documentos en carpetas.",
+        benefit: "Encuentras lo importante sin navegar por varias pantallas.",
       },
     },
   },
@@ -367,24 +367,12 @@ export const COACHES = {
     icon: "accreditation",
     eyebrow: "Carpeta SEREMI",
     title: "Carpeta SEREMI DS 20 al día",
-    description: "La matriz DS 20 por artículos del Decreto N°20 con alertas de vencimiento.",
+    description: "Los ámbitos del reporte, desplegables y con lenguaje sencillo.",
     steps: [
-      { title: "Mira la evidencia vigente", text: "Porcentaje y pendientes por ámbito." },
-      { title: "Entra a un ámbito", text: "Revisa requisitos y sube documentos." },
+      { title: "Abre un ámbito", text: "Revisa sus puntos sin salir de la carpeta." },
+      { title: "Completa un punto", text: "Sube o revisa el respaldo desde una sola acción." },
     ],
     benefit: "Tu carpeta lista el día de la fiscalización, sin folders perdidos.",
-  },
-
-  "accreditation-ambito": {
-    icon: "accreditation",
-    eyebrow: "Ámbito SEREMI",
-    title: "Requisitos del ámbito",
-    description: "Estado, vencimientos y filtros fiscalizables del ámbito.",
-    steps: [
-      { title: "Filtra por estado", text: "Pendiente, vigente, no cumple o vencido." },
-      { title: "Entra al requisito", text: "Para ver evidencias y subir documentos." },
-    ],
-    benefit: "Priorizas de un vistazo qué necesita acción inmediata.",
   },
 
   "accreditation-requisito": {

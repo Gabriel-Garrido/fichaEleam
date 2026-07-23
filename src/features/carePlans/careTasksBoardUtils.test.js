@@ -3,6 +3,7 @@ import {
   buildTaskMetrics,
   getTurnFocus,
   getTaskProgress,
+  matchesTaskSearch,
   normalizeTaskView,
   normalizeSeguimiento,
   sortWorkItemsByUrgency,
@@ -82,5 +83,30 @@ describe("careTasksBoardUtils board helpers", () => {
     expect(normalizeTaskView("vencidas")).toBe("pendientes");
     expect(normalizeTaskView("unknown")).toBe("pendientes");
     expect(getTaskProgress({ total: 10, pendientes: 3, reprogramadas: 2 })).toEqual({ total: 10, completed: 7, pct: 70 });
+  });
+
+  it("searches normalized tasks by resident, accents and task content", () => {
+    const item = {
+      resident: { nombre: "José", apellido: "Pérez" },
+      title: "Cambio de posición",
+      typeLabel: "Cuidado",
+      meta: "Prevención",
+      row: { actividad: { instrucciones: "Usar cojín" } },
+    };
+
+    expect(matchesTaskSearch(item, "jose perez")).toBe(true);
+    expect(matchesTaskSearch(item, "Pérez José")).toBe(true);
+    expect(matchesTaskSearch(item, "cambio posicion")).toBe(true);
+    expect(matchesTaskSearch(item, "cojin")).toBe(true);
+    expect(matchesTaskSearch(item, "María")).toBe(false);
+  });
+
+  it("searches medication names from normalized and raw data", () => {
+    const item = {
+      resident: { nombre: "Ana", apellido: "Silva" },
+      title: "Paracetamol",
+      row: { indicacion: { medicamento_nombre: "Paracetamol", dosis: "500 mg" } },
+    };
+    expect(matchesTaskSearch(item, "paracetamol 500")).toBe(true);
   });
 });

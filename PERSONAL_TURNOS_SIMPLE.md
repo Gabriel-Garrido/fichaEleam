@@ -3,7 +3,7 @@
 Este módulo separa cuatro tareas que antes estaban dispersas o mezcladas:
 
 1. **Equipo:** personas con acceso a FichaEleam e invitaciones pendientes.
-2. **Antecedentes SEREMI:** planta completa, incluidos trabajadores sin acceso al sistema; cargo, función, estado, competencias y capacitación.
+2. **Equipo · antecedentes SEREMI:** en la misma pantalla se mantiene la planta completa, incluidos trabajadores sin acceso; cargo, función, estado, competencias y capacitación.
 3. **Dotación:** calendario semanal de personas por turno y alerta automática de brecha.
 4. **Entrega de turno:** novedades clínicas y pendientes para el equipo siguiente.
 
@@ -12,7 +12,7 @@ Las rutas existentes se mantienen. Una navegación común permite cambiar entre 
 ## Uso por rol
 
 - **Administrador ELEAM:** invita usuarios, mantiene la planta y antecedentes, programa o quita asignaciones y registra entregas.
-- **Funcionario:** consulta equipo, antecedentes y dotación; puede registrar y consultar entregas clínicas según el acceso operativo del establecimiento.
+- **Funcionario:** consulta equipo y dotación solo si tiene habilitada el área Personal; las entregas clínicas dependen del acceso al área Residentes.
 - **Superadministrador:** conserva las capacidades administrativas definidas por las políticas existentes.
 
 Los controles de modificación de planta y dotación están protegidos en interfaz y por RLS. La ausencia de un botón no se considera un control de seguridad.
@@ -20,7 +20,18 @@ Los controles de modificación de planta y dotación están protegidos en interf
 ## Flujo mínimo recomendado
 
 1. Agregar a `Equipo` sólo a quienes necesitan iniciar sesión.
-2. Agregar en `Antecedentes SEREMI` al resto de la planta sin crear cuentas innecesarias.
+2. Agregar desde `Equipo` al resto de la planta sin crear cuentas innecesarias y completar allí sus antecedentes SEREMI.
+
+## Permisos de funcionarios
+
+Desde cada funcionario con acceso, el administrador puede abrir `Configurar permisos`. El editor separa dos decisiones:
+
+1. **Qué puede ver:** Inicio, Establecimiento, Residentes, Personal y Cumplimiento.
+2. **Qué puede hacer:** acciones de creación, edición, eliminación, validación y cierre agrupadas por módulo.
+
+La función elegida al crear a la persona propone permisos iniciales sencillos, que pueden ajustarse antes de finalizar. No hay perfiles de permisos adicionales que dupliquen esa decisión. Si no se elige ningún permiso, la cuenta queda activa pero sin acceso a áreas.
+
+Los permisos son cerrados por defecto: un área desactivada desaparece del menú y de los accesos relacionados, sus URLs quedan protegidas y Supabase bloquea consultas, cambios y documentos de esa área. Activar una acción habilita automáticamente el área correspondiente; desactivar el área limpia esas acciones. Los tooltips explican el efecto antes de guardar. Solo el administrador puede modificar permisos.
 3. Completar cargo y tipo de dotación de cada persona.
 4. Registrar competencias relevantes y el avance de capacitación anual.
 5. En `Dotación`, seleccionar el día y asignar cada persona. El rol del turno se infiere del tipo de dotación para evitar clasificaciones duplicadas.
