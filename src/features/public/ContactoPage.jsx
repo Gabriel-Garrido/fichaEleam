@@ -101,7 +101,7 @@ export default function ContactoPage() {
               </h1>
 
               <p className="mt-7 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
-                Cuéntanos sobre tu residencia y te mostramos cómo FichaEleam ordena la ficha clínica, la entrega de turno y la Carpeta SEREMI. Respondemos solicitudes de demo y consultas comerciales en horario hábil de Chile.
+                Cuéntanos sobre tu residencia y te mostramos cómo FichaEleam ordena el cuidado diario, la Carpeta SEREMI y la cobranza, incluidos los respaldos y recordatorios por correo. Respondemos solicitudes de demo y consultas comerciales en horario hábil de Chile.
               </p>
 
               <div className="mt-9 grid grid-cols-2 gap-6 border-t border-white/10 pt-8 sm:grid-cols-3 lg:gap-10">

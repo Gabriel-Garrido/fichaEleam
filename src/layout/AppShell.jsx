@@ -1,16 +1,27 @@
-import { Outlet, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import DesktopSidebar from "./DesktopSidebar";
 import MobileBottomNav from "./MobileBottomNav";
 import { useAuth } from "../context/AuthContext";
 import { useNavigationItems } from "../navigation/useNavigationItems";
 import { logout } from "../features/auth/authService";
+import { getPrivateRouteTitle } from "../routes/privateRouteMetadata";
 
 export default function AppShell({ children }) {
   const auth = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const { sections, bottomNavSlots, quickActions } = useNavigationItems();
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    document.title = `${getPrivateRouteTitle(location.pathname)} · FichaEleam`;
+
+    // Las vistas con información privada nunca deben heredar el "index, follow"
+    // de una página pública prerenderizada al abrir o recargar una URL interna.
+    const robots = document.head.querySelector('meta[name="robots"]');
+    robots?.setAttribute("content", "noindex, nofollow");
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     try {

@@ -38,7 +38,7 @@ const MARKETING_IMAGES = {
 
 const BASE_TITLE = "FichaEleam · Software para ELEAM en Chile";
 const BASE_DESCRIPTION =
-  "FichaEleam digitaliza la gestión clínica, documental y operativa de ELEAM en Chile: fichas, signos vitales, observaciones, medicamentos y Carpeta SEREMI DS 20.";
+  "Software para ELEAM con gestión clínica, Carpeta SEREMI y cobranza de residentes: cobros, respaldos, historial y recordatorios por correo.";
 
 function absoluteUrl(value = "") {
   if (!value) return `${ORIGIN}${MARKETING_IMAGES.home}`;
@@ -396,6 +396,7 @@ function buildLandingHtml() {
         <li><strong>Carpeta SEREMI DS 20</strong>: matriz por art&iacute;culos, evidencia requerida, criticidad, estados fiscalizables y alertas de vencimiento.</li>
         <li><strong>eMAR / Kardex electr&oacute;nico</strong>: administraci&oacute;n de medicamentos por turno con historial inmutable.</li>
         <li><strong>Entrega de turno</strong>: pendientes clínicos, medicamentos y tareas con trazabilidad por responsable.</li>
+        <li><strong>Cobranza de residentes</strong>: mensualidades, otros cobros, respaldos, historial y recordatorios por correo para pagos pendientes.</li>
         <li><strong>Gesti&oacute;n de habitaciones y camas</strong>: inventario, ocupaci&oacute;n y traslados con historial.</li>
       </ul>
 
@@ -445,6 +446,7 @@ function buildPaymentHtml() {
         <li>eMAR (kardex electr&oacute;nico) e historial inmutable de administraci&oacute;n de medicamentos.</li>
         <li>Plan de cuidado con tareas por turno.</li>
         <li>Entrega de turno con alertas, tareas y responsables.</li>
+        <li>Cobranza de residentes con respaldos, historial y recordatorios por correo.</li>
         <li>Permisos granulares por funcionario.</li>
         <li>Importaci&oacute;n masiva v&iacute;a Excel.</li>
         <li>Soporte en espa&ntilde;ol por correo y WhatsApp.</li>
@@ -639,7 +641,7 @@ function buildSoftwareHtml() {
   return `<main class="seo-prerender">
       <nav aria-label="Breadcrumb"><a href="/">Inicio</a> &middot; Software para ELEAM</nav>
       <h1>Software para ELEAM en Chile</h1>
-      <p class="article-summary">Ficha cl&iacute;nica digital, signos vitales con alertas, eMAR, programa de atenci&oacute;n integral usuaria, observaciones de turno y Carpeta SEREMI DS 20 en una sola plataforma para ELEAM en Chile.</p>
+      <p class="article-summary">Ficha cl&iacute;nica, cuidado diario, medicamentos, Carpeta SEREMI y cobranza de residentes con respaldos, historial y recordatorios por correo.</p>
       <img src="${MARKETING_IMAGES.software}" alt="Dashboard clinico de FichaEleam con signos vitales y ficha de residente" loading="eager">
 
       <h2>Excel y papel vs FichaEleam</h2>
@@ -668,6 +670,7 @@ function buildSoftwareHtml() {
         <li>Trazabilidad clínica y operativa por usuario y fecha.</li>
         <li>Entrega de turno con resumen cl&iacute;nico, eMAR y pendientes.</li>
         <li>Permisos granulares por funcionario.</li>
+        <li>Cobranza de residentes con mensualidades, otros cobros, respaldos, historial y recordatorios por correo.</li>
         <li>Importaci&oacute;n masiva v&iacute;a Excel con validadores nativos.</li>
         <li>Trazabilidad e historial inmutable.</li>
       </ul>
@@ -1197,6 +1200,7 @@ Los residentes activos y hospitalizados consumen cupo. Residentes egresados o fa
 - Eventos adversos y eventos criticos con seguimiento
 - Entrega de turno con pendientes clínicos, medicamentos y tareas
 - Gestion de equipo con permisos granulares por funcionario
+- Cobranza de residentes con mensualidades, otros cobros, respaldos tributarios, historial y recordatorios por correo
 - Importacion masiva via Excel con validadores nativos
 - Cuenta demo real con 30 dias de prueba gratuita
 

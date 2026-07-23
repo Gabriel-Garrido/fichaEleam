@@ -56,10 +56,10 @@ const BENTO_FEATURES = [
   },
   {
     col: "",
-    icon: "users",
-    metric: "Continuidad del cuidado",
-    title: "Entrega de turno trazable",
-    text: "El equipo recibe pendientes clínicos, medicamentos y tareas en un resumen operativo verificable.",
+    icon: "document",
+    metric: "Cobranza ordenada",
+    title: "Cobros y recordatorios en un solo lugar",
+    text: "Registra mensualidades y otros cobros, adjunta respaldos y envía recordatorios por correo a quienes tienen pagos pendientes.",
     tone: "emerald",
   },
 ];
@@ -76,12 +76,13 @@ const SOLUTIONS = [
   "Avisos automáticos antes de que venza cada documento de la SEREMI",
   "Cada registro queda con el nombre de quién lo hizo y a qué hora",
   "Una entrega de turno que reúne alertas, tareas y responsables",
+  "Cobros por residente con historial, respaldos y recordatorios por correo",
 ];
 
 const ROLES = [
   {
     role: "Dirección",
-    desc: "Una mirada completa: residentes, equipo, cumplimiento SEREMI, pagos y reportes.",
+    desc: "Una mirada completa: residentes, equipo, cumplimiento, cobranza y reportes.",
     tone: "teal",
     icon: "shield",
   },
@@ -111,13 +112,14 @@ const PLAN_FEATURES = [
   "Signos vitales con alertas",
   "Entrega de turno y observaciones",
   "Medicamentos y plan de cuidado",
+  "Cobranza, respaldos y recordatorios por correo",
   "Permisos granulares para el equipo",
 ];
 
 const FAQ_ITEMS = [
   {
     q: "¿Qué es FichaEleam?",
-    a: "FichaEleam es un software web para residencias de personas mayores (ELEAM) en Chile. Reúne la ficha clínica, los signos vitales, las observaciones, la entrega de turno, los medicamentos y la Carpeta SEREMI (Decreto N°20) en un solo lugar.",
+    a: "FichaEleam es un software web para residencias de personas mayores (ELEAM) en Chile. Reúne la ficha clínica, el cuidado diario, los medicamentos, la Carpeta SEREMI y la cobranza a residentes, con historial y recordatorios por correo.",
   },
   {
     q: "¿Me ayuda con la fiscalización de la SEREMI?",
@@ -159,7 +161,7 @@ export default function LandingPage() {
   useSEO({
     title: "Software para ELEAM en Chile · Ficha clínica y Carpeta SEREMI",
     description:
-      "FichaEleam reúne la ficha clínica, los signos vitales, la entrega de turno, los medicamentos y la Carpeta SEREMI (Decreto N°20) de tu residencia de personas mayores en un solo lugar. Demo gratis por 30 días.",
+      "Software para ELEAM con ficha clínica, turnos, medicamentos, Carpeta SEREMI y cobranza a residentes con respaldos y recordatorios por correo. Demo gratis.",
     path: "/",
     image: PUBLIC_ASSETS.hero.publicSrc,
     keywords: ["software ELEAM Chile", "Decreto N°20", "carpeta SEREMI", "ficha clínica persona mayor", "residencia persona mayor"],
@@ -235,7 +237,7 @@ export default function LandingPage() {
                   </h1>
 
                   <p className="mt-7 max-w-xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
-                    Ficha clínica, signos vitales con alertas, entrega de turno, medicamentos y la Carpeta SEREMI (Decreto&nbsp;N&deg;20) lista para la fiscalización. Todo en un solo lugar, hecho para residencias de personas mayores en Chile.
+                    Ficha clínica, cuidado diario, medicamentos, Carpeta SEREMI y cobranza a residentes con respaldos y recordatorios por correo. Todo en un solo lugar, hecho para ELEAM en Chile.
                   </p>
 
                   <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">

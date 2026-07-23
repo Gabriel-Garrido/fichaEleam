@@ -18,7 +18,7 @@ import { DECRETO20_REQUISITOS } from "../../content/decreto20Eleam";
 const FAQ = [
   {
     q: "¿Qué es un software para ELEAM?",
-    a: "Es una plataforma digital que centraliza fichas clínicas, signos vitales, turnos, medicamentos, programa de atención integral y carpeta SEREMI para ELEAM.",
+    a: "Es una plataforma digital que reúne fichas clínicas, turnos, medicamentos, carpeta SEREMI y cobranza a residentes con respaldos, historial y recordatorios por correo.",
   },
   {
     q: "¿Por qué un software especializado y no Excel?",
@@ -47,6 +47,7 @@ const MODULES = [
   ["Evaluaciones geriátricas", "Barthel, Katz, MNA y MMSE dentro de la ficha del residente."],
   ["Habitaciones y camas", "Inventario, ocupación, traslados, reservas y trazabilidad operacional."],
   ["Equipo y permisos", "Accesos claros para administradores y funcionarios."],
+  ["Cobranza de residentes", "Mensualidades, otros cobros, respaldos e historial por residente, con recordatorios por correo para pagos pendientes."],
 ];
 
 const COMPARISON = [
@@ -55,6 +56,7 @@ const COMPARISON = [
   ["Turnos", "Cuaderno o WhatsApp", "Resumen digital del turno"],
   ["SEREMI", "Carpetas físicas y vencimientos manuales", "Ámbitos, evidencias y vencimientos"],
   ["Evaluaciones", "Escalas en archivos separados", "Historial clínico por residente"],
+  ["Cobranza", "Planillas, mensajes y respaldos dispersos", "Cobros, pagos, documentos y recordatorios en un historial"],
 ];
 
 export default function SoftwareEleamPage() {
@@ -64,7 +66,7 @@ export default function SoftwareEleamPage() {
   useSEO({
     title: "Software para ELEAM en Chile · Gestión clínica y SEREMI",
     description:
-      "Software web especializado para ELEAM en Chile: ficha clínica digital, signos vitales, entrega de turno, medicamentos y carpeta SEREMI Decreto N°20.",
+      "Software para ELEAM con ficha clínica, turnos, medicamentos, Carpeta SEREMI y cobranza de residentes con respaldos y recordatorios por correo.",
     path: "/software-eleam",
     image: PUBLIC_ASSETS.software.publicSrc,
     keywords: [
@@ -73,6 +75,7 @@ export default function SoftwareEleamPage() {
       "sistema gestión ELEAM Chile",
       "ficha clínica digital ELEAM",
       "administración de medicamentos ELEAM Chile",
+      "software cobranza residentes ELEAM",
     ],
     jsonLd: [
       breadcrumbJsonLd([
@@ -96,7 +99,7 @@ export default function SoftwareEleamPage() {
                   El software que reemplaza Excel, cuadernos y carpetas físicas
                 </h1>
                 <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-                  Una sola plataforma para dirigir el ELEAM, registrar el cuidado diario y mantener la documentación SEREMI organizada.
+                  Dirige el ELEAM desde un solo lugar: cuidado diario, documentación, equipo y cobranza a residentes, sin depender de planillas separadas.
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <button type="button" onClick={() => openDemo("software_hero")} className={PUBLIC_BUTTON.primary}>
@@ -158,7 +161,7 @@ export default function SoftwareEleamPage() {
             title="Todo el flujo operativo del ELEAM en una interfaz común"
             center
           >
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {MODULES.map(([title, text], index) => (
                 <PublicFeatureCard
                   key={title}

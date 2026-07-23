@@ -43,6 +43,7 @@ const INCLUYE = [
   "Registro diario de signos vitales por turno",
   "Observaciones de turno con 12 categorías",
   "Sistema de documentación SEREMI (Decreto N°20)",
+  "Cobranza de residentes con respaldos y recordatorios por correo",
   "Funcionarios incluidos según el cupo del plan",
   "Soporte por correo electrónico",
 ];
@@ -798,7 +799,7 @@ export default function PaymentPage() {
                   Precios claros para digitalizar tu ELEAM
                 </h1>
                 <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-                  Elige según residentes activos u hospitalizados. Todos los planes incluyen ficha clínica, signos vitales y Carpeta SEREMI.
+                  Elige según residentes activos u hospitalizados. Todos los planes incluyen gestión clínica, Carpeta SEREMI y cobranza de residentes con recordatorios por correo.
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <button type="button" onClick={() => openDemo("payment_public_hero")} className={PUBLIC_BUTTON.primary}>

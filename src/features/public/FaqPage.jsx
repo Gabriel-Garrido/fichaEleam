@@ -18,7 +18,7 @@ const CATEGORIES = [
     qa: [
       {
         q: "¿Qué es FichaEleam?",
-        a: "FichaEleam es un software web especializado para Establecimientos de Larga Estadía para Personas Mayores (ELEAM) en Chile. Centraliza ficha clínica, signos vitales, observaciones por turno, plan de cuidado, administración de medicamentos, gestión de habitaciones y carpeta SEREMI Decreto N°20 en una sola plataforma.",
+        a: "FichaEleam es un software web especializado para ELEAM en Chile. Centraliza ficha clínica, cuidado diario, medicamentos, equipo, carpeta SEREMI y cobranza a residentes con respaldos, historial y recordatorios por correo.",
       },
       {
         q: "¿En qué se diferencia de un software clínico genérico?",
@@ -140,7 +140,11 @@ const CATEGORIES = [
       },
       {
         q: "¿Puedo controlar qué ve cada funcionario?",
-        a: "Sí. El administrador define permisos operativos por funcionario para residentes, signos vitales, observaciones, planes de cuidado, medicamentos y acreditación.",
+        a: "Sí. El administrador define permisos por funcionario para residentes, cuidado diario, medicamentos, cumplimiento y cobranza. Solo quienes estén autorizados pueden ver o gestionar pagos.",
+      },
+      {
+        q: "¿Puedo llevar la cobranza de los residentes?",
+        a: "Sí. Puedes registrar mensualidades y otros cobros, guardar pagos y respaldos tributarios, revisar el historial por residente y enviar recordatorios por correo cuando existan saldos vencidos. FichaEleam registra la gestión; no procesa el pago ni emite documentos tributarios.",
       },
     ],
   },
