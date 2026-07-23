@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import Button from "../../components/Button";
+import FilterBar from "../../components/FilterBar";
 import Loading from "../../components/Loading";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
@@ -8,12 +9,13 @@ import {
   getResidentPaymentDocumentUrl,
   getResidentPaymentSnapshot,
   resendResidentPaymentReceipt,
+  sendResidentPaymentReminder,
 } from "./residentPaymentService";
 import {
   buildPaymentSummary,
   chargeState,
   formatClp,
-  paidForCharge,
+  paymentTotalsByCharge,
   residentName,
 } from "./residentPaymentUtils";
 import { ChargeList, PaymentHistory, SummaryCard, TabButton } from "./ResidentPaymentLists";
@@ -39,6 +41,10 @@ export default function ResidentPaymentsPage() {
   const [tab, setTab] = useState("charges");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("open");
+  const [sort, setSort] = useState("priority");
+  const [historyStatus, setHistoryStatus] = useState("all");
+  const [historyFrom, setHistoryFrom] = useState("");
+  const [historyTo, setHistoryTo] = useState("");
   const [chargeLimit, setChargeLimit] = useState(PAGE_SIZE);
   const [paymentLimit, setPaymentLimit] = useState(PAGE_SIZE);
   const [showCharge, setShowCharge] = useState(false);
@@ -46,6 +52,7 @@ export default function ResidentPaymentsPage() {
   const [payCharge, setPayCharge] = useState(null);
   const [voidTarget, setVoidTarget] = useState(null);
   const [sendingId, setSendingId] = useState(null);
+  const [remindingResidentId, setRemindingResidentId] = useState(null);
 
   const canRegister = can("registrar_pagos_residentes");
   const canSend = can("enviar_comprobantes_pagos");
@@ -72,14 +79,31 @@ export default function ResidentPaymentsPage() {
     () => residentMap(snapshot?.residents ?? []),
     [snapshot?.residents],
   );
-  const summary = useMemo(
-    () => buildPaymentSummary(snapshot?.charges, snapshot?.payments),
-    [snapshot],
+  const summary = useMemo(() => buildPaymentSummary(snapshot?.charges, snapshot?.payments), [snapshot]);
+  const paymentTotals = useMemo(() => paymentTotalsByCharge(snapshot?.payments), [snapshot?.payments]);
+  const indexedCharges = useMemo(
+    () => (snapshot?.charges ?? []).map((charge) => ({
+      ...charge,
+      pagado_registrado: paymentTotals.get(charge.id) ?? 0,
+    })),
+    [paymentTotals, snapshot?.charges],
   );
-  const query = search.trim().toLocaleLowerCase("es-CL");
+  const chargesById = useMemo(
+    () => Object.fromEntries(indexedCharges.map((charge) => [charge.id, charge])),
+    [indexedCharges],
+  );
+  const deliveriesByPayment = useMemo(() => {
+    const index = new Map();
+    for (const delivery of snapshot?.deliveries ?? []) {
+      if (!index.has(delivery.payment_id)) index.set(delivery.payment_id, delivery);
+    }
+    return index;
+  }, [snapshot?.deliveries]);
+  const deferredSearch = useDeferredValue(search);
+  const query = deferredSearch.trim().toLocaleLowerCase("es-CL");
 
-  const charges = useMemo(() => (snapshot?.charges ?? []).filter((charge) => {
-    const state = chargeState(charge, snapshot?.payments);
+  const charges = useMemo(() => indexedCharges.filter((charge) => {
+    const state = chargeState(charge);
     const resident = residentsById[charge.residente_id];
     const haystack = `${residentName(resident)} ${charge.concepto} ${charge.observacion ?? ""}`
       .toLocaleLowerCase("es-CL");
@@ -87,15 +111,28 @@ export default function ResidentPaymentsPage() {
     if (status === "open" && !["pendiente", "parcial", "vencido"].includes(state.key)) return false;
     if (status !== "all" && status !== "open" && state.key !== status) return false;
     return true;
-  }), [query, residentsById, snapshot?.charges, snapshot?.payments, status]);
+  }).sort((left, right) => {
+    if (sort === "resident") return residentName(residentsById[left.residente_id]).localeCompare(residentName(residentsById[right.residente_id]), "es");
+    if (sort === "recent") return String(right.fecha_vencimiento).localeCompare(String(left.fecha_vencimiento));
+    const rank = { vencido: 0, parcial: 1, pendiente: 2, pagado: 3, anulado: 4 };
+    return (rank[chargeState(left).key] - rank[chargeState(right).key])
+      || String(left.fecha_vencimiento).localeCompare(String(right.fecha_vencimiento));
+  }), [indexedCharges, query, residentsById, sort, status]);
 
   const payments = useMemo(() => (snapshot?.payments ?? []).filter((payment) => {
     const resident = residentsById[payment.residente_id];
-    const charge = snapshot?.charges?.find((item) => item.id === payment.charge_id);
+    const charge = chargesById[payment.charge_id];
     const haystack = `${residentName(resident)} ${charge?.concepto ?? ""} ${payment.referencia ?? ""} ${payment.observacion ?? ""}`
       .toLocaleLowerCase("es-CL");
-    return !query || haystack.includes(query);
-  }), [query, residentsById, snapshot?.charges, snapshot?.payments]);
+    if (query && !haystack.includes(query)) return false;
+    const delivery = deliveriesByPayment.get(payment.id);
+    if (historyStatus === "active" && payment.estado !== "registrado") return false;
+    if (historyStatus === "void" && payment.estado !== "anulado") return false;
+    if (historyStatus === "email_pending" && (payment.estado !== "registrado" || delivery?.estado === "enviado")) return false;
+    if (historyFrom && payment.fecha_pago < historyFrom) return false;
+    if (historyTo && payment.fecha_pago > historyTo) return false;
+    return true;
+  }), [chargesById, deliveriesByPayment, historyFrom, historyStatus, historyTo, query, residentsById, snapshot?.payments]);
 
   useEffect(() => {
     setChargeLimit(PAGE_SIZE);
@@ -112,6 +149,19 @@ export default function ResidentPaymentsPage() {
       toast(sendError.message, "error");
     } finally {
       setSendingId(null);
+    }
+  };
+
+  const sendReminder = async (charge) => {
+    setRemindingResidentId(charge.residente_id);
+    try {
+      await sendResidentPaymentReminder(charge.residente_id);
+      toast("Recordatorio de pago enviado.", "success");
+      await load();
+    } catch (sendError) {
+      toast(sendError.message, "error");
+    } finally {
+      setRemindingResidentId(null);
     }
   };
 
@@ -175,31 +225,7 @@ export default function ResidentPaymentsPage() {
             <TabButton id="history-tab" controls="history-panel" active={tab === "history"} onClick={() => setTab("history")}>Historial de pagos</TabButton>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end">
-            <label className="sm:col-span-2 xl:col-span-1">
-              <span className="sr-only">Buscar en cobranza</span>
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar residente o concepto"
-                className="min-h-11 w-full min-w-0 rounded-xl border border-slate-200 px-3 text-base outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 xl:w-72"
-              />
-            </label>
-            {tab === "charges" && (
-              <label>
-                <span className="sr-only">Filtrar cobros por estado</span>
-                <select value={status} onChange={(event) => setStatus(event.target.value)} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base">
-                  <option value="open">Pendientes y vencidos</option>
-                  <option value="pendiente">Pendientes</option>
-                  <option value="parcial">Pagos parciales</option>
-                  <option value="vencido">Vencidos</option>
-                  <option value="pagado">Pagados</option>
-                  <option value="anulado">Anulados</option>
-                  <option value="all">Todos</option>
-                </select>
-              </label>
-            )}
+          <div className="flex flex-wrap gap-2 xl:justify-end">
             {canRegister && (
               <>
                 <Button onClick={() => setShowProfiles(true)} className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Mensualidades</Button>
@@ -209,6 +235,39 @@ export default function ResidentPaymentsPage() {
           </div>
         </div>
 
+        <div className="border-b border-slate-100 bg-slate-50/60 p-4">
+          <FilterBar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder={tab === "charges" ? "Buscar por residente, concepto u observación" : "Buscar por residente, concepto o referencia"}
+            filters={tab === "charges" ? [
+              { name: "status", type: "select", label: "Estado", options: [["open", "Pendientes y vencidos"], ["vencido", "Vencidos"], ["pendiente", "Pendientes"], ["parcial", "Pago parcial"], ["pagado", "Pagados"], ["anulado", "Anulados"], ["all", "Todos"]] },
+              { name: "sort", type: "select", label: "Orden", options: [["priority", "Prioridad"], ["recent", "Vencimiento más reciente"], ["resident", "Nombre del residente"]] },
+            ] : [
+              { name: "historyStatus", type: "select", label: "Estado", options: [["all", "Todos"], ["active", "Registrados"], ["email_pending", "Correo pendiente"], ["void", "Anulados"]] },
+              { name: "historyDate", type: "dateRange", label: "Fecha del pago", nameDesde: "historyFrom", nameHasta: "historyTo" },
+            ]}
+            values={{ status, sort, historyStatus, historyFrom, historyTo }}
+            onFilterChange={(name, value) => {
+              if (name === "status") setStatus(value || "open");
+              if (name === "sort") setSort(value || "priority");
+              if (name === "historyStatus") setHistoryStatus(value || "all");
+              if (name === "historyFrom") setHistoryFrom(value);
+              if (name === "historyTo") setHistoryTo(value);
+            }}
+            onClearAll={() => {
+              setStatus("open");
+              setSort("priority");
+              setHistoryStatus("all");
+              setHistoryFrom("");
+              setHistoryTo("");
+            }}
+            resultCount={tab === "charges" ? Math.min(chargeLimit, charges.length) : Math.min(paymentLimit, payments.length)}
+            totalCount={tab === "charges" ? charges.length : payments.length}
+            loading={loading}
+          />
+        </div>
+
         {loading && snapshot && <p aria-live="polite" className="border-b border-slate-100 px-4 py-2 text-xs font-medium text-slate-500">Actualizando información…</p>}
 
         {tab === "charges" ? (
@@ -216,11 +275,15 @@ export default function ResidentPaymentsPage() {
             id="charges-panel"
             charges={charges.slice(0, chargeLimit)}
             totalCount={charges.length}
-            payments={snapshot?.payments ?? []}
+            payments={[]}
             residentsById={residentsById}
             canRegister={canRegister}
+            canSend={canSend}
             canVoid={canVoid}
+            reminders={snapshot?.reminders ?? []}
+            remindingResidentId={remindingResidentId}
             onPay={setPayCharge}
+            onReminder={sendReminder}
             onVoid={(charge) => setVoidTarget({ type: "charge", item: charge })}
             onShowMore={() => setChargeLimit((current) => current + PAGE_SIZE)}
           />
@@ -229,7 +292,7 @@ export default function ResidentPaymentsPage() {
             id="history-panel"
             payments={payments.slice(0, paymentLimit)}
             totalCount={payments.length}
-            charges={snapshot?.charges ?? []}
+            charges={indexedCharges}
             residentsById={residentsById}
             deliveries={snapshot?.deliveries ?? []}
             currentUserId={user?.id}
@@ -248,6 +311,7 @@ export default function ResidentPaymentsPage() {
       <ChargeModal
         isOpen={showCharge}
         residents={snapshot?.residents ?? []}
+        contacts={snapshot?.contacts ?? []}
         onClose={() => setShowCharge(false)}
         onSaved={async () => { setShowCharge(false); await load(); }}
       />
@@ -262,7 +326,7 @@ export default function ResidentPaymentsPage() {
         charge={payCharge}
         resident={payCharge ? residentsById[payCharge.residente_id] : null}
         contact={snapshot?.contacts?.find((item) => item.residente_id === payCharge?.residente_id)}
-        paid={payCharge ? paidForCharge(payCharge.id, snapshot?.payments) : 0}
+        paid={payCharge?.pagado_registrado ?? 0}
         eleamId={snapshot?.eleamId}
         canSend={canSend}
         onClose={() => setPayCharge(null)}

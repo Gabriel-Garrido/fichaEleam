@@ -1335,16 +1335,55 @@ create index if not exists idx_resident_payment_deliveries_payment
 create index if not exists idx_resident_payment_deliveries_eleam
   on public.resident_payment_deliveries(eleam_id, creado_en desc);
 
+create table if not exists public.resident_payment_reminders (
+  id                    uuid primary key default gen_random_uuid(),
+  eleam_id              uuid not null references public.eleams(id) on delete cascade,
+  residente_id          uuid not null,
+  periodo               date not null check (periodo = date_trunc('month', periodo)::date),
+  destinatario_nombre   text not null,
+  destinatario_email    text not null,
+  monto_pendiente       integer not null check (monto_pendiente > 0),
+  estado                text not null default 'pendiente' check (estado in ('pendiente','enviado')),
+  proveedor_id          text,
+  solicitado_por        uuid not null references public.profiles(id) on delete restrict,
+  enviado_en            timestamptz,
+  creado_en             timestamptz not null default now(),
+  unique (eleam_id, residente_id, periodo),
+  foreign key (residente_id, eleam_id) references public.residentes(id, eleam_id) on delete cascade,
+  check (
+    (estado = 'pendiente' and enviado_en is null)
+    or (estado = 'enviado' and enviado_en is not null)
+  )
+);
+
+create index if not exists idx_resident_payment_reminders_eleam
+  on public.resident_payment_reminders(eleam_id, periodo desc, creado_en desc);
+
 create table if not exists public.resident_payment_audit (
   id              uuid primary key default gen_random_uuid(),
   eleam_id        uuid not null references public.eleams(id) on delete cascade,
-  entidad         text not null check (entidad in ('contacto','configuracion','cobro','pago','envio')),
+  entidad         text not null check (entidad in ('contacto','configuracion','cobro','pago','envio','recordatorio')),
   entidad_id      uuid not null,
-  accion          text not null check (accion in ('crear','actualizar','adjuntar','enviar','reintentar','anular')),
+  accion          text not null check (accion in ('crear','actualizar','eliminar','adjuntar','enviar','reintentar','anular')),
   detalle         jsonb,
   realizado_por   uuid references public.profiles(id) on delete set null,
   realizado_en    timestamptz not null default now()
 );
+
+-- CREATE TABLE IF NOT EXISTS no modifica checks de una instalación que ya
+-- tenga la tabla. Recrearlos explícitamente mantiene el esquema idempotente
+-- cuando se incorporan nuevas acciones o entidades de auditoría.
+alter table public.resident_payment_audit
+  drop constraint if exists resident_payment_audit_entidad_check;
+alter table public.resident_payment_audit
+  add constraint resident_payment_audit_entidad_check
+  check (entidad in ('contacto','configuracion','cobro','pago','envio','recordatorio'));
+
+alter table public.resident_payment_audit
+  drop constraint if exists resident_payment_audit_accion_check;
+alter table public.resident_payment_audit
+  add constraint resident_payment_audit_accion_check
+  check (accion in ('crear','actualizar','eliminar','adjuntar','enviar','reintentar','anular'));
 
 create index if not exists idx_resident_payment_audit_eleam
   on public.resident_payment_audit(eleam_id, realizado_en desc);
@@ -3028,6 +3067,38 @@ begin
 end;
 $$;
 
+create or replace function public.eliminar_mensualidad_residente(p_residente_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_eleam_id uuid := public.my_eleam_id();
+begin
+  if v_uid is null or v_eleam_id is null or public.my_rol() not in ('admin_eleam','funcionario')
+     or not public.eleam_has_access(v_eleam_id)
+     or not public.funcionario_can('registrar_pagos_residentes') then
+    raise exception 'No autorizado para eliminar mensualidades' using errcode = '42501';
+  end if;
+
+  delete from public.resident_billing_profiles
+  where residente_id = p_residente_id and eleam_id = v_eleam_id;
+  if not found then
+    raise exception 'Mensualidad no encontrada' using errcode = 'P0001';
+  end if;
+
+  insert into public.resident_payment_audit (
+    eleam_id, entidad, entidad_id, accion, detalle, realizado_por
+  ) values (
+    v_eleam_id, 'configuracion', p_residente_id, 'eliminar',
+    jsonb_build_object('efecto', 'detiene futuros cobros; conserva cobros y pagos existentes'),
+    v_uid
+  );
+end;
+$$;
+
 create or replace function public.resident_payment_snapshot()
 returns jsonb
 language plpgsql
@@ -3096,7 +3167,18 @@ begin
     ), '[]'::jsonb),
     'deliveries', coalesce((
       select jsonb_agg(to_jsonb(d) order by d.creado_en desc)
-      from public.resident_payment_deliveries d where d.eleam_id = v_eleam_id
+      from (
+        select distinct on (payment_id) *
+        from public.resident_payment_deliveries
+        where eleam_id = v_eleam_id
+        order by payment_id, creado_en desc
+      ) d
+    ), '[]'::jsonb),
+    'reminders', coalesce((
+      select jsonb_agg(to_jsonb(pr) order by pr.creado_en desc)
+      from public.resident_payment_reminders pr
+      where pr.eleam_id = v_eleam_id
+        and pr.periodo = date_trunc('month', current_date)::date
     ), '[]'::jsonb)
   );
 end;
@@ -3216,7 +3298,7 @@ begin
   if p_metodo_pago not in ('transferencia','efectivo','tarjeta','cheque','otro') then raise exception 'Medio de pago invalido' using errcode = 'P0001'; end if;
 
   update public.resident_payments set
-    estado = 'anulado', anulado_motivo = 'Registro incompleto expirado',
+    estado = 'anulado', anulado_motivo = 'Anulación automática del sistema: el documento no se completó dentro de 1 hora.',
     anulado_en = now(), anulado_por = registrado_por, actualizado_en = now()
   where charge_id = p_charge_id and estado = 'pendiente_documento'
     and creado_en < now() - interval '1 hour';
@@ -3317,6 +3399,7 @@ $$;
 revoke all on function public.guardar_contacto_pago_residente(uuid, text, text, text, text) from public;
 revoke all on function public.resident_payment_snapshot() from public;
 revoke all on function public.actualizar_mensualidad_residente(uuid, integer, integer, text, date, boolean) from public;
+revoke all on function public.eliminar_mensualidad_residente(uuid) from public;
 revoke all on function public.crear_cobro_residente(uuid, text, text, date, date, integer, text, boolean) from public;
 revoke all on function public.iniciar_pago_residente(uuid, integer, date, text, text, text) from public;
 revoke all on function public.anular_pago_residente(uuid, text) from public;
@@ -3324,6 +3407,7 @@ revoke all on function public.anular_cobro_residente(uuid, text) from public;
 grant execute on function public.guardar_contacto_pago_residente(uuid, text, text, text, text) to authenticated;
 grant execute on function public.resident_payment_snapshot() to authenticated;
 grant execute on function public.actualizar_mensualidad_residente(uuid, integer, integer, text, date, boolean) to authenticated;
+grant execute on function public.eliminar_mensualidad_residente(uuid) to authenticated;
 grant execute on function public.crear_cobro_residente(uuid, text, text, date, date, integer, text, boolean) to authenticated;
 grant execute on function public.iniciar_pago_residente(uuid, integer, date, text, text, text) to authenticated;
 grant execute on function public.anular_pago_residente(uuid, text) to authenticated;
@@ -7405,6 +7489,7 @@ alter table public.resident_billing_profiles enable row level security;
 alter table public.resident_charges enable row level security;
 alter table public.resident_payments enable row level security;
 alter table public.resident_payment_deliveries enable row level security;
+alter table public.resident_payment_reminders enable row level security;
 alter table public.resident_payment_audit enable row level security;
 alter table public.pagos enable row level security;
 alter table public.mp_webhook_events enable row level security;
@@ -9014,6 +9099,7 @@ drop policy if exists "resident_billing_profiles_select" on public.resident_bill
 drop policy if exists "resident_charges_select" on public.resident_charges;
 drop policy if exists "resident_payments_select" on public.resident_payments;
 drop policy if exists "resident_payment_deliveries_select" on public.resident_payment_deliveries;
+drop policy if exists "resident_payment_reminders_select" on public.resident_payment_reminders;
 drop policy if exists "resident_payment_audit_select" on public.resident_payment_audit;
 
 create policy "resident_payment_contacts_select" on public.resident_payment_contacts
@@ -9052,6 +9138,14 @@ create policy "resident_payment_deliveries_select" on public.resident_payment_de
   for select using (
     public.my_rol() in ('admin_eleam','funcionario')
     and eleam_id = public.my_eleam_id()
+    and public.eleam_has_access(eleam_id)
+    and public.funcionario_can('ver_pagos_residentes')
+  );
+
+create policy "resident_payment_reminders_select" on public.resident_payment_reminders
+  for select to authenticated
+  using (
+    eleam_id = public.my_eleam_id()
     and public.eleam_has_access(eleam_id)
     and public.funcionario_can('ver_pagos_residentes')
   );
@@ -10368,6 +10462,7 @@ begin
       ('resident_charges', 'resident_payments'),
       ('resident_payments', 'resident_payments'),
       ('resident_payment_deliveries', 'resident_payments'),
+      ('resident_payment_reminders', 'resident_payments'),
       ('resident_payment_audit', 'resident_payments'),
 
       ('acred_requisitos_eleam', 'compliance'),

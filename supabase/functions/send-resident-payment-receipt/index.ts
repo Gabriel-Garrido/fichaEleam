@@ -94,6 +94,17 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("es-CL", { dateStyle: "long", timeZone: "America/Santiago" }).format(new Date(`${value}T12:00:00-04:00`));
 }
 
+function chileDateKey(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 async function buildReceipt(payment: Record<string, any>, eleamName: string): Promise<Uint8Array> {
   const document = await PDFDocument.create();
   const page = document.addPage([595.28, 841.89]);
@@ -156,11 +167,8 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const paymentId = cleanText(body.paymentId, 36);
     const finalize = body.action === "finalize";
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(paymentId)) {
-      return jsonResponse(req, { error: "Pago inválido" }, 400);
-    }
+    const reminder = body.action === "reminder";
 
     const sb = adminClient();
     const [{ data: eleam }, { data: permissions }, { data: areaPermission }] = await Promise.all([
@@ -183,6 +191,94 @@ Deno.serve(async (req) => {
     }
     if (!finalize && !permissions?.enviar_comprobantes_pagos) {
       return jsonResponse(req, { error: "No tienes permiso para enviar comprobantes" }, 403);
+    }
+
+    if (reminder) {
+      const residentId = cleanText(body.residentId, 36);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(residentId)) {
+        return jsonResponse(req, { error: "Residente inválido" }, 400);
+      }
+
+      const today = chileDateKey();
+      const period = `${today.slice(0, 7)}-01`;
+      const [{ data: resident }, { data: contact }, { data: overdueCharges }] = await Promise.all([
+        sb.from("residentes").select("id, nombre, apellido").eq("id", residentId).eq("eleam_id", profile.eleam_id).maybeSingle(),
+        sb.from("resident_payment_contacts").select("nombre, email").eq("residente_id", residentId).eq("eleam_id", profile.eleam_id).maybeSingle(),
+        sb.from("resident_charges").select("id, concepto, monto, fecha_vencimiento")
+          .eq("residente_id", residentId).eq("eleam_id", profile.eleam_id)
+          .eq("estado", "activo").lt("fecha_vencimiento", today),
+      ]);
+      if (!resident) return jsonResponse(req, { error: "Residente no encontrado" }, 404);
+      if (!contact?.email) return jsonResponse(req, { error: "El residente no tiene un contacto de pagos con correo" }, 409);
+      if (!overdueCharges?.length) return jsonResponse(req, { error: "El residente no tiene cobros vencidos pendientes" }, 409);
+
+      const chargeIds = overdueCharges.map((charge) => charge.id);
+      const { data: registeredPayments } = await sb.from("resident_payments")
+        .select("charge_id, monto").in("charge_id", chargeIds).eq("estado", "registrado");
+      const paidByCharge = new Map<string, number>();
+      for (const payment of registeredPayments ?? []) {
+        paidByCharge.set(payment.charge_id, (paidByCharge.get(payment.charge_id) ?? 0) + Number(payment.monto || 0));
+      }
+      const pendingCharges = overdueCharges
+        .map((charge) => ({ ...charge, saldo: Math.max(0, Number(charge.monto) - (paidByCharge.get(charge.id) ?? 0)) }))
+        .filter((charge) => charge.saldo > 0);
+      if (!pendingCharges.length) return jsonResponse(req, { error: "El residente no tiene cobros vencidos pendientes" }, 409);
+
+      // La restricción única en base de datos evita duplicados aun cuando dos
+      // usuarios presionen el botón al mismo tiempo.
+      await sb.from("resident_payment_reminders").delete()
+        .eq("eleam_id", profile.eleam_id).eq("residente_id", residentId).eq("periodo", period)
+        .eq("estado", "pendiente").lt("creado_en", new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
+      const total = pendingCharges.reduce((sum, charge) => sum + charge.saldo, 0);
+      const { data: reservation, error: reservationError } = await sb.from("resident_payment_reminders").insert({
+        eleam_id: profile.eleam_id,
+        residente_id: residentId,
+        periodo: period,
+        destinatario_nombre: contact.nombre,
+        destinatario_email: contact.email,
+        monto_pendiente: total,
+        solicitado_por: user.id,
+      }).select("id").single();
+      if (reservationError?.code === "23505") {
+        return jsonResponse(req, { error: "El recordatorio de este mes ya fue enviado" }, 409);
+      }
+      if (reservationError || !reservation) return jsonResponse(req, { error: "No se pudo reservar el envío del recordatorio" }, 500);
+
+      const residentName = cleanText(`${resident.nombre} ${resident.apellido}`, 160);
+      const rows = pendingCharges.map((charge) =>
+        `<tr><td style="padding:9px 0;border-bottom:1px solid #e2e8f0">${escapeHtml(charge.concepto)}</td><td style="padding:9px 0;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600">${formatClp(charge.saldo)}</td></tr>`
+      ).join("");
+      const emailResult = await sendEmail({
+        to: contact.email,
+        subject: cleanText(`Recordatorio de pago pendiente · ${residentName} · ${eleam.nombre}`, 180),
+        html: `<!doctype html><html lang="es"><body style="margin:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b"><div style="max-width:580px;margin:32px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0"><div style="background:#0f766e;padding:24px 32px;color:white"><h1 style="margin:0;font-size:21px">${escapeHtml(eleam.nombre)}</h1><p style="margin:6px 0 0;color:#ccfbf1">Recordatorio de pago</p></div><div style="padding:28px 32px"><p>Hola, <strong>${escapeHtml(contact.nombre)}</strong>.</p><p>Te recordamos que existen pagos pendientes asociados a <strong>${escapeHtml(residentName)}</strong>.</p><table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">${rows}<tr><td style="padding:14px 0;font-weight:700">Total pendiente</td><td style="padding:14px 0;text-align:right;font-size:18px;font-weight:700;color:#0f766e">${formatClp(total)}</td></tr></table><p style="font-size:13px;color:#64748b">Si ya realizaste el pago o necesitas aclarar alguno de estos cobros, comunícate con el establecimiento por sus canales habituales.</p></div></div></body></html>`,
+      });
+      if (!emailResult.sent) {
+        await sb.from("resident_payment_reminders").delete().eq("id", reservation.id).eq("estado", "pendiente");
+        return jsonResponse(req, { error: "El correo no pudo enviarse. Puedes intentarlo nuevamente." }, 502);
+      }
+
+      const sentAt = new Date().toISOString();
+      await sb.from("resident_payment_reminders").update({
+        estado: "enviado",
+        proveedor_id: emailResult.providerMessageId ?? null,
+        enviado_en: sentAt,
+      }).eq("id", reservation.id).eq("estado", "pendiente");
+      await sb.from("resident_payment_audit").insert({
+        eleam_id: profile.eleam_id,
+        entidad: "recordatorio",
+        entidad_id: reservation.id,
+        accion: "enviar",
+        detalle: { residente_id: residentId, periodo: period, monto_pendiente: total },
+        realizado_por: user.id,
+      });
+      return jsonResponse(req, { sent: true, sentAt, period });
+    }
+
+    const paymentId = cleanText(body.paymentId, 36);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(paymentId)) {
+      return jsonResponse(req, { error: "Pago inválido" }, 400);
     }
 
     const { data: rawPayment, error: paymentError } = await sb
@@ -292,7 +388,7 @@ Deno.serve(async (req) => {
     const emailResult = await sendEmail({
       to: contact.email,
       subject: cleanText(`Comprobante de pago · ${residentName} · ${eleam.nombre}`, 180),
-      html: `<!doctype html><html lang="es"><body style="margin:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b"><div style="max-width:580px;margin:32px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0"><div style="background:#0f766e;padding:24px 32px;color:white"><h1 style="margin:0;font-size:21px">${escapeHtml(eleam.nombre)}</h1><p style="margin:6px 0 0;color:#ccfbf1">Confirmación de pago</p></div><div style="padding:28px 32px"><p>Hola, <strong>${escapeHtml(contact.nombre)}</strong>.</p><p>Registramos un pago asociado a <strong>${escapeHtml(residentName)}</strong>.</p><div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:16px;margin:20px 0"><p style="margin:0 0 8px"><strong>${formatClp(payment.monto)}</strong></p><p style="margin:0;font-size:14px">${escapeHtml(charge.concepto)} · ${formatDate(payment.fecha_pago)}</p></div><p style="font-size:14px;color:#475569">Adjuntamos la confirmación emitida por FichaEleam y el documento externo cargado por el establecimiento.</p><p style="font-size:12px;color:#b91c1c"><strong>La confirmación de FichaEleam no es una boleta, factura ni documento tributario.</strong></p><p style="font-size:12px;color:#64748b;margin-top:24px">Si tienes dudas sobre este pago, comunícate con el establecimiento por sus canales habituales.</p></div></div></body></html>`,
+      html: `<!doctype html><html lang="es"><body style="margin:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b"><div style="max-width:580px;margin:32px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0"><div style="background:#0f766e;padding:24px 32px;color:white"><h1 style="margin:0;font-size:21px">${escapeHtml(eleam.nombre)}</h1><p style="margin:6px 0 0;color:#ccfbf1">Confirmación de pago</p></div><div style="padding:28px 32px"><p>Hola, <strong>${escapeHtml(contact.nombre)}</strong>.</p><p>Registramos un pago asociado a <strong>${escapeHtml(residentName)}</strong>.</p><div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:16px;margin:20px 0"><p style="margin:0 0 8px"><strong>${formatClp(payment.monto)}</strong></p><p style="margin:0;font-size:14px">${escapeHtml(charge.concepto)} · ${formatDate(payment.fecha_pago)}</p></div><p style="font-size:14px;color:#475569">Adjuntamos la confirmación emitida por FichaEleam y el documento externo cargado por el establecimiento.</p><p style="font-size:12px;color:#64748b;margin-top:24px">Si tienes dudas sobre este pago, comunícate con el establecimiento por sus canales habituales.</p></div></div></body></html>`,
       attachments: [
         { filename: `confirmacion_pago_${payment.id.slice(0, 8)}.pdf`, content: bytesToBase64(receiptBytes) },
         { filename: documentName, content: bytesToBase64(externalBytes) },

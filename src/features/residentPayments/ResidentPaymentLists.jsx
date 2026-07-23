@@ -3,7 +3,6 @@ import {
   PAYMENT_METHODS,
   chargeState,
   formatClp,
-  latestDelivery,
   paidForCharge,
   residentName,
 } from "./residentPaymentUtils";
@@ -60,7 +59,10 @@ function ShowMore({ visible, total, onClick }) {
   );
 }
 
-export function ChargeList({ id, charges, totalCount, payments, residentsById, canRegister, canVoid, onPay, onVoid, onShowMore }) {
+export function ChargeList({
+  id, charges, totalCount, payments, residentsById, canRegister, canSend, canVoid,
+  reminders = [], remindingResidentId, onPay, onReminder, onVoid, onShowMore,
+}) {
   if (!charges.length) {
     return (
       <div id={id} role="tabpanel" aria-labelledby="charges-tab" className="px-5 py-14 text-center">
@@ -73,9 +75,17 @@ export function ChargeList({ id, charges, totalCount, payments, residentsById, c
     <div id={id} role="tabpanel" aria-labelledby="charges-tab">
       <ul className="divide-y divide-slate-100">
         {charges.map((charge) => {
-          const paid = paidForCharge(charge.id, payments);
+          const paid = charge.pagado_registrado ?? paidForCharge(charge.id, payments);
           const balance = Math.max(0, Number(charge.monto) - paid);
           const state = chargeState(charge, payments);
+          const currentPeriod = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Santiago", year: "numeric", month: "2-digit",
+          }).format(new Date());
+          const remindedThisMonth = reminders.some((reminder) =>
+            reminder.residente_id === charge.residente_id
+            && reminder.estado === "enviado"
+            && reminder.periodo?.startsWith(currentPeriod)
+          );
           const percentage = Math.min(100, Math.round((paid / Number(charge.monto)) * 100));
           return (
             <li key={charge.id} className="p-4 sm:p-5">
@@ -88,6 +98,11 @@ export function ChargeList({ id, charges, totalCount, payments, residentsById, c
                   <p className="mt-1 break-words text-sm text-slate-700">{charge.concepto}</p>
                   <p className="mt-1 text-xs text-slate-500">Vence {formatDate(charge.fecha_vencimiento)}{charge.periodo ? ` · Período ${charge.periodo.slice(0, 7)}` : ""}</p>
                   {charge.observacion && <p className="mt-2 line-clamp-2 break-words text-xs text-slate-500">{charge.observacion}</p>}
+                  {charge.estado === "anulado" && charge.anulado_motivo && (
+                    <p className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-700">
+                      <strong>Motivo de anulación:</strong> {charge.anulado_motivo}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500"><span>Pagado {formatClp(paid)}</span><span>Total {formatClp(charge.monto)}</span></div>
@@ -98,6 +113,16 @@ export function ChargeList({ id, charges, totalCount, payments, residentsById, c
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
                   {canRegister && balance > 0 && charge.estado === "activo" && <Button onClick={() => onPay(charge)} className="bg-teal-700 text-white hover:bg-teal-800">Registrar pago</Button>}
+                  {canSend && state.key === "vencido" && (
+                    <Button
+                      disabled={remindedThisMonth || remindingResidentId === charge.residente_id}
+                      onClick={() => onReminder(charge)}
+                      title={remindedThisMonth ? "Ya se envió un recordatorio a este residente durante el mes actual." : "Envía al contacto de pagos un resumen de los cobros vencidos del residente."}
+                      className="border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {remindingResidentId === charge.residente_id ? "Enviando..." : remindedThisMonth ? "Recordatorio enviado este mes" : "Enviar recordatorio"}
+                    </Button>
+                  )}
                   {canVoid && charge.estado === "activo" && paid === 0 && <Button onClick={() => onVoid(charge)} className="border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">Anular</Button>}
                 </div>
               </div>
@@ -119,12 +144,19 @@ export function PaymentHistory({ id, payments, totalCount, charges, residentsByI
       </div>
     );
   }
+  const deliveryIndex = new Map();
+  for (const delivery of deliveries) {
+    const current = deliveryIndex.get(delivery.payment_id);
+    if (!current || new Date(delivery.creado_en ?? 0) > new Date(current.creado_en ?? 0)) {
+      deliveryIndex.set(delivery.payment_id, delivery);
+    }
+  }
   return (
     <div id={id} role="tabpanel" aria-labelledby="history-tab">
       <ul className="divide-y divide-slate-100">
         {payments.map((payment) => {
           const charge = charges.find((item) => item.id === payment.charge_id);
-          const delivery = latestDelivery(payment.id, deliveries);
+          const delivery = deliveryIndex.get(payment.id) ?? null;
           const canCancelPending = payment.estado === "pendiente_documento"
             && (canVoid || (canRegister && payment.registrado_por === currentUserId));
           return (
@@ -138,6 +170,11 @@ export function PaymentHistory({ id, payments, totalCount, charges, residentsByI
                   <p className="mt-1 break-words text-sm text-slate-600">{charge?.concepto ?? "Cobro"} · {PAYMENT_METHODS[payment.metodo_pago] ?? payment.metodo_pago}</p>
                   <p className="mt-1 break-words text-xs text-slate-500">{formatDate(payment.fecha_pago)}{payment.referencia ? ` · Ref. ${payment.referencia}` : ""}</p>
                   {payment.observacion && <p className="mt-1 break-words text-xs text-slate-500">{payment.observacion}</p>}
+                  {payment.estado === "anulado" && payment.anulado_motivo && (
+                    <p className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-700">
+                      <strong>Motivo de anulación:</strong> {payment.anulado_motivo}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="break-words text-xl font-bold text-slate-900">{formatClp(payment.monto)}</p>

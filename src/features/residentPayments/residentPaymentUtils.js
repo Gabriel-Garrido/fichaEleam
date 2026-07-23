@@ -27,9 +27,18 @@ export function paidForCharge(chargeId, payments = []) {
     .reduce((sum, payment) => sum + Number(payment.monto || 0), 0);
 }
 
+export function paymentTotalsByCharge(payments = []) {
+  const totals = new Map();
+  for (const payment of payments) {
+    if (payment.estado !== "registrado") continue;
+    totals.set(payment.charge_id, (totals.get(payment.charge_id) ?? 0) + Number(payment.monto || 0));
+  }
+  return totals;
+}
+
 export function chargeState(charge, payments = [], today = new Date()) {
   if (charge.estado === "anulado") return { key: "anulado", label: "Anulado", tone: "slate" };
-  const paid = paidForCharge(charge.id, payments);
+  const paid = charge.pagado_registrado ?? paidForCharge(charge.id, payments);
   if (paid >= Number(charge.monto)) return { key: "pagado", label: "Pagado", tone: "emerald" };
   const todayText = dateKey(today);
   if (charge.fecha_vencimiento < todayText) return { key: "vencido", label: paid > 0 ? "Vencido · pago parcial" : "Vencido", tone: "rose" };
@@ -38,12 +47,14 @@ export function chargeState(charge, payments = [], today = new Date()) {
 }
 
 export function buildPaymentSummary(charges = [], payments = [], today = new Date()) {
+  const totals = paymentTotalsByCharge(payments);
   const activeCharges = charges.filter((charge) => charge.estado === "activo");
   const totalCharged = activeCharges.reduce((sum, charge) => sum + Number(charge.monto || 0), 0);
-  const totalPaid = activeCharges.reduce((sum, charge) => sum + paidForCharge(charge.id, payments), 0);
+  const totalPaid = activeCharges.reduce((sum, charge) => sum + (totals.get(charge.id) ?? 0), 0);
   const overdue = activeCharges.reduce((sum, charge) => {
-    if (chargeState(charge, payments, today).key !== "vencido") return sum;
-    return sum + Math.max(0, charge.monto - paidForCharge(charge.id, payments));
+    const paid = totals.get(charge.id) ?? 0;
+    if (chargeState({ ...charge, pagado_registrado: paid }, [], today).key !== "vencido") return sum;
+    return sum + Math.max(0, charge.monto - paid);
   }, 0);
   const currentMonth = dateKey(today).slice(0, 7);
   const collectedMonth = payments

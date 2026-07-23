@@ -4,7 +4,7 @@
 
 Enseñar a un administrador de ELEAM a completar su primera configuración y realizar el ciclo operativo principal sin mostrar todas las opciones disponibles.
 
-Duración recomendada: **12 a 14 minutos**.
+Duración recomendada: **14 a 16 minutos**.
 
 ## Preparación de la grabación
 
@@ -12,6 +12,8 @@ Duración recomendada: **12 a 14 minutos**.
 - Crear dos habitaciones, tres camas, dos funcionarios y dos residentes ficticios.
 - Dejar un requisito SEREMI pendiente y otro vigente.
 - Preparar un residente con plan de cuidado y medicamento no controlado.
+- Preparar un cobro mensual pendiente, un contacto de pagos ficticio y un archivo PDF de respaldo sin datos reales.
+- Preparar un segundo pago dentro de un rango de fechas distinto para demostrar los filtros del historial.
 - Ocultar correos, RUT, teléfonos y datos reales.
 - Grabar en escritorio a 1440p y repetir acciones críticas en vista móvil solo si aporta valor.
 - Activar “No molestar” y cerrar pestañas ajenas.
@@ -46,7 +48,7 @@ Recorrer lentamente el menú lateral y luego mostrar la navegación inferior mó
 
 ### Voz
 
-> La aplicación se divide en cinco áreas. Inicio reúne prioridades. Establecimiento contiene habitaciones y camas. Residentes concentra la ficha y el trabajo clínico. Personal organiza al equipo y la dotación. Cumplimiento SEREMI reúne requisitos, documentos y protocolos.
+> La aplicación se divide en cinco áreas principales. Inicio reúne prioridades. Establecimiento contiene habitaciones y camas. Residentes concentra la ficha y el trabajo clínico. Personal organiza al equipo y la dotación. Cumplimiento reúne requisitos y documentos. Para quienes tengan permiso, Cobranza aparece como una herramienta administrativa independiente.
 
 > Las acciones del turno, como cuidados, medicamentos y entrega de novedades, están disponibles como accesos rápidos. Así el menú se mantiene pequeño aunque la ficha conserve toda la trazabilidad necesaria.
 
@@ -207,7 +209,52 @@ Entrar a **Personal**.
 
 ---
 
-## 09:55–11:35 — Cumplimiento SEREMI
+## 09:55–11:45 — Cobranza
+
+### Imagen
+
+Entrar a **Cobranza**, mostrar el resumen y crear un cobro con datos ficticios.
+
+### Voz
+
+> Cobranza permite organizar mensualidades y otros cobros de residentes. FichaEleam no procesa dinero ni emite documentos tributarios: registra pagos realizados externamente y conserva la boleta, factura u otro respaldo cargado por el establecimiento.
+
+> Al crear un cobro, busca al residente, define el concepto, monto y vencimiento. Si es una mensualidad habitual, puedes hacer que se genere cada mes. En el mismo formulario registras el contacto que recibirá confirmaciones y recordatorios.
+
+### Acción
+
+1. Mostrar los indicadores **Por cobrar**, **Vencido** y **Recibido este mes**.
+2. Presionar **Crear cobro**.
+3. Buscar y seleccionar un residente.
+4. Mostrar la opción de mensualidad recurrente.
+5. Completar un contacto de pagos ficticio y crear el cobro.
+
+### Voz
+
+> Cuando recibes un abono, abre el cobro y selecciona Registrar pago. El contacto aparece autocompletado para que puedas confirmarlo o corregirlo. Registra el monto, la fecha y el medio de pago, y adjunta el respaldo tributario en PDF, JPG o PNG.
+
+### Acción
+
+1. Abrir **Registrar pago**.
+2. Señalar el saldo y los datos del pago.
+3. Mostrar el contacto autocompletado.
+4. Adjuntar el PDF ficticio sin completar el envío si la grabación no debe generar correos.
+5. Abrir **Historial de pagos**.
+6. Filtrar con **Desde** y **Hasta** y mostrar el contador de resultados.
+
+### Voz
+
+> El historial permite buscar por residente, concepto o referencia y filtrar por estado o rango de fechas. Un pago incorrecto se anula con una causa clara, pero nunca desaparece del historial. En cobros vencidos puedes enviar un recordatorio al contacto; el sistema limita el envío a una vez por residente durante el mes.
+
+> Si una mensualidad debe suspenderse temporalmente, puedes pausarla. Si el residente egresó, falleció o ya no corresponde cobrarle, elimínala del listado. Los cobros y pagos anteriores siempre se conservan.
+
+### Mensaje en pantalla
+
+`Registra · Respalda · Comunica · Conserva el historial`
+
+---
+
+## 11:45–13:25 — Cumplimiento
 
 ### Imagen
 
@@ -215,9 +262,9 @@ Entrar a **Cumplimiento SEREMI** y recorrer sus tarjetas.
 
 ### Voz
 
-> Cumplimiento reúne la preparación documental y operacional. En Requisitos y documentos puedes revisar cada ámbito, cargar evidencia, registrar vencimientos y responder observaciones.
+> Cumplimiento reúne la preparación documental y operacional en ámbitos. Abre cada ámbito para revisar sus puntos, cargar evidencia, registrar vencimientos y responder observaciones.
 
-> Protocolos y obligaciones concentra brechas y reportes. Emergencias permite mantener el plan y registrar simulacros. Reclamos conserva folio, respuesta y trazabilidad.
+> Emergencias permite mantener el plan y registrar simulacros. Reclamos conserva folio, respuesta y trazabilidad.
 
 > Parte de la carpeta se completa automáticamente con registros realizados en Residentes, Personal y Establecimiento. Esto evita volver a escribir la misma información.
 
@@ -230,7 +277,7 @@ Entrar a **Cumplimiento SEREMI** y recorrer sus tarjetas.
 
 ---
 
-## 11:35–12:20 — Entrega de turno
+## 13:25–14:10 — Entrega de turno
 
 ### Imagen
 
@@ -246,7 +293,7 @@ Mostrar un resumen, agregar una nota breve y enseñar la vista imprimible.
 
 ---
 
-## 12:20–13:00 — Cierre
+## 14:10–14:50 — Cierre
 
 ### Imagen
 
@@ -277,14 +324,15 @@ Operación clara · Evidencia ordenada · Fiscalización preparada
 06:25 Plan de cuidado
 07:35 Medicamentos
 08:55 Personal y dotación
-09:55 Cumplimiento SEREMI
-11:35 Entrega de turno
-12:20 Próximos pasos
+09:55 Cobranza de residentes
+11:45 Cumplimiento
+13:25 Entrega de turno
+14:10 Próximos pasos
 ```
 
 ## Descripción sugerida
 
-> Aprende el flujo esencial de FichaEleam: configuración del establecimiento, ingreso de residentes, ficha clínica, planes de cuidado, medicamentos, personal, dotación, entrega de turno y cumplimiento SEREMI Decreto N.° 20.
+> Aprende el flujo esencial de FichaEleam: configuración del establecimiento, ingreso de residentes, ficha clínica, planes de cuidado, medicamentos, personal, dotación, cobranza administrativa, entrega de turno y cumplimiento.
 
 ## Indicaciones de edición
 

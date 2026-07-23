@@ -122,7 +122,7 @@ El acceso operativo requiere:
 | `/residents/:id` | Ficha integral del residente |
 | `/personal` | Centro de personal |
 | `/personal/equipo` | Equipo, antecedentes SEREMI y permisos; funcionarios en lectura y administración exclusiva del administrador |
-| `/cobranza` | Mensualidades, otros cobros, abonos y comprobantes de residentes |
+| `/cobranza` | Mensualidades, cobros, abonos, recordatorios e historial filtrable por fechas |
 | `/personal/dotacion` | Turnos y cumplimiento de dotación |
 | `/cumplimiento` | Ámbitos, requisitos y evidencia en una sola vista |
 | `/cumplimiento/reporte` | Reporte imprimible/exportable |
@@ -227,7 +227,7 @@ El RPC `ds20_operational_evidence_summary()` calcula automáticamente verificado
 | `mp-webhook` | Procesa eventos firmados de MercadoPago |
 | `track-landing-event` | Registra analítica pública limitada |
 | `send-crm-email-campaign` | Envía campañas autorizadas |
-| `send-resident-payment-receipt` | Envía la confirmación no tributaria y el documento externo de un pago de residente |
+| `send-resident-payment-receipt` | Valida respaldos, envía confirmaciones de pago y recordatorios mensuales de cobros vencidos |
 | `crm-unsubscribe` | Procesa la baja de correo |
 
 Despliegue de ejemplo:
@@ -327,7 +327,7 @@ Antes de agregar una pantalla o campo:
 - [`FICHA_RESIDENTE_SIMPLE.md`](./FICHA_RESIDENTE_SIMPLE.md): portada, navegación, permisos y alcance normativo de la ficha individual.
 - [`PERSONAL_TURNOS_SIMPLE.md`](./PERSONAL_TURNOS_SIMPLE.md): planta, antecedentes SEREMI, dotación semanal y entrega de turno simplificadas.
 - [`TAREAS_DIARIAS_SIMPLE.md`](./TAREAS_DIARIAS_SIMPLE.md): bandeja priorizada del turno, estados, permisos y comportamiento responsive.
-- [`COBRANZA_RESIDENTES.md`](./COBRANZA_RESIDENTES.md): mensualidades, otros cobros, abonos, documentos externos, permisos y envío de comprobantes.
+- [`COBRANZA_RESIDENTES.md`](./COBRANZA_RESIDENTES.md): guía de uso, mensualidades, cobros, abonos, documentos, recordatorios, filtros, permisos y seguridad.
 - [`AUDITORIA_COBRANZA_RESIDENTES_2026-07-22.md`](./AUDITORIA_COBRANZA_RESIDENTES_2026-07-22.md): hallazgos y correcciones de integridad, seguridad, permisos, correo y UX responsive.
 - [`CLAUDE.md`](./CLAUDE.md): guía técnica y arquitectura para agentes y mantenedores.
 - [`codex.md`](./codex.md): reglas rápidas de colaboración y cambios.

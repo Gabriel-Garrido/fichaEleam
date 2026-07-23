@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import Button from "../../components/Button";
+import { useConfirm } from "../../components/ConfirmDialog";
 import HelpTooltip from "../../components/HelpTooltip";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import {
   createResidentCharge,
+  deleteResidentBillingProfile,
   registerResidentPayment,
   savePaymentContact,
   updateResidentBillingProfile,
@@ -69,14 +71,19 @@ function alignDueDate(period, currentDate) {
 
 export function BillingProfilesModal({ isOpen, profiles, residentsById, onClose, onSaved }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [savingId, setSavingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [search, setSearch] = useState("");
+  const [visibleLimit, setVisibleLimit] = useState(30);
 
   useEffect(() => {
     if (!isOpen) {
       setEditingId(null);
       setDraft(null);
+      setSearch("");
+      setVisibleLimit(30);
     }
   }, [isOpen]);
 
@@ -138,17 +145,57 @@ export function BillingProfilesModal({ isOpen, profiles, residentsById, onClose,
     }
   };
 
+  const remove = async (profile) => {
+    const name = residentName(residentsById[profile.residente_id]);
+    const accepted = await confirm({
+      title: "Eliminar mensualidad",
+      message: `Se quitará la mensualidad de ${name} y no se crearán nuevos cobros automáticos.\n\nLos cobros y pagos que ya existen se conservarán en el historial.`,
+      confirmText: "Eliminar mensualidad",
+      cancelText: "Volver",
+      danger: true,
+    });
+    if (!accepted) return;
+    setSavingId(profile.residente_id);
+    try {
+      await deleteResidentBillingProfile(profile.residente_id);
+      toast("Mensualidad eliminada del listado.", "success");
+      await onSaved();
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const busy = savingId !== null;
+  const query = search.trim().toLocaleLowerCase("es-CL");
+  const filteredProfiles = profiles.filter((profile) =>
+    `${residentName(residentsById[profile.residente_id])} ${profile.concepto}`
+      .toLocaleLowerCase("es-CL")
+      .includes(query)
+  );
   return (
     <Modal isOpen={isOpen} onClose={() => !busy && onClose()} title="Mensualidades automáticas" panelClassName="max-w-3xl p-4 sm:p-6">
       <p className="text-sm leading-6 text-slate-600">
-        Cambia el monto o el vencimiento de los próximos meses, o pausa la generación automática. Los cobros ya creados mantienen sus valores.
+        Cambia los próximos cobros, pausa temporalmente una mensualidad o elimínala cuando ya no corresponda. Los cobros y pagos anteriores siempre se conservan.
       </p>
+      {profiles.length > 8 && (
+        <label className="mt-4 block">
+          <span className="sr-only">Buscar mensualidad por residente</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => { setSearch(event.target.value); setVisibleLimit(30); }}
+            placeholder="Buscar residente o concepto"
+            className="min-h-11 w-full rounded-xl border border-slate-300 px-3 text-base outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+          />
+        </label>
+      )}
       {profiles.length === 0 ? (
         <div className="mt-5 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Aún no hay mensualidades automáticas. Créala desde “Crear cobro”.</div>
-      ) : (
+      ) : filteredProfiles.length > 0 ? (
         <ul className="mt-5 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
-          {profiles.map((profile) => {
+          {filteredProfiles.slice(0, visibleLimit).map((profile) => {
             const editing = editingId === profile.residente_id;
             const saving = savingId === profile.residente_id;
             return (
@@ -170,6 +217,7 @@ export function BillingProfilesModal({ isOpen, profiles, residentsById, onClose,
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button type="button" disabled={busy} onClick={() => startEditing(profile)} className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Editar</Button>
                       <Button type="button" disabled={busy} onClick={() => toggle(profile)} className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">{saving ? "Guardando..." : profile.activo ? "Pausar" : "Reactivar"}</Button>
+                      <Button type="button" disabled={busy} onClick={() => remove(profile)} className="border border-rose-200 bg-white text-rose-700 hover:bg-rose-50">Eliminar</Button>
                     </div>
                   )}
                 </div>
@@ -190,20 +238,46 @@ export function BillingProfilesModal({ isOpen, profiles, residentsById, onClose,
             );
           })}
         </ul>
+      ) : (
+        <p className="mt-5 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">No encontramos mensualidades con esa búsqueda.</p>
+      )}
+      {visibleLimit < filteredProfiles.length && (
+        <div className="mt-4 text-center">
+          <Button type="button" disabled={busy} onClick={() => setVisibleLimit((current) => current + 30)} className="border border-slate-200 bg-white text-slate-700">
+            Mostrar 30 más
+          </Button>
+        </div>
       )}
       <div className="mt-5 flex justify-end"><Button type="button" disabled={busy} onClick={onClose} className="bg-teal-700 text-white">Listo</Button></div>
     </Modal>
   );
 }
 
-export function ChargeModal({ isOpen, residents, onClose, onSaved }) {
+export function ChargeModal({ isOpen, residents, contacts = [], onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState(emptyCharge);
+  const [receiver, setReceiver] = useState(EMPTY_CONTACT);
+  const [residentSearch, setResidentSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (isOpen) setForm(emptyCharge());
+    if (isOpen) {
+      setForm(emptyCharge());
+      setReceiver(EMPTY_CONTACT);
+      setResidentSearch("");
+    }
   }, [isOpen]);
+
+  const selectResident = (residentId) => {
+    setForm((current) => ({ ...current, residenteId: residentId }));
+    const contact = contacts.find((item) => item.residente_id === residentId);
+    setReceiver(contact ? {
+      nombre: contact.nombre ?? "",
+      relacion: contact.relacion ?? "",
+      email: contact.email ?? "",
+      telefono: contact.telefono ?? "",
+    } : EMPTY_CONTACT);
+  };
 
   const submit = async (event) => {
     event.preventDefault();
@@ -220,8 +294,13 @@ export function ChargeModal({ isOpen, residents, onClose, onSaved }) {
       toast("El vencimiento debe estar dentro del período de la mensualidad.", "error");
       return;
     }
+    if (receiver.nombre.trim().length < 2 || receiver.relacion.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(receiver.email)) {
+      toast("Completa correctamente el contacto que recibirá los correos de pago.", "error");
+      return;
+    }
     setSaving(true);
     try {
+      await savePaymentContact(form.residenteId, receiver);
       await createResidentCharge({ ...form, monto: amount });
       toast("Cobro creado.", "success");
       await onSaved();
@@ -231,15 +310,33 @@ export function ChargeModal({ isOpen, residents, onClose, onSaved }) {
       setSaving(false);
     }
   };
+  const residentQuery = residentSearch.trim().toLocaleLowerCase("es-CL");
+  const eligibleResidents = residents
+    .filter((resident) => ["activo", "hospitalizado"].includes(resident.estado))
+    .filter((resident) => !residentQuery || residentName(resident).toLocaleLowerCase("es-CL").includes(residentQuery));
+  const selectedResident = residents.find((resident) => resident.id === form.residenteId);
+  const visibleResidents = selectedResident && !eligibleResidents.some((resident) => resident.id === selectedResident.id)
+    ? [selectedResident, ...eligibleResidents.slice(0, 99)]
+    : eligibleResidents.slice(0, 100);
 
   return (
-    <Modal isOpen={isOpen} onClose={() => !saving && onClose()} title="Crear cobro" panelClassName="max-w-xl p-4 sm:p-6">
+    <Modal isOpen={isOpen} onClose={() => !saving && onClose()} title="Crear cobro" panelClassName="max-w-2xl p-4 sm:p-6">
       <form onSubmit={submit} className="space-y-4">
         <p className="text-sm text-slate-600">Registra una mensualidad o cualquier otro concepto que deba pagarse.</p>
-        <Select label="Residente" value={form.residenteId} onChange={(value) => setForm((current) => ({ ...current, residenteId: value }))} required>
+        {residents.length > 20 && (
+          <Field
+            label="Buscar residente"
+            type="search"
+            value={residentSearch}
+            onChange={setResidentSearch}
+            placeholder="Escribe el nombre o apellido"
+          />
+        )}
+        <Select label="Residente" value={form.residenteId} onChange={selectResident} required>
           <option value="">Selecciona un residente</option>
-          {residents.filter((resident) => ["activo", "hospitalizado"].includes(resident.estado)).map((resident) => <option key={resident.id} value={resident.id}>{residentName(resident)}</option>)}
+          {visibleResidents.map((resident) => <option key={resident.id} value={resident.id}>{residentName(resident)}</option>)}
         </Select>
+        {eligibleResidents.length > 100 && <p className="-mt-2 text-xs text-slate-500">Se muestran los primeros 100 resultados. Escribe más letras para acotar la búsqueda.</p>}
         <div className="grid gap-4 sm:grid-cols-2">
           <Select label="Tipo" value={form.tipo} onChange={(value) => setForm((current) => ({ ...current, tipo: value, concepto: value === "mensualidad" ? "Mensualidad" : "", repetirMensual: value === "mensualidad" }))}>
             <option value="mensualidad">Mensualidad</option>
@@ -259,6 +356,16 @@ export function ChargeModal({ isOpen, residents, onClose, onSaved }) {
         )}
         <Field label="Fecha de vencimiento" type="date" value={form.fechaVencimiento} onChange={(value) => setForm((current) => ({ ...current, fechaVencimiento: value }))} required />
         <Textarea label="Observación (opcional)" value={form.observacion} onChange={(value) => setForm((current) => ({ ...current, observacion: value }))} placeholder="Detalle del servicio, gasto u otra información útil" />
+        <section className="rounded-xl border border-teal-200 bg-teal-50/50 p-4">
+          <h3 className="text-sm font-semibold text-teal-950">Contacto de pagos</h3>
+          <p className="mt-1 text-xs leading-5 text-teal-800">Esta persona recibirá las confirmaciones y los recordatorios de este residente. Podrás actualizarla al crear otro cobro.</p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <Field label="Nombre" value={receiver.nombre} maxLength="120" onChange={(value) => setReceiver((current) => ({ ...current, nombre: value }))} required />
+            <Field label="Relación con el residente" value={receiver.relacion} maxLength="80" onChange={(value) => setReceiver((current) => ({ ...current, relacion: value }))} placeholder="Ej: hija, representante legal" required />
+            <Field label="Correo" type="email" value={receiver.email} maxLength="254" onChange={(value) => setReceiver((current) => ({ ...current, email: value }))} required />
+            <Field label="Teléfono (opcional)" value={receiver.telefono} maxLength="40" onChange={(value) => setReceiver((current) => ({ ...current, telefono: value }))} />
+          </div>
+        </section>
         <ModalActions onCancel={onClose} saving={saving} label="Crear cobro" />
       </form>
     </Modal>
@@ -333,7 +440,7 @@ export function PaymentModal({ charge, resident, contact, paid, eleamId, canSend
         </section>
         <section className="rounded-xl border border-slate-200 p-4">
           <h3 className="text-sm font-semibold text-slate-900">Documento externo</h3>
-          <p className="mt-1 text-xs leading-5 text-slate-500">Adjunta la boleta, factura o respaldo emitido fuera de FichaEleam. Se validará su contenido antes de confirmar el pago. Máximo 5 MB.</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">Adjunta la boleta, factura u otro respaldo tributario. (Máximo 5 MB.)</p>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <Select label="Tipo de documento" value={payment.documentType} onChange={(value) => setPayment((current) => ({ ...current, documentType: value }))}>{Object.entries(DOCUMENT_TYPES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
             <label className="min-w-0"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Archivo</span><input type="file" accept="application/pdf,image/jpeg,image/png" required onChange={(event) => setPayment((current) => ({ ...current, file: event.target.files?.[0] ?? null }))} className="block min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white p-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:font-semibold file:text-teal-700" /></label>
@@ -341,7 +448,7 @@ export function PaymentModal({ charge, resident, contact, paid, eleamId, canSend
         </section>
         <section className="rounded-xl border border-teal-200 bg-teal-50/50 p-4">
           <h3 className="text-sm font-semibold text-teal-950">Contacto de pagos</h3>
-          <p className="mt-1 text-xs leading-5 text-teal-800">Quedará guardado para este residente. Puedes actualizarlo en el próximo pago; los reenvíos usarán el contacto vigente.</p>
+          <p className="mt-1 text-xs leading-5 text-teal-800">Estos datos vienen del cobro. Revísalos antes de continuar; si los cambias, quedarán guardados para los próximos pagos y reenvíos.</p>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <Field label="Nombre" value={receiver.nombre} maxLength="120" onChange={(value) => setReceiver((current) => ({ ...current, nombre: value }))} required />
             <Field label="Relación con el residente" value={receiver.relacion} maxLength="80" onChange={(value) => setReceiver((current) => ({ ...current, relacion: value }))} placeholder="Ej: hija, representante legal" required />
@@ -358,24 +465,36 @@ export function PaymentModal({ charge, resident, contact, paid, eleamId, canSend
 
 export function VoidModal({ target, onClose, onSaved }) {
   const toast = useToast();
+  const [category, setCategory] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (target) setReason("");
+    if (target) {
+      setCategory("");
+      setReason("");
+    }
   }, [target]);
 
   if (!target) return null;
   const submit = async (event) => {
     event.preventDefault();
-    if (reason.trim().length < 5) {
-      toast("Explica brevemente el motivo.", "error");
+    if (!category || reason.trim().length < 5) {
+      toast("Selecciona una causa y explica brevemente qué ocurrió.", "error");
       return;
     }
+    const categoryLabel = {
+      ingreso_incorrecto: "datos ingresados incorrectamente",
+      duplicado: "registro duplicado",
+      pago_revertido: "pago revertido o no concretado",
+      error_sistema: "error del sistema",
+      otro: "otra causa",
+    }[category];
+    const clearReason = `Anulación manual por ${categoryLabel}: ${reason.trim()}`;
     setSaving(true);
     try {
-      if (target.type === "payment") await voidResidentPayment(target.item.id, reason);
-      else await voidResidentCharge(target.item.id, reason);
+      if (target.type === "payment") await voidResidentPayment(target.item.id, clearReason);
+      else await voidResidentCharge(target.item.id, clearReason);
       toast(target.type === "payment" ? "Pago anulado." : "Cobro anulado.", "success");
       await onSaved();
     } catch (error) {
@@ -387,8 +506,16 @@ export function VoidModal({ target, onClose, onSaved }) {
   return (
     <Modal isOpen onClose={() => !saving && onClose()} title={target.type === "payment" ? "Anular pago" : "Anular cobro"} panelClassName="max-w-md p-4 sm:p-6">
       <form onSubmit={submit} className="space-y-4">
-        <p className="text-sm leading-6 text-slate-600">El registro permanecerá en el historial para conservar la trazabilidad.</p>
-        <Textarea label="Motivo" value={reason} onChange={setReason} required />
+        <p className="text-sm leading-6 text-slate-600">El registro permanecerá en el historial. El motivo será visible, por lo que debe explicar claramente qué ocurrió.</p>
+        <Select label="Causa" value={category} onChange={setCategory} required>
+          <option value="">Selecciona una causa</option>
+          <option value="ingreso_incorrecto">Datos ingresados incorrectamente</option>
+          <option value="duplicado">Registro duplicado</option>
+          <option value="pago_revertido">Pago revertido o no concretado</option>
+          <option value="error_sistema">Error del sistema</option>
+          <option value="otro">Otra causa</option>
+        </Select>
+        <Textarea label="¿Qué ocurrió?" value={reason} onChange={setReason} maxLength={400} placeholder="Describe brevemente el error y, si corresponde, cómo se corrigió" required />
         <ModalActions onCancel={onClose} saving={saving} label="Confirmar anulación" danger />
       </form>
     </Modal>

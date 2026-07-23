@@ -34,6 +34,7 @@ export async function getResidentPaymentSnapshot() {
     charges: data?.charges ?? [],
     payments: data?.payments ?? [],
     deliveries: data?.deliveries ?? [],
+    reminders: data?.reminders ?? [],
   };
 }
 
@@ -61,6 +62,13 @@ export async function updateResidentBillingProfile(profile, changes = {}) {
   });
   if (error) throw rpcError(error, "No se pudo actualizar la mensualidad automática.");
   return data;
+}
+
+export async function deleteResidentBillingProfile(residentId) {
+  const { error } = await supabase.rpc("eliminar_mensualidad_residente", {
+    p_residente_id: residentId,
+  });
+  if (error) throw rpcError(error, "No se pudo eliminar la mensualidad.");
 }
 
 export async function createResidentCharge(payload) {
@@ -94,7 +102,10 @@ export async function registerResidentPayment({ eleamId, chargeId, amount, date,
   const path = `${eleamId}/${pending.id}/${safeFilename(file.name)}`;
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
   if (uploadError) {
-    await supabase.rpc("anular_pago_residente", { p_payment_id: pending.id, p_motivo: "Carga del documento fallida" });
+    await supabase.rpc("anular_pago_residente", {
+      p_payment_id: pending.id,
+      p_motivo: "Anulación automática del sistema: no fue posible cargar el documento adjunto.",
+    });
     throw new Error("No se pudo adjuntar el documento. El pago no fue registrado.");
   }
 
@@ -127,7 +138,10 @@ export async function registerResidentPayment({ eleamId, chargeId, amount, date,
       return { payment: recovered, emailSent: delivery?.estado === "enviado", emailSkipped: false };
     }
     await supabase.storage.from(BUCKET).remove([path]);
-    await supabase.rpc("anular_pago_residente", { p_payment_id: pending.id, p_motivo: "No se pudo validar el documento" });
+    await supabase.rpc("anular_pago_residente", {
+      p_payment_id: pending.id,
+      p_motivo: "Anulación automática del sistema: el documento adjunto no pudo validarse.",
+    });
     throw finalizeError;
   }
 }
@@ -136,6 +150,15 @@ export async function resendResidentPaymentReceipt(paymentId) {
   const { data, error } = await supabase.functions.invoke("send-resident-payment-receipt", { body: { paymentId, retry: true } });
   if (error) await throwEdgeFunctionError(error, "No se pudo enviar el comprobante. Intenta nuevamente.");
   if (!data?.sent) throw new Error(data?.error || "No se pudo enviar el comprobante. Intenta nuevamente.");
+  return data;
+}
+
+export async function sendResidentPaymentReminder(residentId) {
+  const { data, error } = await supabase.functions.invoke("send-resident-payment-receipt", {
+    body: { action: "reminder", residentId },
+  });
+  if (error) await throwEdgeFunctionError(error, "No se pudo enviar el recordatorio.");
+  if (!data?.sent) throw new Error(data?.error || "No se pudo enviar el recordatorio.");
   return data;
 }
 

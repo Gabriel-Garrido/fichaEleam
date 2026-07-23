@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPaymentSummary, chargeState, latestDelivery, paidForCharge, validatePaymentFile } from "./residentPaymentUtils";
+import { buildPaymentSummary, chargeState, latestDelivery, paidForCharge, paymentTotalsByCharge, validatePaymentFile } from "./residentPaymentUtils";
 
 const charge = { id: "c1", monto: 100000, fecha_vencimiento: "2026-07-10", estado: "activo" };
 
@@ -24,6 +24,17 @@ describe("resident payment calculations", () => {
       { payment_id: "p1", estado: "enviado", creado_en: "2026-07-20T11:00:00Z" },
     ];
     expect(latestDelivery("p1", deliveries)?.estado).toBe("enviado");
+  });
+
+  it("indexa pagos vigentes por cobro sin contar anulaciones", () => {
+    const totals = paymentTotalsByCharge([
+      { charge_id: "c1", estado: "registrado", monto: 10000 },
+      { charge_id: "c1", estado: "registrado", monto: 5000 },
+      { charge_id: "c1", estado: "anulado", monto: 90000 },
+      { charge_id: "c2", estado: "registrado", monto: 7000 },
+    ]);
+    expect(totals.get("c1")).toBe(15000);
+    expect(totals.get("c2")).toBe(7000);
   });
 
   it("exige respaldo externo seguro", () => {
