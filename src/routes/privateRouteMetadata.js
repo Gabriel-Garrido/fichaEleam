@@ -44,4 +44,3 @@ const PRIVATE_ROUTE_TITLES = [
 export function getPrivateRouteTitle(pathname) {
   return PRIVATE_ROUTE_TITLES.find(([pattern]) => pattern.test(pathname))?.[1] ?? "FichaEleam";
 }
-
