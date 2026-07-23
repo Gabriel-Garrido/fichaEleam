@@ -13,10 +13,12 @@ describe("Supabase Edge Function authentication contract", () => {
   it.each([
     "create-demo-user",
     "create-staff-user",
+    "update-staff-user",
     "delete-staff-user",
     "mp-create-subscription",
     "mp-cancel-subscription",
     "send-crm-email-campaign",
+    "send-resident-payment-receipt",
   ])("requires JWT for %s", (functionName) => {
     expect(verifyJwtFor(functionName)).toBe(true);
   });

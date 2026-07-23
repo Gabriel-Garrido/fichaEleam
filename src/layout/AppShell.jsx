@@ -44,10 +44,14 @@ export default function AppShell({ children }) {
         onLogout={handleLogout}
       />
       <div className={`min-w-0 max-w-full overflow-x-hidden ${collapsed ? "lg:pl-20" : "lg:pl-72"} transition-[padding] duration-200`}>
-        {auth.featurePermissionsError && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5">
+        {(auth.featurePermissionsError || auth.permissionsError) && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5"
+          >
             <p className="text-sm text-amber-800">
-              No pudimos cargar tus permisos de acceso. Algunas secciones pueden no estar disponibles.
+              No pudimos verificar todos tus permisos. Por seguridad, algunas secciones o acciones están temporalmente bloqueadas.
             </p>
             <button
               type="button"

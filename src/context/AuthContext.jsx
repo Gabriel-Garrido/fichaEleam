@@ -7,6 +7,22 @@ import { FEATURE_CATALOG } from "../features/permissions/featureCatalog";
 const AuthContext = createContext();
 
 const AUTH_NOTICE_STORAGE_KEY = "fichaeleam_auth_notice";
+const ACTION_PERMISSION_SELECT = `
+  profile_id,
+  crear_residentes, editar_residentes, eliminar_residentes,
+  crear_signos_vitales, editar_signos_vitales, eliminar_signos_vitales,
+  crear_observaciones, editar_observaciones, eliminar_observaciones,
+  crear_planes_cuidado, editar_planes_cuidado, completar_tareas_cuidado,
+  editar_indicaciones_cuidado, aplicar_evaluaciones_clinicas,
+  crear_indicaciones_medicamentos, editar_indicaciones_medicamentos,
+  administrar_medicamentos, validar_medicamentos_controlados, ajustar_stock_medicamentos,
+  asignar_camas, editar_inventario_bienes,
+  subir_acreditacion, editar_acreditacion, archivar_acreditacion,
+  gestionar_cumplimiento, gestionar_emergencias, registrar_simulacros, gestionar_reclamos,
+  crear_eventos_adversos, editar_eventos_adversos, cerrar_eventos_adversos,
+  ver_pagos_residentes, registrar_pagos_residentes,
+  enviar_comprobantes_pagos, anular_pagos_residentes
+`;
 
 function takeStoredAuthNotice() {
   if (typeof window === "undefined") return null;
@@ -45,6 +61,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile]         = useState(null);
   const [eleam, setEleam]             = useState(null);
   const [permisos, setPermisos]       = useState(null);
+  const [permissionsError, setPermissionsError] = useState(false);
   const [featurePermissions, setFeaturePermissions] = useState(null);
   const [featurePermissionsError, setFeaturePermissionsError] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
@@ -111,6 +128,7 @@ export function AuthProvider({ children }) {
         setProfile(null);
         setEleam(null);
         setPermisos(null);
+        setPermissionsError(false);
         setFeaturePermissions(null);
         await supabase.auth.signOut();
         return;
@@ -137,14 +155,23 @@ export function AuthProvider({ children }) {
 
       // Cargar permisos granulares solo para funcionarios
       if (data.rol === "funcionario") {
-        const { data: perms } = await supabase
+        const { data: perms, error: permissionsLoadError } = await supabase
           .from("funcionario_permisos")
-          .select("*")
+          .select(ACTION_PERMISSION_SELECT)
           .eq("profile_id", data.id)
           .maybeSingle();
-        setPermisos(perms ?? null);
+        if (permissionsLoadError) {
+          // Fail-closed: una falla de red o RLS nunca debe convertir la ausencia
+          // de datos en permisos concedidos.
+          setPermisos(null);
+          setPermissionsError(true);
+        } else {
+          setPermisos(perms ?? null);
+          setPermissionsError(false);
+        }
       } else {
         setPermisos(null);
+        setPermissionsError(false);
       }
 
       // Permisos por área: controlan menú, enlaces, rutas y RLS. Para un
@@ -196,6 +223,12 @@ export function AuthProvider({ children }) {
       }
     } catch (error) {
       console.warn("No se pudo cargar el perfil:", error);
+      // No conservar autorizaciones potencialmente obsoletas cuando falla la
+      // actualización de sesión o de perfil.
+      setPermisos(null);
+      setPermissionsError(true);
+      setFeaturePermissions(null);
+      setFeaturePermissionsError(true);
       setAuthNotice("Iniciaste sesión, pero no pudimos cargar todos los datos de tu cuenta.");
     } finally {
       if (!silent) setProfileLoading(false);
@@ -236,6 +269,7 @@ export function AuthProvider({ children }) {
           setProfile(null);
           setEleam(null);
           setPermisos(null);
+          setPermissionsError(false);
           setFeaturePermissions(null);
           setAuthNotice(takeStoredAuthNotice());
           purgeRetiredGuidanceKeys();
@@ -341,6 +375,7 @@ export function AuthProvider({ children }) {
     isStaff,
     homePath,
     permisos,
+    permissionsError,
     featurePermissions,
     featurePermissionsError,
     can,
@@ -354,7 +389,7 @@ export function AuthProvider({ children }) {
   }), [
     user, profile, eleam, plan, subscriptionStatus, pagoActivo, rol,
     isAdminEleam, isFuncionario, isSuperadmin, isStaff,
-    homePath, permisos, featurePermissions, featurePermissionsError, can, canFeature,
+    homePath, permisos, permissionsError, featurePermissions, featurePermissionsError, can, canFeature,
     mustResetPassword, profileLoading, authLoading, authNotice,
     supabaseError, refetchProfile,
   ]);

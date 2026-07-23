@@ -285,7 +285,7 @@ Deno.serve(async (req) => {
     if (provisionErr || !provisionId) {
       console.error("staff auth provision create", provisionErr);
       return jsonResponse(req, {
-        error: "No se pudo preparar la provisión Auth. Aplica supabase_schema.sql actualizado y vuelve a intentar.",
+        error: "No se pudo preparar la cuenta del funcionario. Intenta nuevamente o contacta a soporte.",
       }, 500);
     }
 
@@ -316,11 +316,8 @@ Deno.serve(async (req) => {
           error: "Este correo ya existe en Auth. Actualiza la lista y vuelve a intentarlo para reparar la cuenta, o revisa Auth > Users si el problema persiste.",
         }, 409);
       }
-      const detail = String(createError.message ?? createError);
       return jsonResponse(req, {
-        error: detail.includes("Database error creating new user")
-          ? "Auth rechazó la creación por un trigger de base de datos. Aplica supabase_schema.sql y vuelve a desplegar la función."
-          : "No se pudo crear el usuario.",
+        error: "No se pudo crear la cuenta del funcionario. Intenta nuevamente o contacta a soporte.",
       }, 500);
     }
 
@@ -343,7 +340,7 @@ Deno.serve(async (req) => {
         return jsonResponse(req, { error: message }, 409);
       }
       return jsonResponse(req, {
-        error: "Auth creó el usuario, pero no se pudo crear su perfil. Aplica supabase_schema.sql y vuelve a intentar.",
+        error: "No se pudo completar la cuenta del funcionario. Intenta nuevamente o contacta a soporte.",
       }, 500);
     }
 

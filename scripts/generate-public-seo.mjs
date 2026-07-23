@@ -1312,11 +1312,15 @@ ErrorDocument 404 /404.html
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
   Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy https://api.mercadopago.com; frame-src 'self' https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy; object-src 'none'; manifest-src 'self'"
-  SetEnvIf Request_URI "^/(assets|marketing)/" long_cache
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set X-Permitted-Cross-Domain-Policies "none"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; script-src-elem 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy https://api.mercadopago.com; frame-src 'self' https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.mercadopago.com https://*.mercadopago.cl https://*.mercadopago.com.ar https://*.mercadopago.com.br https://*.mercadopago.com.mx https://*.mercadopago.com.co https://*.mercadopago.com.pe https://*.mercadopago.com.uy; object-src 'none'; manifest-src 'self'"
+  SetEnvIf Request_URI "^/assets/" long_cache
+  SetEnvIf Request_URI "^/marketing/" marketing_cache
   SetEnvIf Request_URI "^/(${privatePattern})(/|$)" noindex_route
   Header always set X-Robots-Tag "noindex, nofollow" env=noindex_route
   Header always set Cache-Control "max-age=31536000, immutable" env=long_cache
+  Header always set Cache-Control "max-age=604800, stale-while-revalidate=86400" env=marketing_cache
   <FilesMatch "^(index\\.html|404\\.html|robots\\.txt|sitemap\\.xml|llms\\.txt)$">
     Header always set Cache-Control "no-cache, no-store, must-revalidate"
     Header always set Pragma "no-cache"

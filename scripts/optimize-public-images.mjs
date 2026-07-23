@@ -33,31 +33,19 @@ const firstExisting = (...candidates) => {
 const DASHBOARDS = [
   {
     out: "hero.webp",
-    source: firstExisting(
-      "public/marketing/fichaeleam-hero-demo-soporte.png",
-      "src/assets/images/fichaeleam-hero.png",
-    ),
+    source: firstExisting("public/marketing/fichaeleam-hero-demo-soporte.png"),
   },
   {
     out: "software.webp",
-    source: firstExisting(
-      "public/marketing/software-eleam-dashboard-signos-residente.png",
-      "src/assets/images/software-eleam-dashboard-signos-residente.png",
-    ),
+    source: firstExisting("public/marketing/software-eleam-dashboard-signos-residente.png"),
   },
   {
     out: "comparison.webp",
-    source: firstExisting(
-      "src/assets/images/excel-papel-vs-fichaeleam-dashboard.png",
-      "public/marketing/excel-papel-vs-fichaeleam-dashboard.png",
-    ),
+    source: firstExisting("public/marketing/excel-papel-vs-fichaeleam-dashboard.png"),
   },
   {
     out: "shift.webp",
-    source: firstExisting(
-      "src/assets/images/entrega-turno-equipo-clinico-dashboard.png",
-      "public/marketing/entrega-turno-equipo-clinico-dashboard.png",
-    ),
+    source: firstExisting("public/marketing/entrega-turno-equipo-clinico-dashboard.png"),
   },
 ];
 

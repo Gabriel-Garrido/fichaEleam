@@ -324,6 +324,33 @@ if (exists(htaccessPath)) {
   if (!/X-Robots-Tag\s+"noindex,\s*nofollow"/.test(htaccess)) {
     fail(".htaccess debe emitir X-Robots-Tag noindex para rutas privadas.");
   }
+  if (/unsafe-eval/i.test(htaccess)) {
+    fail(".htaccess no debe habilitar unsafe-eval en la política CSP de producción.");
+  }
+  if (!htaccess.includes('Cross-Origin-Opener-Policy "same-origin"')) {
+    fail(".htaccess debe aislar el contexto de navegación con Cross-Origin-Opener-Policy.");
+  }
+  if (!htaccess.includes('SetEnvIf Request_URI "^/assets/" long_cache')) {
+    fail(".htaccess debe aplicar caché inmutable solo a assets versionados.");
+  }
+  if (!htaccess.includes('SetEnvIf Request_URI "^/marketing/" marketing_cache')) {
+    fail(".htaccess debe usar una caché renovable para imágenes de marketing sin hash.");
+  }
+}
+
+const headersPath = path.join(dist, "_headers");
+if (exists(headersPath)) {
+  const headers = read(headersPath);
+  if (/unsafe-eval/i.test(headers)) fail("_headers no debe habilitar unsafe-eval.");
+  if (!headers.includes("Cross-Origin-Opener-Policy: same-origin")) {
+    fail("_headers debe incluir Cross-Origin-Opener-Policy.");
+  }
+  if (!headers.includes("/assets/*") || !headers.includes("immutable")) {
+    fail("_headers debe definir caché inmutable para assets versionados.");
+  }
+  if (!headers.includes("/marketing/*") || !headers.includes("stale-while-revalidate")) {
+    fail("_headers debe permitir renovar recursos de marketing sin hash.");
+  }
 }
 
 const notFoundPath = path.join(dist, "404.html");

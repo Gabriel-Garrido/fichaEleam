@@ -181,7 +181,7 @@ export default function CampaignsPanel({ initialSelectedProspectIds = [], onCons
                   </div>
                   <EstadoBadge value={c.estado} />
                 </div>
-                <div className="mt-3 grid grid-cols-4 gap-2 border-y border-slate-100 py-3 text-center">
+                <div className="mt-3 grid grid-cols-2 gap-2 border-y border-slate-100 py-3 text-center sm:grid-cols-4">
                   <div>
                     <p className="text-[10px] uppercase tracking-wide text-slate-400">Total</p>
                     <p className="text-sm font-bold tabular-nums">{c.total_destinatarios}</p>

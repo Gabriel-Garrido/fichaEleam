@@ -5,6 +5,12 @@ const PERM_KEYWORDS       = ["permission", "denied", "rls", "policy", "not allow
 const NOTFOUND_KEYWORDS   = ["not found", "does not exist", "no rows"];
 const DUPLICATE_KEYWORDS  = ["duplicate", "unique", "already exists", "conflict"];
 const RATE_LIMIT_KEYWORDS = ["rate limit", "too many requests", "over_email_send_rate", "429"];
+const ERROR_CODE_CONTEXT = {
+  "23505": "duplicate",
+  "42501": "perm",
+  "PGRST116": "notfound",
+  "429": "rate_limit",
+};
 
 const CONTEXT_MESSAGES = {
   network:    "No pudimos conectarnos al servidor. Revisa tu conexión y vuelve a intentarlo.",
@@ -30,6 +36,10 @@ function matchesAny(message, keywords) {
  * @returns {string}
  */
 export function friendlyError(error, fallback = "Ocurrió un problema inesperado. Intenta de nuevo.") {
+  const code = String(error?.code ?? error?.status ?? error?.statusCode ?? "").toUpperCase();
+  const contextFromCode = ERROR_CODE_CONTEXT[code];
+  if (contextFromCode) return CONTEXT_MESSAGES[contextFromCode];
+
   const raw = (
     error?.message ||
     error?.error?.message ||

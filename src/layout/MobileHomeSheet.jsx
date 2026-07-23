@@ -32,6 +32,8 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
   const location = useLocation();
   const [query, setQuery] = useState("");
   const sheetRef = useRef(null);
+  const searchRef = useRef(null);
+  const previousFocusRef = useRef(null);
 
   useEffect(() => {
     if (!open) {
@@ -47,11 +49,37 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
 
   useEffect(() => {
     if (!open) return;
+    previousFocusRef.current = document.activeElement;
+    const focusFrame = window.requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }));
     const handler = (e) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = Array.from(sheetRef.current?.querySelectorAll(
+        "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      ) ?? []).filter((node) => node.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handler);
+      if (previousFocusRef.current && document.contains(previousFocusRef.current)) {
+        previousFocusRef.current.focus({ preventScroll: true });
+      }
+    };
   }, [open, onClose]);
 
   const roleLabel = ROLE_LABELS[auth.rol] ?? auth.rol;
@@ -155,6 +183,7 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" />
             </svg>
             <input
+              ref={searchRef}
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -174,7 +203,7 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
                   Sin resultados para "{query}"
                 </p>
               ) : (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 gap-2 min-[400px]:grid-cols-4">
                   {filteredNav.map((item) =>
                     item.disabled ? (
                       <DisabledTile key={item.id} item={item} />
@@ -222,7 +251,7 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
               {sections.map((section) => (
                 <div key={section.id} className="mb-5">
                   <SectionLabel label={section.label} />
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2 min-[400px]:grid-cols-4">
                     {section.items.map((item) =>
                       item.disabled ? (
                         <DisabledTile key={item.id} item={item} />

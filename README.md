@@ -76,7 +76,7 @@ La fuente canónica es [`supabase_schema.sql`](./supabase_schema.sql). Para esta
 
 No se incluye una migración de datos heredados porque el producto se está reiniciando desde cero.
 
-El esquema canónico está consolidado: no contiene reconstrucciones `DROP TABLE`, migraciones históricas ni definiciones sucesivas de una misma función. Actualmente crea 68 tablas públicas con RLS y 60 funciones/RPC. El portal familiar y el registro de visitas fueron retirados también del modelo de datos; los antecedentes de familiares y personas significativas exigibles se registran en los módulos clínicos y de cumplimiento correspondientes.
+El esquema canónico está consolidado para una base nueva. La auditoría automatizada actual reconoce 75 tablas públicas, 68 funciones/RPC y 11 Edge Functions. Todas las tablas de negocio quedan bajo RLS; los antecedentes de familiares y personas significativas exigibles se registran en los módulos clínicos y de cumplimiento correspondientes.
 
 Antes de desplegar cambios de base de datos ejecuta:
 
@@ -309,6 +309,24 @@ npm run build
 npm run seo:check
 ```
 
+La verificación también controla contratos de autenticación de Edge Functions, respuestas sin detalles internos, CSP de producción, aislamiento de rutas privadas y políticas de caché. Ejecuta adicionalmente:
+
+```bash
+npm audit
+```
+
+El resultado esperado es `0 vulnerabilities`, incluidas las herramientas de desarrollo.
+
+## Seguridad, rendimiento y crecimiento
+
+- Los permisos se validan en cuatro capas: menú, ruta, servicio/RPC y RLS. Si no es posible cargar permisos, el cliente bloquea el acceso de forma segura y permite reintentar.
+- El perfil y los permisos usan selecciones explícitas de columnas; no se envían notas internas ni secretos al navegador.
+- Las Edge Functions autenticadas requieren JWT y vuelven a validar rol, ELEAM y acción. Los errores internos quedan en logs y las respuestas públicas son genéricas y accionables.
+- Los bundles por ruta se cargan de forma diferida. Los assets versionados usan caché inmutable; las imágenes de marketing sin hash usan una caché renovable.
+- Los listados de alta cardinalidad deben implementar búsqueda, filtros y paginación en servidor. No se deben introducir nuevas consultas ilimitadas ni patrones N+1.
+- El menú de escritorio, la barra móvil y el lanzador muestran únicamente áreas y acciones autorizadas. El lanzador móvil tiene búsqueda, cierre con Escape, foco contenido y distribución adaptable desde 320 px.
+- Antes de aumentar capacidad se deben observar latencia p95, errores de Auth/Functions, conexiones PostgreSQL, consultas lentas, Storage y entregabilidad de correo. El umbral de 1.000 usuarios no exige cambiar de arquitectura si la carga permanece distribuida entre ELEAM, pero sí requiere alertas y pruebas de carga.
+
 ## Criterios para nuevas funcionalidades
 
 Antes de agregar una pantalla o campo:
@@ -336,4 +354,5 @@ Antes de agregar una pantalla o campo:
 - [`decreto_20_fichaeleam_actualizacion.md`](./decreto_20_fichaeleam_actualizacion.md): análisis normativo.
 - [`INFORME_AUDITORIA_DECRETO20_SEO.md`](./INFORME_AUDITORIA_DECRETO20_SEO.md): auditoría de contenido y SEO.
 - [`INFORME_AUDITORIA_TECNICA_2026-07-20.md`](./INFORME_AUDITORIA_TECNICA_2026-07-20.md): hallazgos, remediaciones, validación y riesgos técnicos.
+- [`AUDITORIA_ESCALABILIDAD_SEGURIDAD_2026-07-23.md`](./AUDITORIA_ESCALABILIDAD_SEGURIDAD_2026-07-23.md): auditoría transversal de escalabilidad, permisos, errores, responsive, despliegue y preparación para más de 1.000 usuarios.
 - [`CUMPLIMIENTO_SIMPLE.md`](./CUMPLIMIENTO_SIMPLE.md): flujo mínimo de documentos, protocolos, fiscalización y reglas de acceso.
