@@ -11,6 +11,7 @@ La implementación quedó preparada para una base vacía, separada de los pagos 
 
 ### Integridad financiera
 
+- La clave compuesta `(id, eleam_id)` de `residentes` ahora tiene nombre e índice idempotente antes de las FK de cobranza. Esto permite reejecutar el esquema tras una ejecución parcial sin el error PostgreSQL `42830`.
 - Una mensualidad anulada podía volver a crearse al abrir la pantalla. La unicidad ahora considera cualquier estado del período.
 - Crear una mensualidad única podía sobrescribir o pausar una configuración recurrente. El perfil solo cambia cuando se solicita repetición mensual.
 - El vencimiento podía quedar en un mes diferente al período facturado. Frontend y RPC ahora exigen coherencia.

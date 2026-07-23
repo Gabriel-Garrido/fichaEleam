@@ -15,6 +15,14 @@ describe("resident payment security contracts", () => {
     expect(schema).not.toMatch(/insert into public\.pagos[\s\S]{0,300}resident_payments/i);
   });
 
+  it("crea la clave candidata de residentes antes de las FK compuestas", () => {
+    const uniqueKey = schema.indexOf("create unique index if not exists residentes_id_eleam_unique");
+    const paymentContact = schema.indexOf("create table if not exists public.resident_payment_contacts");
+    expect(uniqueKey).toBeGreaterThan(-1);
+    expect(paymentContact).toBeGreaterThan(uniqueKey);
+    expect(schema).toContain("on public.residentes(id, eleam_id)");
+  });
+
   it("protege saldos, documentos y trazabilidad", () => {
     expect(schema).toContain("for update;");
     expect(schema).toContain("El monto supera el saldo pendiente");

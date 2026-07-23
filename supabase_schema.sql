@@ -119,9 +119,14 @@ create table if not exists public.residentes (
   creado_por               uuid references auth.users(id) on delete set null,
   creado_en                timestamptz not null default now(),
   actualizado_en           timestamptz not null default now(),
-  unique (id, eleam_id)
+  constraint residentes_id_eleam_unique unique (id, eleam_id)
 );
 
+-- CREATE TABLE IF NOT EXISTS no incorpora restricciones nuevas cuando una
+-- ejecución anterior alcanzó a crear la tabla. Este índice nombrado hace que
+-- la FK compuesta de cobranza sea válida también al reintentar el esquema.
+create unique index if not exists residentes_id_eleam_unique
+  on public.residentes(id, eleam_id);
 create unique index if not exists residentes_rut_eleam_unique
   on public.residentes(rut, eleam_id)
   where rut is not null;
