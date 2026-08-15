@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from "react";
-import Loading from "../components/Loading";
+import { LoadingOverlay } from "../components/Loading";
 
 export const LoadingContext = createContext();
 
@@ -7,7 +7,7 @@ export function LoadingProvider({ children }) {
   const [loading, setLoading] = useState(false);
   return (
     <LoadingContext.Provider value={{ loading, setLoading }}>
-      {loading && <Loading message="Cargando..." />}
+      {loading && <LoadingOverlay message="Procesando..." />}
       {children}
     </LoadingContext.Provider>
   );

@@ -9,13 +9,15 @@ const OBSERVATION_SELECT = `
 
 export const getObservations = async (
   residenteId = null,
-  { limit = 50, desde = null, hasta = null, tipo = null, soloSeguimiento = false, search = null } = {}
+  { limit = 50, offset = 0, desde = null, hasta = null, tipo = null, soloSeguimiento = false, search = null } = {}
 ) => {
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
   let query = supabase
     .from("observaciones_diarias")
     .select(`${OBSERVATION_SELECT}, residentes(nombre, apellido)`)
     .order("fecha_hora", { ascending: false })
-    .limit(limit);
+    .range(safeOffset, safeOffset + safeLimit - 1);
 
   if (residenteId)    query = query.eq("residente_id", residenteId);
   // Convert local date boundaries to UTC ISO strings so timestamptz comparisons
@@ -35,7 +37,19 @@ export const getObservations = async (
 
   const { data, error } = await query;
   if (error) throw error;
-  return data;
+  const rows = data ?? [];
+  const authorIds = [...new Set(rows.map((row) => row.registrado_por).filter(Boolean))];
+  if (authorIds.length === 0) return rows;
+
+  const { data: authors } = await supabase
+    .from("profiles")
+    .select("id, nombre")
+    .in("id", authorIds);
+  const authorById = new Map((authors ?? []).map((author) => [author.id, author.nombre]));
+  return rows.map((row) => ({
+    ...row,
+    registrado_por_nombre: authorById.get(row.registrado_por) ?? null,
+  }));
 };
 
 export const createObservation = async (payload) => {

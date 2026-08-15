@@ -10,6 +10,7 @@ export default function PageLayout({
   className = "",
   size = "xl",
   coachFeatureId,
+  headerClassName = "",
 }) {
   const sizes = {
     lg: "max-w-5xl",
@@ -34,6 +35,7 @@ export default function PageLayout({
           eyebrow={eyebrow}
           description={description}
           actions={headerActions}
+          className={headerClassName}
         />
       )}
       {coach.enabled && (

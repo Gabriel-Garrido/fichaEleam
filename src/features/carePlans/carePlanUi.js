@@ -15,7 +15,18 @@ export const INITIAL_CARE_PLAN = {
   necesidades_espirituales: "",
   meta_rehabilitacion: "",
   restricciones_actividad: "",
+  participacion_residente: "",
+  participacion_detalle: "",
 };
+
+export const CARE_PLAN_REQUIRED_FIELDS = Object.freeze([
+  ["objetivos", "Objetivo individual"],
+  ["pauta_alimentacion", "Pauta de alimentación"],
+  ["pauta_hidratacion", "Pauta de hidratación"],
+  ["meta_rehabilitacion", "Mantención o rehabilitación"],
+  ["objetivo_biopsicosocial", "Bienestar y participación"],
+  ["participacion_residente", "Participación del residente"],
+]);
 
 export const INITIAL_CARE_ACTIVITY = {
   categoria: "alimentacion",
@@ -78,17 +89,9 @@ export function buildDailyShiftSchedules(shifts = ["mañana"], currentSchedules 
     .filter((shift) => safeShifts.includes(shift))
     .map((shift) => {
       const existing = currentSchedules.find((item) => item.turno === shift);
-      return {
-        ...INITIAL_CARE_SCHEDULE,
-        ...existing,
-        frecuencia: "diaria",
-        dias_semana: [1, 2, 3, 4, 5, 6, 7],
-        dias_mes: [1],
-        fecha_unica: "",
-        tolerancia_min: 60,
-        turno: shift,
-        activo: true,
-      };
+      return existing
+        ? { ...cloneCareSchedule(existing), turno: shift }
+        : { ...INITIAL_CARE_SCHEDULE, turno: shift };
     });
 }
 
@@ -99,6 +102,10 @@ export function careScheduleError(schedule) {
   if (!schedule?.hora) return "Indica la hora de ejecución.";
   if (schedule.frecuencia === "semanal" && !(schedule.dias_semana?.length)) {
     return "Selecciona al menos un día de la semana.";
+  }
+  if (schedule.frecuencia === "mensual"
+      && (!(schedule.dias_mes?.length) || !schedule.dias_mes.every((day) => Number(day) >= 1 && Number(day) <= 31))) {
+    return "Indica un día válido del mes.";
   }
   if (schedule.frecuencia === "una_vez" && !schedule.fecha_unica) {
     return "Indica la fecha de ejecución.";
@@ -167,6 +174,17 @@ export function sortCareActivities(activities = []) {
     });
 }
 
+export function groupCareActivitiesByTurn(activities = []) {
+  const groups = Object.fromEntries(CARE_TURNOS.map((turno) => [turno, []]));
+  for (const activity of sortCareActivities(activities)) {
+    for (const schedule of getActiveCareSchedules(activity)) {
+      if (!groups[schedule.turno]) continue;
+      groups[schedule.turno].push({ activity, schedule });
+    }
+  }
+  return groups;
+}
+
 export function buildCarePlanForm(plan) {
   return plan ? {
     titulo: plan.titulo ?? "Plan de cuidado",
@@ -182,23 +200,41 @@ export function buildCarePlanForm(plan) {
     necesidades_espirituales: plan.necesidades_espirituales ?? "",
     meta_rehabilitacion: plan.meta_rehabilitacion ?? "",
     restricciones_actividad: plan.restricciones_actividad ?? "",
+    participacion_residente: plan.participacion_residente ?? "",
+    participacion_detalle: plan.participacion_detalle ?? "",
   } : INITIAL_CARE_PLAN;
+}
+
+export function carePlanPendingItems({ plan, activities = [] } = {}) {
+  const pending = CARE_PLAN_REQUIRED_FIELDS
+    .filter(([field]) => !String(plan?.[field] ?? "").trim())
+    .map(([field, label]) => ({ field, label, type: "content" }));
+
+  if (["representante", "ambos", "no_posible"].includes(plan?.participacion_residente)
+      && !String(plan?.participacion_detalle ?? "").trim()) {
+    pending.push({ field: "participacion_detalle", label: "Detalle de participación", type: "content" });
+  }
+
+  if (sortCareActivities(activities).length === 0) {
+    pending.push({ field: "activities", label: "Cuidados con acciones y frecuencia", type: "content" });
+  }
+  if (!plan?.validado_en || !plan?.validado_por_dt) {
+    pending.push({ field: "review", label: "Revisión de dirección técnica", type: "review" });
+  }
+  return pending;
 }
 
 export function calculateCarePlanReadiness({ plan, activities = [] } = {}) {
   const active = sortCareActivities(activities);
-  const hasClinicalSummary = Boolean(
-    plan?.objetivos?.trim()
-    || plan?.pauta_alimentacion?.trim()
-    || plan?.pauta_hidratacion?.trim()
-    || plan?.restricciones?.trim()
-    || plan?.riesgo_caidas
-    || plan?.riesgo_up
-  );
+  const pending = carePlanPendingItems({ plan, activities });
+  const contentPending = pending.filter((item) => item.type === "content");
 
   return {
     active: active.length,
-    hasClinicalSummary,
+    hasClinicalSummary: contentPending.length === 0,
+    contentComplete: contentPending.length === 0,
+    reviewed: contentPending.length === 0 && Boolean(plan?.validado_en && plan?.validado_por_dt),
+    pending,
   };
 }
 
@@ -207,10 +243,5 @@ export function buildQuickCarePlanDefaults(resident = {}) {
   return {
     ...INITIAL_CARE_PLAN,
     titulo: displayName ? `Plan de cuidado de ${displayName}` : INITIAL_CARE_PLAN.titulo,
-    riesgo_caidas: "medio",
-    riesgo_up: "medio",
-    objetivos: "Mantener seguridad, confort, hidratación, alimentación asistida y movilidad funcional según tolerancia diaria.",
-    pauta_alimentacion: "Verificar dieta indicada y tolerancia en cada comida. Avisar rechazo, tos, dificultad para tragar o baja ingesta.",
-    pauta_hidratacion: "Ofrecer líquidos según pauta y registrar rechazos o restricciones clínicas.",
   };
 }

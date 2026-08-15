@@ -15,6 +15,48 @@ describe("resident traceability schema contracts", () => {
     expect(schema).toContain("p_estado text default null");
     expect(schema).toContain("'prioridad_visual'");
     expect(schema).toContain("grant execute on function public.listar_trazabilidad_residente(uuid, date, date, text[], text, integer) to authenticated");
+    expect(schema).toContain("create or replace function public.listar_historial_residente_paginado");
+    expect(schema).toContain("p_busqueda text default null");
+    expect(schema).toContain("p_offset integer default 0");
+    expect(schema).toContain("create or replace function public.obtener_detalle_historial_residente");
+  });
+
+  it("audits resident and related record changes without duplicating bed synchronization", () => {
+    expect(schema).toContain("create table if not exists public.residentes_audit");
+    expect(schema).toContain("create trigger trg_residentes_audit");
+    expect(schema).toContain("create or replace function public.audit_resident_related_changes");
+    expect(schema).toContain("trg_resident_consents_resident_audit");
+    expect(schema).toContain("trg_resident_health_network_resident_audit");
+    expect(schema).toContain("trg_health_controls_resident_audit");
+    expect(schema).toContain("trg_evaluaciones_clinicas_resident_audit");
+    expect(schema).toContain("trg_persona_sig_resident_audit");
+    expect(schema).toContain("trg_actividades_sociales_resident_audit");
+    expect(schema).toContain("'creado_por','actualizado_por','registrado_por','evaluado_por'");
+    expect(schema).toContain("cama_actual_id','creado_por'");
+  });
+
+  it("audits every editable area shown in resident general information", () => {
+    for (const trigger of [
+      "trg_residentes_audit",
+      "trg_evaluaciones_clinicas_resident_audit",
+      "trg_resident_consents_resident_audit",
+      "trg_resident_health_network_resident_audit",
+      "trg_health_controls_resident_audit",
+      "trg_persona_sig_resident_audit",
+      "trg_actividades_sociales_resident_audit",
+    ]) {
+      expect(schema).toContain(trigger);
+    }
+  });
+
+  it("keeps list payloads compact and loads details separately", () => {
+    const paginated = schema.slice(
+      schema.indexOf("create or replace function public.listar_historial_residente_paginado"),
+      schema.indexOf("create or replace function public.obtener_detalle_historial_residente"),
+    );
+    expect(paginated).toContain("limit v_limit offset v_offset");
+    expect(paginated).toContain("'tiene_detalle', true");
+    expect(paginated).not.toContain("'detalle_texto'");
   });
 
   it("keeps access, limit and date filtering safeguards in the RPC", () => {
@@ -35,6 +77,7 @@ describe("resident traceability schema contracts", () => {
       "plan_cuidado_audit",
       "medicamentos_audit",
       "camas_audit",
+      "residentes_audit",
     ]) {
       expect(schema).toContain(table);
     }
@@ -48,5 +91,6 @@ describe("resident traceability schema contracts", () => {
     expect(schema).toContain("idx_plan_cuidado_audit_residente_fecha");
     expect(schema).toContain("idx_medicamentos_audit_residente_fecha");
     expect(schema).toContain("idx_camas_audit_residente_fecha");
+    expect(schema).toContain("idx_residentes_audit_residente_fecha");
   });
 });

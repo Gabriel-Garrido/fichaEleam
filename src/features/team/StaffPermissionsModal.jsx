@@ -5,6 +5,7 @@ import Loading from "../../components/Loading";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { FEATURE_CATALOG, featureDefaultMap } from "../permissions/featureCatalog";
+import { applyPermissionToggle } from "../permissions/actionPermission";
 import { DEFAULT_PERMS, FEATURE_ACTION_PERMISSIONS, PERMISSION_FEATURE, PERM_GROUPS, normalizePaymentAccess } from "./teamConstants";
 import {
   getFuncionarioPermisos,
@@ -84,17 +85,10 @@ export default function StaffPermissionsModal({ member, isOpen, onClose, initial
 
   const setActionAccess = (permission, checked) => {
     const featureId = PERMISSION_FEATURE[permission];
-    if (featureId === "resident_payments") {
-      const related = FEATURE_ACTION_PERMISSIONS.resident_payments ?? [];
-      setActions((current) => permission === "ver_pagos_residentes" && !checked
-        ? { ...current, ...Object.fromEntries(related.map((key) => [key, false])) }
-        : { ...current, [permission]: checked, ...(checked ? { ver_pagos_residentes: true } : {}) });
-      if (permission === "ver_pagos_residentes" && !checked) {
-        setAreas((current) => ({ ...current, resident_payments: false }));
-        return;
-      }
-    } else {
-      setActions((current) => ({ ...current, [permission]: checked }));
+    setActions((current) => applyPermissionToggle(current, permission, checked));
+    if (permission === "ver_pagos_residentes" && !checked) {
+      setAreas((current) => ({ ...current, resident_payments: false }));
+      return;
     }
     if (checked && featureId) {
       setAreas((current) => ({ ...current, [featureId]: true }));
@@ -155,9 +149,11 @@ export default function StaffPermissionsModal({ member, isOpen, onClose, initial
               {PERM_GROUPS.map((group) => (
                 <fieldset key={group.label} className="rounded-2xl border border-slate-200 p-3">
                   <legend className="px-1 text-sm font-bold text-slate-900">{group.label}</legend>
+                  {group.description && <p className="mb-2 px-1 text-xs leading-5 text-slate-500">{group.description}</p>}
                   <div className="space-y-2">
-                    {group.perms.filter((permission) => !INTERNAL_ACTIONS.has(permission.key)).map((permission) => <PermissionToggle key={permission.key} compact label={permission.label} checked={actions[permission.key] === true} onChange={(checked) => setActionAccess(permission.key, checked)} />)}
+                    {group.perms.filter((permission) => !INTERNAL_ACTIONS.has(permission.key)).map((permission) => <PermissionToggle key={permission.key} compact label={permission.label} description={permission.description} checked={actions[permission.key] === true} onChange={(checked) => setActionAccess(permission.key, checked)} />)}
                   </div>
+                  {group.label === "Medicamentos" && actions.administrar_medicamentos === true && <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-900">Para cuidadores, habilita este permiso sólo si cuentan con capacitación acreditada y el protocolo define cuándo pueden administrar.</p>}
                 </fieldset>
               ))}
             </div>

@@ -4,6 +4,8 @@ import {
   getTurnFocus,
   getTaskProgress,
   matchesTaskSearch,
+  matchesTaskType,
+  normalizeTaskType,
   normalizeTaskView,
   normalizeSeguimiento,
   sortWorkItemsByUrgency,
@@ -108,5 +110,13 @@ describe("careTasksBoardUtils board helpers", () => {
       row: { indicacion: { medicamento_nombre: "Paracetamol", dosis: "500 mg" } },
     };
     expect(matchesTaskSearch(item, "paracetamol 500")).toBe(true);
+  });
+
+  it("filters by task type without triggering another backend request", () => {
+    expect(normalizeTaskType("med")).toBe("med");
+    expect(normalizeTaskType("desconocido")).toBe("");
+    expect(matchesTaskType({ source: "care" }, "care")).toBe(true);
+    expect(matchesTaskType({ source: "med" }, "care")).toBe(false);
+    expect(matchesTaskType({ source: "med" }, "")).toBe(true);
   });
 });

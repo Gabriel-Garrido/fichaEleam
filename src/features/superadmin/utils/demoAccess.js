@@ -35,16 +35,20 @@ export function getDemoLeadAccessState(lead = {}) {
 
 export function demoGrantResultMessage(result = {}) {
   const emailFailed = result.email_error || result.email_sent === false;
+  const googleAccess = result.access_method === "google" || result._access_method === "google";
+  const sentAccess = googleAccess
+    ? "Se enviaron instrucciones para ingresar con Google."
+    : "Se envió un enlace para crear o restablecer la contraseña.";
 
   if (result.code === "access_resent" || result.already_active) {
     return {
       title: "Demo ya aprobado",
       toast: emailFailed
         ? "El demo ya estaba aprobado; no se pudo reenviar el acceso"
-        : "Nuevo enlace de acceso enviado",
+        : googleAccess ? "Instrucciones para Google enviadas" : "Nuevo enlace de acceso enviado",
       body: emailFailed
         ? "La cuenta sigue activa, pero no se pudo enviar el nuevo enlace. Revisa el error de correo."
-        : "La cuenta ya existia y se envio un nuevo enlace para crear o restablecer la contrasena.",
+        : `La cuenta ya existía. ${sentAccess}`,
     };
   }
 
@@ -53,10 +57,10 @@ export function demoGrantResultMessage(result = {}) {
       title: "Demo reutilizado",
       toast: emailFailed
         ? "Demo activado; el correo de acceso no se pudo enviar"
-        : "Demo activado y enlace de acceso enviado",
+        : googleAccess ? "Demo activado e instrucciones para Google enviadas" : "Demo activado y enlace de acceso enviado",
       body: emailFailed
         ? "El correo ya tenia una cuenta compatible, pero no se pudo enviar el enlace de acceso."
-        : "El correo ya tenia una cuenta compatible y recibira un enlace para crear o restablecer su contrasena.",
+        : `El correo ya tenía una cuenta compatible. ${sentAccess}`,
     };
   }
 
@@ -68,7 +72,7 @@ export function demoGrantResultMessage(result = {}) {
         : "Cuenta demo reparada correctamente",
       body: emailFailed
         ? "Se reparo el usuario Auth, pero no se pudo enviar el enlace de acceso. El usuario puede pedir uno nuevo desde recuperar acceso."
-        : "Se reparo el usuario Auth y se le envio por correo un enlace para definir su contrasena.",
+        : `Se reparó el usuario de acceso. ${sentAccess}`,
     };
   }
 
@@ -143,7 +147,9 @@ export function demoGrantResultMessage(result = {}) {
   return {
     title: "Usuario demo creado",
     toast: "Usuario demo creado correctamente",
-    body: "El usuario recibira por correo un enlace para definir su contrasena e ingresar.",
+    body: googleAccess
+      ? "El usuario recibirá instrucciones para ingresar directamente con su cuenta de Google."
+      : "El usuario recibirá un enlace personal para definir su contraseña e ingresar.",
   };
 }
 

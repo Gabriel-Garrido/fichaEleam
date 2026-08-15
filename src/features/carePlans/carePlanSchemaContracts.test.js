@@ -11,6 +11,8 @@ describe("care plan schema contracts", () => {
     expect(schema).toContain("constraint plan_cuidado_actividades_visible_familiar_summary_check");
     expect(schema).toContain("constraint plan_cuidado_horarios_frecuencia_shape_check");
     expect(schema).toContain("constraint tareas_cuidado_reprogramada_fecha_check");
+    expect(schema).toContain("constraint planes_cuidado_participacion_check");
+    expect(schema).toContain("constraint planes_cuidado_participacion_detalle_len");
   });
 
   it("exposes transactional preset creation RPC with authenticated grant", () => {
@@ -21,5 +23,22 @@ describe("care plan schema contracts", () => {
   it("keeps follow-ups queryable as operational pending work", () => {
     expect(schema).toContain("idx_observaciones_residente_seguimiento_turno");
     expect(schema).toContain("where requiere_seguimiento = true");
+  });
+
+  it("requires an authorized and complete technical review", () => {
+    expect(schema).toContain("validar_planes_cuidado  boolean not null default false");
+    expect(schema).toContain("create or replace function public.revisar_plan_cuidado");
+    expect(schema).toContain("public.funcionario_can('validar_planes_cuidado')");
+    expect(schema).toContain("Agrega al menos un cuidado con frecuencia antes de confirmar la revisión.");
+    expect(schema).toContain("grant execute on function public.revisar_plan_cuidado(uuid) to authenticated");
+  });
+
+  it("invalidates the review and audits later plan definition changes", () => {
+    expect(schema).toContain("create or replace function public.invalidate_care_plan_review_on_update");
+    expect(schema).toContain("create or replace function public.invalidate_care_plan_review_from_child");
+    expect(schema).toContain("create or replace function public.audit_care_plan_definition");
+    expect(schema).toContain("trg_planes_cuidado_invalidate_review");
+    expect(schema).toContain("trg_plan_actividades_invalidate_review");
+    expect(schema).toContain("trg_plan_horarios_invalidate_review");
   });
 });

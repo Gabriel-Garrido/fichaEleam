@@ -20,6 +20,7 @@ import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { sendStaffPasswordRecovery, updateStaffUser } from "../team/teamService";
+import { friendlyError } from "../../utils/errorMessages";
 
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100";
 
@@ -63,7 +64,7 @@ function initials(name) {
   return String(name ?? "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
-export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
+export default function StaffCompetenciesTab({ onAddWithAccess = null, onDeactivateAccess = null, onRestoreAccess = null, currentProfileId = null, refreshKey = 0 }) {
   const toast = useToast();
   const confirm = useConfirm();
   const { isAdminEleam } = useAuth();
@@ -72,6 +73,7 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
   const [training, setTraining] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -115,6 +117,7 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const synced = isAdminEleam ? await syncStaffMembersFromProfiles() : await listStaffMembers();
       const data = await listCompetenciesAndTraining();
@@ -124,13 +127,13 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
       setSelectedId((prev) => prev ?? synced[0]?.id ?? null);
     } catch (error) {
       console.error(error);
-      toast(error.message || "No se pudo cargar la información del equipo.", "error");
+      setLoadError(friendlyError(error, "No se pudo cargar la información del equipo."));
     } finally {
       setLoading(false);
     }
-  }, [isAdminEleam, toast]);
+  }, [isAdminEleam]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   useEffect(() => {
     if (!selected) return;
@@ -256,10 +259,14 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
 
   if (loading) return <Loading message="Cargando equipo..." />;
 
+  if (loadError) {
+    return <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900"><p className="font-semibold">No pudimos cargar el directorio</p><p className="mt-1 text-rose-800">{loadError}</p><Button type="button" onClick={load} className="mt-3 border border-rose-200 bg-white text-rose-800">Reintentar</Button></div>;
+  }
+
   return (
     <div className="space-y-4">
       {isAdminEleam && <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="text-sm font-bold text-slate-900">Agregar una persona</p><p className="mt-1 text-xs leading-5 text-slate-500">Crea una cuenta solo si necesita usar el sistema.</p></div>
+        <div><div className="flex items-center gap-2"><p className="text-sm font-bold text-slate-900">Agregar una persona</p><HelpTooltip label="Diferencia entre agregar con acceso o sin acceso"><strong>Con acceso:</strong> podrá iniciar sesión y verá únicamente las áreas y acciones que autorices. <strong>Sin acceso:</strong> sólo quedará en el directorio, dotación, turnos, competencias y cursos; no podrá entrar a FichaEleam. Cada usuario debe usar una cuenta individual.</HelpTooltip></div><p className="mt-1 text-xs leading-5 text-slate-500">Elige si necesita entrar a FichaEleam o sólo formar parte del registro del equipo.</p></div>
         <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
           {onAddWithAccess && <Button type="button" onClick={onAddWithAccess} className="w-full bg-teal-700 text-white hover:bg-teal-800 sm:w-auto">Agregar con acceso</Button>}
           <Button type="button" onClick={() => setShowAddWithoutAccess(true)} className="w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto">Agregar sin acceso</Button>
@@ -302,7 +309,7 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2"><p className="truncate text-sm font-bold text-slate-900">{item.nombre}</p>{selected?.id === item.id && <span className="shrink-0 rounded-full bg-teal-700 px-2 py-1 text-[9px] font-bold text-white">Seleccionado</span>}</div>
                       <p className="mt-0.5 truncate text-xs font-medium text-slate-600">{item.cargo || "Sin cargo registrado"}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{TIPO_DOTACION_LABEL[item.tipo_dotacion] ?? item.tipo_dotacion}</span>{item.profile?.rol && <RolePill role={item.profile.rol} />}{!item.profile_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Sin acceso</span>}{item.activo === false && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Inactivo</span>}</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{TIPO_DOTACION_LABEL[item.tipo_dotacion] ?? item.tipo_dotacion}</span>{item.profile?.rol && <RolePill role={item.profile.rol} />}{(!item.profile_id || item.profile?.acceso_activo === false) && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Sin acceso</span>}{item.activo === false && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Inactivo</span>}</div>
                       <p className="mt-2 text-[11px] font-medium text-slate-500">{yearlyHours(training, item.id)} horas de cursos este año</p>
                     </div>
                   </div>
@@ -330,32 +337,29 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
               <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
                 <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${selected.activo ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{selected.activo ? "Activo" : "Inactivo"}</span>
                 {isAdminEleam && <Button type="button" onClick={() => setShowEdit(true)} className="w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto">Editar datos</Button>}
-                {isAdminEleam && selected.profile_id && selected.profile?.rol === "funcionario" && <Button type="button" onClick={() => setShowPermissions(true)} className="w-full border border-teal-200 bg-white text-teal-800 hover:bg-teal-50 sm:w-auto">Gestionar permisos</Button>}
+                {isAdminEleam && selected.profile_id && selected.profile?.rol === "funcionario" && selected.profile?.acceso_activo !== false && <Button type="button" onClick={() => setShowPermissions(true)} className="w-full border border-teal-200 bg-white text-teal-800 hover:bg-teal-50 sm:w-auto">Permisos</Button>}
+                {isAdminEleam && selected.profile_id && selected.profile_id !== currentProfileId && selected.profile?.acceso_activo !== false && onDeactivateAccess && <Button type="button" onClick={() => onDeactivateAccess(selected)} className="w-full border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 sm:w-auto">Desactivar acceso</Button>}
+                {isAdminEleam && selected.profile_id && selected.profile?.acceso_activo === false && onRestoreAccess && <Button type="button" onClick={() => onRestoreAccess(selected)} className="w-full border border-teal-200 bg-white text-teal-800 hover:bg-teal-50 sm:w-auto">Restaurar acceso</Button>}
               </div>
             </div>
             {detailView === "resumen" && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Detail label="Cargo" value={selected.cargo || "Sin cargo"} />
               <Detail label="Función en el equipo" value={TIPO_DOTACION_LABEL[selected.tipo_dotacion] ?? selected.tipo_dotacion} />
-              <Detail label="Acceso a FichaEleam" value={selected.profile_id ? "Con acceso" : "Sin acceso"} />
+              <Detail label="Acceso a FichaEleam" value={selected.profile_id && selected.profile?.acceso_activo !== false ? "Con acceso" : "Sin acceso"} />
               <Detail label="Cursos del año" value={`${yearlyHours(training, selected.id)} horas`} />
             </div>}
             </div>
             <nav className="grid grid-cols-3 border-t border-slate-100 bg-slate-50/70 p-1.5" aria-label="Secciones de la persona">
               <DetailTab active={detailView === "resumen"} onClick={() => setDetailView("resumen")} label="Resumen" />
-              <DetailTab active={detailView === "documentos"} onClick={() => setDetailView("documentos")} label="Documentos" count={selectedCompetencies.length} />
+              <DetailTab active={detailView === "documentos"} onClick={() => setDetailView("documentos")} label="Competencias" count={selectedCompetencies.length} />
               <DetailTab active={detailView === "cursos"} onClick={() => setDetailView("cursos")} label="Cursos" count={selectedTraining.length} />
             </nav>
           </section>
 
-          {detailView === "resumen" && <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
-            <h3 className="text-sm font-bold text-slate-900">Vista general</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-500">Usa las pestañas para revisar los documentos o cursos de {selected.nombre}. Para cambiar sus datos básicos, selecciona “Editar datos”.</p>
-          </section>}
-
           {detailView === "documentos" && <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
-            <div className="mb-4 flex items-start gap-2"><div><h3 className="text-base font-bold text-slate-900">Documentos y habilidades</h3><p className="mt-1 text-xs leading-5 text-slate-500">Mantén al día los antecedentes correspondientes a esta persona.</p></div><HelpTooltip label="Ayuda sobre habilidades y documentos">Registra las competencias y certificados requeridos según la función de la persona y el DS20.</HelpTooltip></div>
+            <div className="mb-4 flex items-start gap-2"><div><h3 className="text-base font-bold text-slate-900">Competencias</h3><p className="mt-1 text-xs leading-5 text-slate-500">Registra las competencias verificadas y su vigencia según la función.</p></div><HelpTooltip label="Ayuda sobre competencias">Este registro ayuda a mantener la matriz de competencias exigida para el equipo. Conserva los certificados y el plan anual en la sección Cumplimiento.</HelpTooltip></div>
             <div className="mb-5 grid items-end gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-4">
-              <FieldLabel label="Habilidad o documento">
+              <FieldLabel label="Competencia">
                 <select className={inputClass} value={competencyDraft.competencia} disabled={saving || !isAdminEleam} onChange={(e) => setCompetencyDraft((p) => ({ ...p, competencia: e.target.value }))}>
                   {COMPETENCY_CATALOG.map((item) => <option key={item} value={item}>{item}</option>)}
                 </select>
@@ -373,10 +377,10 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
               <FieldLabel label="Fecha de vencimiento">
                 <input type="date" className={inputClass} value={competencyDraft.fecha_vencimiento} disabled={saving || !isAdminEleam} onChange={(e) => setCompetencyDraft((p) => ({ ...p, fecha_vencimiento: e.target.value }))} />
               </FieldLabel>
-              {isAdminEleam && <div className="sm:col-span-2 xl:col-span-4 flex justify-end"><Button type="button" onClick={saveCompetencyDraft} disabled={saving} className="w-full bg-teal-700 text-white hover:bg-teal-800 sm:w-auto">Guardar documento</Button></div>}
+              {isAdminEleam && <div className="sm:col-span-2 xl:col-span-4 flex justify-end"><Button type="button" onClick={saveCompetencyDraft} disabled={saving} className="w-full bg-teal-700 text-white hover:bg-teal-800 sm:w-auto">Guardar competencia</Button></div>}
             </div>
             {selectedCompetencies.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center"><p className="text-sm font-semibold text-slate-700">Sin documentos registrados</p><p className="mt-1 text-xs text-slate-500">Cuando agregues uno, aparecerá aquí.</p></div>
+              <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center"><p className="text-sm font-semibold text-slate-700">Sin competencias registradas</p><p className="mt-1 text-xs text-slate-500">Cuando registres una, aparecerá aquí.</p></div>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {selectedCompetencies.map((item) => (
@@ -437,7 +441,8 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null }) {
           <FieldLabel label="Cargo"><input required className={inputClass} value={memberDraft.cargo} disabled={saving} onChange={(event) => setMemberDraft((current) => ({ ...current, cargo: event.target.value }))} placeholder="Ej: TENS de turno" /></FieldLabel>
           <FieldLabel label="Función en el equipo"><select className={inputClass} value={memberDraft.tipo_dotacion} disabled={saving} onChange={(event) => setMemberDraft((current) => ({ ...current, tipo_dotacion: event.target.value }))}>{Object.entries(TIPO_DOTACION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FieldLabel>
           <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700"><input type="checkbox" checked={memberDraft.activo} disabled={saving} onChange={(event) => setMemberDraft((current) => ({ ...current, activo: event.target.checked }))} className="h-4 w-4 accent-teal-700" />Disponible para asignar turnos</label>
-          {selected?.profile_id && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-semibold text-amber-950">¿Necesita una nueva contraseña?</p><p className="mt-1 text-xs leading-5 text-amber-800">Enviaremos un enlace de recuperación a su correo. Sus datos no guardados en este formulario no se perderán.</p><Button type="button" onClick={resetPassword} disabled={saving} className="mt-3 border border-amber-300 bg-white text-amber-900 hover:bg-amber-100">Restablecer contraseña</Button></div>}
+          {selected?.profile_id && selected.profile?.acceso_activo !== false && /@gmail\.com$/i.test(selected.email || "") && <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-900"><strong>Acceso con Google.</strong> Esta persona debe ingresar con “Continuar con Google” usando exactamente {selected.email}.</div>}
+          {selected?.profile_id && selected.profile?.acceso_activo !== false && !/@gmail\.com$/i.test(selected.email || "") && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-semibold text-amber-950">¿Necesita una nueva contraseña?</p><p className="mt-1 text-xs leading-5 text-amber-800">Enviaremos un enlace de recuperación a su correo. Sus datos no guardados en este formulario no se perderán.</p><Button type="button" onClick={resetPassword} disabled={saving} className="mt-3 border border-amber-300 bg-white text-amber-900 hover:bg-amber-100">Restablecer contraseña</Button></div>}
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end"><Button type="button" onClick={() => setShowEdit(false)} disabled={saving} className="border border-slate-200 bg-white text-slate-700">Cancelar</Button><Button type="submit" disabled={saving || memberDraft.nombre.trim().length < 2 || !memberDraft.cargo.trim()} className="bg-teal-700 text-white hover:bg-teal-800">{saving ? "Guardando..." : "Guardar cambios"}</Button></div>
         </form>
       </Modal>

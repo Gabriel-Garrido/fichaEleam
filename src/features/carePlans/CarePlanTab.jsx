@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import HelpTooltip from "../../components/HelpTooltip";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
 import useSessionFormDraft from "../../hooks/useSessionFormDraft";
+import { formatDateOnly } from "../../utils/dateUtils";
 import CarePlanActivityModal from "./CarePlanActivityModal";
 import {
   CARE_BASE_PRESET_IDS,
@@ -12,6 +14,7 @@ import {
   deactivateCareActivity,
   getResidentCarePlan,
   reactivateCareActivity,
+  reviewCarePlan,
   saveCareActivity,
   saveCarePlan,
 } from "./carePlansService";
@@ -24,6 +27,7 @@ import {
   calculateCarePlanReadiness,
   formatCareSchedule,
   getActiveCareSchedules,
+  groupCareActivitiesByTurn,
   sortCareActivities,
 } from "./carePlanUi";
 
@@ -50,17 +54,20 @@ function clearSessionDraft(key) {
 
 export default function CarePlanTab({ resident }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const { can } = useAuth();
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [presetSaving, setPresetSaving] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [activityModal, setActivityModal] = useState(null);
   const [clinicalOpen, setClinicalOpen] = useState(false);
   const [showPaused, setShowPaused] = useState(false);
 
   const canEdit = can("editar_planes_cuidado");
   const canCreate = can("crear_planes_cuidado");
+  const canReview = can("validar_planes_cuidado");
   const canManage = plan ? canEdit : canCreate;
   const planDraftKey = `fichaeleam_carePlan_${resident.id}_${plan?.id ?? "new"}`;
   const planDraftInitial = useMemo(() => buildCarePlanForm(plan), [plan]);
@@ -71,7 +78,8 @@ export default function CarePlanTab({ resident }) {
     try {
       const data = await getResidentCarePlan(resident.id);
       setPlan(data);
-      setClinicalOpen(false);
+      const readiness = calculateCarePlanReadiness({ plan: data, activities: data?.actividades ?? [] });
+      setClinicalOpen(Boolean(data && !readiness.contentComplete));
     } catch (err) {
       console.error(err);
       toast("No se pudo cargar el plan de cuidado.", "error");
@@ -112,7 +120,7 @@ export default function CarePlanTab({ resident }) {
           existingActivities: [],
         });
       }
-      toast(includeBaseRoutine ? "Plan creado con rutina base." : "Plan creado.", "success");
+      toast(includeBaseRoutine ? "Plan creado con cuidados esenciales." : "Plan creado.", "success");
       await load();
     } catch (err) {
       console.error(err);
@@ -146,13 +154,13 @@ export default function CarePlanTab({ resident }) {
     setSaving(true);
     try {
       await saveCareActivity({ plan, activity: { ...activity, schedules } });
-      toast("Rutina guardada.", "success");
+      toast("Cuidado guardado.", "success");
       setActivityModal(null);
       await load();
       return true;
     } catch (err) {
       console.error(err);
-      toast(err.message || "No se pudo guardar la rutina.", "error");
+      toast(err.message || "No se pudo guardar el cuidado.", "error");
       return false;
     } finally {
       setSaving(false);
@@ -168,13 +176,13 @@ export default function CarePlanTab({ resident }) {
         presetIds: CARE_BASE_PRESET_IDS,
         existingActivities: activities,
       });
-      const createdText = `${result.created} rutina${result.created === 1 ? "" : "s"}`;
+      const createdText = `${result.created} cuidado${result.created === 1 ? "" : "s"}`;
       const skippedText = result.skipped ? `, ${result.skipped} ya existían` : "";
-      toast(`Rutina base agregada: ${createdText}${skippedText}.`, "success");
+      toast(`Cuidados esenciales agregados: ${createdText}${skippedText}.`, "success");
       await load();
     } catch (err) {
       console.error(err);
-      toast("No se pudo agregar la rutina base.", "error");
+      toast("No se pudieron agregar los cuidados esenciales.", "error");
     } finally {
       setPresetSaving(false);
     }
@@ -184,11 +192,11 @@ export default function CarePlanTab({ resident }) {
     setSaving(true);
     try {
       await deactivateCareActivity(activity.id);
-      toast("Rutina pausada.", "info");
+      toast("Cuidado pausado.", "info");
       await load();
     } catch (err) {
       console.error(err);
-      toast("No se pudo pausar la rutina.", "error");
+      toast("No se pudo pausar el cuidado.", "error");
     } finally {
       setSaving(false);
     }
@@ -198,13 +206,35 @@ export default function CarePlanTab({ resident }) {
     setSaving(true);
     try {
       await reactivateCareActivity(activity.id);
-      toast("Rutina reactivada.", "success");
+      toast("Cuidado reactivado.", "success");
       await load();
     } catch (err) {
       console.error(err);
-      toast("No se pudo reactivar la rutina.", "error");
+      toast("No se pudo reactivar el cuidado.", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReview = async () => {
+    if (!plan || !canReview || !metrics.contentComplete) return;
+    const ok = await confirm({
+      title: "Confirmar revisión del plan",
+      message: "Confirma que dirección técnica revisó el objetivo, las pautas y los cuidados programados con la situación actual del residente.",
+      confirmText: "Confirmar revisión",
+      cancelText: "Volver",
+    });
+    if (!ok) return;
+    setReviewing(true);
+    try {
+      await reviewCarePlan(plan.id);
+      toast("Plan revisado por dirección técnica.", "success");
+      await load();
+    } catch (error) {
+      console.error(error);
+      toast(error.message || "No se pudo confirmar la revisión del plan.", "error");
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -240,6 +270,22 @@ export default function CarePlanTab({ resident }) {
         resident={resident}
         plan={plan}
         metrics={metrics}
+        canReview={canReview}
+        reviewing={reviewing}
+        onReview={handleReview}
+      />
+
+      <ClinicalPlanPanel
+        form={form}
+        plan={plan}
+        metrics={metrics}
+        canManage={canManage}
+        saving={saving}
+        open={clinicalOpen}
+        dirty={planDirty}
+        onToggle={() => setClinicalOpen((prev) => !prev)}
+        onChange={setForm}
+        onSubmit={handleSavePlan}
       />
 
       <RoutineCockpit
@@ -258,19 +304,6 @@ export default function CarePlanTab({ resident }) {
         onReactivate={handleReactivate}
       />
 
-      <ClinicalPlanPanel
-        form={form}
-        plan={plan}
-        metrics={metrics}
-        canManage={canManage}
-        saving={saving}
-        open={clinicalOpen}
-        dirty={planDirty}
-        onToggle={() => setClinicalOpen((prev) => !prev)}
-        onChange={setForm}
-        onSubmit={handleSavePlan}
-      />
-
       <CarePlanActivityModal
         modal={activityModal}
         saving={saving}
@@ -282,25 +315,50 @@ export default function CarePlanTab({ resident }) {
   );
 }
 
-function CarePlanHeader({ resident, plan, metrics }) {
+function CarePlanHeader({ resident, plan, metrics, canReview, reviewing, onReview }) {
+  const contentPending = metrics.pending.filter((item) => item.type === "content");
+  const reviewName = plan.validador?.nombre;
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="teal">Programa activo</Badge>
-            <Badge>Versión {plan.version ?? 1}</Badge>
+            <Badge tone={metrics.reviewed ? "emerald" : "amber"}>
+              {metrics.reviewed ? "Revisado" : contentPending.length > 0 ? `${contentPending.length} pendiente${contentPending.length === 1 ? "" : "s"}` : "Listo para revisión"}
+            </Badge>
+            <Badge tone="teal">{metrics.active} cuidado{metrics.active === 1 ? "" : "s"}</Badge>
           </div>
           <h2 className="mt-3 text-xl font-semibold text-slate-950 sm:text-2xl">
-            {plan.titulo || `Plan de cuidado de ${residentFullName(resident)}`}
+            Plan de atención y cuidados
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Acciones y frecuencia del programa de atención integral de la persona residente.
+            Objetivos, apoyos y cuidados programados para {residentFullName(resident)}.
           </p>
-          <p className="mt-3 text-sm font-medium text-slate-500">
-            {metrics.active} rutina{metrics.active === 1 ? "" : "s"} activa{metrics.active === 1 ? "" : "s"}
-          </p>
+          {metrics.reviewed ? (
+            <p className="mt-3 text-xs font-medium text-emerald-700">
+              Revisión de dirección técnica: {formatDateOnly(plan.validado_en)}{reviewName ? ` · ${reviewName}` : ""}
+            </p>
+          ) : (
+            <p className="mt-3 text-xs font-medium text-amber-800">
+              {contentPending.length > 0
+                ? "Completa los datos señalados antes de solicitar la revisión."
+                : "El contenido está completo y requiere revisión de dirección técnica."}
+            </p>
+          )}
         </div>
+        {!metrics.reviewed && (
+          <div className="w-full rounded-xl border border-amber-200 bg-amber-50 p-3 lg:max-w-xs">
+            <p className="text-sm font-semibold text-amber-950">Revisión del plan</p>
+            <p className="mt-1 text-xs leading-5 text-amber-800">Debe volver a revisarse cuando cambien las necesidades o los cuidados.</p>
+            {canReview ? (
+              <button type="button" onClick={onReview} disabled={reviewing || !metrics.contentComplete} className="mt-3 min-h-10 w-full rounded-xl bg-amber-700 px-3 text-sm font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50">
+                {reviewing ? "Confirmando…" : "Confirmar revisión"}
+              </button>
+            ) : (
+              <p className="mt-2 text-xs font-semibold text-amber-900">Solicita la revisión a dirección técnica.</p>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -316,7 +374,7 @@ function CarePlanEmptyState({ resident, canCreate, saving, onCreate }) {
       </div>
       <h3 className="text-lg font-semibold text-slate-950">Crea el plan de cuidado de {residentFullName(resident)}</h3>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-        Parte con una rutina base lista (alimentación, hidratación, higiene, movilidad, prevención y bienestar) y ajústala después solo donde haga falta. Toma menos de un minuto.
+        Crea una base de cuidados cotidianos y luego completa el objetivo y las pautas propias del residente.
       </p>
       {canCreate ? (
         <div className="mt-6 flex justify-center">
@@ -326,7 +384,7 @@ function CarePlanEmptyState({ resident, canCreate, saving, onCreate }) {
             disabled={saving}
             className="w-full rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
           >
-            {saving ? "Creando..." : "Crear plan con rutina base"}
+            {saving ? "Creando..." : "Crear plan"}
           </button>
         </div>
       ) : (
@@ -351,16 +409,16 @@ function RoutineCockpit({
   onTogglePaused,
   onReactivate,
 }) {
-  const grouped = groupActivitiesByTurn(activities);
+  const grouped = groupCareActivitiesByTurn(activities);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-950">Rutinas por turno</h2>
-            <HelpTooltip label="Ayuda: rutinas de cuidado">
-              Cada rutina programada genera tareas por turno para el equipo. Edita una rutina para cambiar su horario.
+            <h2 className="text-base font-semibold text-slate-950">Cuidados por turno</h2>
+            <HelpTooltip label="Ayuda: cuidados por turno">
+              Cada cuidado programado genera tareas para el equipo. Edítalo para cambiar sus turnos u horarios.
             </HelpTooltip>
           </div>
           <p className="mt-1 text-sm text-slate-500">
@@ -377,7 +435,7 @@ function RoutineCockpit({
               onClick={onNew}
               className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:w-auto"
             >
-              Nueva rutina
+              Nuevo cuidado
             </button>
           </div>
         )}
@@ -416,15 +474,6 @@ function RoutineCockpit({
   );
 }
 
-function groupActivitiesByTurn(activities = []) {
-  return activities.reduce((acc, activity) => {
-    const primaryTurn = getActiveCareSchedules(activity)[0]?.turno ?? "mañana";
-    if (!acc[primaryTurn]) acc[primaryTurn] = [];
-    acc[primaryTurn].push(activity);
-    return acc;
-  }, {});
-}
-
 function TurnRoutineColumn({ turno, items, canEdit, saving, onEdit, onDeactivate }) {
   return (
     <div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 p-3">
@@ -436,14 +485,15 @@ function TurnRoutineColumn({ turno, items, canEdit, saving, onEdit, onDeactivate
       </div>
       {items.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-400">
-          Sin rutinas en este turno.
+          Sin cuidados en este turno.
         </p>
       ) : (
         <div className="space-y-3">
-          {items.map((activity) => (
+          {items.map(({ activity, schedule }) => (
             <ActivityRow
-              key={activity.id}
+              key={`${activity.id}-${schedule.id ?? schedule.hora}`}
               activity={activity}
+              schedule={schedule}
               canEdit={canEdit}
               saving={saving}
               onEdit={onEdit}
@@ -456,41 +506,7 @@ function TurnRoutineColumn({ turno, items, canEdit, saving, onEdit, onDeactivate
   );
 }
 
-function PresetPicker({ groups, existingPresetIds, saving, canEdit, onOpen }) {
-  return (
-    <div className="mt-4 grid gap-4 lg:grid-cols-2">
-      {Object.entries(groups).map(([area, presets]) => (
-        <div key={area} className="rounded-xl bg-white p-3 ring-1 ring-slate-100">
-          <p className="mb-2 text-xs font-semibold uppercase text-slate-400">{area}</p>
-          <div className="flex flex-wrap gap-2">
-            {presets.map((preset) => {
-              const added = existingPresetIds.has(preset.id);
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => onOpen(preset)}
-                  disabled={saving || (added && !canEdit)}
-                  title={added ? "Editar rutina existente" : "Agregar esta rutina"}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
-                    added
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800"
-                  }`}
-                >
-                  {preset.activity.titulo}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ActivityRow({ activity, canEdit, saving, onEdit, onDeactivate }) {
-  const schedules = getActiveCareSchedules(activity);
+function ActivityRow({ activity, schedule, canEdit, saving, onEdit, onDeactivate }) {
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -500,12 +516,8 @@ function ActivityRow({ activity, canEdit, saving, onEdit, onDeactivate }) {
       <h4 className="mt-2 text-sm font-semibold text-slate-950">{activity.titulo}</h4>
       {activity.instrucciones && <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{activity.instrucciones}</p>}
 
-      <div className="mt-3 space-y-1.5">
-        {schedules.map((schedule, index) => (
-          <div key={schedule.id ?? `${schedule.turno}-${schedule.hora}-${index}`} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">
-            {formatCareSchedule(schedule)}
-          </div>
-        ))}
+      <div className="mt-3 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-600">
+        {formatCareSchedule(schedule).replace(`${TURN_LABELS[schedule.turno] ?? schedule.turno} · `, "")}
       </div>
 
 
@@ -539,7 +551,7 @@ function PausedActivities({ items, show, canEdit, saving, onToggle, onReactivate
         className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700"
       >
         <Chevron open={show} />
-        {items.length} rutina{items.length === 1 ? "" : "s"} pausada{items.length === 1 ? "" : "s"}
+        {items.length} cuidado{items.length === 1 ? "" : "s"} pausado{items.length === 1 ? "" : "s"}
       </button>
       {show && (
         <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -577,9 +589,9 @@ function EmptyActivities({ onAddBaseRoutine, saving }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
         </svg>
       </div>
-      <p className="text-sm font-semibold text-slate-950">Aún no hay rutinas activas</p>
+      <p className="text-sm font-semibold text-slate-950">Aún no hay cuidados activos</p>
       <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-        La forma más rápida es cargar la rutina base y ajustar horarios o prioridades después.
+        Agrega los cuidados esenciales y ajusta sólo lo que esta persona necesite.
       </p>
       {onAddBaseRoutine && (
         <button
@@ -588,7 +600,7 @@ function EmptyActivities({ onAddBaseRoutine, saving }) {
           disabled={saving}
           className="mt-4 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
         >
-          {saving ? "Agregando..." : "Agregar rutina base"}
+          {saving ? "Agregando..." : "Agregar cuidados esenciales"}
         </button>
       )}
     </div>
@@ -596,8 +608,9 @@ function EmptyActivities({ onAddBaseRoutine, saving }) {
 }
 
 function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty, onToggle, onChange, onSubmit }) {
+  const contentPending = metrics.pending.filter((item) => item.type === "content" && item.field !== "activities");
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className={`rounded-2xl border bg-white shadow-sm ${contentPending.length > 0 ? "border-amber-300 ring-1 ring-amber-100" : "border-slate-200"}`}>
       <button
         type="button"
         onClick={onToggle}
@@ -605,14 +618,14 @@ function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty
       >
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-950">Información clínica y alertas</h2>
-            <Badge tone={metrics.hasClinicalSummary ? "emerald" : "amber"}>
-              {metrics.hasClinicalSummary ? "Completo" : "Pendiente"}
+            <h2 className="text-base font-semibold text-slate-950">Resumen del plan</h2>
+            <Badge tone={contentPending.length === 0 ? "emerald" : "amber"}>
+              {contentPending.length === 0 ? "Completo" : `${contentPending.length} pendiente${contentPending.length === 1 ? "" : "s"}`}
             </Badge>
             {dirty && <Badge tone="amber">Borrador</Badge>}
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Contexto que orienta al equipo. Opcional: no bloquea la operación diaria.
+            Define qué se busca lograr y cómo apoyar salud, nutrición, funcionalidad y bienestar.
           </p>
         </div>
         <span className="inline-flex items-center gap-2 text-sm font-semibold text-teal-700">
@@ -623,10 +636,12 @@ function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty
 
       {!open && (
         <div className="border-t border-slate-100 p-4 sm:p-5">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <ClinicalSummaryItem label="Objetivo" value={plan.objetivos} fallback="Sin objetivo registrado" />
-            <ClinicalSummaryItem label="Alimentación" value={plan.pauta_alimentacion} fallback="Sin pauta específica" />
-            <ClinicalSummaryItem label="Hidratación" value={plan.pauta_hidratacion} fallback="Sin pauta específica" />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <ClinicalSummaryItem label="Objetivo individual" value={plan.objetivos} fallback="Pendiente" required />
+            <ClinicalSummaryItem label="Alimentación e hidratación" value={[plan.pauta_alimentacion, plan.pauta_hidratacion].filter(Boolean).join(" · ")} fallback="Pendiente" required />
+            <ClinicalSummaryItem label="Mantención o rehabilitación" value={plan.meta_rehabilitacion} fallback="Pendiente" required />
+            <ClinicalSummaryItem label="Bienestar y participación" value={plan.objetivo_biopsicosocial} fallback="Pendiente" required />
+            <ClinicalSummaryItem label="Participación en el plan" value={participationSummary(plan)} fallback="Pendiente" required />
             <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
               <p className="text-xs font-semibold uppercase text-slate-400">Riesgos</p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -635,74 +650,78 @@ function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty
               </div>
             </div>
           </div>
-          {(plan.objetivo_biopsicosocial || plan.valoracion_social || plan.meta_rehabilitacion) && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 border-t border-slate-100 pt-3">
-              <ClinicalSummaryItem label="Objetivo biopsicosocial" value={plan.objetivo_biopsicosocial} fallback={null} />
-              <ClinicalSummaryItem label="Valoración social" value={plan.valoracion_social} fallback={null} />
-              <ClinicalSummaryItem label="Meta de rehabilitación" value={plan.meta_rehabilitacion} fallback={null} />
-            </div>
-          )}
+          {plan.restricciones && <div className="mt-3"><ClinicalSummaryItem label="Alertas para el cuidado" value={plan.restricciones} fallback={null} /></div>}
         </div>
       )}
 
       {open && (
         <form onSubmit={onSubmit} className="border-t border-slate-100 p-4 sm:p-5">
-          <div className="grid gap-5 xl:grid-cols-3">
-            <div className="space-y-4">
-              <Field
-                label="Título del plan"
-                value={form.titulo}
-                onChange={(value) => onChange((prev) => ({ ...prev, titulo: value }))}
-                disabled={!canManage || saving}
-              />
+          <div className="space-y-5">
+            <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-sm leading-5 text-teal-900">
+              Escribe indicaciones concretas y propias del residente. Los cuidados con horario se agregan más abajo.
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
               <TextArea
-                label="Objetivos clínico-operativos"
+                label="Objetivo individual"
                 value={form.objetivos}
                 onChange={(value) => onChange((prev) => ({ ...prev, objetivos: value }))}
                 disabled={!canManage || saving}
-                rows={5}
+                rows={4}
+                required
+                placeholder="Ej.: mantener movilidad segura y participación en actividades de su preferencia."
               />
-            </div>
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                <SelectField
-                  label="Riesgo de caídas"
-                  value={form.riesgo_caidas}
-                  onChange={(value) => onChange((prev) => ({ ...prev, riesgo_caidas: value }))}
-                  disabled={!canManage || saving}
-                />
-                <SelectField
-                  label="Riesgo UPP"
-                  value={form.riesgo_up}
-                  onChange={(value) => onChange((prev) => ({ ...prev, riesgo_up: value }))}
-                  disabled={!canManage || saving}
-                  tooltip={UPP_TOOLTIP}
-                />
-              </div>
               <TextArea
-                label="Restricciones o alertas"
-                value={form.restricciones}
-                onChange={(value) => onChange((prev) => ({ ...prev, restricciones: value }))}
+                label="Mantención o rehabilitación"
+                value={form.meta_rehabilitacion}
+                onChange={(value) => onChange((prev) => ({ ...prev, meta_rehabilitacion: value }))}
                 disabled={!canManage || saving}
-                rows={5}
+                rows={4}
+                required
+                placeholder="Apoyos para movilidad, transferencias, funcionalidad o rehabilitación."
               />
-            </div>
-            <div className="space-y-4">
               <TextArea
                 label="Pauta de alimentación"
                 value={form.pauta_alimentacion}
                 onChange={(value) => onChange((prev) => ({ ...prev, pauta_alimentacion: value }))}
                 disabled={!canManage || saving}
-                rows={4}
+                required
+                placeholder="Dieta, textura, asistencia y señales que requieren aviso."
               />
               <TextArea
                 label="Pauta de hidratación"
                 value={form.pauta_hidratacion}
                 onChange={(value) => onChange((prev) => ({ ...prev, pauta_hidratacion: value }))}
                 disabled={!canManage || saving}
-                rows={4}
+                required
+                placeholder="Oferta de líquidos, restricciones y forma de apoyo."
+              />
+              <TextArea
+                label="Bienestar y participación"
+                value={form.objetivo_biopsicosocial}
+                onChange={(value) => onChange((prev) => ({ ...prev, objetivo_biopsicosocial: value }))}
+                disabled={!canManage || saving}
+                required
+                placeholder="Acompañamiento, estimulación, recreación y vínculos que se promoverán."
+              />
+              <ParticipationField
+                value={form.participacion_residente}
+                detail={form.participacion_detalle}
+                onChange={(participacion_residente) => onChange((prev) => ({ ...prev, participacion_residente }))}
+                onDetailChange={(participacion_detalle) => onChange((prev) => ({ ...prev, participacion_detalle }))}
+                disabled={!canManage || saving}
               />
             </div>
+
+            <details className="rounded-xl border border-slate-200 bg-slate-50">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">Alertas y riesgos específicos</summary>
+              <div className="grid gap-4 border-t border-slate-200 p-4 md:grid-cols-2">
+                <SelectField label="Riesgo de caídas" value={form.riesgo_caidas} onChange={(value) => onChange((prev) => ({ ...prev, riesgo_caidas: value }))} disabled={!canManage || saving} />
+                <SelectField label="Riesgo UPP" value={form.riesgo_up} onChange={(value) => onChange((prev) => ({ ...prev, riesgo_up: value }))} disabled={!canManage || saving} tooltip={UPP_TOOLTIP} />
+                <div className="md:col-span-2">
+                  <TextArea label="Restricciones o alertas" value={form.restricciones} onChange={(value) => onChange((prev) => ({ ...prev, restricciones: value }))} disabled={!canManage || saving} placeholder="Solo indicaciones que el equipo deba tener presentes." />
+                </div>
+              </div>
+            </details>
           </div>
 
           {canManage && (
@@ -712,7 +731,7 @@ function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty
                 disabled={saving}
                 className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
               >
-                {saving ? "Guardando..." : "Guardar"}
+                {saving ? "Guardando..." : "Guardar resumen"}
               </button>
             </div>
           )}
@@ -722,13 +741,56 @@ function ClinicalPlanPanel({ form, plan, metrics, canManage, saving, open, dirty
   );
 }
 
-function ClinicalSummaryItem({ label, value, fallback }) {
+function ClinicalSummaryItem({ label, value, fallback, required = false }) {
+  const missing = !String(value ?? "").trim();
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-      <p className="text-xs font-semibold uppercase text-slate-400">{label}</p>
-      <p className={`mt-1 line-clamp-3 text-sm ${value?.trim() ? "text-slate-700" : "text-slate-400"}`}>
-        {value?.trim() || fallback}
+    <div className={`rounded-xl border p-3 ${required && missing ? "border-amber-200 bg-amber-50" : "border-slate-100 bg-slate-50"}`}>
+      <p className={`text-xs font-semibold uppercase ${required && missing ? "text-amber-800" : "text-slate-400"}`}>{label}</p>
+      <p className={`mt-1 line-clamp-3 text-sm ${missing ? required ? "font-semibold text-amber-900" : "text-slate-400" : "text-slate-700"}`}>
+        {String(value ?? "").trim() || fallback}
       </p>
+    </div>
+  );
+}
+
+const PARTICIPATION_LABELS = {
+  residente: "Residente",
+  representante: "Representante o persona significativa",
+  ambos: "Residente y representante",
+  no_posible: "No fue posible",
+};
+
+function participationLabel(value) {
+  return PARTICIPATION_LABELS[value] ?? "";
+}
+
+function participationSummary(plan = {}) {
+  const label = participationLabel(plan.participacion_residente);
+  if (!label) return "";
+  const requiresDetail = ["representante", "ambos", "no_posible"].includes(plan.participacion_residente);
+  const detail = plan.participacion_detalle?.trim();
+  if (requiresDetail && !detail) return "";
+  return detail ? `${label} · ${detail}` : label;
+}
+
+function ParticipationField({ value, detail, onChange, onDetailChange, disabled }) {
+  const requiresDetail = value === "representante" || value === "ambos" || value === "no_posible";
+  const missing = !value || (requiresDetail && !detail?.trim());
+  return (
+    <div className={`rounded-xl border p-3 ${missing ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
+      <label className="block text-sm font-medium text-slate-700">
+        Participación en la elaboración <span className="text-amber-700">· requerido</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} required className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50">
+          <option value="">Seleccionar</option>
+          {Object.entries(PARTICIPATION_LABELS).map(([optionValue, label]) => <option key={optionValue} value={optionValue}>{label}</option>)}
+        </select>
+      </label>
+      {requiresDetail && (
+        <label className="mt-3 block text-sm font-medium text-slate-700">
+          {value === "no_posible" ? "Motivo" : "Persona que participó"}
+          <input value={detail} onChange={(event) => onDetailChange(event.target.value)} disabled={disabled} required maxLength={500} placeholder={value === "no_posible" ? "Explica brevemente por qué no fue posible." : "Nombre y relación con el residente."} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+        </label>
+      )}
     </div>
   );
 }
@@ -742,20 +804,6 @@ function RiskBadge({ label, value, tooltip }) {
     >
       {label}: {risk?.label ?? "Sin clasificar"}
     </span>
-  );
-}
-
-function InfoBox({ tone = "teal", label, value }) {
-  const cls = {
-    teal: "border-teal-100 bg-teal-50 text-teal-800",
-    sky: "border-sky-100 bg-sky-50 text-sky-800",
-    amber: "border-amber-100 bg-amber-50 text-amber-800",
-  }[tone];
-  return (
-    <div className={`rounded-xl border p-3 ${cls}`}>
-      <p className="mb-1 text-xs font-semibold uppercase opacity-70">{label}</p>
-      <p className="whitespace-pre-line text-sm">{value}</p>
-    </div>
   );
 }
 
@@ -779,24 +827,6 @@ function Chevron({ open }) {
   );
 }
 
-function Field({ label, value, onChange, disabled, type = "text", min, max, step }) {
-  return (
-    <label className="block text-sm font-medium text-slate-700">
-      {label}
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        min={min}
-        max={max}
-        step={step}
-        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50"
-      />
-    </label>
-  );
-}
-
 function SelectField({ label, value, onChange, disabled, tooltip }) {
   return (
     <label className="block text-sm font-medium text-slate-700" title={tooltip}>
@@ -816,16 +846,19 @@ function SelectField({ label, value, onChange, disabled, tooltip }) {
   );
 }
 
-function TextArea({ label, value, onChange, disabled, rows = 3, placeholder }) {
+function TextArea({ label, value, onChange, disabled, rows = 3, placeholder, required = false }) {
+  const missing = required && !value?.trim();
   return (
-    <label className="block text-sm font-medium text-slate-700">
-      {label}
+    <label className={`block rounded-xl text-sm font-medium text-slate-700 ${missing ? "border border-amber-300 bg-amber-50 p-3" : ""}`}>
+      {label}{required && <span className="text-amber-700"> · requerido</span>}
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         rows={rows}
         placeholder={placeholder}
+        required={required}
+        maxLength={2000}
         className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50"
       />
     </label>

@@ -421,13 +421,20 @@ export function isAssessmentComplete(tipo, detalle = {}) {
   return false;
 }
 
-export function computeBarthel(detalle = {}) {
-  const puntaje = BARTHEL_ITEMS.reduce((sum, item) => sum + (Number(detalle[item.key]) || 0), 0);
-  const resultado = puntaje >= 100 ? "Independiente"
+export function barthelDependencyFromScore(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const puntaje = Number(value);
+  if (!Number.isFinite(puntaje) || puntaje < 0 || puntaje > 100) return null;
+  return puntaje >= 100 ? "Independiente"
     : puntaje >= 91 ? "Dependencia leve"
     : puntaje >= 61 ? "Dependencia moderada"
     : puntaje >= 21 ? "Dependencia severa"
     : "Dependencia total";
+}
+
+export function computeBarthel(detalle = {}) {
+  const puntaje = BARTHEL_ITEMS.reduce((sum, item) => sum + (Number(detalle[item.key]) || 0), 0);
+  const resultado = barthelDependencyFromScore(puntaje);
   return { puntaje, resultado };
 }
 

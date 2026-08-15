@@ -29,6 +29,25 @@ export const PRIORITY_ORDER = { urgente: 0, alta: 1, media: 2, baja: 3 };
 const CLOSED_STATES = ["cumplida", "omitida", "cancelada", "administrado", "validado", "omitido", "cancelado"];
 const SOURCE_ORDER = { seguimiento: 0, med: 1, care: 2, vitals: 3 };
 
+export const TASK_TYPE_OPTIONS = [
+  ["", "Todos los tipos"],
+  ["care", "Cuidados"],
+  ["med", "Medicamentos"],
+  ["vitals", "Signos vitales"],
+  ["seguimiento", "Seguimientos"],
+];
+
+const TASK_TYPE_VALUES = new Set(TASK_TYPE_OPTIONS.map(([value]) => value));
+
+export function normalizeTaskType(value) {
+  return TASK_TYPE_VALUES.has(value) ? value : "";
+}
+
+export function matchesTaskType(item, type) {
+  const normalized = normalizeTaskType(type);
+  return !normalized || item?.source === normalized;
+}
+
 function formatMedicationDueWindow(row) {
   const dueAt = medicationDueAt(row);
   if (!dueAt) return null;

@@ -62,10 +62,10 @@ export const COACHES = {
     icon: "shift",
     eyebrow: "Entrega de turno",
     title: "Pasa el turno sin perder nada",
-    description: "El historial de entregas y el armado del resumen para el siguiente equipo.",
+    description: "Historial trazable y resumen operativo para el siguiente equipo.",
     steps: [
       { title: "Crea una entrega", text: "El sistema junta medicamentos, tareas y signos por ti." },
-      { title: "Comparte o imprime", text: "Queda firmada y disponible para el equipo entrante." },
+      { title: "Consulta o imprime", text: "Queda identificada por responsable y disponible para el equipo entrante." },
     ],
     benefit: "Adiós a las hojas sueltas y las entregas verbales que se pierden.",
   },
@@ -74,10 +74,10 @@ export const COACHES = {
     icon: "shift",
     eyebrow: "Nueva entrega",
     title: "Arma la entrega en 3 minutos",
-    description: "El turno llega precargado y organizado por residente. Solo agregas tus notas.",
+    description: "El turno llega precargado. Sólo agregas información que no esté ya en los pendientes automáticos.",
     steps: [
       { title: "Revisa lo precargado", text: "Medicamentos, tareas y signos ya consolidados." },
-      { title: "Anota pendientes", text: "Lo que el siguiente equipo debe ejecutar." },
+      { title: "Deja instrucciones", text: "Registra sólo lo que el siguiente equipo debe conocer o ejecutar." },
     ],
     benefit: "Tu cierre de turno pasa de 20 minutos a 3, y queda trazado.",
   },
@@ -86,9 +86,9 @@ export const COACHES = {
     icon: "shift",
     eyebrow: "Entrega de turno",
     title: "Detalle imprimible y trazado",
-    description: "La entrega completa por residente, lista para consultar o imprimir.",
+    description: "Entrega compacta con responsable, versiones y formato A4.",
     steps: [
-      { title: "Revisa por residente", text: "Lo que ocurrió con cada uno en el turno." },
+      { title: "Revisa prioridades", text: "Consulta sólo los pendientes y antecedentes relevantes del turno." },
       { title: "Imprime si lo necesitas", text: "Formato optimizado para papel A4." },
     ],
     benefit: "Resuelves dudas y auditas incidentes consultando entregas anteriores.",
@@ -96,7 +96,7 @@ export const COACHES = {
 
   "care-tasks": {
     icon: "tasks",
-    eyebrow: "Tareas del turno",
+    eyebrow: "Cuidados del turno",
     title: "Lo que toca hacer ahora",
     description: "Una bandeja con cuidados, signos, medicamentos y seguimientos del turno.",
     steps: [
@@ -152,7 +152,7 @@ export const COACHES = {
     title: "Todo sobre tu residente",
     description: "Datos, salud, plan de cuidado, medicación y trazabilidad, juntos.",
     steps: [
-      { title: "Navega las pestañas", text: "Salud, cuidado, medicamentos, Ingreso DS 20 y bitácora." },
+      { title: "Ordena los medicamentos", text: "Usa Tratamiento y recetas, Recepción y stock, o Administraciones." },
       { title: "Aplica escalas", text: "Barthel, Katz, MNA, MMSE y Tinetti desde la pestaña de salud." },
       { title: "Completa el Ingreso DS 20", text: "Consentimiento, red de salud y persona significativa." },
     ],
@@ -209,19 +209,19 @@ export const COACHES = {
 
   observations: {
     icon: "observations",
-    eyebrow: "Observaciones",
-    title: "Novedades y seguimientos a mano",
-    description: "Incidentes y novedades clínicas por residente, con filtros.",
+    eyebrow: "Registro de evolución",
+    title: "Evolución y seguimientos en cada ficha",
+    description: "Observaciones clínicas y de cuidado ordenadas por residente y fecha.",
     steps: [
       { title: "Filtra por tipo", text: "Caídas, curaciones, visitas médicas y más." },
-      { title: "Crea una nueva", text: "Con tipos agrupados por categoría." },
+      { title: "Registra sin salir", text: "El residente ya está identificado dentro de su ficha." },
     ],
     benefit: "El siguiente turno arranca con contexto completo, sin notas sueltas.",
   },
 
   "observations-new": {
     icon: "observations",
-    eyebrow: "Nueva observación",
+    eyebrow: "Registro de evolución",
     title: "Documenta lo que ocurrió",
     description: "Tipo, descripción y acciones tomadas. Marca seguimiento si aplica.",
     steps: [

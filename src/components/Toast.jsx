@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import { sanitizeUserMessage } from "../utils/errorMessages";
 
 const ToastContext = createContext(null);
 
@@ -55,7 +56,8 @@ export function ToastProvider({ children }) {
     const id = ++_toastCounter;
     const fallback = type === "error" ? 7000 : 4500;
     const ms = typeof duration === "number" ? duration : fallback;
-    setToasts((prev) => [...prev.slice(-3), { id, message, type }]);
+    const visibleMessage = type === "error" ? sanitizeUserMessage(message) : message;
+    setToasts((prev) => [...prev.slice(-3), { id, message: visibleMessage, type }]);
     const timer = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
       timers.current.delete(timer);

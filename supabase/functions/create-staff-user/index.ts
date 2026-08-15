@@ -1,6 +1,6 @@
 // POST /functions/v1/create-staff-user
 //
-// Body: { nombre: string, email: string, telefono?: string, rol?: 'funcionario' }
+// Body: { nombre: string, email: string, telefono?: string, rol?: 'funcionario' | 'admin_eleam' }
 //
 // Crea el usuario con una contraseña aleatoria interna y le
 // envía por correo un enlace para definir su propia contraseña. La contraseña
@@ -9,40 +9,28 @@
 // Nunca confiar en user_metadata para eleam_id/rol.
 //
 // Reglas:
-//   • Solo el admin ELEAM con suscripción activa/en_gracia puede crear funcionarios.
-//   • El alta respeta max_funcionarios del plan.
+//   • Solo un admin ELEAM con acceso activo puede crear usuarios para su mismo ELEAM.
+//   • Los funcionarios respetan max_funcionarios; los administradores no consumen cupo operativo.
 //   • La contraseña nunca se devuelve; el acceso se entrega por enlace al correo.
 //   • Si Resend no está configurado o falla, retorna email_sent=false y email_error.
 
 import { preflight, jsonResponse, internalErrorResponse } from "../_shared/cors.ts";
-import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
-import { sendEmail, staffWelcomeEmail, type EmailResult } from "../_shared/email.ts";
+import { adminClient, getCallerProfile, hasOperationalAccess } from "../_shared/supabase.ts";
+import { gmailStaffWelcomeEmail, sendEmail, staffWelcomeEmail, type EmailResult } from "../_shared/email.ts";
 import {
   findAuthUserByEmail,
   isDuplicateAuthUserError,
 } from "../_shared/authUsers.ts";
 import {
   EMAIL_RE,
+  GMAIL_RE,
   createAuthProvisionRequest,
   deleteAuthProvisionRequest,
   generateAccessLink,
   generatePassword,
+  getAppUrl,
 } from "../_shared/provisioning.ts";
 
-
-function eleamHasAccess(eleam: {
-  subscription_status?: string | null;
-  pago_activo?: boolean | null;
-  fecha_vencimiento_suscripcion?: string | null;
-}): boolean {
-  if (eleam.pago_activo === true) return true;
-  if (["activo", "en_gracia"].includes(String(eleam.subscription_status ?? ""))) return true;
-  if (eleam.subscription_status === "cancelado" && eleam.fecha_vencimiento_suscripcion) {
-    const until = new Date(eleam.fecha_vencimiento_suscripcion);
-    return !Number.isNaN(until.valueOf()) && until > new Date();
-  }
-  return false;
-}
 
 function cleanText(value: unknown, max = 500): string {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
@@ -68,15 +56,33 @@ async function sendStaffAccessLink({
 }: {
   email: string;
   nombre: string;
-  setupUrl: string;
+  setupUrl?: string;
   eleamNombre: string;
   rol: string;
 }) {
+  const usesGoogle = GMAIL_RE.test(email);
   return await sendEmail({
     to: email,
     subject: `Tu acceso a FichaEleam — ${eleamNombre}`,
-    html: staffWelcomeEmail({ nombre, email, eleamNombre, rol, setupUrl }),
+    html: usesGoogle
+      ? gmailStaffWelcomeEmail({ nombre, email, eleamNombre, rol, loginUrl: `${getAppUrl()}/login` })
+      : staffWelcomeEmail({ nombre, email, eleamNombre, rol, setupUrl: String(setupUrl ?? "") }),
   });
+}
+
+async function sendStaffAccessEmail(
+  sb: ReturnType<typeof adminClient>,
+  { email, nombre, eleamNombre, rol }: { email: string; nombre: string; eleamNombre: string; rol: string },
+) {
+  if (GMAIL_RE.test(email)) {
+    const emailResult = await sendStaffAccessLink({ email, nombre, eleamNombre, rol });
+    return { emailResult, accessMethod: "google" };
+  }
+  const linkResult = await generateAccessLink(sb, email);
+  const emailResult: EmailResult = linkResult.link
+    ? await sendStaffAccessLink({ email, nombre, setupUrl: linkResult.link, eleamNombre, rol })
+    : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+  return { emailResult, accessMethod: "password" };
 }
 
 Deno.serve(async (req) => {
@@ -92,7 +98,7 @@ Deno.serve(async (req) => {
     if (error || !user || !profile) {
       return jsonResponse(req, { error: "No autenticado" }, 401);
     }
-    if (!["admin_eleam", "funcionario"].includes(profile.rol) || !profile.eleam_id) {
+    if (profile.rol !== "admin_eleam" || !profile.eleam_id) {
       return jsonResponse(req, { error: "Tu cuenta no puede crear usuarios para un ELEAM" }, 403);
     }
 
@@ -101,7 +107,11 @@ Deno.serve(async (req) => {
     const cleanEmail = String(body.email ?? "").trim().toLowerCase();
     const telefono = normalizePhone(body.telefono);
     const requestedRole = String(body.rol ?? "funcionario").trim();
-    const rol = "funcionario" as const;
+    if (!["funcionario", "admin_eleam"].includes(requestedRole)) {
+      return jsonResponse(req, { error: "El tipo de cuenta solicitado no es válido" }, 400);
+    }
+    const rol = requestedRole as "funcionario" | "admin_eleam";
+    const mustResetPassword = !GMAIL_RE.test(cleanEmail);
 
     if (!nombre) {
       return jsonResponse(req, { error: "El nombre es obligatorio" }, 400);
@@ -115,14 +125,6 @@ Deno.serve(async (req) => {
     if (!cleanEmail || !EMAIL_RE.test(cleanEmail)) {
       return jsonResponse(req, { error: "Email inválido" }, 400);
     }
-    if (requestedRole !== rol) {
-      return jsonResponse(req, { error: "Solo se pueden crear cuentas de funcionarios" }, 400);
-    }
-    if (profile.rol !== "admin_eleam") {
-      return jsonResponse(req, {
-        error: "Solo el administrador del ELEAM puede crear funcionarios.",
-      }, 403);
-    }
     if (telefono && !isValidChilePhone(telefono)) {
       return jsonResponse(req, { error: "Teléfono inválido. Usa un número chileno, por ejemplo +56 9 1234 5678." }, 400);
     }
@@ -132,12 +134,12 @@ Deno.serve(async (req) => {
     // Verificar estado del ELEAM
     const { data: eleam } = await sb
       .from("eleams")
-      .select("id, subscription_status, pago_activo, fecha_vencimiento_suscripcion, plan_id, max_funcionarios, nombre")
+      .select("id, plan, subscription_status, pago_activo, fecha_vencimiento_suscripcion, plan_id, max_funcionarios, nombre")
       .eq("id", profile.eleam_id)
       .maybeSingle();
     if (!eleam) return jsonResponse(req, { error: "ELEAM no encontrado" }, 404);
 
-    if (!eleamHasAccess(eleam)) {
+    if (!hasOperationalAccess(eleam)) {
       return jsonResponse(req, { error: "El ELEAM no tiene acceso activo" }, 403);
     }
 
@@ -153,7 +155,8 @@ Deno.serve(async (req) => {
           .from("profiles")
           .select("id", { head: true, count: "exact" })
           .eq("eleam_id", eleam.id)
-          .eq("rol", "funcionario");
+          .eq("rol", "funcionario")
+          .eq("acceso_activo", true);
 
         const { count: pendingInvites } = await sb
           .from("funcionario_invitaciones")
@@ -208,7 +211,7 @@ Deno.serve(async (req) => {
         telefono: telefono || null,
         rol,
         eleam_id: profile.eleam_id,
-        must_reset_password: true,
+        must_reset_password: mustResetPassword,
       });
 
       if (profileInsertErr) {
@@ -232,7 +235,7 @@ Deno.serve(async (req) => {
         email_confirm: true,
         app_metadata: {
           ...currentAppMetadata,
-          fichaeleam_account_source: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
+          fichaeleam_account_source: "admin_created",
           eleam_id_direct: profile.eleam_id,
           rol_direct: rol,
         },
@@ -240,7 +243,7 @@ Deno.serve(async (req) => {
           ...currentUserMetadata,
           nombre,
           telefono: telefono || null,
-          must_reset_password: true,
+          must_reset_password: mustResetPassword,
         },
       });
 
@@ -252,16 +255,9 @@ Deno.serve(async (req) => {
         }, 500);
       }
 
-      const linkResult = await generateAccessLink(sb, cleanEmail);
-      const emailResult: EmailResult = linkResult.link
-        ? await sendStaffAccessLink({
-            email: cleanEmail,
-            nombre,
-            setupUrl: linkResult.link,
-            eleamNombre: eleam.nombre,
-            rol,
-          })
-        : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+      const { emailResult, accessMethod } = await sendStaffAccessEmail(sb, {
+        email: cleanEmail, nombre, eleamNombre: eleam.nombre, rol,
+      });
 
       return jsonResponse(req, {
         ok: true,
@@ -269,6 +265,7 @@ Deno.serve(async (req) => {
         profile_id: existingAuthUser.id,
         email: cleanEmail,
         rol,
+        access_method: accessMethod,
         email_sent: emailResult.sent,
         email_skipped: emailResult.skipped === true,
         ...(emailResult.error ? { email_error: emailResult.error } : {}),
@@ -279,13 +276,13 @@ Deno.serve(async (req) => {
       email: cleanEmail,
       eleamId: profile.eleam_id,
       rol,
-      accountSource: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
+      accountSource: "admin_created",
     });
 
     if (provisionErr || !provisionId) {
       console.error("staff auth provision create", provisionErr);
       return jsonResponse(req, {
-        error: "No se pudo preparar la cuenta del funcionario. Intenta nuevamente o contacta a soporte.",
+        error: "No se pudo preparar la cuenta. Intenta nuevamente o contacta a soporte.",
       }, 500);
     }
 
@@ -296,14 +293,14 @@ Deno.serve(async (req) => {
       password: tempPassword,
       email_confirm: true,
       app_metadata: {
-        fichaeleam_account_source: profile.rol === "admin_eleam" ? "admin_created" : "funcionario_created",
+        fichaeleam_account_source: "admin_created",
         eleam_id_direct: profile.eleam_id,
         rol_direct: rol,
       },
       user_metadata: {
         nombre,
         telefono: telefono || null,
-        must_reset_password: true,
+        must_reset_password: mustResetPassword,
         fichaeleam_provision_id: provisionId,
       },
     });
@@ -317,7 +314,7 @@ Deno.serve(async (req) => {
         }, 409);
       }
       return jsonResponse(req, {
-        error: "No se pudo crear la cuenta del funcionario. Intenta nuevamente o contacta a soporte.",
+        error: "No se pudo crear la cuenta. Intenta nuevamente o contacta a soporte.",
       }, 500);
     }
 
@@ -329,7 +326,7 @@ Deno.serve(async (req) => {
       telefono: telefono || null,
       rol,
       eleam_id: profile.eleam_id,
-      must_reset_password: true,
+      must_reset_password: mustResetPassword,
     }, { onConflict: "id" });
 
     if (profileProvisionErr) {
@@ -340,26 +337,20 @@ Deno.serve(async (req) => {
         return jsonResponse(req, { error: message }, 409);
       }
       return jsonResponse(req, {
-        error: "No se pudo completar la cuenta del funcionario. Intenta nuevamente o contacta a soporte.",
+        error: "No se pudo completar la cuenta. Intenta nuevamente o contacta a soporte.",
       }, 500);
     }
 
-    const linkResult = await generateAccessLink(sb, cleanEmail);
-    const emailResult: EmailResult = linkResult.link
-      ? await sendStaffAccessLink({
-          email: cleanEmail,
-          nombre,
-          setupUrl: linkResult.link,
-          eleamNombre: eleam.nombre,
-          rol,
-        })
-      : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+    const { emailResult, accessMethod } = await sendStaffAccessEmail(sb, {
+      email: cleanEmail, nombre, eleamNombre: eleam.nombre, rol,
+    });
 
     return jsonResponse(req, {
       ok: true,
       profile_id: createdUserId,
       email: cleanEmail,
       rol,
+      access_method: accessMethod,
       email_sent: emailResult.sent,
       email_skipped: emailResult.skipped === true,
       ...(emailResult.error ? { email_error: emailResult.error } : {}),

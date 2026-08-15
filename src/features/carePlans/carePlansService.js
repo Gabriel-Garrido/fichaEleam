@@ -102,8 +102,8 @@ export const CARE_ACTIVITY_PRESETS = [
     activity: {
       categoria: "higiene",
       titulo: "Vestuario y ropa de cama",
-      descripcion: "Cambio de ropa, revisión de pertenencias y cama limpia/seca.",
-      instrucciones: "Priorizar residentes con incontinencia, sudoración o lesiones cutáneas.",
+      descripcion: "Cambio de vestuario y ropa de cama, con envío de ropa personal y lencería al circuito de lavandería.",
+      instrucciones: "Mantener ropa limpia, identificada y acorde a la preferencia de la persona; avisar pérdidas o deterioro.",
       prioridad: "media",
       requiere_observacion: false,
     },
@@ -184,6 +184,7 @@ export const CARE_BASE_PRESET_IDS = [
   "once-cena-asistida",
   "hidratacion-manana",
   "bano-higiene",
+  "vestuario-ropa-cama",
   "eliminacion-muda",
   "movilizacion-transferencias",
   "actividad-estimulacion",
@@ -210,7 +211,11 @@ export const OMISSION_REASONS = [
 const CARE_PLAN_SELECT = `
   id, eleam_id, residente_id, titulo, objetivos,
   pauta_alimentacion, pauta_hidratacion, restricciones,
-  riesgo_caidas, riesgo_up, estado, version,
+  objetivo_biopsicosocial, valoracion_social, intereses_actividades,
+  necesidades_espirituales, meta_rehabilitacion, restricciones_actividad,
+  participacion_residente, participacion_detalle,
+  riesgo_caidas, riesgo_up, estado, version, validado_por_dt, validado_en,
+  validador:profiles!planes_cuidado_validado_por_dt_fkey(nombre),
   creado_por, actualizado_por, creado_en, actualizado_en
 `;
 
@@ -433,6 +438,8 @@ export async function saveCarePlan(residenteId, payload = {}) {
     necesidades_espirituales: payload.necesidades_espirituales?.trim() || null,
     meta_rehabilitacion: payload.meta_rehabilitacion?.trim() || null,
     restricciones_actividad: payload.restricciones_actividad?.trim() || null,
+    participacion_residente: payload.participacion_residente || null,
+    participacion_detalle: payload.participacion_detalle?.trim() || null,
     actualizado_por: userId,
   };
 
@@ -457,6 +464,14 @@ export async function saveCarePlan(residenteId, payload = {}) {
     })
     .select(CARE_PLAN_SELECT)
     .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function reviewCarePlan(planId) {
+  const { data, error } = await supabase.rpc("revisar_plan_cuidado", {
+    p_plan_id: planId,
+  });
   if (error) throw error;
   return data;
 }
@@ -714,7 +729,7 @@ export async function listCareTasks({
     .lt("fecha", fecha)
     .order("fecha", { ascending: true })
     .order("hora", { ascending: true })
-    .limit(100);
+    .limit(500);
   if (residenteId) older = older.eq("residente_id", residenteId);
   carryQueries.push(older);
 
@@ -727,7 +742,7 @@ export async function listCareTasks({
       .eq("fecha", fecha)
       .in("turno", previous)
       .order("hora", { ascending: true })
-      .limit(100);
+      .limit(500);
     if (residenteId) sameDay = sameDay.eq("residente_id", residenteId);
     carryQueries.push(sameDay);
   }

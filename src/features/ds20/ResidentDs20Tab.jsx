@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Button from "../../components/Button";
 import Loading from "../../components/Loading";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useAuth } from "../../context/AuthContext";
-import { formatDateOnly, todayIso } from "../../utils/dateUtils";
+import { formatDateOnly } from "../../utils/dateUtils";
 import ConsentModal from "./ConsentModal";
+import UploadConsentModal from "./UploadConsentModal";
 import {
   ACTIVIDAD_FRECUENCIAS,
   ACTIVIDAD_FRECUENCIA_LABEL,
@@ -13,10 +14,9 @@ import {
   ACTIVIDAD_PREFERENCIA_LABEL,
   ACTIVIDAD_TIPOS,
   ACTIVIDAD_TIPO_LABEL,
-  CONTROL_ESTADO_LABEL,
   getResidentDs20Bundle,
+  listActiveHealthCenters,
   getSignedDs20Url,
-  saveHealthControl,
   upsertHealthCenter,
   upsertResidentHealthNetwork,
   getPersonaSignificativa,
@@ -40,30 +40,6 @@ const BOOL_OPTIONS = [
   ["false", "No"],
 ];
 
-const DEPENDENCIA_LABEL = {
-  leve: "Leve",
-  moderado: "Moderada",
-  severo: "Severa",
-  total: "Total",
-};
-
-function StatusItem({ label, ok, detail, action }) {
-  return (
-    <div className={`rounded-2xl border p-3 ${ok ? "border-emerald-100 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className={`text-sm font-semibold ${ok ? "text-emerald-800" : "text-amber-900"}`}>{label}</p>
-          {detail && <p className="mt-1 text-xs leading-5 text-slate-600">{detail}</p>}
-        </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${ok ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
-          {ok ? "OK" : "Pendiente"}
-        </span>
-      </div>
-      {action && <div className="mt-3">{action}</div>}
-    </div>
-  );
-}
-
 function Field({ label, children }) {
   return (
     <label className="block text-sm font-semibold text-slate-700">
@@ -83,7 +59,11 @@ export default function ResidentDs20Tab({ resident, onResidentChanged }) {
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showNetworkForm, setShowNetworkForm] = useState(false);
+  const [healthCenters, setHealthCenters] = useState([]);
+  const [healthCentersLoading, setHealthCentersLoading] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
+  const [showConsentUpload, setShowConsentUpload] = useState(false);
   const [personaSig, setPersonaSig] = useState(null);
   const [personaSigForm, setPersonaSigForm] = useState({ nombre: "", parentesco: "", telefono: "", email: "", vive_con_residente: false, descripcion_relacion: "", preferencias_visita: "" });
   const [showPersonaSigForm, setShowPersonaSigForm] = useState(false);
@@ -100,16 +80,6 @@ export default function ResidentDs20Tab({ resident, onResidentChanged }) {
     medico_referencia: "",
     telefono_referencia: "",
     observaciones: "",
-  });
-  const [controlForm, setControlForm] = useState({
-    tipo: "control",
-    estado: "programado",
-    fecha_programada: todayIso(),
-    especialidad: "",
-    profesional: "",
-    motivo: "",
-    resultado: "",
-    proximo_control: "",
   });
 
   const load = useCallback(async () => {
@@ -149,22 +119,33 @@ export default function ResidentDs20Tab({ resident, onResidentChanged }) {
       });
     } catch (error) {
       console.error(error);
-      toast(error.message || "No se pudo cargar Ingreso DS20.", "error");
+      toast(error.message || "No se pudieron cargar los antecedentes de ingreso.", "error");
     } finally {
       setLoading(false);
     }
-  }, [resident, toast]);
+  }, [resident?.id, resident?.prevision, toast]);
 
   useEffect(() => { load(); }, [load]);
 
   const latestConsent = bundle?.consents?.[0] ?? null;
-  const compliance = bundle?.compliance;
-  const nextControl = useMemo(() => {
-    const upcoming = (bundle?.controls ?? [])
-      .filter((item) => (item.proximo_control || item.fecha_programada) >= todayIso())
-      .sort((a, b) => String(a.proximo_control || a.fecha_programada).localeCompare(String(b.proximo_control || b.fecha_programada)));
-    return upcoming[0] ?? null;
-  }, [bundle?.controls]);
+
+  const toggleNetworkForm = async () => {
+    if (showNetworkForm) {
+      setShowNetworkForm(false);
+      return;
+    }
+    setShowNetworkForm(true);
+    if (healthCenters.length > 0) return;
+    setHealthCentersLoading(true);
+    try {
+      setHealthCenters(await listActiveHealthCenters());
+    } catch (error) {
+      console.error(error);
+      toast("No se pudo cargar la lista de centros de salud.", "error");
+    } finally {
+      setHealthCentersLoading(false);
+    }
+  };
 
   const saveNetwork = async () => {
     setSaving(true);
@@ -190,41 +171,11 @@ export default function ResidentDs20Tab({ resident, onResidentChanged }) {
       });
       toast("Red de salud actualizada.", "success");
       await load();
+      setShowNetworkForm(false);
       void onResidentChanged?.();
     } catch (error) {
       console.error(error);
       toast(error.message || "No se pudo guardar red de salud.", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveControl = async () => {
-    if (!controlForm.fecha_programada) {
-      toast("La fecha del control es obligatoria.", "warning");
-      return;
-    }
-    setSaving(true);
-    try {
-      await saveHealthControl(resident.id, {
-        ...controlForm,
-        health_center_id: networkForm.health_center_id || bundle?.network?.health_center_id || null,
-      });
-      toast("Control de salud guardado.", "success");
-      setControlForm({
-        tipo: "control",
-        estado: "programado",
-        fecha_programada: todayIso(),
-        especialidad: "",
-        profesional: "",
-        motivo: "",
-        resultado: "",
-        proximo_control: "",
-      });
-      await load();
-    } catch (error) {
-      console.error(error);
-      toast(error.message || "No se pudo guardar el control.", "error");
     } finally {
       setSaving(false);
     }
@@ -298,80 +249,79 @@ export default function ResidentDs20Tab({ resident, onResidentChanged }) {
     }
   };
 
-  if (loading) return <Loading message="Cargando ingreso DS20..." />;
+  if (loading) return <Loading message="Cargando antecedentes de ingreso..." />;
+
+  const hasNetwork = Boolean(bundle?.network?.health_center_id || bundle?.network?.centro?.nombre || bundle?.network?.sistema_salud || bundle?.network?.numero_ficha);
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <div id="resident-admission" className="scroll-mt-4 space-y-5">
+      <section className={`rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${latestConsent ? "border-slate-200" : "border-amber-300 ring-1 ring-amber-100"}`}>
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Checklist de ingreso DS20</h2>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Los pendientes no bloquean la operación, pero quedan visibles como alertas críticas.</p>
+            <h2 className="text-base font-semibold text-slate-950">Antecedentes de ingreso</h2>
+            <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-500">Reúne aquí el consentimiento y los antecedentes que acompañan la estadía. El seguimiento normativo general se mantiene en Cumplimiento.</p>
           </div>
-          {compliance?.pendientes > 0 && (
-            <span className="w-fit rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
-              {compliance.pendientes} pendiente{compliance.pendientes === 1 ? "" : "s"}
-            </span>
-          )}
+          <span className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${latestConsent ? "bg-emerald-50 text-emerald-700" : "bg-amber-100 text-amber-900"}`}>
+            {latestConsent ? "Consentimiento registrado" : "Pendiente DS20"}
+          </span>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <StatusItem
-            label="Consentimiento voluntario"
-            ok={Boolean(latestConsent)}
-            detail={latestConsent ? `Firmado el ${formatDateOnly(latestConsent.fecha_consentimiento)} por ${latestConsent.firmante_nombre}` : "Registra firma y PDF de respaldo."}
-            action={(canEdit || latestConsent?.pdf_storage_path) && (
-              <div className="flex flex-wrap items-center gap-3">
-                {canEdit && (
+        <div className={`rounded-xl border p-3 sm:p-4 ${latestConsent ? "border-slate-100 bg-slate-50" : "border-amber-200 bg-amber-50"}`}>
+          <p className="text-sm font-semibold text-slate-900">Consentimiento informado</p>
+          <p className="mt-1 text-sm leading-5 text-slate-600">
+            {latestConsent ? `Registrado el ${formatDateOnly(latestConsent.fecha_consentimiento)} por ${latestConsent.firmante_nombre}.` : "Requerido para el ingreso: registra un nuevo consentimiento o sube el documento que ya fue firmado."}
+          </p>
+          {(canEdit || latestConsent?.pdf_storage_path) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {canEdit && (
+                <>
                   <Button type="button" onClick={() => setShowConsent(true)} className="bg-teal-700 text-white hover:bg-teal-800">
-                    {latestConsent ? "Registrar nuevo consentimiento" : "Firmar consentimiento"}
+                    {latestConsent ? "Registrar uno nuevo" : "Registrar consentimiento"}
                   </Button>
-                )}
-                {latestConsent?.pdf_storage_path && (
-                  <button type="button" onClick={() => openPdf(latestConsent.pdf_storage_path)} className="text-sm font-semibold text-teal-700 hover:underline">
-                    Ver PDF firmado
-                  </button>
-                )}
-              </div>
-            )}
-          />
-          <StatusItem
-            label="Condición de salud grave"
-            ok={!resident.condicion_salud_grave}
-            detail={resident.condicion_salud_grave ? (resident.condicion_salud_grave_detalle || "Requiere revisión técnica.") : "Sin alerta registrada."}
-          />
-          <StatusItem
-            label="Dependencia funcional"
-            ok={Boolean(resident.nivel_dependencia)}
-            detail={resident.nivel_dependencia ? `Clasificación: ${DEPENDENCIA_LABEL[resident.nivel_dependencia] ?? resident.nivel_dependencia}` : "Falta clasificar para dotación."}
-          />
-          <StatusItem
-            label="Evaluaciones geriátricas"
-            ok={Boolean(compliance?.barthel_ok && compliance?.katz_ok && compliance?.mna_ok && compliance?.mmse_ok)}
-            detail={`Barthel ${compliance?.barthel_ok ? "OK" : "pendiente"} · Katz ${compliance?.katz_ok ? "OK" : "pendiente"} · MNA ${compliance?.mna_ok ? "OK" : "pendiente"} · MMSE ${compliance?.mmse_ok ? "OK" : "pendiente"}`}
-          />
-          <StatusItem
-            label="Red de salud"
-            ok={Boolean(compliance?.red_salud_ok)}
-            detail={bundle?.network?.centro?.nombre || bundle?.network?.sistema_salud || "Falta centro APS/privado o sistema de salud."}
-          />
-          <StatusItem
-            label="Próximo control"
-            ok={Boolean(nextControl)}
-            detail={nextControl ? `${formatDateOnly(nextControl.proximo_control || nextControl.fecha_programada)} · ${nextControl.especialidad || nextControl.tipo}` : "Sin control o derivación registrada."}
-          />
+                  <Button type="button" onClick={() => setShowConsentUpload(true)} className="border border-slate-200 bg-white text-slate-700 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800">
+                    Subir documento firmado
+                  </Button>
+                </>
+              )}
+              {latestConsent?.pdf_storage_path && (
+                <button type="button" onClick={() => openPdf(latestConsent.pdf_storage_path)} className="min-h-10 px-2 text-sm font-semibold text-teal-700 hover:underline">
+                  Ver documento
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
-        <div className="mb-4">
-          <h2 className="text-base font-bold text-slate-900">Red de salud básica</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">Registra centro APS o privado, datos de referencia y controles.</p>
+      <section className={`rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${hasNetwork ? "border-slate-200" : "border-amber-300 ring-1 ring-amber-100"}`}>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold text-slate-950">Red de salud</h2>
+              {!hasNetwork && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">Pendiente DS20</span>}
+            </div>
+            <p className="mt-1 text-sm leading-5 text-slate-500">Centro de atención y contacto profesional del residente.</p>
+          </div>
+          {canEdit && (
+            <button type="button" onClick={toggleNetworkForm} className="min-h-10 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800">
+              {showNetworkForm ? "Cerrar" : hasNetwork ? "Editar" : "Registrar"}
+            </button>
+          )}
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
+        {!showNetworkForm && (hasNetwork ? (
+          <dl className="grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-2 sm:p-4">
+            <div><dt className="text-xs font-semibold text-slate-500">Centro</dt><dd className="mt-1 text-sm font-medium text-slate-900">{bundle.network?.centro?.nombre || "Sin centro asociado"}</dd></div>
+            <div><dt className="text-xs font-semibold text-slate-500">Sistema de salud</dt><dd className="mt-1 text-sm font-medium text-slate-900">{bundle.network?.sistema_salud || "Sin registrar"}</dd></div>
+            <div><dt className="text-xs font-semibold text-slate-500">Inscripción APS</dt><dd className="mt-1 text-sm font-medium text-slate-900">{bundle.network?.inscrito_aps == null ? "Sin registrar" : bundle.network.inscrito_aps ? "Sí" : "No"}</dd></div>
+            <div><dt className="text-xs font-semibold text-slate-500">Profesional de referencia</dt><dd className="mt-1 text-sm font-medium text-slate-900">{bundle.network?.medico_referencia || "Sin registrar"}</dd></div>
+          </dl>
+        ) : (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">Registra el centro o sistema de salud para respaldar la continuidad de atención exigida en la ficha del residente.</p>
+        ))}
+        {showNetworkForm && <div className="grid gap-4 rounded-xl border border-slate-100 bg-slate-50/60 p-3 md:grid-cols-2 sm:p-4">
           <Field label="Centro existente">
-            <select className={inputClass} value={networkForm.health_center_id} disabled={saving || !canEdit} onChange={(e) => setNetworkForm((p) => ({ ...p, health_center_id: e.target.value }))}>
-              <option value="">Seleccionar o crear nuevo</option>
-              {(bundle?.centers ?? []).map((center) => (
+            <select className={inputClass} value={networkForm.health_center_id} disabled={saving || healthCentersLoading || !canEdit} onChange={(e) => setNetworkForm((p) => ({ ...p, health_center_id: e.target.value }))}>
+              <option value="">{healthCentersLoading ? "Cargando centros…" : "Seleccionar o crear nuevo"}</option>
+              {healthCenters.map((center) => (
                 <option key={center.id} value={center.id}>{center.nombre} · {center.tipo}</option>
               ))}
             </select>
@@ -408,95 +358,22 @@ export default function ResidentDs20Tab({ resident, onResidentChanged }) {
           <Field label="Observaciones">
             <textarea className={`${inputClass} resize-y`} rows={3} value={networkForm.observaciones} disabled={saving || !canEdit} onChange={(e) => setNetworkForm((p) => ({ ...p, observaciones: e.target.value }))} />
           </Field>
-        </div>
-        {canEdit && (
-          <div className="mt-4 flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2 md:col-span-2">
+            <Button type="button" disabled={saving} onClick={() => setShowNetworkForm(false)} className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
+              Cancelar
+            </Button>
             <Button type="button" disabled={saving} onClick={saveNetwork} className="bg-teal-700 text-white hover:bg-teal-800">
               Guardar red de salud
             </Button>
           </div>
-        )}
+        </div>}
       </section>
 
-      <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
-        <div className="mb-4">
-          <h2 className="text-base font-bold text-slate-900">Controles y derivaciones</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">Registra controles APS/privados, urgencias y próximas fechas.</p>
-        </div>
-        {canEdit && (
-          <div className="mb-5 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-3">
-            <Field label="Fecha">
-              <input type="date" className={inputClass} value={controlForm.fecha_programada} disabled={saving} onChange={(e) => setControlForm((p) => ({ ...p, fecha_programada: e.target.value }))} />
-            </Field>
-            <Field label="Tipo">
-              <select className={inputClass} value={controlForm.tipo} disabled={saving} onChange={(e) => setControlForm((p) => ({ ...p, tipo: e.target.value }))}>
-                <option value="control">Control</option>
-                <option value="derivacion">Derivación</option>
-                <option value="urgencia">Urgencia</option>
-                <option value="teleconsulta">Teleconsulta</option>
-                <option value="otro">Otro</option>
-              </select>
-            </Field>
-            <Field label="Estado">
-              <select className={inputClass} value={controlForm.estado} disabled={saving} onChange={(e) => setControlForm((p) => ({ ...p, estado: e.target.value }))}>
-                <option value="programado">Programado</option>
-                <option value="realizado">Realizado</option>
-                <option value="cancelado">Cancelado</option>
-                <option value="inasistente">Inasistente</option>
-              </select>
-            </Field>
-            <Field label="Especialidad">
-              <input className={inputClass} value={controlForm.especialidad} disabled={saving} onChange={(e) => setControlForm((p) => ({ ...p, especialidad: e.target.value }))} />
-            </Field>
-            <Field label="Profesional">
-              <input className={inputClass} value={controlForm.profesional} disabled={saving} onChange={(e) => setControlForm((p) => ({ ...p, profesional: e.target.value }))} />
-            </Field>
-            <Field label="Próximo control">
-              <input type="date" className={inputClass} value={controlForm.proximo_control} disabled={saving} onChange={(e) => setControlForm((p) => ({ ...p, proximo_control: e.target.value }))} />
-            </Field>
-            <div className="md:col-span-3">
-              <Field label="Motivo">
-                <textarea className={`${inputClass} resize-y`} rows={2} value={controlForm.motivo} disabled={saving} onChange={(e) => setControlForm((p) => ({ ...p, motivo: e.target.value }))} />
-              </Field>
-            </div>
-            <div className="md:col-span-3">
-              <Field label="Resultado">
-                <textarea className={`${inputClass} resize-y`} rows={2} value={controlForm.resultado} disabled={saving} onChange={(e) => setControlForm((p) => ({ ...p, resultado: e.target.value }))} />
-              </Field>
-            </div>
-            <div className="md:col-span-3 flex justify-end">
-              <Button type="button" disabled={saving} onClick={saveControl} className="bg-teal-700 text-white hover:bg-teal-800">
-                Guardar control
-              </Button>
-            </div>
-          </div>
-        )}
-        {(bundle?.controls ?? []).length === 0 ? (
-          <p className="text-sm text-slate-500">Sin controles registrados.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {bundle.controls.map((control) => (
-              <li key={control.id} className="py-3">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{formatDateOnly(control.fecha_programada)} · {control.especialidad || control.tipo}</p>
-                    <p className="text-xs text-slate-500">{control.centro?.nombre || "Sin centro"} · {CONTROL_ESTADO_LABEL[control.estado] ?? control.estado}</p>
-                    {(control.motivo || control.resultado) && <p className="mt-1 text-xs leading-5 text-slate-600">{control.resultado || control.motivo}</p>}
-                  </div>
-                  {control.proximo_control && <span className="w-fit rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">Próximo {formatDateOnly(control.proximo_control)}</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* Persona Significativa DS20 Art. 18 */}
-      <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Persona significativa</h2>
-            <p className="mt-0.5 text-xs text-slate-500">DS20 Art. 18 — Referente afectivo y de apoyo del residente.</p>
+            <h2 className="text-base font-semibold text-slate-950">Persona significativa</h2>
+            <p className="mt-1 text-sm text-slate-500">Referente afectivo o persona de apoyo que el residente reconoce como importante.</p>
           </div>
           {canEdit && (
             <button type="button" onClick={() => setShowPersonaSigForm(!showPersonaSigForm)}
@@ -583,12 +460,11 @@ export default function ResidentDs20Tab({ resident, onResidentChanged }) {
         )}
       </section>
 
-      {/* Actividades Sociales DS20 Art. 20 */}
-      <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Actividades sociales y recreativas</h2>
-            <p className="mt-0.5 text-xs text-slate-500">DS20 Art. 20 — Intereses, frecuencia y preferencias del residente.</p>
+            <h2 className="text-base font-semibold text-slate-950">Intereses y actividades</h2>
+            <p className="mt-1 text-sm text-slate-500">Preferencias que ayudan a planificar actividades significativas para el residente.</p>
           </div>
           {canEdit && (
             <button type="button" onClick={() => setShowActividadForm(!showActividadForm)}
@@ -672,6 +548,13 @@ export default function ResidentDs20Tab({ resident, onResidentChanged }) {
       <ConsentModal
         isOpen={showConsent}
         onClose={() => setShowConsent(false)}
+        resident={resident}
+        eleam={eleam}
+        onSaved={load}
+      />
+      <UploadConsentModal
+        isOpen={showConsentUpload}
+        onClose={() => setShowConsentUpload(false)}
         resident={resident}
         eleam={eleam}
         onSaved={load}

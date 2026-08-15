@@ -33,12 +33,15 @@ import {
   getTaskProgress,
   matchesFilter,
   normalizeTaskView,
+  normalizeTaskType,
   matchesTaskSearch,
+  matchesTaskType,
   normalizeCareTask,
   normalizeMedication,
   normalizeSeguimiento,
   normalizeVitalTask,
   sortWorkItemsByUrgency,
+  TASK_TYPE_OPTIONS,
 } from "./careTasksBoardUtils";
 import {
   getPendingVitalSignsResidents,
@@ -90,13 +93,14 @@ export default function CareTasksPage() {
   const toast = useToast();
   const { can, profile } = useAuth();
   const [pageFilters, setPageFilter] = useFilterParams({
-    schema: { fecha: "date", turno: "string", view: "string", filter: "string", q: "string" },
-    defaults: { fecha: todayIso(), turno: currentTurno(), view: "pendientes", filter: "", q: "" },
+    schema: { fecha: "date", turno: "string", view: "string", filter: "string", type: "string", q: "string" },
+    defaults: { fecha: todayIso(), turno: currentTurno(), view: "pendientes", filter: "", type: "", q: "" },
   });
   const fecha = pageFilters.fecha || todayIso();
   const turno = pageFilters.turno || currentTurno();
   const view = normalizeTaskView(pageFilters.view || pageFilters.filter);
   const searchQuery = pageFilters.q ?? "";
+  const taskType = normalizeTaskType(pageFilters.type);
   const debouncedQuery = useDebouncedValue(searchQuery, 200);
   const setFecha = (value) => setPageFilter("fecha", value);
   const setTurno = (value) => setPageFilter("turno", value);
@@ -111,6 +115,7 @@ export default function CareTasksPage() {
   const [vitalsModal, setVitalsModal] = useState(null);
   const [seguimientoModal, setSeguimientoModal] = useState(null);
   const [assignedTurnos, setAssignedTurnos] = useState([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(true);
 
   const canComplete = can("completar_tareas_cuidado");
   const canAdminister = can("administrar_medicamentos");
@@ -122,7 +127,8 @@ export default function CareTasksPage() {
   useEffect(() => {
     let active = true;
     async function resolveAssignedShift() {
-      if (!currentUserId) return;
+      setAssignmentsLoading(true);
+      if (!currentUserId) { setAssignmentsLoading(false); return; }
       try {
         const assignments = await listMyShiftAssignments({ fecha, profileId: currentUserId });
         if (!active) return;
@@ -134,6 +140,8 @@ export default function CareTasksPage() {
       } catch (assignmentError) {
         console.warn("No se pudo resolver el turno asignado:", assignmentError);
         if (active) setAssignedTurnos([]);
+      } finally {
+        if (active) setAssignmentsLoading(false);
       }
     }
     resolveAssignedShift();
@@ -178,9 +186,10 @@ export default function CareTasksPage() {
     return sortWorkItemsByUrgency(
       allItems
         .filter((item) => matchesFilter(item, view))
+        .filter((item) => matchesTaskType(item, taskType))
         .filter((item) => matchesTaskSearch(item, debouncedQuery))
     );
-  }, [allItems, view, debouncedQuery]);
+  }, [allItems, view, taskType, debouncedQuery]);
 
   const metrics = useMemo(() => buildTaskMetrics(allItems), [allItems]);
   const handleCareClose = async ({ action, notas, motivo, seguimiento, seguimientoFecha, seguimientoTurno }) => {
@@ -296,9 +305,9 @@ export default function CareTasksPage() {
   return (
     <PageLayout
       coachFeatureId="care-tasks"
-      title="Tareas del turno"
+      title="Cuidados del turno"
       eyebrow="Trabajo diario"
-      description="Revisa y completa en un solo lugar lo pendiente de tu turno."
+      description="Completa las tareas asignadas y deja trazabilidad de lo realizado, omitido o reprogramado."
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           {lastLoaded && (
@@ -323,7 +332,7 @@ export default function CareTasksPage() {
     >
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0"><h2 className="text-base font-bold text-slate-900">Tu bandeja de trabajo</h2><p className="mt-1 text-xs leading-5 text-slate-500">Mostramos primero el turno que tienes asignado en Personal.</p>{assignedTurnos.length > 0 ? <div className="mt-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold capitalize text-teal-800">Tu turno: {assignedTurnos.join(" y ")}</span>{!assignedTurnos.includes(turno) && <button type="button" onClick={() => setTurno(assignedTurnos[0])} className="text-xs font-bold text-teal-700 hover:underline">Volver a mi turno</button>}</div> : <p className="mt-2 text-xs font-medium text-amber-700">No tienes un turno asignado para esta fecha. Puedes consultar cualquier turno.</p>}</div>
+          <div className="min-w-0">{assignmentsLoading ? <p className="animate-pulse text-xs font-medium text-slate-400">Consultando turno asignado…</p> : assignedTurnos.length > 0 ? <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold capitalize text-teal-800">Turno asignado: {assignedTurnos.join(" y ")}</span>{!assignedTurnos.includes(turno) && <button type="button" onClick={() => setTurno(assignedTurnos[0])} className="text-xs font-bold text-teal-700 hover:underline">Volver a mi turno</button>}</div> : <p className="text-xs font-medium text-amber-700">No tienes un turno asignado para esta fecha. Puedes consultar cualquier turno.</p>}</div>
           <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-md">
             <label className="text-sm font-medium text-slate-700">
               Fecha
@@ -347,9 +356,10 @@ export default function CareTasksPage() {
           </div>
         </div>
 
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <label htmlFor="careTasks-search" className="sr-only">Buscar residente o tarea</label>
-          <div className="relative">
+        <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+          <div>
+            <label htmlFor="careTasks-search" className="sr-only">Buscar residente o tarea</label>
+            <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <circle cx="11" cy="11" r="7" />
@@ -376,7 +386,19 @@ export default function CareTasksPage() {
                 </svg>
               </button>
             )}
+            </div>
           </div>
+          <label className="text-sm font-semibold text-slate-700">
+            <span className="sr-only">Tipo de tarea</span>
+            <select
+              value={taskType}
+              onChange={(event) => setPageFilter("type", event.target.value)}
+              aria-label="Filtrar por tipo de tarea"
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 sm:min-h-10 sm:text-sm"
+            >
+              {TASK_TYPE_OPTIONS.map(([value, label]) => <option key={value || "all"} value={value}>{label}</option>)}
+            </select>
+          </label>
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Vista de tareas">
@@ -387,23 +409,23 @@ export default function CareTasksPage() {
           ))}
         </div>
 
-        {(view !== "pendientes" || searchQuery) && (
+        {(view !== "pendientes" || searchQuery || taskType) && (
           <div className="mt-3 flex items-center justify-end">
             <button
               type="button"
-              onClick={() => { setView("pendientes"); setPageFilter("q", ""); }}
+              onClick={() => { setView("pendientes"); setPageFilter("q", ""); setPageFilter("type", ""); }}
               className="text-xs font-semibold text-slate-500 hover:text-slate-800 hover:underline"
             >
-              Volver a “Por hacer”
+              Limpiar filtros
             </button>
           </div>
         )}
       </section>
 
       <section className="grid grid-cols-3 gap-2 sm:gap-3">
-        <TaskMetric label="Por hacer" value={metrics.pendientes} tone="amber" />
-        <TaskMetric label="Atrasadas" value={metrics.vencidas} tone="rose" />
-        <TaskMetric label="Progreso" value={`${getTaskProgress(metrics).completed}/${getTaskProgress(metrics).total}`} tone="teal" />
+        <TaskMetric label="Por hacer" value={loading ? "…" : metrics.pendientes} tone={loading ? "slate" : "amber"} loading={loading} />
+        <TaskMetric label="Atrasadas" value={loading ? "…" : metrics.vencidas} tone={loading ? "slate" : "rose"} loading={loading} />
+        <TaskMetric label="Progreso" value={loading ? "…" : `${getTaskProgress(metrics).completed}/${getTaskProgress(metrics).total}`} tone={loading ? "slate" : "teal"} loading={loading} />
       </section>
 
       {error && (
@@ -422,7 +444,7 @@ export default function CareTasksPage() {
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-1 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="text-sm font-bold text-slate-900">{view === "pendientes" ? "Pendientes del turno" : view === "cerradas" ? "Registros terminados" : "Todas las tareas"}</h2><p className="mt-0.5 text-xs text-slate-500">{searchQuery ? `Resultados para “${searchQuery}”` : "Ordenadas por urgencia y hora programada."}</p></div>
+          <div><h2 className="text-sm font-bold text-slate-900">{view === "pendientes" ? "Por hacer" : view === "cerradas" ? "Hechas" : "Todas las tareas"}</h2><p className="mt-0.5 text-xs text-slate-500">{searchQuery ? `Resultados para “${searchQuery}”` : taskType ? `Filtro: ${TASK_TYPE_OPTIONS.find(([value]) => value === taskType)?.[1] ?? "Tipo de tarea"}` : "Primero aparecen las vencidas, urgentes y próximas por hora."}</p></div>
           {!loading && <span className="text-xs font-bold text-slate-500">{items.length} {items.length === 1 ? "registro" : "registros"}</span>}
         </div>
         {loading ? (
@@ -430,14 +452,16 @@ export default function CareTasksPage() {
             <p className="text-xs font-medium text-slate-500">Cargando tareas del turno…</p>
             {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-100" />)}
           </div>
+        ) : error && allItems.length === 0 ? (
+          <div className="p-6 text-center text-sm text-slate-500">No se muestran resultados porque la consulta no terminó correctamente.</div>
         ) : items.length === 0 ? (
           <div className="p-4 sm:p-6">
             <EmptyState
-              tone={searchQuery ? "slate" : view === "pendientes" && metrics.total > 0 ? "emerald" : "teal"}
-              title={searchQuery ? "No encontramos coincidencias" : view === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
+              tone={searchQuery || taskType ? "slate" : view === "pendientes" && metrics.total > 0 ? "emerald" : "teal"}
+              title={searchQuery || taskType ? "No encontramos coincidencias" : view === "pendientes" && metrics.total > 0 ? "Todo el turno al día" : "Sin tareas aquí"}
               description={
-                searchQuery
-                  ? `No hay residentes ni tareas que coincidan con “${searchQuery}” en este turno.`
+                searchQuery || taskType
+                  ? "No hay tareas que coincidan con los filtros seleccionados en este turno."
                   : view === "pendientes" && metrics.total > 0
                   ? "No quedan pendientes ni vencidas para este turno."
                   : metrics.total > 0
@@ -450,8 +474,8 @@ export default function CareTasksPage() {
                 </svg>
               }
               action={
-                searchQuery
-                  ? { label: "Limpiar búsqueda", onClick: () => setPageFilter("q", "") }
+                searchQuery || taskType
+                  ? { label: "Limpiar filtros", onClick: () => { setPageFilter("q", ""); setPageFilter("type", ""); } }
                   : metrics.total > 0 && view !== "pendientes"
                   ? { label: "Ver tareas por hacer", onClick: () => setView("pendientes") }
                   : null
@@ -508,13 +532,15 @@ export default function CareTasksPage() {
   );
 }
 
-function TaskMetric({ label, value, tone }) {
+function TaskMetric({ label, value, tone, loading = false }) {
   const colors = tone === "rose"
     ? "border-rose-200 bg-rose-50 text-rose-700"
     : tone === "amber"
       ? "border-amber-200 bg-amber-50 text-amber-800"
-      : "border-teal-200 bg-teal-50 text-teal-800";
-  return <div className={`rounded-2xl border p-3 text-center sm:p-4 ${colors}`}><p className="text-xs font-semibold">{label}</p><p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl">{value}</p></div>;
+      : tone === "slate"
+        ? "border-slate-200 bg-white text-slate-500"
+        : "border-teal-200 bg-teal-50 text-teal-800";
+  return <div className={`rounded-2xl border p-3 text-center sm:p-4 ${colors}`}><p className="text-xs font-semibold">{label}</p><p className={`mt-1 text-xl font-bold tabular-nums sm:text-2xl ${loading ? "animate-pulse" : ""}`}>{value}</p></div>;
 }
 
 export function WorkItemRow({ item, canComplete, canAdminister, canValidate, canCreateVitals, canResolveSeguimiento, currentUserId, onCareAction, onMedicationAction, onVitalsAction, onSeguimientoAction }) {

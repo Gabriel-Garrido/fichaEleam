@@ -21,7 +21,11 @@ export const DEPENDENCIA_TONE = {
 };
 
 export const TIPO_LABEL = {
-  observacion_general:         "General",
+  observacion_general:         "Estado general",
+  cambio_clinico:              "Cambio clínico o síntoma",
+  dolor:                       "Dolor",
+  piel_heridas:                "Piel o heridas",
+  conducta_animo:              "Conducta o estado de ánimo",
   caida:                       "Caída",
   incidente:                   "Incidente",
   curacion:                    "Curación",
@@ -61,15 +65,20 @@ export function calcAge(fechaNacimiento) {
 }
 
 const RESIDENT_TAB_ALIASES = {
-  info: "resumen",
-  signos: "resumen",
-  observaciones: "resumen",
-  tareas: "turno",
+  info: "general",
+  resumen: "general",
+  ds20: "general",
+  signos: "general",
+  observaciones: "trazabilidad",
+  evolution: "trazabilidad",
+  evolucion: "trazabilidad",
+  tareas: "general",
+  turno: "general",
 };
 
-export function normalizeResidentTab(value, allowed = ["resumen", "ds20", "turno", "care", "emar", "trazabilidad"]) {
-  const normalized = RESIDENT_TAB_ALIASES[value] ?? value ?? "resumen";
-  return allowed.includes(normalized) ? normalized : "resumen";
+export function normalizeResidentTab(value, allowed = ["general", "care", "emar", "trazabilidad"]) {
+  const normalized = RESIDENT_TAB_ALIASES[value] ?? value ?? "general";
+  return allowed.includes(normalized) ? normalized : "general";
 }
 
 function normalizeAllergyValue(value) {

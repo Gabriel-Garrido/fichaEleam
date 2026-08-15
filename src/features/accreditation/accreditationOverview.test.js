@@ -53,7 +53,7 @@ describe("compliance overview", () => {
     );
 
     expect(groups[0]).toMatchObject({ ready: 1, compliant: 1, pending: 0, percentage: 100 });
-    expect(simpleRequirementStatus(groups[0].items[0])).toMatchObject({ label: "Al día", tone: "emerald" });
+    expect(simpleRequirementStatus(groups[0].items[0])).toMatchObject({ label: "Registros completos", tone: "emerald" });
   });
 
   it("does not let an automatic metric hide an open observation", () => {

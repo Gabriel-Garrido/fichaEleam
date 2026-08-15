@@ -15,18 +15,20 @@
 
 import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
-import { sendEmail, demoWelcomeEmail, type EmailResult } from "../_shared/email.ts";
+import { sendEmail, demoWelcomeEmail, type DemoAccessMethod, type EmailResult } from "../_shared/email.ts";
 import {
   findAuthUserByEmail,
   isDuplicateAuthUserError,
 } from "../_shared/authUsers.ts";
 import {
   EMAIL_RE,
+  GMAIL_RE,
   UUID_RE,
   createAuthProvisionRequest,
   deleteAuthProvisionRequest,
   generateAccessLink,
   generatePassword,
+  getAppUrl,
 } from "../_shared/provisioning.ts";
 
 const AUTHORIZABLE_STATES = new Set(["nuevo", "contactado", "demo_activo"]);
@@ -65,14 +67,35 @@ async function sendDemoAccessLink({
 }: {
   email: string;
   nombre: string;
-  setupUrl: string;
+  setupUrl?: string;
   eleamNombre: string;
 }) {
+  const accessMethod: DemoAccessMethod = GMAIL_RE.test(email) ? "google" : "password";
   return await sendEmail({
     to: email,
     subject: `Tu demo de FichaEleam está lista, ${nombre}`,
-    html: demoWelcomeEmail({ nombre, email, eleamNombre, setupUrl }),
+    html: demoWelcomeEmail({
+      nombre,
+      email,
+      eleamNombre,
+      accessMethod,
+      accessUrl: accessMethod === "google" ? `${getAppUrl()}/login` : String(setupUrl ?? ""),
+    }),
   });
+}
+
+async function sendDemoAccessEmail(sb: ReturnType<typeof adminClient>, email: string, nombre: string, eleamNombre: string) {
+  const accessMethod: DemoAccessMethod = GMAIL_RE.test(email) ? "google" : "password";
+  if (accessMethod === "google") {
+    const emailResult = await sendDemoAccessLink({ email, nombre, eleamNombre });
+    return { emailResult, accessMethod };
+  }
+
+  const linkResult = await generateAccessLink(sb, email);
+  const emailResult: EmailResult = linkResult.link
+    ? await sendDemoAccessLink({ email, nombre, setupUrl: linkResult.link, eleamNombre })
+    : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+  return { emailResult, accessMethod };
 }
 
 Deno.serve(async (req) => {
@@ -131,22 +154,25 @@ Deno.serve(async (req) => {
 
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const eleamNombre = lead.eleam_nombre || "Demo ELEAM";
+    const mustResetPassword = !GMAIL_RE.test(cleanEmail);
 
     if (lead.demo_user_id) {
-      const linkResult = await generateAccessLink(sb, cleanEmail);
-      const emailResult: EmailResult = linkResult.link
-        ? await sendDemoAccessLink({
-            email: cleanEmail,
-            nombre: lead.nombre,
-            setupUrl: linkResult.link,
-            eleamNombre,
-          })
-        : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+      if (!mustResetPassword) {
+        const { error: accessFlagError } = await sb.from("profiles")
+          .update({ must_reset_password: false })
+          .eq("id", lead.demo_user_id);
+        if (accessFlagError) {
+          console.error("demo google access flag", accessFlagError);
+          return fail(req, "internal_error", "No se pudo preparar el acceso con Google. Intenta nuevamente.", 500);
+        }
+      }
+      const { emailResult, accessMethod } = await sendDemoAccessEmail(sb, cleanEmail, lead.nombre, eleamNombre);
 
       return success(req, "access_resent", "El demo ya estaba aprobado; se generó un nuevo enlace de acceso.", {
         already_active: true,
         profile_id: lead.demo_user_id,
         email: cleanEmail,
+        access_method: accessMethod,
         email_sent: emailResult.sent,
         email_skipped: emailResult.skipped === true,
         ...(emailResult.error ? { email_error: emailResult.error } : {}),
@@ -219,7 +245,7 @@ Deno.serve(async (req) => {
       }
 
       const { error: profileResetErr } = await sb.from("profiles").update({
-        must_reset_password: true,
+        must_reset_password: mustResetPassword,
       }).eq("id", existingProfile.id);
 
       if (profileResetErr) {
@@ -239,21 +265,14 @@ Deno.serve(async (req) => {
         return fail(req, "internal_error", "La cuenta se habilitó, pero no se pudo actualizar el lead. Recarga y verifica.", 500);
       }
 
-      const linkResult = await generateAccessLink(sb, cleanEmail);
-      const emailResult: EmailResult = linkResult.link
-        ? await sendDemoAccessLink({
-            email: cleanEmail,
-            nombre: lead.nombre,
-            setupUrl: linkResult.link,
-            eleamNombre,
-          })
-        : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+      const { emailResult, accessMethod } = await sendDemoAccessEmail(sb, cleanEmail, lead.nombre, eleamNombre);
 
       return success(req, "reused_demo", "Demo activado usando una cuenta existente compatible.", {
         reused_existing_user: true,
         profile_id: existingProfile.id,
         eleam_id: existingProfile.eleam_id,
         email: cleanEmail,
+        access_method: accessMethod,
         email_sent: emailResult.sent,
         email_skipped: emailResult.skipped === true,
         ...(emailResult.error ? { email_error: emailResult.error } : {}),
@@ -302,7 +321,7 @@ Deno.serve(async (req) => {
         email: cleanEmail,
         rol: "admin_eleam",
         eleam_id: demoEleam.id,
-        must_reset_password: true,
+        must_reset_password: mustResetPassword,
       });
 
       if (profileInsert.error) {
@@ -332,7 +351,7 @@ Deno.serve(async (req) => {
         user_metadata: {
           ...currentUserMetadata,
           nombre: lead.nombre,
-          must_reset_password: true,
+          must_reset_password: mustResetPassword,
         },
       });
 
@@ -357,21 +376,14 @@ Deno.serve(async (req) => {
         return fail(req, "internal_error", "No se pudo actualizar el lead con la cuenta reparada.", 500);
       }
 
-      const linkResult = await generateAccessLink(sb, cleanEmail);
-      const emailResult: EmailResult = linkResult.link
-        ? await sendDemoAccessLink({
-            email: cleanEmail,
-            nombre: lead.nombre,
-            setupUrl: linkResult.link,
-            eleamNombre,
-          })
-        : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+      const { emailResult, accessMethod } = await sendDemoAccessEmail(sb, cleanEmail, lead.nombre, eleamNombre);
 
       return success(req, "repaired_auth", "Cuenta Auth reparada y demo aprobado.", {
         repaired_existing_auth_user: true,
         profile_id: existingAuthUser.id,
         eleam_id: demoEleam.id,
         email: cleanEmail,
+        access_method: accessMethod,
         email_sent: emailResult.sent,
         email_skipped: emailResult.skipped === true,
         ...(emailResult.error ? { email_error: emailResult.error } : {}),
@@ -404,7 +416,7 @@ Deno.serve(async (req) => {
       },
       user_metadata: {
         nombre: lead.nombre,
-        must_reset_password: true,
+        must_reset_password: mustResetPassword,
         fichaeleam_provision_id: provisionId,
       },
     });
@@ -433,7 +445,7 @@ Deno.serve(async (req) => {
       email: cleanEmail,
       rol: "admin_eleam",
       eleam_id: eleamId,
-      must_reset_password: true,
+      must_reset_password: mustResetPassword,
     }, { onConflict: "id" });
 
     if (profileUpsertErr) {
@@ -456,20 +468,13 @@ Deno.serve(async (req) => {
       return fail(req, "internal_error", "El usuario se creó, pero no se pudo actualizar el lead. Recarga y verifica.", 500);
     }
 
-    const linkResult = await generateAccessLink(sb, cleanEmail);
-    const emailResult: EmailResult = linkResult.link
-      ? await sendDemoAccessLink({
-          email: cleanEmail,
-          nombre: lead.nombre,
-          setupUrl: linkResult.link,
-          eleamNombre,
-        })
-      : { sent: false, error: linkResult.error ?? "No se pudo generar el enlace de acceso" };
+    const { emailResult, accessMethod } = await sendDemoAccessEmail(sb, cleanEmail, lead.nombre, eleamNombre);
 
     return success(req, "created", "Usuario demo creado correctamente.", {
       profile_id: profileId,
       eleam_id: eleamId,
       email: cleanEmail,
+      access_method: accessMethod,
       email_sent: emailResult.sent,
       email_skipped: emailResult.skipped === true,
       ...(emailResult.error ? { email_error: emailResult.error } : {}),

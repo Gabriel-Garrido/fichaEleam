@@ -45,6 +45,7 @@ export default function StaffingPage() {
   const [compliance, setCompliance] = useState([]);
   const [selection, setSelection] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDaysIso(weekStart, index)), [weekStart]);
@@ -56,6 +57,7 @@ export default function StaffingPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const people = isAdminEleam ? await syncStaffMembersFromProfiles() : await listStaffMembers();
       const [planned, checks] = await Promise.all([
@@ -67,11 +69,11 @@ export default function StaffingPage() {
       setCompliance(checks);
     } catch (error) {
       console.error(error);
-      toast(error.message || "No se pudo cargar la dotación.", "error");
+      setLoadError(error.message || "No se pudo cargar la dotación.");
     } finally {
       setLoading(false);
     }
-  }, [isAdminEleam, toast, weekEnd, weekStart]);
+  }, [isAdminEleam, weekEnd, weekStart]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -177,7 +179,7 @@ export default function StaffingPage() {
               <button key={day} type="button" role="tab" aria-selected={active} onClick={() => setSelectedDay(day)} className={`relative min-h-14 rounded-xl px-1 py-2 text-center ${active ? "bg-teal-700 text-white" : "bg-slate-50 text-slate-700 hover:bg-slate-100"}`}>
                 <span className="block text-[11px] font-semibold capitalize sm:text-xs">{label.weekday}</span>
                 <span className="block text-base font-bold">{label.day}</span>
-                {issues > 0 && <span className={`absolute right-1 top-1 h-2 w-2 rounded-full ${active ? "bg-amber-300" : "bg-rose-500"}`}><span className="sr-only">{issues} alertas</span></span>}
+                {!loading && !loadError && issues > 0 && <span className={`absolute right-1 top-1 h-2 w-2 rounded-full ${active ? "bg-amber-300" : "bg-rose-500"}`}><span className="sr-only">{issues} alertas</span></span>}
               </button>
             );
           })}
@@ -185,12 +187,14 @@ export default function StaffingPage() {
       </section>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Summary label="Estado del día" value={selectedChecks.some((item) => item.incumple) ? "Revisar" : "Cumple"} alert={selectedChecks.some((item) => item.incumple)} />
-        <Summary label="Alertas de la semana" value={weekIssues} alert={weekIssues > 0} />
-        <Summary label="Residentes sin clasificar" value={unclassified} alert={unclassified > 0} />
+        <Summary label="Estado del día" value={loading ? "…" : loadError ? "Sin verificar" : selectedChecks.some((item) => item.incumple) ? "Revisar" : "Cumple"} alert={!loading && !loadError && selectedChecks.some((item) => item.incumple)} loading={loading} />
+        <Summary label="Alertas de la semana" value={loading ? "…" : loadError ? "—" : weekIssues} alert={!loading && !loadError && weekIssues > 0} loading={loading} />
+        <Summary label="Residentes sin clasificar" value={loading ? "…" : loadError ? "—" : unclassified} alert={!loading && !loadError && unclassified > 0} loading={loading} />
       </div>
 
-      {loading ? <Loading message="Cargando dotación..." /> : activeStaff.length === 0 ? (
+      {loading ? <Loading message="Cargando dotación..." /> : loadError ? (
+        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800"><p className="font-semibold">No pudimos mostrar la dotación</p><p className="mt-1">{loadError}</p><Button type="button" onClick={load} className="mt-3 border border-rose-200 bg-white text-rose-700">Reintentar</Button></div>
+      ) : activeStaff.length === 0 ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Primero agrega personas y completa su tipo de dotación desde “Equipo”.</div>
       ) : (
         <section className="grid gap-4 lg:grid-cols-3">
@@ -233,6 +237,6 @@ export default function StaffingPage() {
   );
 }
 
-function Summary({ label, value, alert }) {
-  return <div className={`rounded-2xl border p-4 ${alert ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}><p className="text-xs font-semibold text-slate-600">{label}</p><p className={`mt-1 text-xl font-bold ${alert ? "text-rose-700" : "text-emerald-700"}`}>{value}</p></div>;
+function Summary({ label, value, alert, loading = false }) {
+  return <div className={`rounded-2xl border p-4 ${loading ? "border-slate-200 bg-white" : alert ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}><p className="text-xs font-semibold text-slate-600">{label}</p><p className={`mt-1 text-xl font-bold ${loading ? "animate-pulse text-slate-400" : alert ? "text-rose-700" : "text-emerald-700"}`}>{value}</p></div>;
 }

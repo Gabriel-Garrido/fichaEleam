@@ -10,6 +10,34 @@ import {
 export { currentTurno, todayIso };
 
 export const EMAR_TURNOS = ["mañana", "tarde", "noche"];
+export const MAX_PRESCRIPTION_FILE_SIZE_BYTES = 3 * 1024 * 1024;
+
+const PRESCRIPTION_MIME_BY_EXTENSION = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+function prescriptionFileType(file) {
+  const extension = (file?.name?.split(".").pop() ?? "").toLowerCase();
+  const expectedType = PRESCRIPTION_MIME_BY_EXTENSION[extension];
+  if (!expectedType) return null;
+
+  const declaredType = String(file?.type ?? "").toLowerCase();
+  const normalizedType = declaredType === "image/jpg" ? "image/jpeg" : declaredType;
+  if (normalizedType && normalizedType !== expectedType) return null;
+  return expectedType;
+}
+
+export function validatePrescriptionFile(file) {
+  if (!file) return "Selecciona la receta en PDF o imagen.";
+  if (!Number.isFinite(file.size) || file.size <= 0) return "El archivo está vacío o no se pudo leer.";
+  if (file.size > MAX_PRESCRIPTION_FILE_SIZE_BYTES) return "La receta excede el máximo de tamaño de archivo de 3 MB. Reduce su peso e intenta nuevamente.";
+  if (!prescriptionFileType(file)) return "Usa un archivo PDF o una imagen JPG, PNG o WEBP.";
+  return null;
+}
 
 export const MED_ROUTES = [
   ["oral", "Oral"],
@@ -56,6 +84,12 @@ const SCHEDULE_SELECT = `
   tolerancia_min, activo, creado_en, actualizado_en
 `;
 
+const PRESCRIPTION_SELECT = `
+  id, eleam_id, residente_id, indicacion_id, storage_path,
+  archivo_nombre, archivo_tipo, archivo_tamanio, fecha_emision,
+  fecha_vencimiento, prescriptor_nombre, observaciones, subido_por, creado_en
+`;
+
 const STOCK_LOT_SELECT = `
   id, eleam_id, residente_id, indicacion_id, medicamento_nombre, lote,
   fecha_vencimiento, cantidad_actual, unidad, ubicacion,
@@ -75,6 +109,13 @@ const RECONCILIATION_SELECT = `
   id, eleam_id, lote_id, cantidad_sistema, cantidad_fisica,
   diferencia, motivo, estado, creado_por, validado_por,
   creado_en, validado_en
+`;
+
+const STOCK_MOVEMENT_SELECT = `
+  id, eleam_id, lote_id, indicacion_id, administracion_id, tipo,
+  cantidad, stock_resultante, motivo, requiere_validacion,
+  validado_por, validado_en, creado_por, creado_en,
+  lote:medicamentos_stock_lotes!inner(id, residente_id, medicamento_nombre, lote, unidad)
 `;
 
 const ADMIN_SELECT = `
@@ -209,10 +250,10 @@ export async function listMedicationAdministrations({
 }
 
 export async function getResidentEmar(residenteId) {
-  const [indicaciones, lotes, administraciones] = await Promise.all([
+  const [indicaciones, lotes, administraciones, movimientos] = await Promise.all([
     supabase
       .from("medicamentos_indicaciones")
-      .select(`${INDICATION_SELECT}, horarios:medicamentos_horarios(${SCHEDULE_SELECT})`)
+      .select(`${INDICATION_SELECT}, horarios:medicamentos_horarios(${SCHEDULE_SELECT}), recetas:medicamentos_recetas(${PRESCRIPTION_SELECT})`)
       .eq("residente_id", residenteId)
       .order("creado_en", { ascending: false }),
     supabase
@@ -227,17 +268,77 @@ export async function getResidentEmar(residenteId) {
       .order("fecha", { ascending: false })
       .order("hora", { ascending: false })
       .limit(20),
+    supabase
+      .from("medicamentos_stock_movimientos")
+      .select(STOCK_MOVEMENT_SELECT)
+      .eq("lote.residente_id", residenteId)
+      .order("creado_en", { ascending: false })
+      .limit(100),
   ]);
 
   if (indicaciones.error) throw indicaciones.error;
   if (lotes.error) throw lotes.error;
   if (administraciones.error) throw administraciones.error;
+  if (movimientos.error) throw movimientos.error;
 
   return {
     indicaciones: indicaciones.data ?? [],
     lotes: lotes.data ?? [],
     administraciones: administraciones.data ?? [],
+    movimientos: movimientos.data ?? [],
   };
+}
+
+export async function uploadMedicationPrescription({ residenteId, indicacion, file, fechaEmision, fechaVencimiento = null, observaciones = null }) {
+  const validationError = validatePrescriptionFile(file);
+  if (validationError) throw new Error(validationError);
+  if (!indicacion?.id) throw new Error("Selecciona una indicación válida.");
+  if (!fechaEmision) throw new Error("Indica la fecha de emisión de la receta.");
+  if (fechaVencimiento && fechaVencimiento < fechaEmision) throw new Error("La fecha de vencimiento no puede ser anterior a la emisión.");
+
+  const { userId, eleamId } = await getSessionProfile();
+  const contentType = prescriptionFileType(file);
+  const originalName = String(file.name || "receta.pdf").trim().slice(-255);
+  const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
+  const suffix = Math.random().toString(36).slice(2, 10);
+  const storagePath = `medicamentos/${eleamId}/residentes/${residenteId}/recetas/${Date.now()}-${suffix}-${safeName}`;
+  const { error: uploadError } = await supabase.storage
+    .from("documentos-eleam")
+    .upload(storagePath, file, { contentType, upsert: false });
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await supabase
+    .from("medicamentos_recetas")
+    .insert({
+      eleam_id: eleamId,
+      residente_id: residenteId,
+      indicacion_id: indicacion.id,
+      storage_path: storagePath,
+      archivo_nombre: originalName,
+      archivo_tipo: contentType,
+      archivo_tamanio: file.size,
+      fecha_emision: fechaEmision,
+      fecha_vencimiento: fechaVencimiento || null,
+      prescriptor_nombre: indicacion.prescriptor_nombre,
+      observaciones: observaciones?.trim() || null,
+      subido_por: userId,
+    })
+    .select(PRESCRIPTION_SELECT)
+    .single();
+  if (error) {
+    await supabase.storage.from("documentos-eleam").remove([storagePath]);
+    throw error;
+  }
+  return data;
+}
+
+export async function getMedicationPrescriptionUrl(storagePath) {
+  if (!storagePath) return null;
+  const { data, error } = await supabase.storage
+    .from("documentos-eleam")
+    .createSignedUrl(storagePath, 60 * 30);
+  if (error) throw error;
+  return data?.signedUrl ?? null;
 }
 
 export async function saveMedicationIndication({ residenteId, indication, schedule }) {

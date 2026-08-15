@@ -26,6 +26,7 @@ export function CriticalAlerts({
   ds20Staffing = [],
   adverseEvents = { total: 0, gravesOCriticos: 0 },
   loading,
+  incomplete = false,
   navigate,
   canFeature,
 }) {
@@ -54,6 +55,14 @@ export function CriticalAlerts({
   const totalAlertas = critical.length + visibleFollowUps.length + docs7d.length + emarUrgent + careUrgent + assessmentsCount + ds20ResidentPending.length + ds20StaffingIssues.length + adverseOpen;
 
   if (!totalAlertas) {
+    if (incomplete) {
+      return (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-amber-100 font-bold text-amber-700">!</span>
+          <div><p className="text-sm font-semibold text-amber-900">Resumen parcialmente disponible</p><p className="text-xs text-amber-800">No se pudieron verificar todas las fuentes. No asumiremos que están sin pendientes.</p></div>
+        </div>
+      );
+    }
     return (
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-3">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5 text-emerald-600 shrink-0">
@@ -76,10 +85,10 @@ export function CriticalAlerts({
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
         </svg>
         <h2 className="font-semibold text-rose-800">
-          Atención inmediata · {totalAlertas} alerta{totalAlertas === 1 ? "" : "s"}
+          Pendientes prioritarios · {totalAlertas}
         </h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             label: "Medicamentos urgentes",
@@ -142,8 +151,8 @@ export function CriticalAlerts({
             visible: canResidents,
             value: visibleFollowUps.length,
             tone: "amber",
-            onClick: visibleFollowUps.length ? () => navigate("/observations") : null,
-            hint: visibleFollowUps.length ? "Observaciones marcadas para seguimiento" : "Al día",
+            onClick: visibleFollowUps.length ? () => navigate("/operacion/cuidados") : null,
+            hint: visibleFollowUps.length ? "Registros de evolución marcados para seguimiento" : "Al día",
           },
           {
             label: "Documentos por vencer ≤ 7d",
@@ -163,9 +172,8 @@ export function CriticalAlerts({
               ? ds20ResidentPending.slice(0, 2).map((a) => `${a.residente_nombre}`).join(" · ")
               : "Ingresos completos",
           },
-        ].filter((chip) => chip.visible)
-          // Activas primero (rojas antes que ámbar); las que están al día quedan
-          // al final en gris para no competir visualmente.
+        ].filter((chip) => chip.visible && chip.value > 0)
+          // Mostrar sólo pendientes reales para que el panel siga siendo breve.
           .sort((a, b) => {
             const activeA = a.value > 0 ? (a.tone === "rose" ? 0 : 1) : 2;
             const activeB = b.value > 0 ? (b.tone === "rose" ? 0 : 1) : 2;
@@ -225,7 +233,7 @@ export function ManagementBrief({ loading, score, scoreTone, stale, followUps, e
   } else if (stale.length) {
     nextAction = { label: "Tomar controles pendientes", hint: `${stale.length} residente${stale.length === 1 ? "" : "s"} sin control hoy`, path: "/vital-signs/new", tone: "rose" };
   } else if (followUps.length) {
-    nextAction = { label: "Cerrar seguimientos", hint: `${followUps.length} observaci${followUps.length === 1 ? "ón" : "ones"} por revisar`, path: "/observations", tone: "amber" };
+    nextAction = { label: "Cerrar seguimientos", hint: `${followUps.length} registro${followUps.length === 1 ? "" : "s"} de evolución por revisar`, path: "/operacion/cuidados", tone: "amber" };
   } else if (expiring7) {
     nextAction = { label: "Renovar documentos", hint: `${expiring7} vencen en 7 días o menos`, path: "/cumplimiento", tone: "amber" };
   } else {
@@ -542,7 +550,7 @@ export function FollowUpsCard({ items, navigate }) {
       tone="amber"
       action={items.length > 0 && (
         <button type="button"
- onClick={() => navigate("/observations")} className="text-xs text-amber-700 hover:underline">Ver todos →</button>
+ onClick={() => navigate("/operacion/cuidados")} className="text-xs text-amber-700 hover:underline">Abrir seguimientos →</button>
       )}
     >
       {items.length === 0 ? (
@@ -550,7 +558,7 @@ export function FollowUpsCard({ items, navigate }) {
       ) : (
         <ul className="space-y-2">
           {items.slice(0, 4).map((obs) => (
-            <li key={obs.id} onClick={() => navigate(`/residents/${obs.residente_id}`)}
+            <li key={obs.id} onClick={() => navigate(`/residents/${obs.residente_id}?tab=trazabilidad`)}
               className="bg-white rounded-xl border border-slate-100 px-3 py-2 cursor-pointer hover:bg-amber-50/50 transition-colors"
             >
               <div className="flex items-start justify-between gap-2">
@@ -577,7 +585,7 @@ export function IncidentsCard({ items, navigate }) {
       tone="rose"
       action={items.length > 0 && (
         <button type="button"
- onClick={() => navigate("/observations")} className="text-xs text-rose-700 hover:underline">Ver todos →</button>
+ onClick={() => navigate("/residents?destino=ver_evolucion")} className="text-xs text-rose-700 hover:underline">Buscar por residente →</button>
       )}
     >
       {items.length === 0 ? (
@@ -585,7 +593,7 @@ export function IncidentsCard({ items, navigate }) {
       ) : (
         <ul className="space-y-2">
           {items.slice(0, 4).map((obs) => (
-            <li key={obs.id} onClick={() => navigate(`/residents/${obs.residente_id}`)}
+            <li key={obs.id} onClick={() => navigate(`/residents/${obs.residente_id}?tab=trazabilidad`)}
               className="bg-white rounded-xl border border-slate-100 px-3 py-2 cursor-pointer hover:bg-rose-50/50 transition-colors"
             >
               <div className="flex items-start justify-between gap-2">

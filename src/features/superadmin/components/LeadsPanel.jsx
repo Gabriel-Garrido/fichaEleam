@@ -94,6 +94,7 @@ export default function LeadsPanel({
         email:                      updated.email ?? lead.email,
         email_sent:                 updated._email_sent,
         email_error:                updated._email_error,
+        access_method:              updated._access_method,
         reused_existing_user:       updated._reused_existing_user,
         already_active:             updated._already_active,
         repaired_existing_auth_user:updated._repaired_existing_auth_user,
@@ -147,7 +148,9 @@ export default function LeadsPanel({
               <p className="text-sm text-slate-700"><strong>Correo:</strong> {credenciales.email}</p>
               {credenciales.email_sent && (
                 <p className="mt-1 text-sm text-emerald-700">
-                  Se envió a este correo un enlace para definir la contraseña e ingresar.
+                  {credenciales.access_method === "google"
+                    ? "Se enviaron instrucciones para ingresar directamente con Google."
+                    : "Se envió un enlace personal para definir la contraseña e ingresar."}
                 </p>
               )}
             </div>
@@ -156,8 +159,9 @@ export default function LeadsPanel({
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="text-xs font-semibold text-amber-800">Correo de acceso no enviado</p>
                 <p className="mt-1 text-xs text-amber-700">
-                  Motivo: {credenciales.email_error}. El usuario puede pedir el enlace desde
-                  "¿Olvidaste tu contraseña?" en el inicio de sesión.
+                  Motivo: {credenciales.email_error}. {credenciales.access_method === "google"
+                    ? "La cuenta está habilitada y puede ingresar desde fichaeleam.cl usando Continuar con Google."
+                    : "El usuario puede pedir otro enlace desde ¿Olvidaste tu contraseña? en el inicio de sesión."}
                 </p>
               </div>
             )}

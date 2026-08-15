@@ -9,6 +9,7 @@ describe("private route metadata", () => {
     ["/residents/abc/edit", "Editar residente"],
     ["/residents/abc", "Ficha del residente"],
     ["/operacion/turnos/abc", "Entrega de turno"],
+    ["/operacion/cuidados", "Cuidados del turno"],
     ["/cumplimiento/requisito/abc", "Requisito de cumplimiento"],
     ["/superadmin/clientes", "Uso por ELEAM"],
   ])("resolves %s", (pathname, expected) => {

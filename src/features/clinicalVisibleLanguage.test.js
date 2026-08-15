@@ -21,7 +21,7 @@ describe("clinical visible language contracts", () => {
   });
 
   it("uses aligned operational names for the main clinical surfaces", () => {
-    expect(visibleSources).toContain("Tareas del turno");
+    expect(visibleSources).toContain("Cuidados del turno");
     expect(visibleSources).toContain("Medicamentos");
     expect(visibleSources).toContain("Plan de cuidado");
     expect(visibleSources).toContain("Doble firma");

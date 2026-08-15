@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "../../layout/PageLayout";
 import { useAuth } from "../../context/AuthContext";
-import { useToast } from "../../components/Toast";
 import Button from "../../components/Button";
 import FilterBar from "../../components/FilterBar";
 import { useFilterParams } from "../../hooks/useFilterParams";
@@ -47,7 +46,6 @@ const DATE_PRESETS = [
 
 export default function AdverseEventsList() {
   const navigate = useNavigate();
-  const toast = useToast();
   const { can, isAdminEleam } = useAuth();
   const canCreate = isAdminEleam || can("crear_eventos_adversos");
 
@@ -77,15 +75,19 @@ export default function AdverseEventsList() {
   const [events, setEvents] = useState([]);
   const [residents, setResidents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [residentsLoading, setResidentsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     getResidents()
       .then(setResidents)
-      .catch(() => setResidents([]));
+      .catch(() => setResidents([]))
+      .finally(() => setResidentsLoading(false));
   }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const data = await listAdverseEvents({
         search: filters.q || null,
@@ -99,15 +101,16 @@ export default function AdverseEventsList() {
       });
       setEvents(data);
     } catch (err) {
-      toast(userFacingFormError(err, "No se pudieron cargar los eventos adversos."), "error");
+      setLoadError(userFacingFormError(err, "No se pudieron cargar los eventos adversos."));
     } finally {
       setLoading(false);
     }
-  }, [filters, toast]);
+  }, [filters]);
 
   useEffect(() => { load(); }, [load]);
 
   const goToDetail = (event) => navigate(`/eventos-adversos/${event.id}`);
+  const busy = loading || residentsLoading;
 
   return (
     <PageLayout
@@ -143,13 +146,17 @@ export default function AdverseEventsList() {
           values={filters}
           onFilterChange={setFilter}
           onClearAll={clearFilters}
-          resultCount={loading ? undefined : events.length}
-          loading={loading}
+          resultCount={busy ? undefined : events.length}
+          loading={busy}
         />
       </div>
 
-      {loading ? (
+      {loadError && <div role="alert" className="mb-4 flex flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between"><span>{loadError}</span><Button type="button" onClick={load} className="border border-rose-200 bg-white text-rose-700">Reintentar</Button></div>}
+
+      {busy ? (
         <LeadsSkeletonList count={4} />
+      ) : loadError && events.length === 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">No se muestran eventos porque la consulta no terminó correctamente.</div>
       ) : events.length === 0 ? (
         <EmptyState
           hasFilters={Object.values(filters).some((v) => v && v !== false)}

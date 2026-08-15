@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Modal from "../../components/Modal";
 import HelpTooltip from "../../components/HelpTooltip";
-import MetricCard from "../../components/MetricCard";
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useAuth } from "../../context/AuthContext";
@@ -11,6 +11,7 @@ import {
   EMAR_TURNOS,
   MED_ROUTES,
   currentTurno,
+  getMedicationPrescriptionUrl,
   getResidentEmar,
   listPendingControlledReconciliations,
   reconcileControlledStock,
@@ -19,6 +20,7 @@ import {
   saveStockLot,
   todayIso,
 } from "./emarService";
+import MedicationPrescriptionModal from "./MedicationPrescriptionModal";
 import {
   buildStockLotAlerts,
   DEFAULT_MEDICATION_INDICATION,
@@ -60,6 +62,12 @@ const STOCK_TONE = {
   inactivo: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
+const MEDICATION_SECTIONS = [
+  { id: "tratamiento", label: "Tratamiento y recetas" },
+  { id: "stock", label: "Recepción y stock" },
+  { id: "administracion", label: "Administraciones" },
+];
+
 function cloneSchedule(schedule = INITIAL_SCHEDULE) {
   return {
     ...INITIAL_SCHEDULE,
@@ -71,10 +79,11 @@ function cloneSchedule(schedule = INITIAL_SCHEDULE) {
 }
 
 export default function EmarResidentTab({ resident }) {
+  const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
   const { can } = useAuth();
-  const [data, setData] = useState({ indicaciones: [], lotes: [], administraciones: [] });
+  const [data, setData] = useState({ indicaciones: [], lotes: [], administraciones: [], movimientos: [] });
   const [pendingReconciliations, setPendingReconciliations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -82,9 +91,13 @@ export default function EmarResidentTab({ resident }) {
   const [lotModal, setLotModal] = useState(null);
   const [movementModal, setMovementModal] = useState(null);
   const [reconcileModal, setReconcileModal] = useState(null);
+  const [prescriptionModal, setPrescriptionModal] = useState(null);
+  const [section, setSection] = useState("tratamiento");
 
   const canCreateIndication = can("crear_indicaciones_medicamentos");
   const canEditIndication = can("editar_indicaciones_medicamentos");
+  const canUploadPrescription = can("adjuntar_recetas_medicamentos");
+  const canAdminister = can("administrar_medicamentos");
   const canAdjustStock = can("ajustar_stock_medicamentos");
   const canValidate = can("validar_medicamentos_controlados");
 
@@ -117,26 +130,9 @@ export default function EmarResidentTab({ resident }) {
     [data.indicaciones]
   );
 
-  const stockByIndication = useMemo(() => {
-    const totals = {};
-    for (const lot of data.lotes) {
-      if (!lot.indicacion_id || lot.estado !== "activo") continue;
-      const qty = Number(lot.cantidad_actual ?? 0);
-      if (qty <= 0) continue;
-      if (!totals[lot.indicacion_id]) totals[lot.indicacion_id] = { cantidad: 0, unidad: lot.unidad || "unidad" };
-      totals[lot.indicacion_id].cantidad += qty;
-    }
-    return totals;
-  }, [data.lotes]);
-
   const closedIndications = useMemo(
     () => data.indicaciones.filter((item) => ["suspendida", "suspendido", "finalizada"].includes(item.estado)),
     [data.indicaciones]
-  );
-
-  const controlledLots = useMemo(
-    () => data.lotes.filter((lot) => lot.es_controlado),
-    [data.lotes]
   );
 
   const stockAlerts = useMemo(() => {
@@ -147,6 +143,21 @@ export default function EmarResidentTab({ resident }) {
     () => data.administraciones.filter((row) => ["pendiente", "pendiente_validacion"].includes(row.estado)).length,
     [data.administraciones]
   );
+
+  const receptionMovements = useMemo(
+    () => data.movimientos.filter((item) => item.tipo === "recepcion"),
+    [data.movimientos]
+  );
+
+  const openPrescription = async (recipe) => {
+    try {
+      const url = await getMedicationPrescriptionUrl(recipe.storage_path);
+      if (!url) throw new Error("No se pudo abrir la receta.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      toast(error.message || "No se pudo abrir la receta.", "error");
+    }
+  };
 
   const handleSaveIndication = async ({ indication, schedule }) => {
     setSaving(true);
@@ -231,197 +242,33 @@ export default function EmarResidentTab({ resident }) {
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-semibold text-slate-950">Medicamentos</h2>
-              <HelpTooltip label="Ayuda: medicamentos del residente">
-                Las indicaciones generan administraciones por turno. Algunos medicamentos requieren stock por lote y confirmación de un segundo usuario.
-              </HelpTooltip>
-            </div>
-            <p className="text-sm text-slate-500">
-              Indicaciones activas, horarios, stock por lote y registros por validar.
-            </p>
+            <h2 className="text-lg font-bold text-slate-950">Medicamentos</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-500">Indicaciones, recetas, stock y administraciones de {resident.nombre} {resident.apellido}.</p>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-            {canCreateIndication && (
-              <button
-                type="button"
-                onClick={() => setIndicationModal({ indication: INITIAL_INDICATION, schedule: { ...INITIAL_SCHEDULE, turno: currentTurno() } })}
-                className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:w-auto"
-              >
-                Nueva indicación
-              </button>
-            )}
-          </div>
+          {canCreateIndication && <button type="button" onClick={() => setIndicationModal({ indication: INITIAL_INDICATION, schedule: { ...INITIAL_SCHEDULE, turno: currentTurno() } })} className="min-h-10 w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:w-auto">Nueva indicación</button>}
         </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard size="sm" label="Indicaciones activas" value={activeIndications.length} />
-          <MetricCard size="sm" label="Lotes con stock" value={data.lotes.filter((lot) => Number(lot.cantidad_actual ?? 0) > 0).length} tone="emerald" />
-          <MetricCard
-            size="sm"
-            label="Alertas de stock"
-            value={stockAlerts.vencidos.length + stockAlerts.porVencer.length + stockAlerts.sinStock.length}
-            tone={stockAlerts.vencidos.length || stockAlerts.sinStock.length ? "amber" : "emerald"}
-          />
-          <MetricCard size="sm" label="Pendientes" value={recentPending} tone={recentPending ? "amber" : "emerald"} />
-        </div>
-
-        <StockAlertsPanel
-          alerts={stockAlerts}
-          canAdjustStock={canAdjustStock}
-          onNewLot={() => setLotModal({ lot: INITIAL_LOT, indication: activeIndications[0] ?? null })}
-        />
-
-        {(!canCreateIndication || !canAdjustStock) && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Tu perfil puede consultar medicamentos
-            {!canCreateIndication ? ", pero no crear indicaciones" : ""}
-            {!canAdjustStock ? ", ni registrar stock" : ""}. Un administrador puede habilitar esos permisos en Gestión de equipo.
-          </div>
-        )}
-
-        {activeIndications.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-            <h3 className="text-sm font-semibold text-slate-950">Configura la primera indicación</h3>
-            <p className="mx-auto mt-1 max-w-xl text-sm text-slate-500">
-              Registra medicamento, dosis y uno o más horarios. Desde ahí se generarán las administraciones por turno.
-            </p>
-            {canCreateIndication && (
-              <button
-                type="button"
-                onClick={() => setIndicationModal({ indication: INITIAL_INDICATION, schedule: { ...INITIAL_SCHEDULE, turno: currentTurno() } })}
-                className="mt-4 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
-              >
-                Crear indicación
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="mt-4 space-y-4">
-            <IndicationGroup
-              title="Indicaciones vigentes"
-              items={activeIndications}
-              empty="Sin indicaciones vigentes."
-              canEdit={canEditIndication}
-              canAdjustStock={canAdjustStock}
-              stockByIndication={stockByIndication}
-              onEdit={setIndicationModal}
-              onNewLot={setLotModal}
-            />
-            {closedIndications.length > 0 && (
-              <IndicationGroup
-                title="Cerradas o suspendidas"
-                items={closedIndications}
-                empty=""
-                canEdit={canEditIndication}
-                canAdjustStock={canAdjustStock}
-                stockByIndication={stockByIndication}
-                onEdit={setIndicationModal}
-                onNewLot={setLotModal}
-              />
-            )}
-          </div>
-        )}
+        <MedicationSectionNav active={section} onChange={setSection} />
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h2 className="text-base font-semibold text-slate-950">Stock por lote</h2>
-                <HelpTooltip label="Ayuda: stock de medicamentos">
-                  Cada administración con stock obligatorio descuenta del lote seleccionado. Editar un lote no cambia cantidades; las cantidades se mueven con acciones auditadas.
-                </HelpTooltip>
-              </div>
-              <p className="text-sm text-slate-500">Entradas, salidas y ajustes quedan auditados por movimiento.</p>
-            </div>
-            {canAdjustStock && data.lotes.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setMovementModal({ lot: data.lotes[0], tipo: "recepcion" })}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Movimiento
-              </button>
-            )}
-          </div>
+      {section === "tratamiento" && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4"><div className="flex items-center gap-1.5"><h2 className="text-base font-semibold text-slate-950">Tratamiento actual</h2><HelpTooltip label="Ayuda: tratamiento y recetas">Registra medicamento, dosis, vía, prescriptor, vigencia y horarios. La receta en PDF o imagen queda asociada a la indicación.</HelpTooltip></div><p className="mt-1 text-sm text-slate-500">La información necesaria para generar las administraciones del turno.</p></div>
+        {activeIndications.length === 0 ? <EmptyMedicationState title="Aún no hay indicaciones" text="Registra la primera indicación médica y adjunta su receta." action={canCreateIndication ? "Crear indicación" : null} onAction={() => setIndicationModal({ indication: INITIAL_INDICATION, schedule: { ...INITIAL_SCHEDULE, turno: currentTurno() } })} /> : <IndicationGroup title="Indicaciones vigentes" items={activeIndications} empty="Sin indicaciones vigentes." canEdit={canEditIndication} canUpload={canUploadPrescription} onEdit={setIndicationModal} onUpload={setPrescriptionModal} onOpenPrescription={openPrescription} />}
+        {closedIndications.length > 0 && <details className="mt-4 border-t border-slate-100 pt-4"><summary className="cursor-pointer text-sm font-semibold text-slate-600">Ver indicaciones cerradas ({closedIndications.length})</summary><div className="mt-3"><IndicationGroup title="Historial" items={closedIndications} empty="" canEdit={canEditIndication} canUpload={canUploadPrescription} onEdit={setIndicationModal} onUpload={setPrescriptionModal} onOpenPrescription={openPrescription} /></div></details>}
+      </section>}
 
-          {data.lotes.length === 0 ? (
-            <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-              Sin lotes registrados. El stock se exige al administrar medicamentos con inventario activo o doble firma.
-            </p>
-          ) : (
-            <div className="mt-4 divide-y divide-slate-100">
-              {data.lotes.map((lot) => (
-                <StockLotRow
-                  key={lot.id}
-                  lot={lot}
-                  canAdjustStock={canAdjustStock}
-                  onEdit={() => setLotModal({ lot, indication: activeIndications.find((i) => i.id === lot.indicacion_id) ?? null })}
-                  onMove={(tipo) => setMovementModal({ lot, tipo })}
-                  onReconcile={() => setReconcileModal({ lot })}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+      {section === "stock" && <div className="space-y-4">
+        <StockAlertsPanel alerts={stockAlerts} canAdjustStock={canAdjustStock} onNewLot={() => setLotModal({ lot: INITIAL_LOT, indication: activeIndications[0] ?? null })} />
+        <PendingControlledValidations pending={pendingReconciliations} canValidate={canValidate} onValidate={(item) => setReconcileModal({ reconciliation: item })} />
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex items-center gap-1.5"><h2 className="text-base font-semibold text-slate-950">Recepción y stock</h2><HelpTooltip label="Ayuda: recepción y stock">Cada lote conserva cantidad recibida, vencimiento, ubicación y movimientos posteriores.</HelpTooltip></div><p className="mt-1 text-sm text-slate-500">Los controlados muestran aquí mismo sus acciones de conteo y doble firma.</p></div>{canAdjustStock && <button type="button" onClick={() => setLotModal({ lot: INITIAL_LOT, indication: activeIndications[0] ?? null })} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Registrar recepción</button>}</div>
+          {data.lotes.length === 0 ? <EmptyMedicationState title="Sin recepciones registradas" text="Registra el primer lote, su cantidad, vencimiento y ubicación." /> : <div className="mt-4 divide-y divide-slate-100">{data.lotes.map((lot) => <StockLotRow key={lot.id} lot={lot} canAdjustStock={canAdjustStock} onEdit={() => setLotModal({ lot, indication: activeIndications.find((item) => item.id === lot.indicacion_id) ?? null })} onMove={(tipo) => setMovementModal({ lot, tipo })} onReconcile={() => setReconcileModal({ lot })} />)}</div>}
+          <ReceptionHistory movements={receptionMovements} />
+        </section>
+      </div>}
 
-        <div className="space-y-5">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-semibold text-slate-950">Doble firma</h2>
-              <HelpTooltip label="Ayuda: doble firma">
-                Algunos medicamentos requieren stock identificado y confirmación de un segundo usuario antes de cerrar el registro.
-              </HelpTooltip>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <MetricCard size="sm" label="Lotes" value={controlledLots.length} />
-              <MetricCard size="sm" label="Por validar" value={pendingReconciliations.length} tone={pendingReconciliations.length ? "amber" : "emerald"} />
-            </div>
-            {pendingReconciliations.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {pendingReconciliations.slice(0, 3).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    disabled={!canValidate}
-                    onClick={() => setReconcileModal({ reconciliation: item })}
-                    className="w-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-900 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {item.lote?.medicamento_nombre ?? "Medicamento"} · diferencia {item.diferencia}
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-slate-950">Últimas administraciones</h2>
-            {data.administraciones.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">Aún no hay administraciones registradas.</p>
-            ) : (
-              <div className="mt-3 space-y-2">
-                {data.administraciones.slice(0, 6).map((row) => (
-                  <div key={row.id} className="rounded-xl border border-slate-100 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-slate-950">{row.indicacion?.medicamento_nombre}</span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                        {MEDICINE_STATUS_LABEL[row.estado] ?? row.estado}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {formatDateOnly(row.fecha)} · {row.hora?.slice(0, 5)} · {row.turno}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-      </section>
+      {section === "administracion" && <AdministrationSection rows={data.administraciones} pending={recentPending} canAdminister={canAdminister} onOpenTurn={() => navigate(`/operacion/medicamentos?q=${encodeURIComponent(`${resident.nombre} ${resident.apellido}`)}`)} />}
 
       <IndicationModal
         modal={indicationModal}
@@ -453,8 +300,31 @@ export default function EmarResidentTab({ resident }) {
         onClose={() => !saving && setReconcileModal(null)}
         onSubmit={handleReconcile}
       />
+      <MedicationPrescriptionModal indication={prescriptionModal} residentId={resident.id} onClose={() => setPrescriptionModal(null)} onSaved={load} />
     </div>
   );
+}
+
+function MedicationSectionNav({ active, onChange }) {
+  return <nav aria-label="Secciones de medicamentos" className="mt-4 flex gap-1 overflow-x-auto border-t border-slate-100 pt-3">{MEDICATION_SECTIONS.map((item) => <button key={item.id} type="button" onClick={() => onChange(item.id)} aria-current={active === item.id ? "page" : undefined} className={`min-h-10 shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition ${active === item.id ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>{item.label}</button>)}</nav>;
+}
+
+function AdministrationSection({ rows, pending, canAdminister, onOpenTurn }) {
+  return <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-base font-semibold text-slate-950">Administración y uso</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Cada dosis debe dejar medicamento, dosis, hora, vía, estado y responsable. La bandeja del turno es el lugar seguro para ejecutar u omitir.</p></div>{canAdminister && <button type="button" onClick={onOpenTurn} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800">Abrir bandeja del turno{pending ? ` · ${pending}` : ""}</button>}</div>{rows.length === 0 ? <EmptyMedicationState title="Aún no hay administraciones" text="Cuando existan horarios y se trabaje el turno, el historial aparecerá aquí." /> : <div className="mt-4 space-y-2">{rows.map((row) => <div key={row.id} className="flex flex-col gap-2 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-slate-950">{row.indicacion?.medicamento_nombre}</p><p className="mt-1 text-xs text-slate-500">{formatDateOnly(row.fecha)} · {row.hora?.slice(0, 5)} · {row.turno} · {row.indicacion?.via || "vía no indicada"}</p></div><span className="w-fit rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{MEDICINE_STATUS_LABEL[row.estado] ?? row.estado}</span></div>)}</div>}</section>;
+}
+
+function PendingControlledValidations({ pending, canValidate, onValidate }) {
+  if (pending.length === 0) return null;
+  return <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4"><p className="text-sm font-semibold text-sky-950">{pending.length} revisión{pending.length === 1 ? "" : "es"} de stock requiere{pending.length === 1 ? "" : "n"} segunda firma</p><div className="mt-3 flex flex-wrap gap-2">{pending.map((item) => <button key={item.id} type="button" disabled={!canValidate} onClick={() => onValidate(item)} className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs font-semibold text-sky-900 disabled:opacity-50">{item.lote?.medicamento_nombre || "Medicamento"} · validar diferencia {item.diferencia}</button>)}</div></section>;
+}
+
+function ReceptionHistory({ movements }) {
+  if (movements.length === 0) return null;
+  return <details className="mt-4 border-t border-slate-100 pt-4"><summary className="cursor-pointer text-sm font-semibold text-slate-600">Ver historial de recepciones ({movements.length})</summary><div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">{movements.map((item) => <div key={item.id} className="grid gap-1 px-3 py-2 text-xs sm:grid-cols-[1fr_auto_auto]"><span className="font-semibold text-slate-800">{item.lote?.medicamento_nombre} · lote {item.lote?.lote || "sin identificar"}</span><span className="text-emerald-700">+{Number(item.cantidad)} {item.lote?.unidad}</span><span className="text-slate-500">{new Date(item.creado_en).toLocaleString("es-CL")}</span></div>)}</div></details>;
+}
+
+function EmptyMedicationState({ title, text, action = null, onAction = null }) {
+  return <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center"><h3 className="text-sm font-semibold text-slate-950">{title}</h3><p className="mx-auto mt-1 max-w-xl text-sm leading-6 text-slate-500">{text}</p>{action && <button type="button" onClick={onAction} className="mt-4 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">{action}</button>}</div>;
 }
 
 function StockAlertsPanel({ alerts, canAdjustStock, onNewLot }) {
@@ -519,10 +389,10 @@ function IndicationGroup({
   items,
   empty,
   canEdit,
-  canAdjustStock,
-  stockByIndication,
+  canUpload,
   onEdit,
-  onNewLot,
+  onUpload,
+  onOpenPrescription,
 }) {
   return (
     <section className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3">
@@ -541,23 +411,14 @@ function IndicationGroup({
               key={item.id}
               item={item}
               canEdit={canEdit}
-              canAdjustStock={canAdjustStock && item.es_controlado}
-              stock={stockByIndication[item.id]}
+              canUpload={canUpload}
+              onUpload={() => onUpload(item)}
+              onOpenPrescription={onOpenPrescription}
               onEdit={() => onEdit({
                 indication: item,
                 schedules: item.horarios?.filter((h) => h.activo !== false).length
                   ? item.horarios.filter((h) => h.activo !== false)
                   : [INITIAL_SCHEDULE],
-              })}
-              onNewLot={() => onNewLot({
-                indication: item,
-                lot: {
-                  ...INITIAL_LOT,
-                  medicamento_nombre: item.medicamento_nombre,
-                  unidad: item.unidad_dosis || "unidad",
-                  es_controlado: item.es_controlado,
-                  tipo_controlado: item.tipo_controlado || "psicotropico",
-                },
               })}
             />
           ))}
@@ -567,16 +428,16 @@ function IndicationGroup({
   );
 }
 
-function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot }) {
-  const needsStock = item.requiere_stock || item.es_controlado;
-  const hasStock = Number(stock?.cantidad ?? 0) > 0;
+function IndicationRow({ item, canEdit, canUpload, onEdit, onUpload, onOpenPrescription }) {
+  const recipes = [...(item.recetas ?? [])].sort((a, b) => String(b.creado_en).localeCompare(String(a.creado_en)));
+  const latestRecipe = recipes[0];
   return (
     <div className="py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
-              {item.via}
+              {MED_ROUTES.find(([value]) => value === item.via)?.[1] ?? item.via}
             </span>
             {item.es_controlado && (
               <span
@@ -586,22 +447,7 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
                 Requiere doble firma
               </span>
             )}
-            {item.requiere_stock && (
-              <span
-                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600"
-                title="Esta indicación descuenta stock al administrar; necesita un lote con cantidad disponible."
-              >
-                Stock obligatorio
-              </span>
-            )}
-            {item.requiere_doble_validacion && !item.es_controlado && (
-              <span
-                className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700"
-                title="Cada administración debe ser confirmada por un segundo usuario."
-              >
-                Segunda firma
-              </span>
-            )}
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${latestRecipe ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>{latestRecipe ? "Receta adjunta" : "Falta receta"}</span>
             {item.fecha_fin && (
               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
                 Hasta {formatDateOnly(item.fecha_fin)}
@@ -612,18 +458,8 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
           <p className="mt-1 text-sm text-slate-600">
             {item.dosis} {item.unidad_dosis || ""}{item.concentracion ? ` · ${item.concentracion}` : ""}
           </p>
-          {needsStock && (
-            <p className={`mt-1 text-sm font-medium ${hasStock ? "text-emerald-700" : "text-amber-800"}`}>
-              {hasStock
-                ? `Stock disponible: ${stock.cantidad} ${stock.unidad}`
-                : "Sin stock disponible para esta indicación"}
-            </p>
-          )}
-          {needsStock && !hasStock && (
-            <p className="mt-1 text-xs text-slate-500">
-              En el turno no se podrá administrar hasta registrar un lote activo con cantidad disponible.
-            </p>
-          )}
+          <p className="mt-1 text-xs text-slate-500">Prescriptor: {item.prescriptor_nombre}</p>
+          {latestRecipe && <p className="mt-1 text-xs text-slate-500">Receta emitida el {formatDateOnly(latestRecipe.fecha_emision)} · {recipes.length} archivo{recipes.length === 1 ? "" : "s"} en historial</p>}
           {item.instrucciones && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.instrucciones}</p>}
           <div className="mt-2 flex flex-wrap gap-2">
             {(item.horarios ?? []).filter((h) => h.activo !== false).map((h) => (
@@ -632,18 +468,11 @@ function IndicationRow({ item, canEdit, canAdjustStock, stock, onEdit, onNewLot 
               </span>
             ))}
           </div>
+          {recipes.length > 1 && <details className="mt-2"><summary className="cursor-pointer text-xs font-semibold text-slate-500">Ver recetas anteriores</summary><div className="mt-2 flex flex-wrap gap-2">{recipes.slice(1).map((recipe) => <button key={recipe.id} type="button" onClick={() => onOpenPrescription(recipe)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50">{formatDateOnly(recipe.fecha_emision)}</button>)}</div></details>}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {canAdjustStock && (
-            <button
-              type="button"
-              onClick={onNewLot}
-              title="Registrar un nuevo lote para esta indicación: lote, vencimiento, ubicación y stock inicial."
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Agregar lote
-            </button>
-          )}
+          {latestRecipe && <button type="button" onClick={() => onOpenPrescription(latestRecipe)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Ver receta</button>}
+          {canUpload && <button type="button" onClick={onUpload} className="rounded-xl border border-teal-200 px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50">{latestRecipe ? "Nueva receta" : "Adjuntar receta"}</button>}
           {canEdit && (
             <button
               type="button"
@@ -714,7 +543,7 @@ function StockLotRow({ lot, canAdjustStock, onEdit, onMove, onReconcile }) {
               title="Registrar nuevas unidades que ingresan al inventario."
               className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
             >
-              Ingreso
+              Recibir más
             </button>
             {!lot.es_controlado && (
               <button
@@ -1065,7 +894,7 @@ function LotModal({ modal, indications, saving, confirm, onClose, onSubmit }) {
   };
 
   return (
-    <Modal isOpen={!!modal} onClose={handleClose} title={lot.id ? "Editar lote" : "Nuevo lote"}>
+    <Modal isOpen={!!modal} onClose={handleClose} title={lot.id ? "Editar lote" : "Registrar recepción"}>
       <form
         className="space-y-4"
         onSubmit={async (e) => {
@@ -1154,7 +983,7 @@ function LotModal({ modal, indications, saving, confirm, onClose, onSubmit }) {
             Cancelar
           </button>
           <button type="submit" disabled={saving || !lot.medicamento_nombre?.trim()} className="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto">
-            {saving ? "Guardando..." : "Guardar"}
+            {saving ? "Guardando..." : lot.id ? "Guardar cambios" : "Guardar recepción"}
           </button>
         </div>
       </form>
@@ -1201,7 +1030,7 @@ function MovementModal({ modal, lots, saving, confirm, onClose, onSubmit }) {
   };
 
   return (
-    <Modal isOpen={!!modal} onClose={handleClose} title="Movimiento de stock">
+    <Modal isOpen={!!modal} onClose={handleClose} title={tipo === "recepcion" ? "Registrar recepción" : "Movimiento de stock"}>
       <form
         className="space-y-4"
         onSubmit={async (e) => {

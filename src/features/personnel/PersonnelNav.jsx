@@ -8,8 +8,8 @@ const ITEMS = [
 ];
 
 export default function PersonnelNav() {
-  const { canFeature } = useAuth();
-  const items = ITEMS.filter(([path]) => !path.startsWith("/operacion") || canFeature("residents"));
+  const { canFeature, can } = useAuth();
+  const items = ITEMS.filter(([path]) => !path.startsWith("/operacion") || (canFeature("residents") && can("ver_entregas_turno")));
   return (
     <nav aria-label="Personal y turnos" className="mb-5 overflow-x-auto print:hidden">
       <div className="flex min-w-max gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">

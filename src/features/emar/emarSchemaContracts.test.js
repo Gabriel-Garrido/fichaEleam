@@ -28,4 +28,22 @@ describe("medication schema contracts", () => {
     expect(schema).toContain("No se puede administrar con un lote vencido");
     expect(schema).toMatch(/v_lote\.fecha_vencimiento\s+is\s+not\s+null\s+and\s+v_lote\.fecha_vencimiento\s+<\s+current_date/i);
   });
+
+  it("keeps prescription documents private, historical and scoped to the resident", () => {
+    expect(schema).toContain("create table if not exists public.medicamentos_recetas");
+    expect(schema).toContain("alter table public.medicamentos_recetas enable row level security");
+    expect(schema).toContain('create policy "mr_select" on public.medicamentos_recetas');
+    expect(schema).toContain('create policy "mr_insert" on public.medicamentos_recetas');
+    expect(schema).toContain("check (archivo_tamanio between 1 and 3145728) not valid");
+    expect(schema).toContain("check (archivo_tipo in ('application/pdf','image/jpeg','image/png','image/webp')) not valid");
+    expect(schema).toMatch(/create policy "mr_insert"[\s\S]*?funcionario_can\('adjuntar_recetas_medicamentos'\)/);
+    expect(schema).not.toMatch(/create policy "mr_delete"/);
+    expect(schema).toMatch(/not exists \(\s*select 1 from public\.medicamentos_recetas mr\s*where mr\.storage_path = name\s*\)/);
+  });
+
+  it("reports prescription, reception and use as partial DS20 evidence", () => {
+    expect(schema).toContain("DS20-A10-MEDICAMENTOS-RECEPCION-USO");
+    expect(schema).toMatch(/'DS20-A10-MEDICAMENTOS-RECEPCION-USO', 'avance_parcial',[\s\S]*?'\/residents', false\)/);
+  });
+
 });

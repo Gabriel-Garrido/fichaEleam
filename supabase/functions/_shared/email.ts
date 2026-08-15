@@ -127,7 +127,7 @@ export function staffWelcomeEmail({
   const safeEmail = escapeHtml(email);
   const safeEleamNombre = escapeHtml(eleamNombre);
   const safeSetupUrl = escapeHtml(setupUrl);
-  const rolLabel = rol === "familiar" ? "Familiar" : "Funcionario";
+  const rolLabel = rol === "admin_eleam" ? "Administrador del ELEAM" : rol === "familiar" ? "Familiar" : "Funcionario";
   const safeRolLabel = escapeHtml(rolLabel);
   return `
 <!DOCTYPE html>
@@ -219,7 +219,7 @@ export function gmailStaffWelcomeEmail({
   const safeEmail = escapeHtml(email);
   const safeEleamNombre = escapeHtml(eleamNombre);
   const safeLoginUrl = escapeHtml(loginUrl);
-  const rolLabel = rol === "familiar" ? "Familiar" : "Funcionario";
+  const rolLabel = rol === "admin_eleam" ? "Administrador del ELEAM" : rol === "familiar" ? "Familiar" : "Funcionario";
   const safeRolLabel = escapeHtml(rolLabel);
   return `
 <!DOCTYPE html>
@@ -455,21 +455,26 @@ export function paymentAdminNotificationHtml({
 </html>`;
 }
 
+export type DemoAccessMethod = "google" | "password";
+
 export function demoWelcomeEmail({
   nombre,
   email,
   eleamNombre,
-  setupUrl,
+  accessMethod,
+  accessUrl,
 }: {
   nombre: string;
   email: string;
   eleamNombre: string;
-  setupUrl: string;
+  accessMethod: DemoAccessMethod;
+  accessUrl: string;
 }): string {
   const safeNombre = escapeHtml(nombre);
   const safeEmail = escapeHtml(email);
   const safeEleamNombre = escapeHtml(eleamNombre);
-  const safeSetupUrl = escapeHtml(setupUrl);
+  const safeAccessUrl = escapeHtml(accessUrl);
+  const googleAccess = accessMethod === "google";
   return `
 <!DOCTYPE html>
 <html lang="es">
@@ -484,19 +489,28 @@ export function demoWelcomeEmail({
       <p style="color:#1e293b;font-size:16px;margin:0 0 8px">Hola, <strong>${safeNombre}</strong></p>
       <p style="color:#475569;font-size:14px;margin:0 0 24px">
         Tu acceso a la demo de FichaEleam para <strong>${safeEleamNombre}</strong> ha sido activado.
-        Abre el enlace para crear o restablecer tu contraseña. En esa misma pantalla también podrás entrar con Google usando este correo.
+        ${googleAccess
+          ? `Como tu correo es Gmail, ingresa directamente con tu cuenta de Google. No necesitas crear ni recordar una contraseña de FichaEleam.`
+          : `Para comenzar, abre el enlace personal y crea una contraseña para tu cuenta.`}
       </p>
 
-      <a href="${safeSetupUrl}" style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px">
-        Crear contraseña o entrar con Google
+      <a href="${safeAccessUrl}" style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px">
+        ${googleAccess ? "Ingresar con Google" : "Crear mi contraseña"}
       </a>
 
       <p style="color:#64748b;font-size:13px;margin:24px 0 0">
         Correo de tu cuenta: <strong>${safeEmail}</strong>
       </p>
+      <div style="margin:20px 0 0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;color:#475569;font-size:13px;line-height:1.6">
+        <strong>Cómo ingresar:</strong><br>
+        ${googleAccess
+          ? `1. Entra a https://fichaeleam.cl.<br>2. Presiona “Ingresar”.<br>3. Elige “Continuar con Google”.<br>4. Selecciona exactamente <strong>${safeEmail}</strong>.`
+          : `1. Presiona “Crear mi contraseña”.<br>2. Define una contraseña segura.<br>3. Luego ingresa en https://fichaeleam.cl con <strong>${safeEmail}</strong> y esa contraseña.`}
+      </div>
       <p style="color:#94a3b8;font-size:12px;margin:16px 0 0">
-        El enlace es personal y caduca por seguridad. Si expira, solicita uno nuevo desde
-        "¿Olvidaste tu contraseña?" en la página de inicio de sesión.
+        ${googleAccess
+          ? `Si Google muestra varias cuentas, asegúrate de elegir el correo indicado. Otra cuenta no tendrá acceso al ELEAM.`
+          : `El enlace es personal, de un solo uso y caduca por seguridad. Si expira, solicita uno nuevo desde “¿Olvidaste tu contraseña?” en la página de inicio de sesión.`}
         ¿Tienes preguntas? Escríbenos a soporte@fichaeleam.cl
       </p>
     </div>

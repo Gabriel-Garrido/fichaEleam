@@ -11,6 +11,8 @@
 
 > **Estado de producto (2026-07-20):** este archivo conserva el análisis normativo amplio y propuestas de evolución. No todas las propuestas forman parte del producto vigente. En particular, el portal familiar y las cuentas familiares no están activos; las obligaciones de comunicación se registran como antecedentes clínicos o reglamentarios por administradores y funcionarios. Para arquitectura, rutas y alcance actual consulta `README.md` y `CLAUDE.md`.
 
+> **Actualización implementada (2026-08-15):** las observaciones clínicas se gestionan como **Registro de evolución** dentro de la ficha de cada residente. El residente queda fijo; se conservan fecha, turno, categoría, descripción, acciones, respuesta, responsable y seguimiento. Las categorías excluyen medicamentos, cuidados rutinarios, controles y eventos adversos porque poseen registros propios. Los antecedentes se consultan cronológicamente en Historial. Este registro aporta evidencia parcial a la carpeta personal actualizada del artículo 29, sin sustituir los restantes antecedentes de salud, sociales, medicamentos y documentos. El resumen de la entrega está en `ACTUALIZACION_PRODUCTO_2026-08-15.md`.
+
 ---
 
 # 1. Estado normativo vigente
@@ -215,7 +217,7 @@ El cierre transitorio o definitivo debe avisarse a SEREMI.
 
 - Registrar resolución sanitaria.
 - Registrar fecha de otorgamiento.
-- Calcular vigencia de 3 años.
+- Mostrar los períodos de 3 años sin tratar la resolución como vencida automáticamente, porque su renovación es automática mientras no sea dejada sin efecto.
 - Alertar cierre transitorio/definitivo.
 - Registrar observaciones SEREMI y subsanaciones.
 

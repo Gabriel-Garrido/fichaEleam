@@ -487,6 +487,7 @@ const permisosTableMatch = schemaNoComments.match(
   /create\s+table\s+if\s+not\s+exists\s+public\.funcionario_permisos\s*\(([\s\S]*?)\n\);/i,
 );
 const dbPermColumns = new Set();
+const idempotentPermColumns = new Set();
 if (!permisosTableMatch) {
   fail("No se encontró la tabla public.funcionario_permisos en supabase_schema.sql.");
 } else {
@@ -500,6 +501,13 @@ for (const match of schemaNoComments.matchAll(
 )) {
   for (const column of match[0].matchAll(/add\s+column\s+if\s+not\s+exists\s+([a-zA-Z0-9_]+)\s+boolean\s+not\s+null\s+default\s+(?:true|false)/gim)) {
     dbPermColumns.add(column[1]);
+    idempotentPermColumns.add(column[1]);
+  }
+}
+
+for (const key of dbPermColumns) {
+  if (!idempotentPermColumns.has(key)) {
+    fail(`Permiso backend "${key}" no tiene migración ADD COLUMN IF NOT EXISTS para bases existentes.`);
   }
 }
 
@@ -525,7 +533,7 @@ for (const entry of sourceEntries) {
   for (const match of entry.text.matchAll(/["']([a-z]+_[a-z0-9_]+)["']/g)) {
     const key = match[1];
     if (
-      /^(crear|editar|eliminar|completar|administrar|validar|ajustar|subir|archivar|registrar|asignar|aplicar|cerrar|gestionar|ver|enviar|anular)_/.test(key)
+      /^(crear|editar|eliminar|completar|administrar|validar|ajustar|adjuntar|subir|archivar|registrar|asignar|aplicar|cerrar|gestionar|ver|enviar|anular)_/.test(key)
     ) {
       frontendPermKeys.add(key);
     }
@@ -602,7 +610,7 @@ const featureTableGates = {
   residents: [
     "residentes", "signos_vitales", "observaciones_diarias", "evaluaciones_clinicas",
     "resident_consents", "health_centers", "resident_health_network", "health_controls",
-    "turno_entregas", "eventos_adversos", "eventos_adversos_acciones", "eventos_adversos_audit",
+    "turno_entregas", "turno_entregas_audit", "eventos_adversos", "eventos_adversos_acciones", "eventos_adversos_audit",
     "planes_cuidado", "plan_cuidado_actividades", "plan_cuidado_horarios", "tareas_cuidado",
     "plan_cuidado_audit", "medicamentos_indicaciones", "medicamentos_horarios",
     "medicamentos_stock_lotes", "medicamentos_administraciones", "medicamentos_stock_movimientos",

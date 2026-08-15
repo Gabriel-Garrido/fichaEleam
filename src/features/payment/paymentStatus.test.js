@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canStartSubscription, hasPendingDemoAccess, subscriptionButtonLabel } from "./paymentStatus";
+import { canStartSubscription, hasActiveDemo, hasPendingDemoAccess, subscriptionButtonLabel } from "./paymentStatus";
 
 const NOW = new Date("2026-05-17T12:00:00.000Z");
 
@@ -17,6 +17,32 @@ describe("hasPendingDemoAccess", () => {
       plan: "demo",
       subscription_status: "pendiente",
       fecha_vencimiento_suscripcion: "2026-05-01T00:00:00.000Z",
+    }, NOW)).toBe(false);
+  });
+});
+
+describe("hasActiveDemo", () => {
+  it("identifies a demo that is currently available", () => {
+    expect(hasActiveDemo({
+      plan: "demo",
+      subscription_status: "activo",
+      fecha_vencimiento_suscripcion: "2026-05-20T00:00:00.000Z",
+    }, NOW)).toBe(true);
+  });
+
+  it("does not hide plans after the demo expires", () => {
+    expect(hasActiveDemo({
+      plan: "demo",
+      subscription_status: "activo",
+      fecha_vencimiento_suscripcion: "2026-05-01T00:00:00.000Z",
+    }, NOW)).toBe(false);
+  });
+
+  it("keeps the payment page available for a pending checkout", () => {
+    expect(hasActiveDemo({
+      plan: "demo",
+      subscription_status: "pendiente",
+      fecha_vencimiento_suscripcion: "2026-05-20T00:00:00.000Z",
     }, NOW)).toBe(false);
   });
 });

@@ -4,7 +4,8 @@ import { AuthProvider, useAuth } from "../context/AuthContext";
 import AppShell from "../layout/AppShell";
 import ProtectedRoute from "../components/ProtectedRoute";
 import SuperAdminRoute from "../components/SuperAdminRoute";
-import Loading from "../components/Loading";
+import Loading, { PageLoading } from "../components/Loading";
+import { hasActiveDemo } from "../features/payment/paymentStatus";
 
 const Login = lazy(() => import("../features/auth/Login"));
 const RecuperarAcceso = lazy(() => import("../features/auth/RecuperarAcceso"));
@@ -21,8 +22,7 @@ const ResidentDetails = lazy(() => import("../features/residents/ResidentDetails
 const BedsPage = lazy(() => import("../features/beds/BedsPage"));
 const VitalSignsList = lazy(() => import("../features/vitalSigns/VitalSignsList"));
 const VitalSignsForm = lazy(() => import("../features/vitalSigns/VitalSignsForm"));
-const ObservationList = lazy(() => import("../features/observations/ObservationList"));
-const ObservationForm = lazy(() => import("../features/observations/ObservationForm"));
+const LegacyObservationRedirect = lazy(() => import("../features/observations/LegacyObservationRedirect"));
 const AdverseEventsList = lazy(() => import("../features/adverseEvents/AdverseEventsList"));
 const AdverseEventForm = lazy(() => import("../features/adverseEvents/AdverseEventForm"));
 const AdverseEventDetail = lazy(() => import("../features/adverseEvents/AdverseEventDetail"));
@@ -66,13 +66,13 @@ function AuthenticatedRoutes() {
   const fallbackPath = user ? homePath : "/";
 
   return (
-    <Suspense fallback={<Loading message="Cargando vista..." />}>
+    <Suspense fallback={<PageLoading message="Cargando vista..." />}>
       <Routes>
         <Route path="/login" element={user ? signedInRedirect : <Login />} />
         <Route path="/register" element={<Navigate to="/login" replace />} />
         <Route path="/recuperar-acceso" element={<RecuperarAcceso />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/pago" element={user ? <AppShell><PaymentPage /></AppShell> : <PaymentPage />} />
+        <Route path="/pago" element={<PaymentRoute />} />
         <Route path="/pago/return" element={<PaymentReturn />} />
 
         <Route path="/cambiar-clave" element={
@@ -117,10 +117,10 @@ function AuthenticatedRoutes() {
           } />
 
           <Route path="/operacion/turnos" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><TurnosDashboard /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="ver_entregas_turno"><TurnosDashboard /></ProtectedRoute>
           } />
           <Route path="/operacion/turnos/nuevo" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><TurnoBuilder /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="registrar_entregas_turno"><TurnoBuilder /></ProtectedRoute>
           } />
           <Route path="/operacion/cuidados" element={
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><CareTasksPage /></ProtectedRoute>
@@ -129,7 +129,7 @@ function AuthenticatedRoutes() {
             <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><EmarTurnPage /></ProtectedRoute>
           } />
           <Route path="/operacion/turnos/:id" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><TurnoPrintable /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="ver_entregas_turno"><TurnoPrintable /></ProtectedRoute>
           } />
 
           <Route path="/residents" element={
@@ -157,10 +157,10 @@ function AuthenticatedRoutes() {
           } />
 
           <Route path="/observations" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><ObservationList /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents"><LegacyObservationRedirect /></ProtectedRoute>
           } />
           <Route path="/observations/new" element={
-            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="crear_observaciones"><ObservationForm /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={ADMIN_OR_STAFF} requiredFeature="residents" requiredPermission="crear_observaciones"><LegacyObservationRedirect create /></ProtectedRoute>
           } />
 
           <Route path="/eventos-adversos" element={
@@ -200,6 +200,22 @@ function AuthenticatedRoutes() {
       </Routes>
     </Suspense>
   );
+}
+
+function PaymentRoute() {
+  const { user, profile, eleam, homePath, profileLoading } = useAuth();
+
+  if (user && (profileLoading || !profile)) {
+    return <Loading fullScreen message="Verificando el estado de tu ELEAM..." />;
+  }
+
+  // Durante una demo vigente el ELEAM ya tiene acceso completo. Evitamos
+  // mostrarle precios como si necesitara pagar para poder usar la plataforma.
+  if (user && hasActiveDemo(eleam)) {
+    return <Navigate to={homePath} replace />;
+  }
+
+  return user ? <AppShell><PaymentPage /></AppShell> : <PaymentPage />;
 }
 
 function NoPermissionsPage() {

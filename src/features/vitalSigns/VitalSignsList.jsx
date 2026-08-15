@@ -128,6 +128,12 @@ export default function VitalSignsList() {
     </PageLayout>
   );
 
+  if (error && records.length === 0) return (
+    <PageLayout title="Signos vitales" eyebrow="Cuidado diario">
+      <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800"><p className="font-semibold">No pudimos mostrar los signos vitales</p><p className="mt-1">{error}</p><button type="button" onClick={fetchRecords} className="mt-3 rounded-xl border border-rose-200 bg-white px-4 py-2 font-semibold text-rose-700">Reintentar</button></div>
+    </PageLayout>
+  );
+
   return (
     <PageLayout
       coachFeatureId="vital-signs"

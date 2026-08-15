@@ -47,17 +47,18 @@ export function KpiCard({ title, value, sub, icon, tone = "primary", onClick, he
 
 /* ─── Quick action button ─────────────────────────────────────── */
 
-export function QuickAction({ iconId, label, onClick }) {
+export function QuickAction({ iconId, label, description, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="tap-highlight-none flex flex-col items-center gap-2 bg-white rounded-2xl border border-slate-100 p-4 active:scale-[0.98] active:bg-slate-50 sm:hover:shadow-md sm:hover:border-teal-300 sm:hover:-translate-y-0.5 transition-all"
+      className="tap-highlight-none flex min-h-32 flex-col items-start gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all active:scale-[0.98] active:bg-slate-50 sm:hover:-translate-y-0.5 sm:hover:border-teal-300 sm:hover:shadow-md"
     >
       <span className="grid h-10 w-10 place-items-center rounded-2xl bg-teal-50 text-teal-700">
         <NavIcon id={iconId} className="h-5 w-5" />
       </span>
-      <span className="text-xs text-slate-700 text-center leading-tight font-medium">{label}</span>
+      <span className="text-sm font-semibold leading-tight text-slate-800">{label}</span>
+      {description && <span className="text-xs leading-5 text-slate-500">{description}</span>}
     </button>
   );
 }

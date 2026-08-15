@@ -2,9 +2,9 @@
 // Solo el admin del mismo ELEAM puede ejecutar estas acciones. El correo es inmutable.
 
 import { preflight, jsonResponse, internalErrorResponse } from "../_shared/cors.ts";
-import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
+import { adminClient, eleamHasOperationalAccess, getCallerProfile } from "../_shared/supabase.ts";
 import { sendEmail, staffPasswordRecoveryEmail } from "../_shared/email.ts";
-import { generateAccessLink, UUID_RE } from "../_shared/provisioning.ts";
+import { generateAccessLink, GMAIL_RE, UUID_RE } from "../_shared/provisioning.ts";
 
 function cleanText(value: unknown, max: number): string {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
@@ -25,6 +25,9 @@ Deno.serve(async (req) => {
     if (profile.rol !== "admin_eleam" || !profile.eleam_id) {
       return jsonResponse(req, { error: "Solo el administrador puede gestionar funcionarios" }, 403);
     }
+    if (!await eleamHasOperationalAccess(profile.eleam_id)) {
+      return jsonResponse(req, { error: "El ELEAM no tiene acceso activo" }, 403);
+    }
 
     const body = await req.json().catch(() => ({}));
     const profileId = cleanText(body.profile_id, 36);
@@ -35,7 +38,7 @@ Deno.serve(async (req) => {
     const sb = adminClient();
     const { data: target, error: targetError } = await sb
       .from("profiles")
-      .select("id, nombre, email, telefono, rol, eleam_id")
+      .select("id, nombre, email, telefono, rol, eleam_id, acceso_activo")
       .eq("id", profileId)
       .maybeSingle();
     if (targetError) throw targetError;
@@ -43,8 +46,16 @@ Deno.serve(async (req) => {
     if (target.eleam_id !== profile.eleam_id || target.rol !== "funcionario") {
       return jsonResponse(req, { error: "No puedes modificar este usuario" }, 403);
     }
+    if (target.acceso_activo === false) {
+      return jsonResponse(req, { error: "Restaura el acceso antes de modificar esta cuenta" }, 409);
+    }
 
     if (action === "reset_password") {
+      if (GMAIL_RE.test(target.email)) {
+        return jsonResponse(req, {
+          error: "Esta cuenta ingresa con Google y no necesita restablecer una contraseña",
+        }, 409);
+      }
       const { data: eleam } = await sb.from("eleams").select("nombre").eq("id", profile.eleam_id).single();
       const linkResult = await generateAccessLink(sb, target.email);
       if (!linkResult.link) return jsonResponse(req, { error: "No se pudo generar el enlace de recuperación" }, 500);

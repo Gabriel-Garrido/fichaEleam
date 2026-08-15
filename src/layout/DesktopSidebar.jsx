@@ -56,7 +56,7 @@ export default function DesktopSidebar({ collapsed, onToggle, sections, auth, on
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      className={`fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-slate-200/80 bg-white shadow-sm transition-[width] duration-200 ease-out lg:flex lg:flex-col ${
+      className={`fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-slate-200/80 bg-white shadow-sm transition-[width] duration-200 ease-out print:hidden lg:flex lg:flex-col ${
         expanded ? "w-72" : "w-20"
       }`}
     >

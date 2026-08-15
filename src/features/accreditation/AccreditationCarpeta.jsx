@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useToast } from "../../components/Toast";
 import Loading from "../../components/Loading";
 import { friendlyError } from "../../utils/errorMessages";
 import {
@@ -12,21 +11,25 @@ import {
 import { formatDate } from "../../utils/dateUtils";
 import { FeatureCoach } from "../featureCoach";
 import { buildComplianceAreas, simpleRequirementStatus } from "./accreditationOverview";
+import { DS20_LEGAL_CONTEXT, evidencePresentation } from "./complianceGuidance";
 
 // Carpeta SEREMI imprimible. La idea es ser una vista limpia, sin nav,
 // optimizada para impresión a PDF (Ctrl+P → Guardar como PDF).
 
 export default function AccreditationCarpeta() {
   const navigate = useNavigate();
-  const toast = useToast();
   const { eleam } = useAuth();
   const [requisitos, setRequisitos] = useState([]);
   const [observaciones, setObservaciones] = useState([]);
   const [operationalEvidence, setOperationalEvidence] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
+    setLoadError(null);
     Promise.all([getRequisitosEleam(), getObservaciones(), getOperationalEvidence()])
       .then(([r, o, evidence]) => {
         if (!mounted) return;
@@ -34,10 +37,10 @@ export default function AccreditationCarpeta() {
         setObservaciones(o);
         setOperationalEvidence(evidence);
       })
-      .catch((e) => mounted && toast(friendlyError(e, "No se pudo cargar la carpeta SEREMI. Recarga la página."), "error"))
+      .catch((e) => mounted && setLoadError(friendlyError(e, "No se pudo cargar la carpeta SEREMI.")))
       .finally(() => mounted && setLoading(false));
     return () => { mounted = false; };
-  }, [toast]);
+  }, [reloadKey]);
 
   const requisitosPorAmbito = useMemo(
     () => buildComplianceAreas(requisitos, observaciones, operationalEvidence),
@@ -60,6 +63,21 @@ export default function AccreditationCarpeta() {
   }, [requisitos, requisitosPorAmbito]);
 
   if (loading) return <Loading message="Generando Carpeta SEREMI..." />;
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12">
+        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
+          <h1 className="text-lg font-bold text-rose-950">No se pudo generar la carpeta</h1>
+          <p className="mt-2 text-sm text-rose-800">{loadError}</p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button type="button" onClick={() => navigate("/cumplimiento")} className="rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Volver</button>
+            <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Reintentar</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white">
@@ -95,6 +113,9 @@ export default function AccreditationCarpeta() {
           <p className="text-sm text-slate-500 mt-1">
             Generado el {formatDate(new Date().toISOString())}
           </p>
+          <p className="mx-auto mt-2 max-w-2xl text-xs leading-5 text-slate-500">
+            Matriz interna de preparación basada en el texto consolidado vigente desde el {DS20_LEGAL_CONTEXT.effectiveFrom}. No reemplaza la pauta ni el pronunciamiento de la autoridad sanitaria.
+          </p>
         </div>
 
         {/* Resumen */}
@@ -112,7 +133,7 @@ export default function AccreditationCarpeta() {
           )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
-              <p className="text-xs uppercase text-slate-500 font-semibold">Cumplimiento global</p>
+              <p className="text-xs uppercase text-slate-500 font-semibold">Preparación global</p>
               <p className="text-3xl font-black">{resumen.porcentaje}%</p>
             </div>
             <div>
@@ -132,7 +153,7 @@ export default function AccreditationCarpeta() {
 
         {/* Cumplimiento por ámbito */}
         <section>
-          <h2 className="text-lg font-bold border-b border-slate-200 pb-1 mb-3">Cumplimiento por ámbito</h2>
+          <h2 className="text-lg font-bold border-b border-slate-200 pb-1 mb-3">Preparación por ámbito</h2>
           {resumen.ambitos.length === 0 ? (
             <p className="text-sm text-slate-500">Sin ámbitos provisionados para este ELEAM.</p>
           ) : (
@@ -227,18 +248,19 @@ export default function AccreditationCarpeta() {
                         <td className="pr-2">
                           <p className="font-semibold">{re.requisito.nombre}</p>
                           {re.requisito.medio_verificador && (
-                            <p className="text-slate-500 text-[10px]">Verificador: {re.requisito.medio_verificador}</p>
+                            <p className="text-slate-500 text-[10px]">Respaldo esperado: {re.requisito.medio_verificador}</p>
                           )}
                           {re.requisito.articulo_ref && (
                             <p className="text-slate-500 text-[10px]">Referencia: {re.requisito.articulo_ref}</p>
                           )}
                           {re.operationalEvidence && (
                             <p className="mt-1 text-[10px] font-semibold text-teal-800">
-                              {re.operationalEvidence.completa_requisito ? "Cálculo automático" : "Avance registrado"}: {re.operationalEvidence.denominador > 0
+                              {re.operationalEvidence.completa_requisito ? "Verificador FichaEleam" : "Apoyo de FichaEleam"}: {re.operationalEvidence.denominador > 0
                                 ? `${re.operationalEvidence.numerador}/${re.operationalEvidence.denominador} (${re.operationalEvidence.porcentaje}%)`
                                 : "sin datos"} · {re.operationalEvidence.resumen}
                             </p>
                           )}
+                          <p className="mt-1 text-[10px] text-slate-500">Tipo: {evidencePresentation(re).label}</p>
                           {re.no_aplica_motivo && (
                             <p className="text-slate-500 italic text-[10px]">No aplica: {re.no_aplica_motivo}</p>
                           )}
@@ -261,7 +283,7 @@ export default function AccreditationCarpeta() {
         </section>
 
         <div className="text-xs text-slate-400 text-center pt-6 border-t border-slate-200">
-          FichaEleam · Documento generado automáticamente para fiscalización SEREMI.
+          FichaEleam · Carpeta interna de preparación documental. La SEREMI determina el cumplimiento en la fiscalización.
         </div>
       </div>
 

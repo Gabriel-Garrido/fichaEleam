@@ -5,6 +5,7 @@ import Loading from "../../components/Loading";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../context/AuthContext";
 import PageLayout from "../../layout/PageLayout";
+import { friendlyError } from "../../utils/errorMessages";
 import {
   getResidentPaymentDocumentUrl,
   getResidentPaymentSnapshot,
@@ -65,7 +66,7 @@ export default function ResidentPaymentsPage() {
       setSnapshot(await getResidentPaymentSnapshot());
     } catch (loadError) {
       console.error(loadError);
-      setError(loadError.message || "No se pudo cargar la cobranza.");
+      setError(friendlyError(loadError, "No se pudo cargar la cobranza."));
     } finally {
       setLoading(false);
     }

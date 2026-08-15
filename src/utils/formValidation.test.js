@@ -34,6 +34,8 @@ describe("formValidation helpers", () => {
     expect(userFacingFormError(new Error("Failed to fetch"))).toContain("conectar");
     expect(userFacingFormError(new Error("duplicate key value violates unique constraint"))).toContain("Ya existe");
     expect(userFacingFormError(new Error("PGRST301: token expired"), "No se pudo guardar.")).toBe("No se pudo guardar.");
+    expect(userFacingFormError({ code: "42703", message: 'column "ver_pagos_residentes" does not exist' }, "No se pudo guardar."))
+      .toBe("No se pudo guardar.");
   });
 });
 

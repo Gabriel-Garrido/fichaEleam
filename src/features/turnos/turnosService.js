@@ -166,7 +166,6 @@ async function loadCareTurno(fecha, turno) {
       resumen,
       pendientes: rows
         .filter((row) => CARE_OPEN_STATUSES.includes(row.estado))
-        .slice(0, 12)
         .map((row) => ({
           id: row.id,
           hora: row.hora,
@@ -342,44 +341,69 @@ export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTur
   };
 }
 
-export async function listTurnoEntregas(limit = 30) {
-  const { data, error } = await supabase
+async function attachProfileNames(rows, fields = ["creado_por", "actualizado_por", "realizado_por"]) {
+  const ids = [...new Set(rows.flatMap((row) => fields.map((field) => row[field])).filter(Boolean))];
+  if (!ids.length) return rows;
+  const { data, error } = await supabase.from("profiles").select("id, nombre").in("id", ids);
+  if (error) return rows;
+  const names = new Map((data ?? []).map((profile) => [profile.id, profile.nombre]));
+  return rows.map((row) => ({
+    ...row,
+    creado_por_nombre: names.get(row.creado_por) ?? null,
+    actualizado_por_nombre: names.get(row.actualizado_por) ?? null,
+    realizado_por_nombre: names.get(row.realizado_por) ?? null,
+  }));
+}
+
+export async function listTurnoEntregas({ limit = 25, offset = 0, turno = null, desde = null, hasta = null } = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 50);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
+  let query = supabase
     .from("turno_entregas")
-    .select("id, eleam_id, turno, fecha, resumen_json, notas, pendientes, creado_por, creado_en, actualizado_en")
+    .select("id, eleam_id, turno, fecha, notas, pendientes, creado_por, actualizado_por, creado_en, actualizado_en")
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false })
-    .limit(limit);
+    .range(safeOffset, safeOffset + safeLimit - 1);
+  if (turno) query = query.eq("turno", turno);
+  if (desde) query = query.gte("fecha", desde);
+  if (hasta) query = query.lte("fecha", hasta);
+  const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+  return attachProfileNames(data ?? []);
 }
 
 export async function getTurnoEntrega(id) {
   const { data, error } = await supabase
     .from("turno_entregas")
-    .select("id, eleam_id, turno, fecha, resumen_json, notas, pendientes, creado_por, creado_en, actualizado_en")
+    .select("id, eleam_id, turno, fecha, resumen_json, notas, pendientes, creado_por, actualizado_por, creado_en, actualizado_en")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
   return data;
 }
 
-export async function saveTurnoEntrega({ fecha, turno, resumen, notas, pendientes }) {
-  const { eleamId, userId } = await getSessionProfile();
-  const payload = {
-    eleam_id: eleamId,
-    fecha,
-    turno,
-    resumen_json: resumen ?? {},
-    notas: notas?.trim() || null,
-    pendientes: pendientes?.trim() || null,
-    creado_por: userId,
-  };
-
+export async function listTurnoEntregaAudit(entregaId, limit = 20) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
   const { data, error } = await supabase
-    .from("turno_entregas")
-    .upsert(payload, { onConflict: "eleam_id,fecha,turno" })
-    .select("id, eleam_id, turno, fecha, resumen_json, notas, pendientes, creado_por, creado_en, actualizado_en")
-    .single();
+    .from("turno_entregas_audit")
+    .select("id, entrega_id, accion, realizado_por, realizado_en")
+    .eq("entrega_id", entregaId)
+    .order("realizado_en", { ascending: false })
+    .limit(safeLimit);
   if (error) throw error;
-  return data;
+  return attachProfileNames(data ?? [], ["realizado_por"]);
+}
+
+export async function saveTurnoEntrega({ fecha, turno, resumen, pendientes, decisiones = [] }) {
+  const { eleamId } = await getSessionProfile();
+  const { data, error } = await supabase.rpc("guardar_entrega_turno", {
+    p_eleam_id: eleamId,
+    p_fecha: fecha,
+    p_turno: turno,
+    p_resumen: resumen ?? {},
+    p_pendientes: pendientes?.trim() || null,
+    p_decisiones: decisiones,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
 }

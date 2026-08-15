@@ -76,7 +76,7 @@ La fuente canónica es [`supabase_schema.sql`](./supabase_schema.sql). Para esta
 
 No se incluye una migración de datos heredados porque el producto se está reiniciando desde cero.
 
-El esquema canónico está consolidado para una base nueva. La auditoría automatizada actual reconoce 75 tablas públicas, 68 funciones/RPC y 11 Edge Functions. Todas las tablas de negocio quedan bajo RLS; los antecedentes de familiares y personas significativas exigibles se registran en los módulos clínicos y de cumplimiento correspondientes.
+El esquema canónico está consolidado para una base nueva. La auditoría automatizada actual reconoce 77 tablas públicas, 69 funciones/RPC y 11 Edge Functions. Todas las tablas de negocio quedan bajo RLS; los antecedentes de familiares y personas significativas exigibles se registran en los módulos clínicos y de cumplimiento correspondientes.
 
 Antes de desplegar cambios de base de datos ejecuta:
 
@@ -115,11 +115,11 @@ El acceso operativo requiere:
 
 | Ruta | Contenido |
 |---|---|
-| `/dashboard` | Inicio y prioridades |
+| `/dashboard` | Resumen del día, acciones del turno y pendientes activos |
 | `/establecimiento` | Habitaciones, camas, ocupación y asignaciones |
 | `/residents` | Lista e importación de residentes |
 | `/residents/new` | Ingreso simplificado |
-| `/residents/:id` | Ficha integral del residente |
+| `/residents/:id` | Ficha integral con historial paginado y detalles bajo demanda |
 | `/personal` | Centro de personal |
 | `/personal/equipo` | Equipo, antecedentes SEREMI y permisos; funcionarios en lectura y administración exclusiva del administrador |
 | `/cobranza` | Mensualidades, cobros, abonos, recordatorios e historial filtrable por fechas |
@@ -130,11 +130,11 @@ El acceso operativo requiere:
 | `/cumplimiento/protocolos` | Protocolos obligatorios de ingreso/egreso, urgencias y fallecimiento |
 | `/cumplimiento/emergencias` | Plan, escenarios y simulacros |
 | `/cumplimiento/reclamos` | Reclamos y sugerencias |
-| `/operacion/cuidados` | Tareas de cuidado del turno |
+| `/operacion/cuidados` | Cuidados del turno, filtros por estado y tipo de tarea |
 | `/operacion/medicamentos` | Administración de medicamentos |
-| `/operacion/turnos` | Entrega y consulta de turnos |
+| `/operacion/turnos` | Entregas trazables y resolución de cuidados pendientes entre turnos |
 
-Signos vitales, observaciones y eventos adversos se consideran flujos internos del área Residentes aunque conserven URLs técnicas propias.
+Signos vitales y eventos adversos se consideran flujos internos del área Residentes aunque conserven URLs técnicas propias. Las antiguas rutas de observaciones redirigen a la ficha correspondiente: el alta se abre desde **Nuevo registro** y la consulta se concentra en **Historial**, sin volver a solicitar residente.
 
 ### Plataforma
 
@@ -184,6 +184,8 @@ El editor de permisos mantiene consistencia automáticamente: habilitar una acci
 
 La feature `resident_payments` es una excepción intencional al acceso global de plataforma: corresponde a la administración interna de cada ELEAM y permanece separada de `/superadmin/pagos`. Los funcionarios necesitan autorización explícita para verla y permisos independientes para registrar, enviar o anular. La función `administrativo` propone lectura, registro y envío; la anulación queda desactivada por defecto.
 
+En medicamentos, registrar o modificar el tratamiento, adjuntar recetas, administrar, gestionar recepción/stock y efectuar una segunda firma son permisos distintos. Los cuidadores parten sin administración; TENS recibe el circuito operativo; y los respaldos de receta pueden archivarse sin conceder edición clínica.
+
 ## Flujos principales
 
 ### Ingreso de residente
@@ -202,17 +204,29 @@ La importación Excel usa el mismo contrato y ya no crea usuarios asociados. Los
 
 ### Plan de cuidado
 
-Cada residente puede tener un plan activo con actividades y horarios. El sistema genera tareas por fecha y turno. Una tarea puede cumplirse, omitirse o reprogramarse y puede originar un seguimiento.
+Cada residente puede tener un plan activo con un resumen breve: objetivo individual, alimentación, hidratación, mantención o rehabilitación, bienestar biopsicosocial y participación del residente o su representante. Los cuidados se organizan por turno y sólo solicitan acción, área, horario e indicaciones cuando sean necesarias.
+
+La dirección técnica confirma la revisión mediante un permiso independiente. Cualquier modificación posterior del resumen, los cuidados o sus frecuencias invalida esa revisión y queda registrada en auditoría. El sistema genera tareas por fecha y turno; una tarea puede cumplirse, omitirse o reprogramarse y puede originar un seguimiento.
+
+### Registro de evolución
+
+Cada residente dispone de una única acción **Nuevo registro** para elegir signos vitales, evolución o control/derivación. Los formularios mantienen fijo al residente y los registros se consultan en **Historial**, junto con el resto de la trazabilidad. Las rutas antiguas `/observations` y `/observations/new` se mantienen únicamente como redirecciones compatibles.
+
+El formulario de evolución ofrece sólo categorías clínicas que no cuentan con otro registro estructurado: estado general, cambio clínico o síntoma, dolor, piel o heridas y conducta o estado de ánimo. Sus instrucciones y campos se adaptan a la categoría seleccionada; medicamentos, tareas de cuidado, controles de salud y eventos adversos se registran exclusivamente en sus flujos correspondientes.
+
+El registro de controles y derivaciones conserva el centro de atención, fecha, motivo, situación, observaciones e indicaciones profesionales y, cuando corresponde, acompañamiento, continuidad y coordinación con la familia o persona significativa. El formulario muestra únicamente los campos aplicables al estado de la atención y deja su trazabilidad en Historial.
+
+La pestaña **Historial** reúne modificaciones de la ficha, cambios de cama, consentimientos, red y controles de salud, valoraciones, cuidados, medicamentos, signos vitales y evolución. La consulta inicial carga sólo 25 resúmenes; el detalle se solicita al backend únicamente cuando el usuario abre un registro. Búsqueda, períodos rápidos y filtros avanzados se aplican de forma explícita y no repiten consultas cuando sus valores no cambian.
 
 ### Medicamentos y eMAR
 
-Las indicaciones contienen dosis, vía, horarios y reglas de stock. Los medicamentos controlados exigen stock y doble validación. Cada administración y movimiento queda trazado.
+La ficha del residente mantiene solo tres espacios: **Tratamiento y recetas**, **Recepción y stock** y **Administraciones**. Las recetas en PDF, JPG, PNG o WEBP (máximo 3 MB) quedan asociadas directamente a cada indicación y conservan el historial; cada lote registra recepción, ubicación, vencimiento y movimientos auditados. Los controles especiales y la doble validación aparecen dentro del stock solo cuando el medicamento los requiere. La orientación normativa y los respaldos físicos se gestionan exclusivamente en Cumplimiento.
 
 ### Cumplimiento SEREMI
 
 La evidencia puede ser documental u operacional. La carpeta SEREMI reúne documentos cargados y registros producidos en Residentes, Personal y Establecimiento. Los módulos de emergencias, reclamos, protocolos y reportes complementan la matriz DS20.
 
-El RPC `ds20_operational_evidence_summary()` calcula automáticamente verificadores que sí pueden demostrarse con datos estructurados: consentimientos firmados, evaluaciones geriátricas vigentes, red de salud con controles, 22 horas anuales de capacitación y cobertura de cuidadores/TENS para siete días. Si no existen residentes o personal, informa **Sin datos** y nunca presume cumplimiento. Los verificadores físicos o documentales incompletos —planes individuales, habitaciones, medicamentos, protocolos, emergencias y carpeta personal— muestran avance, pero requieren revisión de sus respaldos restantes.
+El RPC `ds20_operational_evidence_summary()` calcula automáticamente verificadores que sí pueden demostrarse con datos estructurados: consentimientos firmados, evaluaciones geriátricas vigentes, red de salud con controles y cobertura de cuidadores/TENS para siete días. El Registro de evolución aporta registros diarios fechados, responsables y seguimientos a la carpeta personal. En medicamentos informa indicaciones con receta, recepciones, usos y lotes trazables, siempre como apoyo parcial cuando aún se requiere revisión material o documental. Si no existen residentes o personal, informa **Sin datos** y nunca presume cumplimiento.
 
 ## Edge Functions
 
@@ -221,7 +235,7 @@ El RPC `ds20_operational_evidence_summary()` calcula automáticamente verificado
 | `create-demo-user` | Aprueba una solicitud y crea el administrador demo |
 | `create-staff-user` | Crea o invita a un funcionario |
 | `update-staff-user` | Edita datos de un funcionario y envía su recuperación de contraseña |
-| `delete-staff-user` | Elimina un funcionario desde Auth y datos asociados |
+| `delete-staff-user` | Desactiva o restaura acceso conservando el historial del usuario |
 | `mp-create-subscription` | Inicia una suscripción MercadoPago |
 | `mp-cancel-subscription` | Cancela la renovación |
 | `mp-webhook` | Procesa eventos firmados de MercadoPago |
@@ -237,6 +251,7 @@ npx supabase login
 npx supabase link --project-ref TU_PROJECT_REF
 npx supabase functions deploy create-demo-user
 npx supabase functions deploy create-staff-user
+npx supabase functions deploy update-staff-user
 npx supabase functions deploy delete-staff-user
 npx supabase functions deploy mp-create-subscription
 npx supabase functions deploy mp-cancel-subscription
@@ -251,7 +266,9 @@ Configura los secretos descritos en `.env.example` con `npx supabase secrets set
 
 ## Storage
 
-El bucket `documentos-acreditacion` debe ser privado. Los archivos se organizan por ELEAM y requisito. El acceso se controla con políticas Storage y nunca mediante URLs públicas permanentes.
+Los buckets `documentos-acreditacion` y `documentos-eleam` deben ser privados. Los archivos se organizan por ELEAM, requisito o residente. El acceso se controla con políticas Storage y nunca mediante URLs públicas permanentes. Las recetas aceptan PDF/JPG/PNG/WEBP hasta 3 MB; los demás límites documentales se validan en su flujo correspondiente.
+
+El resumen completo de esta entrega está en [`ACTUALIZACION_PRODUCTO_2026-08-15.md`](./ACTUALIZACION_PRODUCTO_2026-08-15.md).
 
 ## Estructura del proyecto
 
@@ -263,7 +280,7 @@ src/
 ├── routes/              rutas públicas y autenticadas
 ├── features/
 │   ├── establishment/   centro del establecimiento
-│   ├── residents/       ficha integral
+│   ├── residents/       ficha integral y Registro de evolución
 │   ├── personnel/       centro de personal
 │   ├── compliance/      centro SEREMI
 │   ├── residentPayments/ cobranza interna por ELEAM

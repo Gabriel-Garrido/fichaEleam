@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getResidents, deleteResident, createResidentsBatch } from "./residentService";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
@@ -15,12 +15,18 @@ import { countPlanResidentSlots, getEffectivePlanLimits } from "../payment/planC
 
 export default function ResidentList() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const toast    = useToast();
   const confirm  = useConfirm();
   const { can, isAdminEleam, eleam } = useAuth();
   const canDelete = can("eliminar_residentes");
   const canCreate = can("crear_residentes");
   const canImport = canCreate && isAdminEleam;
+  const evolutionDestination = searchParams.get("destino");
+  const selectingEvolution = ["evolucion", "ver_evolucion"].includes(evolutionDestination);
+  const residentViewPath = (residentId) => selectingEvolution
+    ? `/residents/${residentId}?tab=trazabilidad${evolutionDestination === "evolucion" ? "&nuevaEvolucion=1" : ""}`
+    : `/residents/${residentId}`;
 
   const [residents,    setResidents]    = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -152,6 +158,12 @@ export default function ResidentList() {
         onComplete={handleImportComplete}
       />
 
+      {selectingEvolution && residents.length > 0 && (
+        <div className="mb-4 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900">
+          <strong>{evolutionDestination === "evolucion" ? "Selecciona a quién registrar" : "Selecciona el registro que quieres revisar"}.</strong> Abriremos directamente su Registro de evolución.
+        </div>
+      )}
+
       {maxResidents !== null && (
         <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
           residentLimitReached
@@ -176,7 +188,7 @@ export default function ResidentList() {
         </div>
       )}
 
-      {residents.length === 0 ? (
+      {error && residents.length === 0 ? null : residents.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white shadow-sm overflow-hidden">
           {/* Hero */}
           <div className="px-6 py-12 text-center">
@@ -380,7 +392,7 @@ export default function ResidentList() {
                 <ResidentCard
                   key={r.id}
                   resident={r}
-                  onView={() => navigate(`/residents/${r.id}`)}
+                  onView={() => navigate(residentViewPath(r.id))}
                   onEdit={() => navigate(`/residents/${r.id}/edit`)}
                   onDelete={canDelete ? () => handleDelete(r.id, `${r.nombre} ${r.apellido}`) : null}
                 />
@@ -392,7 +404,7 @@ export default function ResidentList() {
                 <ResidentRow
                   key={r.id}
                   resident={r}
-                  onView={() => navigate(`/residents/${r.id}`)}
+                  onView={() => navigate(residentViewPath(r.id))}
                   onEdit={() => navigate(`/residents/${r.id}/edit`)}
                   onDelete={canDelete ? () => handleDelete(r.id, `${r.nombre} ${r.apellido}`) : null}
                 />

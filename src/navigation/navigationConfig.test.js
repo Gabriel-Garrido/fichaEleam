@@ -43,11 +43,23 @@ describe("navigationConfig role workflows", () => {
 
   it("oculta acciones si falta permiso granular", () => {
     const auth = authFor("funcionario", {
-      can: (permission) => permission !== "administrar_medicamentos",
+      can: (permission) => !["administrar_medicamentos", "validar_medicamentos_controlados"].includes(permission),
     });
     const actions = getQuickActions(auth).map((item) => item.id);
     expect(actions).not.toContain("medications");
     expect(actions).toContain("daily-care");
+  });
+
+  it("muestra medicamentos a quien puede validar aunque no pueda administrar", () => {
+    const auth = authFor("funcionario", {
+      can: (permission) => permission === "validar_medicamentos_controlados",
+    });
+    expect(getQuickActions(auth).map((item) => item.id)).toContain("medications");
+  });
+
+  it("oculta cuidados cuando el usuario no puede realizar ninguna acción del turno", () => {
+    const auth = authFor("funcionario", { can: () => false });
+    expect(getQuickActions(auth).map((item) => item.id)).not.toContain("daily-care");
   });
 
   it.each(["dashboard", "establishment", "residents", "personnel", "compliance", "resident_payments"])(

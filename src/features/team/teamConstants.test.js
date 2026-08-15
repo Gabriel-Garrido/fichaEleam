@@ -16,7 +16,7 @@ describe("team permission presets", () => {
     });
   });
 
-  it("only enables medication indication create/edit permissions for doctors", () => {
+  it("only enables medication indication create/edit permissions for doctors and nurses", () => {
     const eMarEditorCargos = Object.entries(PLANTILLAS_CARGO)
       .filter(([, permisos]) =>
         permisos.crear_indicaciones_medicamentos ||
@@ -24,14 +24,26 @@ describe("team permission presets", () => {
       )
       .map(([cargo]) => cargo);
 
-    expect(eMarEditorCargos).toEqual(["Médico/a"]);
+    expect(eMarEditorCargos).toEqual(["Enfermero/a", "Médico/a"]);
   });
 
-  it("derives safe defaults from the selected team function", () => {
+  it("derives least-privilege medication defaults from the selected team function", () => {
     const caregiver = defaultPermissionsForFunction("cuidador");
     expect(caregiver.areas.residents).toBe(true);
     expect(caregiver.actions.completar_tareas_cuidado).toBe(true);
     expect(caregiver.actions.editar_indicaciones_medicamentos).toBe(false);
+    expect(caregiver.actions.adjuntar_recetas_medicamentos).toBe(true);
+    expect(caregiver.actions.administrar_medicamentos).toBe(false);
+    expect(caregiver.actions.registrar_entregas_turno).toBe(true);
+    expect(caregiver.actions.ver_entregas_turno).toBe(true);
+
+    const tens = defaultPermissionsForFunction("tens");
+    expect(tens.actions).toMatchObject({
+      adjuntar_recetas_medicamentos: true,
+      administrar_medicamentos: true,
+      validar_medicamentos_controlados: true,
+      ajustar_stock_medicamentos: true,
+    });
 
     const cleaner = defaultPermissionsForFunction("aseo");
     expect(Object.values(cleaner.actions).every((allowed) => allowed === false)).toBe(true);

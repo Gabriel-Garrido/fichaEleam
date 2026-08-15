@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from "../services/supabaseConfig";
 import Loading from "../components/Loading";
 import { computeCanFeature, resolveFeatureHomePath } from "./featureAccess";
 import { FEATURE_CATALOG } from "../features/permissions/featureCatalog";
+import { evaluateFuncionarioPermission } from "../features/permissions/actionPermission";
 
 const AuthContext = createContext();
 
@@ -12,9 +13,11 @@ const ACTION_PERMISSION_SELECT = `
   crear_residentes, editar_residentes, eliminar_residentes,
   crear_signos_vitales, editar_signos_vitales, eliminar_signos_vitales,
   crear_observaciones, editar_observaciones, eliminar_observaciones,
-  crear_planes_cuidado, editar_planes_cuidado, completar_tareas_cuidado,
+  registrar_entregas_turno, ver_entregas_turno,
+  crear_planes_cuidado, editar_planes_cuidado, validar_planes_cuidado, completar_tareas_cuidado,
   editar_indicaciones_cuidado, aplicar_evaluaciones_clinicas,
   crear_indicaciones_medicamentos, editar_indicaciones_medicamentos,
+  adjuntar_recetas_medicamentos,
   administrar_medicamentos, validar_medicamentos_controlados, ajustar_stock_medicamentos,
   asignar_camas, editar_inventario_bienes,
   subir_acreditacion, editar_acreditacion, archivar_acreditacion,
@@ -325,8 +328,7 @@ export function AuthProvider({ children }) {
   const can = useCallback((perm) => {
     if (isSuperadmin || isAdminEleam) return true;
     if (!isFuncionario) return false;
-    if (!permisos) return false;
-    return permisos[perm] === true;
+    return evaluateFuncionarioPermission(permisos, perm);
   }, [isSuperadmin, isAdminEleam, isFuncionario, permisos]);
 
   // Fail-closed ante error de carga de permisos por feature. La lógica vive
@@ -394,7 +396,7 @@ export function AuthProvider({ children }) {
     supabaseError, refetchProfile,
   ]);
 
-  if (authLoading) return <Loading message="Verificando autenticación..." />;
+  if (authLoading) return <Loading fullScreen message="Verificando autenticación..." />;
 
   return (
     <AuthContext.Provider value={value}>

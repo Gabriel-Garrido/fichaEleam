@@ -3,7 +3,7 @@ import PageLayout from "../../layout/PageLayout";
 import AreaCard from "../../components/AreaCard";
 
 export default function PersonnelPage() {
-  const { isAdminEleam, isSuperadmin, canFeature } = useAuth();
+  const { isAdminEleam, isSuperadmin, canFeature, can } = useAuth();
   const canManageUsers = isAdminEleam || isSuperadmin;
 
   return (
@@ -29,7 +29,7 @@ export default function PersonnelPage() {
           icon="staffing"
           tone="violet"
         />
-        {canFeature("residents") && <AreaCard
+        {canFeature("residents") && can("ver_entregas_turno") && <AreaCard
           eyebrow="Uso diario"
           title="Entregar turno"
           description="Deja al siguiente equipo sólo alertas, novedades y pendientes importantes."

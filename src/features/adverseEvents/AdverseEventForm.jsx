@@ -83,6 +83,8 @@ export default function AdverseEventForm() {
   const [form, setForm] = useState(ADVERSE_EVENT_EMPTY);
   const [errors, setErrors] = useState({});
   const [residents, setResidents] = useState([]);
+  const [residentsLoading, setResidentsLoading] = useState(true);
+  const [residentsError, setResidentsError] = useState(false);
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
 
@@ -90,9 +92,12 @@ export default function AdverseEventForm() {
   const canEdit = isAdminEleam || can("editar_eventos_adversos");
 
   useEffect(() => {
+    setResidentsLoading(true);
+    setResidentsError(false);
     getResidents()
       .then(setResidents)
-      .catch(() => setResidents([]));
+      .catch(() => { setResidents([]); setResidentsError(true); })
+      .finally(() => setResidentsLoading(false));
   }, []);
 
   // Carga inicial: edición o precargado desde observación.
@@ -184,7 +189,7 @@ export default function AdverseEventForm() {
     }
   };
 
-  if (loading) return <Loading message="Cargando evento adverso..." />;
+  if (loading || residentsLoading) return <Loading message={isEditing ? "Cargando evento adverso..." : "Preparando el registro..."} />;
 
   return (
     <PageLayout
@@ -194,6 +199,7 @@ export default function AdverseEventForm() {
       onBack={() => navigate(isEditing ? `/eventos-adversos/${id}` : "/eventos-adversos")}
     >
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        {residentsError && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">No pudimos cargar la lista de residentes. Puedes registrar un evento institucional o volver a intentarlo recargando la vista.</div>}
         <ErrorSummary errors={errors} />
 
         <FormSection title="¿Qué pasó?" description="Describe el evento con suficiente detalle para que el equipo pueda reaccionar y dejar trazabilidad reglamentaria.">

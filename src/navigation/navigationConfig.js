@@ -1,3 +1,5 @@
+import { CARE_TURN_PERMISSIONS, MEDICATION_TURN_PERMISSIONS } from "../features/permissions/accessRules";
+
 const hasAccess = (auth) => auth?.pagoActivo || auth?.isSuperadmin;
 
 export const ROLE_LABELS = {
@@ -120,7 +122,7 @@ export const QUICK_ACTIONS = [
     roles: ["admin_eleam", "funcionario", "superadmin"],
     requiresEleam: true,
     requiresActive: true,
-    permission: "completar_tareas_cuidado",
+    anyPermissions: CARE_TURN_PERMISSIONS,
   },
   {
     id: "medications",
@@ -132,18 +134,19 @@ export const QUICK_ACTIONS = [
     roles: ["admin_eleam", "funcionario", "superadmin"],
     requiresEleam: true,
     requiresActive: true,
-    permission: "administrar_medicamentos",
+    anyPermissions: MEDICATION_TURN_PERMISSIONS,
   },
   {
     id: "shift-handoff",
     featureId: "residents",
-    label: "Registro del turno",
-    description: "Revisar y entregar novedades",
+    label: "Entrega de turno",
+    description: "Registrar y consultar entregas",
     icon: "shift",
     path: "/operacion/turnos",
     roles: ["admin_eleam", "funcionario", "superadmin"],
     requiresEleam: true,
     requiresActive: true,
+    permission: "ver_entregas_turno",
   },
 ];
 
@@ -154,6 +157,7 @@ function itemAllowed(item, auth) {
   if (item.requiresActive && !hasAccess(auth)) return false;
   if (item.featureId && typeof auth.canFeature === "function" && !auth.canFeature(item.featureId)) return false;
   if (item.permission && typeof auth.can === "function" && !auth.can(item.permission)) return false;
+  if (item.anyPermissions?.length && (typeof auth.can !== "function" || !item.anyPermissions.some((permission) => auth.can(permission)))) return false;
   return true;
 }
 

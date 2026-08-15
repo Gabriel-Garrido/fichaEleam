@@ -1,344 +1,311 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import HelpTooltip from "../../components/HelpTooltip";
-import MetricCard from "../../components/MetricCard";
-import ChipGroup from "../../components/ChipGroup";
-import EmptyState from "../../components/EmptyState";
 import Badge from "../../components/Badge";
+import EmptyState from "../../components/EmptyState";
+import HelpTooltip from "../../components/HelpTooltip";
 import {
   TRACE_QUICK_RANGES,
   TRACE_TYPE_LABEL,
-  buildTraceSummary,
-  filterTraceEvents,
+  getResidentTraceDetail,
   getTraceQuickRange,
   groupTraceEventsByDate,
   listResidentTraceability,
 } from "./residentTraceabilityService";
 
-const TRACE_FILTER_TYPES = ["todos", "cuidado", "medicamentos", "signos", "observaciones", "seguimientos", "visitas", "cama", "auditoria"];
+const PAGE_SIZE = 25;
+const TRACE_FILTER_TYPES = ["todos", "datos", "cama", "salud", "cuidado", "medicamentos", "signos", "observaciones", "seguimientos"];
 const TRACE_FILTER_STATUSES = [
-  ["", "Todos"],
+  ["", "Todos los estados"],
   ["pendiente", "Pendientes"],
-  ["pendiente_validacion", "Por validar"],
   ["realizado", "Realizados"],
   ["reprogramada", "Reprogramados"],
-  ["omitida", "Omitidos"],
+  ["omitida", "No realizados"],
   ["cancelada", "Cancelados"],
-  ["resuelto", "Resueltos"],
 ];
+
+function initialFilters() {
+  const range = getTraceQuickRange("30d");
+  return { rangeKey: range.rangeKey, desde: range.desde, hasta: range.hasta, tipo: "todos", estado: "", query: "" };
+}
+
+function sameFilters(left, right) {
+  return ["rangeKey", "desde", "hasta", "tipo", "estado", "query"]
+    .every((key) => left[key] === right[key]);
+}
 
 function formatTraceDay(value) {
   if (!value || value === "sin_fecha") return "Sin fecha";
   return new Date(`${value}T12:00:00`).toLocaleDateString("es-CL", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
   });
 }
 
-function formatTraceTime(value) {
-  if (!value) return "--:--";
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return "--:--";
-  return date.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
-}
-
 function formatTraceDateTime(value) {
-  if (!value) return "Sin actividad";
+  if (!value) return "Fecha no disponible";
   const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return "Sin actividad";
-  return date.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" });
+  if (Number.isNaN(date.valueOf())) return "Fecha no disponible";
+  return date.toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short" });
 }
 
-function rangeLabel(rangeKey, desde, hasta) {
-  const quick = TRACE_QUICK_RANGES[rangeKey]?.label;
-  if (quick && rangeKey !== "todo") return quick;
-  if (rangeKey === "todo") return "Todo el historial";
-  return [desde, hasta].filter(Boolean).join(" a ") || "Rango personalizado";
-}
-
-export default function ResidentTraceabilityTab({ residenteId }) {
-  const initialRange = getTraceQuickRange("30d");
-  const [rangeKey, setRangeKey] = useState(initialRange.rangeKey);
-  const [desde, setDesde] = useState(initialRange.desde);
-  const [hasta, setHasta] = useState(initialRange.hasta);
-  const [tipo, setTipo] = useState("todos");
-  const [estado, setEstado] = useState("");
-  const [query, setQuery] = useState("");
+export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 }) {
+  const [draft, setDraft] = useState(initialFilters);
+  const [filters, setFilters] = useState(initialFilters);
   const [events, setEvents] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [openEvent, setOpenEvent] = useState(null);
+  const [details, setDetails] = useState({});
+  const [detailLoading, setDetailLoading] = useState(null);
+  const [detailError, setDetailError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async ({ append = false, offset = 0 } = {}) => {
+    append ? setLoadingMore(true) : setLoading(true);
     setError("");
     try {
       const data = await listResidentTraceability({
         residenteId,
-        desde,
-        hasta,
-        tipos: tipo === "todos" ? [] : [tipo],
-        estado: estado && !["pendiente", "realizado"].includes(estado) ? estado : null,
-        limit: 300,
+        desde: filters.desde,
+        hasta: filters.hasta,
+        tipos: filters.tipo === "todos" ? [] : [filters.tipo],
+        estado: filters.estado || null,
+        query: filters.query,
+        limit: PAGE_SIZE + 1,
+        offset,
       });
-      setEvents(data);
-    } catch (err) {
-      console.error(err);
-      setError("No se pudo cargar la trazabilidad del residente.");
+      const page = data.slice(0, PAGE_SIZE);
+      setHasMore(data.length > PAGE_SIZE);
+      setEvents((current) => append ? [...current, ...page] : page);
+      if (!append) {
+        setOpenEvent(null);
+        setDetails({});
+      }
+    } catch (loadError) {
+      console.error(loadError);
+      setError("No se pudo cargar el historial del residente.");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [desde, estado, hasta, residenteId, tipo]);
+  }, [filters, residenteId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
 
-  const filtered = useMemo(
-    () => filterTraceEvents(events, { query, type: tipo, status: estado }),
-    [estado, events, query, tipo]
-  );
-  const summary = useMemo(() => buildTraceSummary(filtered), [filtered]);
-  const pendingHighlights = useMemo(
-    () => filtered.filter((event) => event.statusGroup === "pendiente").slice(0, 3),
-    [filtered]
-  );
-  const grouped = useMemo(() => groupTraceEventsByDate(filtered), [filtered]);
+  const grouped = useMemo(() => groupTraceEventsByDate(events), [events]);
   const days = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
   const applyQuickRange = (key) => {
-    const next = getTraceQuickRange(key);
-    setRangeKey(next.rangeKey);
-    setDesde(next.desde);
-    setHasta(next.hasta);
+    setError("");
+    const range = getTraceQuickRange(key);
+    const next = { ...filters, rangeKey: range.rangeKey, desde: range.desde, hasta: range.hasta };
+    setDraft(next);
+    setFilters((current) => sameFilters(current, next) ? current : next);
   };
 
-  const resetToLast30Days = () => {
-    setTipo("todos");
-    setEstado("");
-    setQuery("");
-    applyQuickRange("30d");
+  const applyFilters = (event) => {
+    event.preventDefault();
+    if (draft.desde && draft.hasta && draft.desde > draft.hasta) {
+      setError("La fecha desde no puede ser posterior a la fecha hasta.");
+      return;
+    }
+    setError("");
+    setFilters((current) => sameFilters(current, draft) ? current : { ...draft });
+  };
+
+  const clearFilters = () => {
+    setError("");
+    const next = initialFilters();
+    setDraft(next);
+    setFilters((current) => sameFilters(current, next) ? current : next);
+  };
+
+  const activeFilterCount = Number(filters.tipo !== "todos") + Number(Boolean(filters.estado)) + Number(Boolean(filters.query));
+
+  const toggleDetail = async (event) => {
+    if (openEvent === event.key) {
+      setOpenEvent(null);
+      return;
+    }
+    setOpenEvent(event.key);
+    setDetailError("");
+    if (details[event.key] || !event.hasDetail) return;
+    setDetailLoading(event.key);
+    try {
+      const detail = await getResidentTraceDetail({
+        residenteId,
+        entity: event.entity,
+        eventId: event.entityId ?? event.id,
+      });
+      setDetails((current) => ({ ...current, [event.key]: detail }));
+    } catch (loadError) {
+      console.error(loadError);
+      setDetailError("No se pudo cargar el detalle de este registro.");
+    } finally {
+      setDetailLoading(null);
+    }
   };
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-              Bitácora del residente
-              <HelpTooltip label="Ayuda: trazabilidad">
-                Muestra qué pasó, cuándo ocurrió, quién lo registró y qué queda pendiente. Los registros internos se muestran resumidos.
-              </HelpTooltip>
-            </div>
-            <p className="mt-1 text-sm text-slate-500">
-              {rangeLabel(rangeKey, desde, hasta)} · {summary.total} evento{summary.total === 1 ? "" : "s"}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <MetricCard size="sm" label="Eventos" value={summary.total} />
-            <MetricCard size="sm" label="Pendientes" value={summary.pending} tone={summary.pending ? "amber" : "slate"} />
-            <MetricCard size="sm" label="Por validar" value={summary.validation} tone={summary.validation ? "sky" : "slate"} />
-            <MetricCard size="sm" label="Última actividad" value={formatTraceDateTime(summary.latest?.occurredAt)} compact />
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-3">
+    <div className="space-y-4">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Periodo</p>
-            <ChipGroup
-              ariaLabel="Rango de fechas"
-              value={rangeKey}
-              onChange={applyQuickRange}
-              options={Object.entries(TRACE_QUICK_RANGES).map(([key, item]) => ({ value: key, label: item.label, tone: "primary" }))}
-              size="sm"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <button
-              type="button"
-              onClick={() => setShowFilters((value) => !value)}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:hidden"
-            >
-              {showFilters ? "Ocultar filtros avanzados" : "Mostrar filtros avanzados"}
-            </button>
-            <button
-              type="button"
-              onClick={load}
-              disabled={loading}
-              className="ml-auto rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
-            >
-              {loading ? "Actualizando…" : "Actualizar"}
-            </button>
-          </div>
-
-          <div className={`${showFilters ? "grid" : "hidden"} gap-4 lg:grid`}>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_140px_minmax(0,1fr)]">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Desde
-                <input
-                  type="date"
-                  value={desde}
-                  onChange={(event) => { setRangeKey("custom"); setDesde(event.target.value); }}
-                  className="mt-1 w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-200 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                />
-              </label>
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Hasta
-                <input
-                  type="date"
-                  value={hasta}
-                  onChange={(event) => { setRangeKey("custom"); setHasta(event.target.value); }}
-                  className="mt-1 w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-200 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                />
-              </label>
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Buscar
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Buscar por acción, responsable, detalle o estado…"
-                  className="mt-1 w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-200 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                />
-              </label>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-slate-950">Historial del residente</h2>
+              <HelpTooltip label="Ayuda sobre el historial">Cada registro conserva fecha y responsable. Los detalles se consultan sólo al abrirlo para mantener la pantalla rápida.</HelpTooltip>
             </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Tipo de evento</p>
-              <ChipGroup
-                ariaLabel="Tipo de evento"
-                value={tipo}
-                onChange={setTipo}
-                options={TRACE_FILTER_TYPES.map((key) => ({ value: key, label: key === "todos" ? "Todo" : TRACE_TYPE_LABEL[key], tone: "primary" }))}
-                size="sm"
-              />
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Estado</p>
-              <ChipGroup
-                ariaLabel="Estado"
-                value={estado}
-                onChange={setEstado}
-                options={TRACE_FILTER_STATUSES.map(([value, label]) => ({ value, label, tone: "primary" }))}
-                size="sm"
-              />
-            </div>
+            <p className="mt-1 text-sm text-slate-500">Cambios de datos, cama, salud y actividad clínica ordenados desde el más reciente.</p>
           </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            {events.length} registro{events.length === 1 ? "" : "s"} cargado{events.length === 1 ? "" : "s"}
+          </span>
         </div>
+
+        <form onSubmit={applyFilters} className="mt-4 space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">
+              Buscar en el historial
+              <input type="search" value={draft.query} onChange={(event) => setDraft((current) => ({ ...current, query: event.target.value }))} placeholder="Ej.: cambio de cama o nombre del responsable" className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-normal outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+            </label>
+            <button type="submit" className="min-h-11 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white hover:bg-slate-800 sm:self-end">Buscar</button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2" aria-label="Periodo del historial">
+            <span className="mr-1 text-xs font-semibold text-slate-500">Período</span>
+            {Object.entries(TRACE_QUICK_RANGES).map(([key, item]) => (
+              <button key={key} type="button" onClick={() => applyQuickRange(key)} className={`min-h-9 rounded-lg px-3 text-sm font-semibold ${draft.rangeKey === key ? "bg-teal-700 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{item.label}</button>
+            ))}
+            <button type="button" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              {showFilters ? "Ocultar filtros" : `Filtros${activeFilterCount ? ` (${activeFilterCount})` : ""}`}
+            </button>
+          </div>
+
+          {showFilters && (
+            <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-4">
+              <FilterSelect label="Tipo de registro" value={draft.tipo} onChange={(value) => setDraft((current) => ({ ...current, tipo: value }))} options={TRACE_FILTER_TYPES.map((value) => [value, value === "todos" ? "Todos los tipos" : TRACE_TYPE_LABEL[value]])} />
+              <FilterSelect label="Estado" value={draft.estado} onChange={(value) => setDraft((current) => ({ ...current, estado: value }))} options={TRACE_FILTER_STATUSES} />
+              <FilterDate label="Desde" value={draft.desde} onChange={(value) => setDraft((current) => ({ ...current, rangeKey: "custom", desde: value }))} />
+              <FilterDate label="Hasta" value={draft.hasta} onChange={(value) => setDraft((current) => ({ ...current, rangeKey: "custom", hasta: value }))} />
+              <div className="flex flex-wrap justify-end gap-2 sm:col-span-2 lg:col-span-4">
+                <button type="button" onClick={clearFilters} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100">Limpiar</button>
+                <button type="submit" className="min-h-10 rounded-xl bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800">Aplicar filtros</button>
+              </div>
+            </div>
+          )}
+        </form>
       </section>
 
-      {pendingHighlights.length > 0 && (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <h3 className="text-sm font-semibold text-amber-950">Pendientes destacados</h3>
-          <div className="mt-3 grid gap-2 lg:grid-cols-3">
-            {pendingHighlights.map((event) => (
-              <TraceEventItem key={`pending-${event.key}`} event={event} compact />
-            ))}
-          </div>
-        </section>
-      )}
+      {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
 
-      {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          {error}
-        </div>
-      )}
-
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <div className="space-y-3 p-4" role="status" aria-live="polite">
-            <p className="text-xs font-medium text-slate-500">Cargando bitácora…</p>
-            {[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl bg-slate-100" />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-4 sm:p-6">
-            <EmptyState
-              tone="teal"
-              title="Sin eventos en este rango"
-              description="Amplía el rango de fechas, cambia el tipo de actividad o limpia la búsqueda."
-              icon={
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0z" />
-                </svg>
-              }
-              action={{ label: "Ver últimos 30 días", onClick: resetToLast30Days }}
-            />
-          </div>
+          <div className="space-y-3 p-4" role="status"><p className="text-xs text-slate-500">Cargando historial…</p>{[0, 1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl bg-slate-100" />)}</div>
+        ) : events.length === 0 ? (
+          <div className="p-5"><EmptyState tone="teal" title="No hay registros en este periodo" description="Amplía el periodo o limpia los filtros para consultar otras acciones." action={{ label: "Limpiar filtros", onClick: clearFilters }} /></div>
         ) : (
           <div className="divide-y divide-slate-100">
             {days.map((day) => (
-              <div key={day} className="p-3 sm:p-4">
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">{formatTraceDay(day)}</h3>
-                <ol className="relative space-y-3 md:border-l md:border-slate-200 md:pl-4">
+              <section key={day} className="p-3 sm:p-4">
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{formatTraceDay(day)}</h3>
+                <ol className="divide-y divide-slate-100">
                   {grouped[day].map((event) => (
-                    <TraceEventItem key={event.key} event={event} />
+                    <TraceEventRow
+                      key={event.key}
+                      event={event}
+                      open={openEvent === event.key}
+                      detail={details[event.key]}
+                      loading={detailLoading === event.key}
+                      error={openEvent === event.key ? detailError : ""}
+                      onClick={() => toggleDetail(event)}
+                    />
                   ))}
                 </ol>
-              </div>
+              </section>
             ))}
           </div>
         )}
       </section>
+
+      {hasMore && <div className="flex justify-center"><button type="button" disabled={loadingMore} onClick={() => load({ append: true, offset: events.length })} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">{loadingMore ? "Cargando…" : "Cargar registros anteriores"}</button></div>}
     </div>
   );
 }
 
-function TraceEventItem({ event, compact = false }) {
-  const [expanded, setExpanded] = useState(false);
-  const longDetail = (event.detail?.length ?? 0) > 140;
-  const detail = compact || !longDetail || expanded ? event.detail : `${event.detail.slice(0, 140)}…`;
+function TraceEventRow({ event, open, detail, loading, error, onClick }) {
   return (
-    <li className={`relative rounded-xl border border-slate-100 bg-white p-3 shadow-sm ${compact ? "" : "md:bg-slate-50/60"}`}>
-      {!compact && <span className="absolute -left-[23px] top-4 hidden h-3 w-3 rounded-full border-2 border-white bg-teal-500 ring-2 ring-slate-200 md:block" />}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-semibold tabular-nums text-slate-500">{formatTraceTime(event.occurredAt)}</span>
-            <Badge tone={mapTraceToneToBadge(event.typeTone)} size="xs">
-              {event.typeLabel}
-            </Badge>
-            <Badge tone={mapTraceToneToBadge(event.statusTone)} size="xs">
-              {event.statusLabel}
-            </Badge>
+    <li>
+      <button type="button" onClick={onClick} aria-expanded={open} className="grid w-full gap-2 px-1 py-3 text-left hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-sm font-semibold text-slate-950">{event.title}</h4>
+            <Badge tone={mapTraceToneToBadge(event.typeTone)} size="xs">{event.typeLabel}</Badge>
+            {event.statusGroup === "pendiente" && <Badge tone="amber" size="xs">{event.statusLabel}</Badge>}
           </div>
-          <h4 className="mt-1 text-sm font-semibold text-slate-950">{event.title}</h4>
-          {detail && <p className="mt-1 text-sm leading-6 text-slate-600">{detail}</p>}
-          {longDetail && !compact && (
-            <button
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-              className="mt-1 text-xs font-semibold text-teal-700 hover:underline"
-            >
-              {expanded ? "Ver menos" : "Ver detalle"}
-            </button>
-          )}
-          {event.entityLabel && (
-            <p className="mt-1 text-[11px] text-slate-400">{event.entityLabel}</p>
-          )}
+          <p className="mt-1 text-xs text-slate-500">{formatTraceDateTime(event.occurredAt)} · {event.actorName || "Responsable no disponible"}</p>
         </div>
-        {event.actorName && (
-          <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
-            {event.actorName}
-          </span>
-        )}
-      </div>
+        <span className="text-xs font-semibold text-teal-700">{open ? "Ocultar detalle" : "Ver detalle"}</span>
+      </button>
+      {open && (
+        <div className="mx-1 mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:mx-3 sm:p-4">
+          {loading ? <p className="text-sm text-slate-500">Cargando detalle…</p> : error ? <p className="text-sm text-rose-700">{error}</p> : <TraceDetail value={detail} />}
+        </div>
+      )}
     </li>
   );
 }
 
-function mapTraceToneToBadge(tone) {
-  switch (tone) {
-    case "rose": return "rose";
-    case "amber": return "amber";
-    case "sky": return "sky";
-    case "emerald": return "emerald";
-    case "teal": return "primary";
-    case "violet": return "primary";
-    case "indigo": return "sky";
-    default: return "slate";
+function TraceDetail({ value }) {
+  if (!value || typeof value !== "object" || Object.keys(value).length === 0) return <p className="text-sm text-slate-500">Este registro no tiene información adicional.</p>;
+  return <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">{detailEntries(value).map(([label, content], index) => <div key={`${label}-${index}`} className="min-w-0"><dt className="text-xs font-semibold text-slate-500">{label}</dt><dd className="mt-0.5 break-words text-sm text-slate-800">{content}</dd></div>)}</dl>;
+}
+
+function detailEntries(value, prefix = "") {
+  return Object.entries(value).flatMap(([key, item]) => {
+    if (key === "id" || key.endsWith("_id")) return [];
+    const label = [prefix, humanizeKey(key)].filter(Boolean).join(" · ");
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      if (Object.hasOwn(item, "anterior") || Object.hasOwn(item, "nuevo")) {
+        return [[label, `${formatDetailValue(item.anterior)} → ${formatDetailValue(item.nuevo)}`]];
+      }
+      return detailEntries(item, label);
+    }
+    return [[label, formatDetailValue(item)]];
+  });
+}
+
+function humanizeKey(value) {
+  const labels = { datos_iniciales: "Datos registrados", datos_anteriores: "Datos anteriores", cambios: "Cambios", seccion: "Sección", accion: "Acción", tipo: "Categoría", descripcion: "Evolución observada", acciones_tomadas: "Atención, respuesta y plan", motivo_omision: "Motivo", requiere_seguimiento: "Requiere seguimiento", seguimiento_fecha: "Fecha de seguimiento", seguimiento_turno: "Turno de seguimiento", seguimiento_estado: "Estado del seguimiento", reprogramada_para: "Reprogramada para", fecha_programada: "Fecha", fecha_realizada: "Fecha de atención", centro_atencion: "Centro o lugar de atención", especialidad: "Atención o especialidad", profesional: "Profesional que atendió", acompanante: "Quién acompañó", familia_informada: "Familia o persona significativa informada", coordinacion_familia: "Coordinación realizada", resultado: "Observaciones e indicaciones", proximo_control: "Próximo control", presion_arterial: "Presión arterial", saturacion_oxigeno: "Saturación de oxígeno", frecuencia_cardiaca: "Frecuencia cardíaca", frecuencia_respiratoria: "Frecuencia respiratoria" };
+  return labels[value] ?? value.replaceAll("_", " ").replace(/^./, (char) => char.toUpperCase());
+}
+
+function formatDetailValue(value) {
+  if (value == null || value === "") return "Sin información";
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "Sin información";
+  const labels = { observacion_general: "Estado general", cambio_clinico: "Cambio clínico o síntoma", dolor: "Dolor", piel_heridas: "Piel o heridas", conducta_animo: "Conducta o estado de ánimo", control: "Control de salud", derivacion: "Derivación", urgencia: "Atención de urgencia", teleconsulta: "Teleconsulta", otro: "Otra atención", programado: "Programada", realizado: "Realizada", cancelado: "Cancelada", inasistente: "No asistió" };
+  if (labels[value]) return labels[value];
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(value))) return "Registro vinculado";
+  if (/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(String(value))) {
+    const date = new Date(String(value).length === 10 ? `${value}T12:00:00` : value);
+    if (!Number.isNaN(date.valueOf())) return date.toLocaleString("es-CL", String(value).length === 10 ? { dateStyle: "medium" } : { dateStyle: "medium", timeStyle: "short" });
   }
+  return String(value);
+}
+
+function FilterDate({ label, value, onChange }) {
+  return <label className="text-xs font-semibold text-slate-600">{label}<input type="date" value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-normal" /></label>;
+}
+
+function FilterSelect({ label, value, onChange, options }) {
+  return <label className="text-xs font-semibold text-slate-600">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal">{options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}</select></label>;
+}
+
+function mapTraceToneToBadge(tone) {
+  if (tone === "rose") return "rose";
+  if (tone === "amber") return "amber";
+  if (tone === "sky" || tone === "indigo") return "sky";
+  if (tone === "emerald") return "emerald";
+  if (tone === "teal" || tone === "violet") return "primary";
+  return "slate";
 }

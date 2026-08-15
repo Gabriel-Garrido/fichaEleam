@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigationItems } from "../navigation/useNavigationItems";
 import { logout } from "../features/auth/authService";
 import { getPrivateRouteTitle } from "../routes/privateRouteMetadata";
+import Loading from "../components/Loading";
 
 export default function AppShell({ children }) {
   const auth = useAuth();
@@ -33,6 +34,7 @@ export default function AppShell({ children }) {
   };
 
   if (!auth.user) return children ?? <Outlet />;
+  if (auth.profileLoading && !auth.profile) return <Loading fullScreen message="Preparando tu espacio de trabajo..." />;
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950">
@@ -43,7 +45,7 @@ export default function AppShell({ children }) {
         auth={auth}
         onLogout={handleLogout}
       />
-      <div className={`min-w-0 max-w-full overflow-x-hidden ${collapsed ? "lg:pl-20" : "lg:pl-72"} transition-[padding] duration-200`}>
+      <div className={`min-w-0 max-w-full overflow-x-hidden print:pl-0 ${collapsed ? "lg:pl-20" : "lg:pl-72"} transition-[padding] duration-200`}>
         {(auth.featurePermissionsError || auth.permissionsError) && (
           <div
             role="status"
@@ -62,7 +64,7 @@ export default function AppShell({ children }) {
             </button>
           </div>
         )}
-        <main className="min-h-screen min-w-0 max-w-full overflow-x-hidden pb-28 lg:pb-0">
+        <main className="min-h-screen min-w-0 max-w-full overflow-x-hidden pb-28 print:min-h-0 print:overflow-visible print:pb-0 lg:pb-0">
           {children ?? <Outlet />}
         </main>
       </div>

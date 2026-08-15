@@ -1,5 +1,5 @@
 export const SIMPLE_STATUS = {
-  vigente: { label: "Al día", tone: "emerald", help: "El respaldo está vigente." },
+  vigente: { label: "Respaldo listo", tone: "emerald", help: "El respaldo fue revisado internamente y está disponible." },
   no_aplica: { label: "No corresponde", tone: "slate", help: "Este punto no aplica al establecimiento." },
   vencido: { label: "Vencido", tone: "rose", help: "El respaldo perdió vigencia y debe renovarse." },
   observado: { label: "Por corregir", tone: "orange", help: "Hay una observación que debes resolver." },
@@ -15,7 +15,7 @@ export function simpleRequirementStatus(item) {
     || ["observado", "no_cumple"].includes(item?.estado);
   if (calculated?.completa_requisito && item?.estado !== "no_aplica" && !hasBlockingObservation) {
     if (calculated.estado_calculado === "completo") {
-      return { label: "Al día", tone: "emerald", help: calculated.detalle };
+      return { label: "Registros completos", tone: "emerald", help: calculated.detalle };
     }
     if (calculated.estado_calculado === "sin_datos") {
       return { label: "Sin datos", tone: "amber", help: calculated.detalle };

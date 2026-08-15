@@ -57,6 +57,7 @@ export default function ReclamosPage() {
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [filterTipo, setFilterTipo] = useState("");
   const [filterEstado, setFilterEstado] = useState("");
   const [selected, setSelected] = useState(null);
@@ -71,14 +72,16 @@ export default function ReclamosPage() {
   const fg = (field) => (e) => setGestionForm((p) => ({ ...p, [field]: e.target.value }));
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
     try {
       setItems(await getReclamos());
     } catch (err) {
-      toast(err.message || "Error al cargar reclamos", "error");
+      setLoadError(err.message || "No se pudieron cargar los reclamos.");
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -189,6 +192,8 @@ export default function ReclamosPage() {
       {/* List */}
       {loading ? (
         <Loading message="Cargando..." />
+      ) : loadError && items.length === 0 ? (
+        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800"><p className="font-semibold">No pudimos mostrar los registros</p><p className="mt-1">{loadError}</p><button type="button" onClick={load} className="mt-3 rounded-xl border border-rose-200 bg-white px-4 py-2 font-semibold text-rose-700">Reintentar</button></div>
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center">
           <p className="text-sm font-semibold text-slate-600">Sin registros</p>

@@ -27,7 +27,7 @@ export const COMPETENCY_CATALOG = [
 const STAFF_SELECT = `
   id, eleam_id, profile_id, nombre, email, telefono, cargo, tipo_dotacion,
   activo, creado_en, actualizado_en,
-  profile:profiles!staff_members_profile_id_fkey(rol)
+  profile:profiles!staff_members_profile_id_fkey(rol, acceso_activo)
 `;
 
 const COMPETENCY_SELECT = `
@@ -84,7 +84,7 @@ export async function syncStaffMembersFromProfiles() {
   const [{ data: profiles, error: profilesError }, { data: existing, error: existingError }] = await Promise.all([
     sb
       .from("profiles")
-      .select("id, nombre, email, telefono, rol")
+      .select("id, nombre, email, telefono, rol, acceso_activo")
       .eq("eleam_id", eleamId)
       .in("rol", ["admin_eleam", "funcionario"])
       .order("nombre", { ascending: true }),
@@ -107,7 +107,7 @@ export async function syncStaffMembersFromProfiles() {
       telefono: profile.telefono,
       cargo: profile.rol === "admin_eleam" ? "Administrador/a" : "Funcionario/a",
       tipo_dotacion: profile.rol === "admin_eleam" ? "administrativo" : "cuidador",
-      activo: true,
+      activo: profile.acceso_activo !== false,
     })));
     if (error) throw error;
   }

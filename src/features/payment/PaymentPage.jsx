@@ -41,7 +41,7 @@ function daysUntil(iso) {
 const INCLUYE = [
   "Fichas clínicas digitales para todos tus residentes",
   "Registro diario de signos vitales por turno",
-  "Observaciones de turno con 12 categorías",
+  "Registro de evolución con 12 categorías",
   "Sistema de documentación SEREMI (Decreto N°20)",
   "Cobranza de residentes con respaldos y recordatorios por correo",
   "Funcionarios incluidos según el cupo del plan",

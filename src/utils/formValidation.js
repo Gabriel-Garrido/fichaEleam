@@ -164,6 +164,7 @@ export function scrollToFirstError(errors = {}) {
 }
 
 export function userFacingFormError(error, fallback = "No se pudo completar la acción. Revisa los datos e intenta nuevamente.") {
+  const code = String(error?.code || "").toUpperCase();
   const message = String(error?.message || "").trim();
   if (!message) return fallback;
 
@@ -179,6 +180,10 @@ export function userFacingFormError(error, fallback = "No se pudo completar la a
   }
   if (lower.includes("not authorized") || lower.includes("no autorizado") || lower.includes("permission denied")) {
     return "Tu cuenta no tiene permisos para completar esta acción.";
+  }
+  if (["42703", "42P01", "42883", "PGRST202"].includes(code)
+    || /\b(column|relation|function)\b.*\bdoes not exist\b/i.test(message)) {
+    return fallback;
   }
   if (message.length > 180 || /^[A-Z0-9_]+:/.test(message)) return fallback;
   return message;

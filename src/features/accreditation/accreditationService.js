@@ -10,7 +10,7 @@ const ALLOWED_MIME = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "image/jpeg", "image/png", "image/webp",
 ]);
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_EVIDENCE_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const AMBITO_SELECT = "id, codigo, nombre, descripcion, icono, norma_codigo, articulo_ref, fuente_url, orden";
 const REQUISITO_ELEAM_SELECT = `
   id, eleam_id, requisito_id, estado, fecha_vencimiento,
@@ -68,7 +68,9 @@ function sanitizeFilename(name) {
 
 export function validateFile(file) {
   if (!file) return "Selecciona un archivo.";
-  if (file.size > MAX_FILE_SIZE) return "El archivo supera los 10 MB.";
+  if (file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+    return "El archivo excede el máximo de tamaño permitido de 10 MB. Reduce su peso e intenta nuevamente.";
+  }
   const ext = (file.name.split(".").pop() ?? "").toLowerCase();
   if (!ALLOWED_EXTENSIONS.has(ext)) {
     return "Formato no permitido. Usa PDF, DOC/DOCX, XLS/XLSX, JPG, PNG o WEBP.";

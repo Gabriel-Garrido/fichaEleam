@@ -89,18 +89,20 @@ function ScoreDisplay({ tipo, assessment }) {
   );
 }
 
-export default function ClinicalAssessmentBadge({ tipo, resident, latest, history = [], onChanged }) {
+export default function ClinicalAssessmentBadge({ tipo, resident, latest, history = [], onChanged, ds20Required = false }) {
   const { can } = useAuth();
   const canApply = can("aplicar_evaluaciones_clinicas");
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
   const status = evaluationStatus(latest?.proxima_evaluacion);
+  const ds20Pending = ds20Required && !latest;
+  const displayStatus = ds20Pending ? { tone: "amber", label: "Pendiente DS20" } : status;
   const lastDate = latest?.fecha_evaluacion;
   const motivoLabel = MOTIVO_LABEL[latest?.motivo] ?? "";
 
   return (
-    <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <section className={`rounded-2xl border bg-white p-4 shadow-sm ${ds20Pending ? "border-amber-300 ring-1 ring-amber-100" : "border-slate-100"}`}>
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
@@ -113,11 +115,12 @@ export default function ClinicalAssessmentBadge({ tipo, resident, latest, histor
           </div>
           <h3 className="text-sm font-semibold text-slate-900">{ASSESSMENT_LABEL[tipo]}</h3>
         </div>
-        <StatusPill status={status} />
+        <StatusPill status={displayStatus} />
       </header>
 
-      <div className="mt-3">
+      <div className={ds20Pending ? "mt-3 rounded-xl bg-amber-50 p-2.5" : "mt-3"}>
         <ScoreDisplay tipo={tipo} assessment={latest} />
+        {ds20Pending && <p className="mt-1 text-xs font-medium leading-4 text-amber-800">Completa esta valoración para respaldar la situación funcional, nutricional o cognitiva en la ficha del residente.</p>}
       </div>
 
       {latest && (

@@ -1,5 +1,6 @@
 import { ensureSupabase } from "../../services/serviceContext";
 import { throwEdgeFunctionError } from "../../services/edgeFunctionErrors";
+import { DEFAULT_PERMS } from "./teamConstants";
 // Lista los funcionarios y el admin del ELEAM del usuario autenticado.
 // La RLS profiles_admin_eleam_select permite al admin ver perfiles de su ELEAM.
 export async function getTeamMembers(eleamId) {
@@ -7,7 +8,7 @@ export async function getTeamMembers(eleamId) {
   const sb = ensureSupabase();
   const { data, error } = await sb
     .from("profiles")
-    .select("id, nombre, email, telefono, rol, creado_en, must_reset_password")
+    .select("id, nombre, email, telefono, rol, creado_en, must_reset_password, acceso_activo, desactivado_en, desactivado_por, motivo_desactivacion, restaurado_en")
     .eq("eleam_id", eleamId)
     .order("creado_en", { ascending: true });
   if (error) throw error;
@@ -39,27 +40,65 @@ export async function revokeInvitation(id) {
   if (error) throw error;
 }
 
-// Crea un funcionario. La cuenta se crea con una contraseña
-// aleatoria interna y el usuario recibe por correo un enlace para definir la
-// suya. Retorna { ok, profile_id, email, rol, email_sent, email_error? }.
-export async function createStaffUser({ nombre, email, telefono = null }) {
+// Crea un funcionario o administrador del mismo ELEAM. La cuenta se crea con una contraseña
+// aleatoria interna. Gmail ingresa con Google; los demás dominios reciben un
+// enlace para definir la suya. Retorna también `access_method`.
+export async function createStaffUser({ nombre, email, telefono = null, rol = "funcionario" }) {
+  if (!["funcionario", "admin_eleam"].includes(rol)) throw new Error("Tipo de cuenta inválido.");
   const sb = ensureSupabase();
   const { data, error } = await sb.functions.invoke("create-staff-user", {
-    body: { nombre, email, telefono, rol: "funcionario" },
+    body: { nombre, email, telefono, rol },
   });
   if (error) await throwEdgeFunctionError(error, "No se pudo crear el usuario");
   if (data?.error) throw new Error(data.error);
   return data;
 }
 
-// Elimina un funcionario del ELEAM usando Admin API via Edge Function.
-export async function deleteStaffUser(profileId) {
+// Revoca el acceso sin borrar el perfil, permisos ni registros históricos.
+export async function deactivateTeamUser(profileId, motivo) {
   const sb = ensureSupabase();
   const { data, error } = await sb.functions.invoke("delete-staff-user", {
-    body: { profile_id: profileId },
+    body: { profile_id: profileId, action: "desactivar", motivo },
   });
-  if (error) await throwEdgeFunctionError(error, "No se pudo eliminar el usuario");
+  if (error) await throwEdgeFunctionError(error, "No se pudo desactivar el usuario");
   if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function restoreTeamUser(profileId) {
+  const sb = ensureSupabase();
+  const { data, error } = await sb.functions.invoke("delete-staff-user", {
+    body: { profile_id: profileId, action: "restaurar" },
+  });
+  if (error) await throwEdgeFunctionError(error, "No se pudo restaurar el usuario");
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function getUserAccessHistory(eleamId) {
+  if (!eleamId) return [];
+  const sb = ensureSupabase();
+  const { data, error } = await sb
+    .from("usuario_acceso_historial")
+    .select("id, profile_id, accion, motivo, realizado_por, realizado_en")
+    .eq("eleam_id", eleamId)
+    .order("realizado_en", { ascending: false });
+  if (error) throw error;
+  const rows = data ?? [];
+  const authorIds = [...new Set(rows.map((row) => row.realizado_por).filter(Boolean))];
+  if (authorIds.length === 0) return rows;
+
+  // `realizado_por` puede provenir de instalaciones antiguas donde la FK
+  // apuntaba a auth.users. Consultar los perfiles por separado evita depender
+  // del cache de relaciones de PostgREST y mantiene el historial disponible.
+  const { data: authors, error: authorsError } = await sb
+    .from("profiles")
+    .select("id, nombre, email")
+    .eq("eleam_id", eleamId)
+    .in("id", authorIds);
+  if (authorsError) throw authorsError;
+  const authorsById = new Map((authors ?? []).map((author) => [author.id, author]));
+  return rows.map((row) => ({ ...row, autor: authorsById.get(row.realizado_por) ?? null }));
 }
 
 // Obtiene los permisos granulares de un funcionario.
@@ -77,9 +116,12 @@ export async function getFuncionarioPermisos(profileId) {
 // Actualiza (upsert) los permisos de un funcionario.
 export async function updateFuncionarioPermisos(profileId, permisos) {
   const sb = ensureSupabase();
+  const safePermissions = Object.fromEntries(
+    Object.keys(DEFAULT_PERMS).map((permission) => [permission, permisos?.[permission] === true]),
+  );
   const { error } = await sb
     .from("funcionario_permisos")
-    .upsert({ profile_id: profileId, ...permisos, actualizado_en: new Date().toISOString() });
+    .upsert({ ...safePermissions, profile_id: profileId, actualizado_en: new Date().toISOString() });
   if (error) throw error;
 }
 

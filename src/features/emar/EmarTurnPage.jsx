@@ -271,10 +271,10 @@ export default function EmarTurnPage() {
       </section>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard label="Pendientes" value={metrics.pendientes} tone="amber" tooltip="Dosis del turno aún por administrar." />
-        <MetricCard label="Vencidas" value={metrics.vencidas} tone="rose" tooltip="Dosis que pasaron su hora o ventana de tolerancia." />
-        <MetricCard label="Por validar" value={metrics.porValidar} tone="sky" tooltip="Administraciones que necesitan confirmación de un segundo usuario." />
-        <MetricCard label="Total" value={metrics.total} tooltip="Total de dosis programadas en el turno." />
+        <MetricCard label="Pendientes" value={loading ? "…" : metrics.pendientes} tone={loading ? "slate" : "amber"} className={loading ? "animate-pulse" : ""} tooltip="Dosis del turno aún por administrar." />
+        <MetricCard label="Vencidas" value={loading ? "…" : metrics.vencidas} tone={loading ? "slate" : "rose"} className={loading ? "animate-pulse" : ""} tooltip="Dosis que pasaron su hora o ventana de tolerancia." />
+        <MetricCard label="Por validar" value={loading ? "…" : metrics.porValidar} tone={loading ? "slate" : "sky"} className={loading ? "animate-pulse" : ""} tooltip="Administraciones que necesitan confirmación de un segundo usuario." />
+        <MetricCard label="Total" value={loading ? "…" : metrics.total} className={loading ? "animate-pulse" : ""} tooltip="Total de dosis programadas en el turno." />
       </section>
 
       {error && (
@@ -297,6 +297,8 @@ export default function EmarTurnPage() {
             <p className="text-xs font-medium text-slate-500">Cargando medicamentos del turno…</p>
             {[0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />)}
           </div>
+        ) : error && rows.length === 0 ? (
+          <div className="p-6 text-center text-sm text-slate-500">No se muestran resultados porque la consulta no terminó correctamente.</div>
         ) : rows.length === 0 ? (
           <div className="p-4 sm:p-6">
             <EmptyState

@@ -2,6 +2,16 @@ import { ensureSupabase, getEleamContext as getMyEleamContext } from "../../serv
 
 export { getMyEleamContext };
 
+export const MAX_CONSENT_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;
+
+export function validateConsentDocument(file) {
+  if (!file) return "Selecciona el consentimiento firmado en PDF.";
+  if (file.size > MAX_CONSENT_DOCUMENT_SIZE_BYTES) return "El consentimiento excede el máximo permitido de 10 MB.";
+  const extension = (file.name?.split(".").pop() ?? "").toLowerCase();
+  if (extension !== "pdf" || (file.type && file.type !== "application/pdf")) return "El consentimiento debe estar en formato PDF.";
+  return null;
+}
+
 const CONSENT_SELECT = `
   id, eleam_id, residente_id, fecha_consentimiento, firmante_nombre,
   firmante_rut, firmante_tipo, relacion_residente,
@@ -25,6 +35,7 @@ const HEALTH_NETWORK_SELECT = `
 const HEALTH_CONTROL_SELECT = `
   id, eleam_id, residente_id, health_center_id, tipo, estado,
   fecha_programada, fecha_realizada, especialidad, profesional,
+  centro_atencion, acompanante, familia_informada, coordinacion_familia,
   motivo, resultado, proximo_control, documento_path, registrado_por,
   creado_en, actualizado_en,
   centro:health_centers(id, nombre, tipo)
@@ -32,46 +43,55 @@ const HEALTH_CONTROL_SELECT = `
 
 
 export async function getResidentDs20Bundle(residenteId) {
-  if (!residenteId) return { consents: [], centers: [], network: null, controls: [], compliance: null };
+  if (!residenteId) return { consents: [], network: null };
   const sb = ensureSupabase();
-  const { eleamId } = await getMyEleamContext();
-  const [consents, centers, network, controls, compliance] = await Promise.all([
+  const [consents, network] = await Promise.all([
     sb
       .from("resident_consents")
       .select(CONSENT_SELECT)
       .eq("residente_id", residenteId)
-      .order("fecha_consentimiento", { ascending: false }),
-    sb
-      .from("health_centers")
-      .select(HEALTH_CENTER_SELECT)
-      .eq("eleam_id", eleamId)
-      .eq("activo", true)
-      .order("nombre", { ascending: true }),
+      .order("fecha_consentimiento", { ascending: false })
+      .limit(1),
     sb
       .from("resident_health_network")
       .select(HEALTH_NETWORK_SELECT)
       .eq("residente_id", residenteId)
       .maybeSingle(),
-    sb
-      .from("health_controls")
-      .select(HEALTH_CONTROL_SELECT)
-      .eq("residente_id", residenteId)
-      .order("fecha_programada", { ascending: false })
-      .limit(20),
-    sb.rpc("ds20_resident_compliance_summary"),
   ]);
 
-  for (const result of [consents, centers, network, controls, compliance]) {
+  for (const result of [consents, network]) {
     if (result.error) throw result.error;
   }
 
   return {
     consents: consents.data ?? [],
-    centers: centers.data ?? [],
     network: network.data ?? null,
-    controls: controls.data ?? [],
-    compliance: (compliance.data ?? []).find((row) => row.residente_id === residenteId) ?? null,
   };
+}
+
+export async function listActiveHealthCenters() {
+  const sb = ensureSupabase();
+  const { eleamId } = await getMyEleamContext();
+  const { data, error } = await sb
+    .from("health_centers")
+    .select(HEALTH_CENTER_SELECT)
+    .eq("eleam_id", eleamId)
+    .eq("activo", true)
+    .order("nombre", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getResidentHealthNetwork(residenteId) {
+  if (!residenteId) return null;
+  const sb = ensureSupabase();
+  const { data, error } = await sb
+    .from("resident_health_network")
+    .select(HEALTH_NETWORK_SELECT)
+    .eq("residente_id", residenteId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
 }
 
 export async function uploadDs20Document({ eleamId, folder, file, contentType = "application/pdf" }) {
@@ -120,6 +140,21 @@ export async function createResidentConsent({ resident, eleam, consent, pdfBlob 
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function createUploadedResidentConsent({ resident, eleam, consent, file }) {
+  const validationError = validateConsentDocument(file);
+  if (validationError) throw new Error(validationError);
+  return createResidentConsent({
+    resident,
+    eleam,
+    consent: {
+      ...consent,
+      residente_puede_firmar: consent.firmante_tipo === "residente",
+      firma_data_url: null,
+    },
+    pdfBlob: file,
+  });
 }
 
 export async function getSignedDs20Url(storagePath) {
@@ -190,11 +225,15 @@ export async function saveHealthControl(residenteId, payload) {
     estado: payload.estado || "programado",
     fecha_programada: payload.fecha_programada,
     fecha_realizada: payload.fecha_realizada || null,
+    centro_atencion: payload.centro_atencion || null,
     especialidad: payload.especialidad || null,
-    profesional: payload.profesional || null,
+    profesional: payload.estado === "realizado" ? payload.profesional || null : null,
+    acompanante: payload.estado === "realizado" ? payload.acompanante || null : null,
+    familia_informada: payload.familia_informada === true,
+    coordinacion_familia: payload.familia_informada ? payload.coordinacion_familia || null : null,
     motivo: payload.motivo || null,
-    resultado: payload.resultado || null,
-    proximo_control: payload.proximo_control || null,
+    resultado: payload.estado === "realizado" ? payload.resultado || null : null,
+    proximo_control: payload.estado === "realizado" ? payload.proximo_control || null : null,
     registrado_por: userId,
     actualizado_en: new Date().toISOString(),
   };

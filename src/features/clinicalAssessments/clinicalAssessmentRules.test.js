@@ -5,6 +5,7 @@ import {
   MNA_ITEMS,
   MMSE_ITEMS,
   addDaysIso,
+  barthelDependencyFromScore,
   computeBarthel,
   computeKatz,
   computeMna,
@@ -74,6 +75,15 @@ describe("clinical assessment rules — Barthel", () => {
       .toBe("Dependencia severa");
     const moderate = { ...maxBarthel(), traslado: 5, deambulacion: 5 };
     expect(computeBarthel(moderate).resultado).toBe("Dependencia moderada");
+  });
+
+  it("uses the same Barthel category when displaying a saved score", () => {
+    expect(barthelDependencyFromScore(100)).toBe("Independiente");
+    expect(barthelDependencyFromScore(95)).toBe("Dependencia leve");
+    expect(barthelDependencyFromScore(75)).toBe("Dependencia moderada");
+    expect(barthelDependencyFromScore(40)).toBe("Dependencia severa");
+    expect(barthelDependencyFromScore(10)).toBe("Dependencia total");
+    expect(barthelDependencyFromScore(null)).toBeNull();
   });
 
   it("isAssessmentComplete is true only when every Barthel item is set", () => {

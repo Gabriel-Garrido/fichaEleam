@@ -4,9 +4,10 @@ export default function PageHeader({
   description,
   actions = null,
   compact = false,
+  className = "",
 }) {
   return (
-    <header className={`flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${compact ? "" : "mb-5 sm:mb-6"}`}>
+    <header className={`flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${compact ? "" : "mb-5 sm:mb-6"} ${className}`}>
       <div className="min-w-0 max-w-full">
         {eyebrow && (
           <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-teal-700">

@@ -29,7 +29,7 @@ export default function MobileBottomNav({ slots, sections, quickActions, auth, o
     <>
       <nav
         aria-label="Navegación principal"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_28px_rgba(15,23,42,0.08)] backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_28px_rgba(15,23,42,0.08)] backdrop-blur-md print:hidden lg:hidden"
       >
         <div className={`mx-auto grid max-w-md ${gridCols} items-end gap-1`}>
           {items.map((slot, idx) => {

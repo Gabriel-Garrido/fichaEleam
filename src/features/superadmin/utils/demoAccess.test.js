@@ -51,6 +51,23 @@ describe("demoGrantResultMessage", () => {
     });
   });
 
+  it("explains direct Google access for Gmail demos", () => {
+    expect(demoGrantResultMessage({
+      code: "created",
+      email_sent: true,
+      access_method: "google",
+    })).toMatchObject({
+      toast: "Usuario demo creado correctamente",
+      body: expect.stringContaining("Google"),
+    });
+
+    expect(demoGrantResultMessage({
+      code: "access_resent",
+      email_sent: true,
+      access_method: "google",
+    }).toast).toContain("Google");
+  });
+
   it("describes email delivery failures", () => {
     expect(demoGrantResultMessage({
       code: "created",

@@ -145,7 +145,7 @@ export default function ResidentForm() {
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-2xl text-emerald-700">✓</div>
           <h1 className="mt-4 text-xl font-bold text-slate-950">Residente creado</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">La carpeta de {created.nombre} {created.apellido} está lista. Continúa con ingreso DS20, evaluaciones y plan de cuidado.</p>
-          <div className="mt-6 grid gap-2 sm:grid-cols-2">{canFeature("establishment") && can("asignar_camas") && <Button onClick={() => navigate("/establecimiento")} className="border border-slate-200 bg-white text-slate-700">Asignar cama</Button>}<Button onClick={() => navigate(`/residents/${created.id}?tab=ds20`)} className="bg-teal-700 text-white">Completar ingreso DS20</Button></div>
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">{canFeature("establishment") && can("asignar_camas") && <Button onClick={() => navigate("/establecimiento")} className="border border-slate-200 bg-white text-slate-700">Asignar cama</Button>}<Button onClick={() => navigate(`/residents/${created.id}?section=ingreso`)} className="bg-teal-700 text-white">Completar antecedentes de ingreso</Button></div>
         </div>
       </div>
     );

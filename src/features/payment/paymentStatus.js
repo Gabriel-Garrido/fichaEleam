@@ -5,6 +5,13 @@ export function hasPendingDemoAccess(eleam, now = new Date()) {
   return !Number.isNaN(expiresAt.valueOf()) && expiresAt > now;
 }
 
+export function hasActiveDemo(eleam, now = new Date()) {
+  if (!eleam || eleam.plan !== "demo" || eleam.subscription_status !== "activo") return false;
+  if (!eleam.fecha_vencimiento_suscripcion) return true;
+  const expiresAt = new Date(eleam.fecha_vencimiento_suscripcion);
+  return !Number.isNaN(expiresAt.valueOf()) && expiresAt >= now;
+}
+
 export function canStartSubscription(eleam) {
   if (!eleam) return true;
   if (eleam.subscription_status === "pendiente" && eleam.mp_preapproval_id) return false;

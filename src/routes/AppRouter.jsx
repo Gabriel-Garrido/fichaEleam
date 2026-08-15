@@ -30,7 +30,7 @@ const AuthenticatedApp = lazy(loadAuthenticatedApp);
 
 export default function AppRouter() {
   return (
-    <Suspense fallback={<Loading message="Cargando vista..." />}>
+    <Suspense fallback={<Loading fullScreen message="Cargando vista..." />}>
       <Routes>
         {/* Páginas públicas SEO bajo un layout persistente: el navbar/footer se montan
             una vez y solo cambia el cuerpo (Suspense contenido en PublicLayout). */}

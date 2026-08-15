@@ -4,9 +4,11 @@ export const TRACE_TYPE_LABEL = {
   cuidado: "Cuidado",
   medicamentos: "Medicamentos",
   signos: "Signos",
-  observaciones: "Observaciones",
+  observaciones: "Evolución",
   seguimientos: "Seguimientos",
   cama: "Cama",
+  datos: "Datos personales",
+  salud: "Salud y documentos",
   auditoria: "Registro interno",
 };
 
@@ -35,6 +37,8 @@ export const TRACE_TYPE_TONE = {
   observaciones: "slate",
   seguimientos: "amber",
   cama: "indigo",
+  datos: "slate",
+  salud: "teal",
   auditoria: "rose",
 };
 
@@ -56,7 +60,6 @@ export const TRACE_STATUS_TONE = {
   alerta: "rose",
 };
 
-const DEFAULT_LIMIT = 200;
 const PENDING_STATUSES = new Set(["pendiente", "pendiente_validacion", "validacion"]);
 const DONE_STATUSES = new Set(["realizado", "cumplida", "administrado", "validado", "resuelto", "completada"]);
 const CANCELLED_STATUSES = new Set(["cancelado", "cancelada", "omitido", "omitida", "revertido"]);
@@ -64,7 +67,7 @@ const TECHNICAL_ENTITY_LABEL = {
   tareas_cuidado: "Tarea de cuidado",
   medicamentos_administraciones: "Administración de medicamento",
   signos_vitales: "Signos vitales",
-  observaciones_diarias: "Observación",
+  observaciones_diarias: "Registro de evolución",
   cama_asignaciones: "Asignación de cama",
   plan_cuidado_audit: "Registro de plan de cuidado",
   medicamentos_audit: "Registro de medicamentos",
@@ -159,6 +162,7 @@ export function normalizeTraceEvent(event = {}) {
     priority: Number.isFinite(Number(event.prioridad_visual))
       ? Number(event.prioridad_visual)
       : PENDING_STATUSES.has(status) ? 0 : 1,
+    hasDetail: event.tiene_detalle !== false,
     raw: event,
   };
 }
@@ -225,18 +229,33 @@ export async function listResidentTraceability({
   hasta = null,
   tipos = [],
   estado = null,
-  limit = DEFAULT_LIMIT,
+  query = null,
+  limit = 26,
+  offset = 0,
 } = {}) {
   if (!residenteId) return [];
 
-  const { data, error } = await supabase.rpc("listar_trazabilidad_residente", {
+  const { data, error } = await supabase.rpc("listar_historial_residente_paginado", {
     p_residente_id: residenteId,
     p_desde: desde || null,
     p_hasta: hasta || null,
     p_tipos: tipos?.length ? tipos : null,
     p_estado: estado || null,
+    p_busqueda: query?.trim() || null,
     p_limit: limit,
+    p_offset: offset,
   });
   if (error) throw error;
   return (data ?? []).map(normalizeTraceEvent);
+}
+
+export async function getResidentTraceDetail({ residenteId, entity, eventId }) {
+  if (!residenteId || !entity || !eventId) throw new Error("Evento de historial incompleto.");
+  const { data, error } = await supabase.rpc("obtener_detalle_historial_residente", {
+    p_residente_id: residenteId,
+    p_entidad: entity,
+    p_evento_id: String(eventId),
+  });
+  if (error) throw error;
+  return data ?? {};
 }

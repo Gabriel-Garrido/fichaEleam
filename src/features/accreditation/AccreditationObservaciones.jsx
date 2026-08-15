@@ -223,6 +223,7 @@ export default function AccreditationObservaciones() {
   const { isAdminEleam } = useAuth();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [obsFilters, setObsFilter, clearObsFilters] = useFilterParams({
     schema: { q: "string", estado: "string", origen: "string" },
     defaults: { q: "", estado: "abiertas", origen: "todas" },
@@ -234,15 +235,16 @@ export default function AccreditationObservaciones() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await getObservaciones();
       setList(data);
     } catch (e) {
-      toast(friendlyError(e, "No se pudieron cargar las observaciones. Recarga la página."), "error");
+      setLoadError(friendlyError(e, "No se pudieron cargar las observaciones."));
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -272,6 +274,18 @@ export default function AccreditationObservaciones() {
   };
 
   if (loading) return <Loading message="Cargando observaciones..." />;
+
+  if (loadError && list.length === 0) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12">
+        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
+          <h1 className="text-lg font-bold text-rose-950">No se pudieron cargar las observaciones</h1>
+          <p className="mt-2 text-sm text-rose-800">{loadError}</p>
+          <button type="button" onClick={load} className="mt-5 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Reintentar</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">

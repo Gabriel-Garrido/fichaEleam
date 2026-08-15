@@ -734,13 +734,13 @@ export default function BedsPage() {
       ) : (
       <div className="space-y-5">
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-7">
-          <Kpi label="Operativas" value={metrics.operativas} sub="Aptas para uso" />
-          <Kpi label="Ocupadas" value={metrics.ocupadas} tone="teal" sub="Con residente" />
-          <Kpi label="Reservadas" value={metrics.reservadasHospitalizacion} tone="amber" sub="Hospitalización" />
-          <Kpi label="Disponibles" value={metrics.disponibles} tone="emerald" sub="Asignables ahora" />
-          <Kpi label="Fuera servicio" value={metrics.fueraServicio} tone="slate" sub="Mantención/inactivas" />
-          <Kpi label="Sin cama" value={metrics.residentesSinCama} tone="rose" sub="Residentes activos" />
-          <Kpi label="Ocupación" value={`${metrics.porcentajeOcupacion}%`} help="Calculado sobre camas operativas; incluye ocupadas y reservadas por hospitalización." />
+          <Kpi label="Operativas" value={loading ? "…" : metrics.operativas} sub="Aptas para uso" />
+          <Kpi label="Ocupadas" value={loading ? "…" : metrics.ocupadas} tone="teal" sub="Con residente" />
+          <Kpi label="Reservadas" value={loading ? "…" : metrics.reservadasHospitalizacion} tone="amber" sub="Hospitalización" />
+          <Kpi label="Disponibles" value={loading ? "…" : metrics.disponibles} tone="emerald" sub="Asignables ahora" />
+          <Kpi label="Fuera servicio" value={loading ? "…" : metrics.fueraServicio} tone="slate" sub="Mantención/inactivas" />
+          <Kpi label="Sin cama" value={loading ? "…" : metrics.residentesSinCama} tone="rose" sub="Residentes activos" />
+          <Kpi label="Ocupación" value={loading ? "…" : `${metrics.porcentajeOcupacion}%`} help="Calculado sobre camas operativas; incluye ocupadas y reservadas por hospitalización." />
         </section>
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -749,10 +749,10 @@ export default function BedsPage() {
               <h2 className="text-sm font-semibold text-slate-800">Ocupación operativa</h2>
               <p className="text-xs text-slate-500">Ocupadas y reservadas bloquean disponibilidad.</p>
             </div>
-            <span className="text-sm font-bold tabular-nums text-teal-700">{metrics.porcentajeOcupacion}%</span>
+            <span className={`text-sm font-bold tabular-nums text-teal-700 ${loading ? "animate-pulse" : ""}`}>{loading ? "Calculando…" : `${metrics.porcentajeOcupacion}%`}</span>
           </div>
           <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-teal-600" style={{ width: `${Math.min(metrics.porcentajeOcupacion, 100)}%` }} />
+            <div className={`h-full rounded-full ${loading ? "w-1/3 animate-pulse bg-slate-300" : "bg-teal-600"}`} style={loading ? undefined : { width: `${Math.min(metrics.porcentajeOcupacion, 100)}%` }} />
           </div>
         </section>
 

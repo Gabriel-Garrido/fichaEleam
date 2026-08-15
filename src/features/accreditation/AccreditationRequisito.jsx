@@ -9,6 +9,7 @@ import Loading from "../../components/Loading";
 import { FeatureCoach } from "../featureCoach";
 import {
   getRequisitoEleam,
+  getOperationalEvidence,
   getDocumentos,
   getObservaciones,
   getAuditTrail,
@@ -24,10 +25,12 @@ import {
   estadoMeta,
   diasHasta,
   validateFile,
+  MAX_EVIDENCE_FILE_SIZE_BYTES,
 } from "./accreditationService";
 import { isValidUUID } from "../../utils/validators";
 import { formatDate } from "../../utils/dateUtils";
 import { friendlyError } from "../../utils/errorMessages";
+import { evidencePresentation, requirementNextAction } from "./complianceGuidance";
 
 function StatePill({ estado }) {
   const m = estadoMeta(estado);
@@ -327,6 +330,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
   const inputRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState(null);
+  const [fileError, setFileError] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [fechaEmision, setFechaEmision] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
@@ -335,6 +339,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
 
   const resetForm = () => {
     setFile(null);
+    setFileError(null);
     setFechaEmision("");
     setFechaVencimiento("");
     setNotas("");
@@ -345,15 +350,21 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
   const selectFile = (nextFile) => {
     if (!nextFile) {
       setFile(null);
+      setFileError(null);
       return;
     }
     const err = validateFile(nextFile);
     if (err) {
       toast(err, "error");
+      setFileError({
+        message: err,
+        tooLarge: nextFile.size > MAX_EVIDENCE_FILE_SIZE_BYTES,
+      });
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
       return;
     }
+    setFileError(null);
     setFile(nextFile);
   };
 
@@ -462,6 +473,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
                 type="button"
                 onClick={() => {
                   setFile(null);
+                  setFileError(null);
                   if (inputRef.current) inputRef.current.value = "";
                 }}
                 className="shrink-0 rounded-xl px-2 py-1 text-xs font-semibold text-teal-800 hover:bg-white"
@@ -471,6 +483,16 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
             </div>
           )}
         </div>
+        {fileError && (
+          <div role="alert" className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-5 text-rose-900">
+            <p className="font-semibold">{fileError.message}</p>
+            {fileError.tooLarge && (
+              <p className="mt-1 text-xs leading-5 text-rose-800">
+                Si es PDF, puedes usar <a href="https://www.ilovepdf.com/es/comprimir_pdf" target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2 hover:text-rose-950">iLovePDF</a>: selecciona el archivo, comprímelo, descárgalo y vuelve a subirlo.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -802,13 +824,14 @@ export default function AccreditationRequisito() {
   const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
-  const { profile, isAdminEleam, can } = useAuth();
+  const { profile, isAdminEleam, can, canFeature } = useAuth();
 
   const [re, setRe] = useState(null);
   const [docs, setDocs] = useState([]);
   const [historial, setHistorial] = useState([]);
   const [observaciones, setObservaciones] = useState([]);
   const [audit, setAudit] = useState([]);
+  const [operationalEvidence, setOperationalEvidence] = useState(null);
   const [tab, setTab] = useState("evidencia");
   const [loading, setLoading] = useState(true);
   const [showHistorial, setShowHistorial] = useState(false);
@@ -821,18 +844,20 @@ export default function AccreditationRequisito() {
     }
     setLoading(true);
     try {
-      const [r, d, h, o, a] = await Promise.all([
+      const [r, d, h, o, a, evidence] = await Promise.all([
         getRequisitoEleam(id),
         getDocumentos(id),
         getDocumentos(id, { incluirHistoria: true }),
         getObservaciones({ requisitoEleamId: id }),
         getAuditTrail({ entidadId: id, limit: 30 }),
+        getOperationalEvidence(),
       ]);
       setRe(r);
       setDocs(d);
       setHistorial(h);
       setObservaciones(o);
       setAudit(a);
+      setOperationalEvidence(evidence.find((item) => item.requisito_codigo === r?.requisito?.codigo) ?? null);
     } catch (e) {
       toast(friendlyError(e, "No se pudo cargar el requisito. Recarga la página e intenta de nuevo."), "error");
     } finally {
@@ -926,6 +951,22 @@ export default function AccreditationRequisito() {
   const a = r.ambito;
   const vigente = docs[0] ?? null;
   const canEditStatus = isAdminEleam || can("editar_acreditacion");
+  const preparedItem = {
+    ...re,
+    operationalEvidence,
+    openObservations: observaciones.filter((item) => item.estado !== "cerrada").length,
+    documentos: docs,
+  };
+  const evidence = evidencePresentation(preparedItem);
+  const canOpenOperationalSource = operationalEvidence?.ruta_origen && (
+    operationalEvidence.ruta_origen.startsWith("/residents") || operationalEvidence.ruta_origen.startsWith("/operacion")
+      ? canFeature("residents")
+      : operationalEvidence.ruta_origen.startsWith("/personal")
+        ? canFeature("personnel")
+        : operationalEvidence.ruta_origen.startsWith("/establecimiento")
+          ? canFeature("establishment")
+          : canFeature("compliance")
+  );
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
@@ -961,6 +1002,43 @@ export default function AccreditationRequisito() {
         <h1 className="text-2xl font-black text-slate-800 mb-2">{r.nombre}</h1>
         {r.descripcion && (
           <p className="text-sm text-slate-600 mb-2">{r.descripcion}</p>
+        )}
+
+        <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200" aria-labelledby="preparation-title">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <h2 id="preparation-title" className="font-bold text-slate-900">Cómo preparar este punto</h2>
+            <p className="mt-0.5 text-xs leading-5 text-slate-500">Separa lo que FichaEleam puede demostrar de aquello que debes obtener o comprobar fuera de la plataforma.</p>
+          </div>
+          <div className="grid gap-px bg-slate-200 md:grid-cols-3">
+            <GuideColumn label="1. Qué pide el DS20" text={r.descripcion || "Revisa el alcance indicado para este requisito."} />
+            <GuideColumn label="2. Qué aporta FichaEleam" text={operationalEvidence?.detalle || evidence.help} tone={evidence.kind} />
+            <GuideColumn label="3. Qué debes conservar" text={r.medio_verificador || "Mantén un respaldo trazable y disponible para revisión."} />
+          </div>
+          <div className="border-t border-slate-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+            <span className="font-bold">Siguiente acción:</span> {requirementNextAction(preparedItem)}
+          </div>
+        </section>
+
+        {operationalEvidence && (
+          <section className={`mt-4 rounded-xl border p-4 ${operationalEvidence.completa_requisito ? "border-emerald-200 bg-emerald-50" : "border-sky-200 bg-sky-50"}`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className={`text-xs font-bold uppercase tracking-wide ${operationalEvidence.completa_requisito ? "text-emerald-700" : "text-sky-700"}`}>
+                  {operationalEvidence.completa_requisito ? "Medio verificador desde FichaEleam" : "Avance operativo desde FichaEleam"}
+                </p>
+                <p className="mt-1 font-semibold text-slate-900">{operationalEvidence.resumen}</p>
+                <p className="mt-1 text-sm text-slate-700">
+                  {operationalEvidence.denominador > 0 ? `${operationalEvidence.numerador} de ${operationalEvidence.denominador} · ${operationalEvidence.porcentaje}%` : "Aún no hay datos suficientes para calcularlo."}
+                </p>
+              </div>
+              {canOpenOperationalSource && (
+                <button type="button" onClick={() => navigate(operationalEvidence.ruta_origen)} className="min-h-10 shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-teal-800 ring-1 ring-teal-200 hover:bg-teal-50">
+                  Completar registros →
+                </button>
+              )}
+            </div>
+            {!operationalEvidence.completa_requisito && <p className="mt-3 text-xs font-semibold text-sky-800">Este avance no completa por sí solo el requisito: revisa también el respaldo complementario.</p>}
+          </section>
         )}
 
         <div className="mt-5">
@@ -1011,7 +1089,7 @@ export default function AccreditationRequisito() {
 
         {r.medio_verificador && (
           <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50 p-4">
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-teal-700">Medio verificador esperado</p>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-teal-700">Respaldo que debes tener disponible</p>
             <p className="text-sm text-teal-900">{r.medio_verificador}</p>
           </div>
         )}
@@ -1020,13 +1098,14 @@ export default function AccreditationRequisito() {
           <DetailTile label="Norma">
             <p className="font-semibold">{r.norma_codigo ?? "DS20"}</p>
             <p className="mt-0.5 text-xs text-slate-500">{r.articulo_ref ?? "Sin artículo asociado"}</p>
+            {r.fuente_url && <a href={r.fuente_url} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-xs font-semibold text-teal-700 hover:underline">Texto oficial ↗</a>}
           </DetailTile>
-          <DetailTile label="Evidencia DS 20">
-            <p className="font-semibold">{r.tipo_evidencia ?? "documento"}</p>
-            <p className="mt-0.5 text-xs text-slate-500">{r.origen_evidencia ?? "documental"}</p>
+          <DetailTile label="Cómo se respalda">
+            <p className="font-semibold">{evidence.label}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{r.tipo_evidencia === "registro" ? "Registro trazable" : "Documento o archivo"}</p>
           </DetailTile>
-          <DetailTile label="Operacional">
-            <p>{r.requisito_operacional ? "Se alimenta con registros vivos de la app." : "Se resuelve con evidencia documental."}</p>
+          <DetailTile label="Revisión recomendada">
+            <p>{r.requiere_vencimiento ? "Registra la fecha que indique el respaldo y reemplázalo al vencer." : "Revísalo cuando cambie la operación o el documento de origen."}</p>
           </DetailTile>
         </div>
       </header>
@@ -1141,6 +1220,20 @@ export default function AccreditationRequisito() {
           <AuditList items={audit} />
         </section>
       )}
+    </div>
+  );
+}
+
+function GuideColumn({ label, text, tone = "document" }) {
+  const toneClass = {
+    verified: "bg-emerald-50",
+    supported: "bg-sky-50",
+    document: "bg-white",
+  }[tone] ?? "bg-white";
+  return (
+    <div className={`p-4 ${toneClass}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-sm leading-6 text-slate-700">{text}</p>
     </div>
   );
 }

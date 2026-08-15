@@ -590,6 +590,7 @@ export async function grantDemoAccess(leadId) {
     _email_sent: data.email_sent === true,
     _email_error: data.email_error || null,
     _email_skipped: data.email_skipped === true,
+    _access_method: data.access_method || "password",
     _reused_existing_user: data.reused_existing_user === true,
     _already_active: data.already_active === true,
     _repaired_existing_auth_user: data.repaired_existing_auth_user === true,
@@ -604,12 +605,11 @@ export async function resendDemoAccessForEleam(eleamId) {
     .select("id, email")
     .eq("eleam_id", eleamId)
     .eq("rol", "admin_eleam")
-    .eq("must_reset_password", true)
     .limit(1)
     .maybeSingle();
   if (profileError) throw profileError;
   if (!adminProfile) {
-    throw new Error("El administrador de este demo ya completó su acceso inicial.");
+    throw new Error("No encontramos un administrador asociado a este demo.");
   }
 
   const { data: lead, error: leadError } = await supabase

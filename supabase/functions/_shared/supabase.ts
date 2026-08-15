@@ -40,12 +40,47 @@ export async function getCallerProfile(req: Request) {
   const admin = adminClient();
   const { data: profile, error: profileErr } = await admin
     .from("profiles")
-    .select("id, nombre, email, rol, eleam_id")
+    .select("id, nombre, email, rol, eleam_id, acceso_activo")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profileErr || !profile) {
+  if (profileErr || !profile || profile.acceso_activo === false) {
     return { user, profile: null, error: "Perfil no encontrado" };
   }
   return { user, profile, error: null };
+}
+
+type EleamAccessState = {
+  plan?: string | null;
+  subscription_status?: string | null;
+  pago_activo?: boolean | null;
+  fecha_vencimiento_suscripcion?: string | null;
+};
+
+export function hasOperationalAccess(eleam: EleamAccessState | null): boolean {
+  if (!eleam) return false;
+  if (eleam.pago_activo === true) return true;
+  if (["activo", "en_gracia"].includes(String(eleam.subscription_status ?? ""))) return true;
+
+  const validUntil = eleam.fecha_vencimiento_suscripcion
+    ? new Date(eleam.fecha_vencimiento_suscripcion)
+    : null;
+  const isWithinValidPeriod = validUntil instanceof Date
+    && !Number.isNaN(validUntil.valueOf())
+    && validUntil > new Date();
+
+  return isWithinValidPeriod && (
+    eleam.subscription_status === "cancelado"
+    || (eleam.plan === "demo" && eleam.subscription_status === "pendiente")
+  );
+}
+
+export async function eleamHasOperationalAccess(eleamId: string): Promise<boolean> {
+  const admin = adminClient();
+  const { data: eleam, error } = await admin
+    .from("eleams")
+    .select("plan, subscription_status, pago_activo, fecha_vencimiento_suscripcion")
+    .eq("id", eleamId)
+    .maybeSingle();
+  return !error && hasOperationalAccess(eleam);
 }
