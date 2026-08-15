@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  canResendDemoAccess,
+  canReactivateDemo,
+  canSendDemoRecovery,
+  demoLoginLabel,
   indexPortfolioUsage,
   portfolioUsageState,
   summarizePortfolioUsage,
@@ -42,11 +44,15 @@ describe("portfolio usage", () => {
     });
   });
 
-  it("permite reenviar solo al administrador de un demo sin primer ingreso", () => {
-    const pending = { adminDemoSinPrimerIngreso: true, ultimaActividad: null };
-    expect(canResendDemoAccess({ plan: "demo" }, pending)).toBe(true);
-    expect(canResendDemoAccess({ plan: "mensual" }, pending)).toBe(false);
-    expect(canResendDemoAccess({ plan: "demo" }, { ...pending, adminDemoSinPrimerIngreso: false })).toBe(false);
-    expect(canResendDemoAccess({ plan: "demo" }, { ...pending, ultimaActividad: "2026-07-20T10:00:00Z" })).toBe(true);
+  it("limita recuperación y reactivación a demos que lo necesitan", () => {
+    expect(canSendDemoRecovery({ plan: "demo" }, { canSendRecovery: true })).toBe(true);
+    expect(canSendDemoRecovery({ plan: "mensual" }, { canSendRecovery: true })).toBe(false);
+    expect(canReactivateDemo({ plan: "demo" }, { needsReactivation: true })).toBe(true);
+    expect(canReactivateDemo({ plan: "demo" }, { needsReactivation: false })).toBe(false);
+  });
+
+  it("explica el último ingreso real del administrador demo", () => {
+    expect(demoLoginLabel({ neverSignedIn: true })).toBe("Nunca ha ingresado");
+    expect(demoLoginLabel(null)).toBe("Acceso no disponible");
   });
 });

@@ -519,6 +519,50 @@ export function demoWelcomeEmail({
 </html>`;
 }
 
+export function demoRecoveryEmail({
+  nombre,
+  email,
+  eleamNombre,
+  accessMethod,
+  accessUrl,
+}: {
+  nombre: string;
+  email: string;
+  eleamNombre: string;
+  accessMethod: DemoAccessMethod;
+  accessUrl: string;
+}): string {
+  const safeNombre = escapeHtml(nombre);
+  const safeEmail = escapeHtml(email);
+  const safeEleamNombre = escapeHtml(eleamNombre);
+  const safeAccessUrl = escapeHtml(accessUrl);
+  const googleAccess = accessMethod === "google";
+  return `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#1e293b">
+  <div style="max-width:580px;margin:32px auto;background:#fff;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden">
+    <div style="background:#0f766e;padding:28px 34px;color:#fff">
+      <p style="margin:0 0 6px;color:#99f6e4;font-size:13px;font-weight:700">FICHAELEAM</p>
+      <h1 style="margin:0;font-size:23px;line-height:1.25">Tu ELEAM sigue listo para continuar</h1>
+    </div>
+    <div style="padding:30px 34px">
+      <p style="margin:0 0 16px">Hola, <strong>${safeNombre}</strong>.</p>
+      <p style="margin:0 0 18px;color:#475569;line-height:1.65">Sabemos que poner en marcha un sistema nuevo toma tiempo. Por eso conservamos la configuración de <strong>${safeEleamNombre}</strong> para que puedas retomar la demo sin comenzar de cero.</p>
+      <div style="margin:20px 0;padding:18px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px">
+        <p style="margin:0 0 10px;font-weight:700;color:#115e59">Una forma simple de probar el valor hoy:</p>
+        <ol style="margin:0;padding-left:20px;color:#475569;line-height:1.7;font-size:14px">
+          <li>Completa la ficha de un residente.</li>
+          <li>Registra una evolución o un signo vital.</li>
+          <li>Revisa cómo queda ordenado el respaldo para el DS 20.</li>
+        </ol>
+      </div>
+      <a href="${safeAccessUrl}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:14px 24px;border-radius:10px;font-weight:700">${googleAccess ? "Retomar con Google" : "Retomar mi demo"}</a>
+      <p style="margin:20px 0 0;color:#64748b;font-size:13px;line-height:1.6">${googleAccess ? `Ingresa con Google y selecciona exactamente <strong>${safeEmail}</strong>.` : `El botón genera un acceso personal y seguro para <strong>${safeEmail}</strong>.`} Si necesitas ayuda para comenzar, responde este correo y te orientaremos.</p>
+    </div>
+  </div>
+</body></html>`;
+}
+
 // ── CRM prospecting templates ──────────────────────────────────────
 
 export const CRM_DEFAULT_FROM = "Gabriel Garrido <gabriel@fichaeleam.cl>";

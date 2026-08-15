@@ -28,38 +28,6 @@ function IconRefresh({ spinning }) {
     </svg>
   );
 }
-function IconArrowRight() {
-  return (
-    <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-    </svg>
-  );
-}
-// Alert strip: items that require immediate attention
-function AlertItem({ icon, count, label, sub, color, onClick }) {
-  const colorMap = {
-    rose:    "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
-    amber:   "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
-    sky:     "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition-colors ${colorMap[color]}`}
-    >
-      {icon}
-      <span className="text-base font-bold tabular-nums leading-none">{count}</span>
-      <span className="leading-tight">
-        {label}
-        {sub && <span className="ml-1 opacity-60 font-normal">{sub}</span>}
-      </span>
-      <IconArrowRight />
-    </button>
-  );
-}
-
 // Overdue task row for the bottom grid
 function OverdueTaskRow({ task }) {
   const d = daysUntil(task.fecha_vencimiento);
@@ -191,15 +159,6 @@ export default function SuperAdminDashboard() {
     ).sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento));
   }, [tasks]);
 
-  const alertItems = useMemo(() => {
-    const items = [];
-    if (overdueTasks.length > 0)
-      items.push({ key: "tasks", icon: <IconWarning />, count: overdueTasks.length, label: "Tareas vencidas", color: "amber", onClick: () => navigate("/superadmin/tareas") });
-    if (renewals.length > 0)
-      items.push({ key: "renewals", icon: <IconClock />, count: renewals.length, label: "Renuevan en 14 días", sub: renewals[0] ? `próximo: ${renewals[0].nombre}` : null, color: "sky", onClick: () => navigate("/superadmin/clientes") });
-    return items;
-  }, [overdueTasks, renewals, navigate]);
-
   if (loading) return <Loading message="Cargando resumen superadmin..." />;
 
   const updatedLabel = lastUpdated
@@ -229,33 +188,16 @@ export default function SuperAdminDashboard() {
               Refrescar
             </button>
           )}
-          <button type="button" onClick={() => navigate("/superadmin/clientes")} className="tap-highlight-none min-h-11 sm:min-h-9 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100">
-            Uso por ELEAM
-          </button>
-          <button type="button" onClick={() => navigate("/superadmin/tareas")} className="tap-highlight-none min-h-11 sm:min-h-9 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100">
-            Tareas
-          </button>
         </div>
       </div>
 
       {error && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
 
-      {/* Urgency alert strip */}
-      {alertItems.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-2">Requiere atención</p>
-          <div className="flex flex-wrap gap-2">
-            {alertItems.map((item) => (
-              <AlertItem key={item.key} {...item} />
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Metrics */}
       <SuperAdminMetrics
         metrics={metrics}
-        onFilterRisk={() => navigate("/superadmin/clientes")}
+        onFilterRisk={() => navigate("/superadmin/clientes?riesgo=alto")}
+        onFilterDemos={() => navigate("/superadmin/clientes?plan=demo")}
         onFilterLeads={() => navigate("/superadmin/leads")}
         onOpenClient={(client) => navigate(`/superadmin/clientes?search=${encodeURIComponent(client.nombre ?? "")}`)}
       />
@@ -265,7 +207,7 @@ export default function SuperAdminDashboard() {
         <div className="mb-4 flex items-start justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Pipeline comercial</h2>
-            <p className="text-xs text-slate-500">Selecciona una etapa para ir directo a esa vista en Cartera.</p>
+            <p className="text-xs text-slate-500">Selecciona una etapa para filtrar la vista de Clientes.</p>
           </div>
           <button
             type="button"

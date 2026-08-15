@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { localDateTimeToIso } from "../../utils/dateUtils";
 
 const OBSERVATION_SELECT = `
   id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas,
@@ -55,8 +56,11 @@ export const getObservations = async (
 export const createObservation = async (payload) => {
   const { data: { user } } = await supabase.auth.getUser();
   const requiereSeguimiento = payload.requiere_seguimiento === true;
+  const fechaHora = localDateTimeToIso(payload.fecha_hora);
+  if (!fechaHora) throw new Error("La fecha y hora del registro no es válida.");
   const cleanPayload = {
     ...payload,
+    fecha_hora: fechaHora,
     seguimiento_fecha: requiereSeguimiento ? payload.seguimiento_fecha || null : null,
     seguimiento_turno: requiereSeguimiento ? payload.seguimiento_turno || null : null,
     seguimiento_estado: requiereSeguimiento ? payload.seguimiento_estado || "pendiente" : "pendiente",
@@ -72,6 +76,11 @@ export const createObservation = async (payload) => {
 
 export const updateObservation = async (id, payload) => {
   const cleanPayload = { ...payload };
+  if (Object.hasOwn(payload, "fecha_hora")) {
+    const fechaHora = localDateTimeToIso(payload.fecha_hora);
+    if (!fechaHora) throw new Error("La fecha y hora del registro no es válida.");
+    cleanPayload.fecha_hora = fechaHora;
+  }
 
   const { data, error } = await supabase
     .from("observaciones_diarias")

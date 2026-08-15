@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Badge from "../../components/Badge";
 import EmptyState from "../../components/EmptyState";
 import HelpTooltip from "../../components/HelpTooltip";
+import { CHILE_TIME_ZONE } from "../../utils/dateUtils";
 import {
   TRACE_QUICK_RANGES,
   TRACE_TYPE_LABEL,
@@ -43,7 +44,7 @@ function formatTraceDateTime(value) {
   if (!value) return "Fecha no disponible";
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return "Fecha no disponible";
-  return date.toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short" });
+  return date.toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short", timeZone: CHILE_TIME_ZONE });
 }
 
 export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 }) {
@@ -288,7 +289,7 @@ function formatDetailValue(value) {
   if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(value))) return "Registro vinculado";
   if (/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(String(value))) {
     const date = new Date(String(value).length === 10 ? `${value}T12:00:00` : value);
-    if (!Number.isNaN(date.valueOf())) return date.toLocaleString("es-CL", String(value).length === 10 ? { dateStyle: "medium" } : { dateStyle: "medium", timeStyle: "short" });
+    if (!Number.isNaN(date.valueOf())) return date.toLocaleString("es-CL", String(value).length === 10 ? { dateStyle: "medium", timeZone: CHILE_TIME_ZONE } : { dateStyle: "medium", timeStyle: "short", timeZone: CHILE_TIME_ZONE });
   }
   return String(value);
 }

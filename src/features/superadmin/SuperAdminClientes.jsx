@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Loading from "../../components/Loading";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { useFilterParams } from "../../hooks/useFilterParams";
 import EleamFilters from "./components/EleamFilters";
 import EleamTable from "./components/EleamTable";
@@ -17,17 +18,20 @@ import {
   createEleamInteraction,
   getAllEleams,
   getCrmTasks,
+  getDemoEngagementOverview,
   getEleamDetail,
   getEleamInteractions,
   getEleamPayments,
   getPortfolioUsage,
-  resendDemoAccessForEleam,
+  reactivateDemoAccess,
+  sendDemoRecoveryEmail,
   updateEleam,
   registerPayment,
 } from "./superadminService";
 
 export default function SuperAdminClientes() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
   const [eleams, setEleams] = useState([]);
   // Mapeo bidireccional URL ↔ filtros (claves cortas en URL, mismo shape para EleamFilters).
@@ -66,17 +70,21 @@ export default function SuperAdminClientes() {
   const [portfolioUsage, setPortfolioUsage] = useState([]);
   const [usageLoading, setUsageLoading] = useState(true);
   const [usageError, setUsageError] = useState("");
-  const [resendingDemoId, setResendingDemoId] = useState(null);
+  const [demoEngagement, setDemoEngagement] = useState([]);
+  const [demoError, setDemoError] = useState("");
+  const [demoAction, setDemoAction] = useState(null);
 
   const refresh = async () => {
     setLoading(true);
     setUsageLoading(true);
     setError("");
     setUsageError("");
+    setDemoError("");
     try {
-      const [eleamsResult, usageResult] = await Promise.allSettled([
+      const [eleamsResult, usageResult, engagementResult] = await Promise.allSettled([
         getAllEleams(),
         getPortfolioUsage(usageDays),
+        getDemoEngagementOverview(),
       ]);
       if (eleamsResult.status === "rejected") throw eleamsResult.reason;
       setEleams(eleamsResult.value);
@@ -85,6 +93,12 @@ export default function SuperAdminClientes() {
       } else {
         console.error(usageResult.reason);
         setUsageError("No pudimos cargar el uso general. Revisa que el esquema actualizado esté aplicado.");
+      }
+      if (engagementResult.status === "fulfilled") {
+        setDemoEngagement(engagementResult.value);
+      } else {
+        console.error(engagementResult.reason);
+        setDemoError("No pudimos consultar los últimos ingresos de las cuentas demo.");
       }
     } catch (err) {
       console.error(err);
@@ -124,6 +138,7 @@ export default function SuperAdminClientes() {
   const filtered = useMemo(() => {
     const search = (filters.search ?? "").toLowerCase().trim();
     const usageByEleam = indexPortfolioUsage(portfolioUsage);
+    const engagementByEleam = Object.fromEntries(demoEngagement.map((item) => [item.eleamId, item]));
     return eleams.filter((e) => {
       if (search) {
         const hay = `${e.nombre} ${e.email_admin ?? ""}`.toLowerCase();
@@ -141,10 +156,11 @@ export default function SuperAdminClientes() {
         if (filters.uso === "sin_uso" && !(usage?.usuariosTotales > 0 && usage?.registros === 0)) return false;
         if (filters.uso === "activos_7d" && !(lastDays != null && lastDays <= 7)) return false;
         if (filters.uso === "sin_activar" && !(usage?.usuariosSinPrimerIngreso > 0)) return false;
+        if (filters.uso === "demo_recuperar" && !(engagementByEleam[e.id]?.canSendRecovery || engagementByEleam[e.id]?.needsReactivation)) return false;
       }
       return true;
     });
-  }, [eleams, filters, portfolioUsage]);
+  }, [demoEngagement, eleams, filters, portfolioUsage]);
 
   const openDrawer = async (eleam) => {
     setDrawerEleam(eleam.id);
@@ -184,51 +200,73 @@ export default function SuperAdminClientes() {
     return createCrmTask(payload);
   };
 
-  const handleResendDemoAccess = async (eleam) => {
-    if (!eleam?.id || resendingDemoId) return;
-    setResendingDemoId(eleam.id);
+  const refreshClientAfterDemoAction = async (eleamId) => {
     try {
-      const result = await resendDemoAccessForEleam(eleam.id);
-      if (result._email_sent) {
-        toast(`Instrucciones de acceso reenviadas a ${result.email}.`, "success");
-      } else {
-        toast(
-          result._email_error
-            ? `El enlace se renovó, pero el correo no pudo enviarse: ${result._email_error}`
-            : "El enlace se renovó, pero el servicio de correo no confirmó el envío.",
-          "warning",
-        );
+      const [detail, engagement] = await Promise.all([
+        getEleamDetail(eleamId),
+        getDemoEngagementOverview(),
+      ]);
+      if (detail) {
+        setEleams((previous) => previous.map((item) => item.id === eleamId ? { ...item, ...detail } : item));
+        setByEleam((previous) => ({ ...previous, [eleamId]: { ...(previous[eleamId] ?? {}), detail } }));
       }
+      setDemoEngagement(engagement);
+    } catch (refreshError) {
+      console.error(refreshError);
+      setDemoError("La acción se completó, pero no pudimos actualizar su estado. Presiona Refrescar.");
+    }
+  };
+
+  const handleSendDemoRecovery = async (eleam) => {
+    if (!eleam?.id || demoAction) return;
+    setDemoAction({ id: eleam.id, type: "email" });
+    try {
+      const result = await sendDemoRecoveryEmail(eleam.id);
+      toast(`Correo para retomar la demo enviado a ${result.email}.`, "success");
+      await refreshClientAfterDemoAction(eleam.id);
     } catch (err) {
       console.error(err);
-      toast(err.message || "No se pudieron reenviar las instrucciones del demo.", "error");
+      toast(err.message || "No se pudo enviar el correo de recuperación.", "error");
     } finally {
-      setResendingDemoId(null);
+      setDemoAction(null);
+    }
+  };
+
+  const handleReactivateDemo = async (eleam) => {
+    if (!eleam?.id || demoAction) return;
+    const accepted = await confirm({
+      title: "Reactivar demo",
+      message: `Se habilitará nuevamente el acceso de ${eleam.nombre} por 14 días. Después podrás enviar el correo para que retome la prueba.`,
+      confirmText: "Reactivar 14 días",
+    });
+    if (!accepted) return;
+    setDemoAction({ id: eleam.id, type: "reactivate" });
+    try {
+      await reactivateDemoAccess(eleam.id);
+      toast("Demo reactivado por 14 días.", "success");
+      await refreshClientAfterDemoAction(eleam.id);
+    } catch (err) {
+      console.error(err);
+      toast(err.message || "No se pudo reactivar el demo.", "error");
+    } finally {
+      setDemoAction(null);
     }
   };
 
   if (loading) return <Loading message="Cargando clientes..." />;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-7xl px-4 py-6">
       <SuperAdminPageHeader
-        title="Uso por ELEAM"
-        description="Compara el uso de la app en todos los establecimientos. Selecciona uno para ver sus usuarios y actividad en detalle."
+        title="Clientes"
+        description="Revisa capacidad, actividad, acceso y seguimiento de cada ELEAM desde un solo lugar."
         actions={
-          <>
-            <button type="button" onClick={refresh} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              Refrescar
-            </button>
-            <button type="button" onClick={() => { setPayFor(""); setShowPay(true); }} className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
-              Registrar pago
-            </button>
-          </>
+          <button type="button" onClick={refresh} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Refrescar</button>
         }
       />
       {error && <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
-      <div className="mt-4">
-        <EleamFilters filters={filters} setFilters={setFilters} count={filtered.length} />
-      </div>
+      {demoError && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{demoError} Las demás métricas siguen disponibles.</div>}
+      <EleamFilters filters={filters} setFilters={setFilters} count={filtered.length} />
       <PortfolioUsageOverview
         eleams={filtered}
         usage={portfolioUsage}
@@ -237,14 +275,16 @@ export default function SuperAdminClientes() {
         error={usageError}
         onDaysChange={handleUsageDays}
       />
-      <div className="mt-4">
+      <div>
         <EleamTable
           eleams={filtered}
           onOpen={openDrawer}
           portfolioUsage={portfolioUsage}
           usageDays={usageDays}
-          onResendDemoAccess={handleResendDemoAccess}
-          resendingDemoId={resendingDemoId}
+          demoEngagement={demoEngagement}
+          onSendDemoRecovery={handleSendDemoRecovery}
+          onReactivateDemo={handleReactivateDemo}
+          demoAction={demoAction}
         />
       </div>
       <EleamEditModal eleam={editEleam} onClose={() => setEditEleam(null)} onSave={handleUpdateEleam} />
@@ -260,6 +300,11 @@ export default function SuperAdminClientes() {
         onCompleteTask={completeCrmTask}
         onCreateInteraction={createEleamInteraction}
         usageDays={usageDays}
+        portfolioUsage={portfolioUsage}
+        demoEngagement={demoEngagement}
+        onSendDemoRecovery={handleSendDemoRecovery}
+        onReactivateDemo={handleReactivateDemo}
+        demoAction={demoAction}
       />
     </div>
   );

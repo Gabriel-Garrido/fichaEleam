@@ -30,7 +30,7 @@ export default function SuperAdminPagos() {
   if (loading) return <Loading message="Cargando pagos..." />;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-7xl px-4 py-6">
       <SuperAdminPageHeader
         title="Pagos"
         description="Conciliación de pagos recientes y activación manual de suscripciones."
@@ -45,4 +45,3 @@ export default function SuperAdminPagos() {
     </div>
   );
 }
-

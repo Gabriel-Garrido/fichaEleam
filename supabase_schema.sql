@@ -2427,7 +2427,9 @@ $$;
 -- N+1 de consultar cada ELEAM por separado y no expone datos clínicos: retorna
 -- únicamente conteos y fechas agregadas. La última actividad es histórica;
 -- registros, usuarios y módulos activos respetan la ventana solicitada.
-create or replace function public.superadmin_portfolio_usage(p_days integer default 30)
+drop function if exists public.superadmin_portfolio_usage(integer);
+
+create function public.superadmin_portfolio_usage(p_days integer default 30)
 returns table (
   eleam_id uuid,
   usuarios_totales bigint,
@@ -2435,7 +2437,11 @@ returns table (
   usuarios_sin_primer_ingreso bigint,
   registros bigint,
   modulos_activos bigint,
-  ultima_actividad timestamptz
+  ultima_actividad timestamptz,
+  residentes_totales bigint,
+  residentes_activos bigint,
+  camas_totales bigint,
+  camas_ocupadas bigint
 )
 language plpgsql
 stable
@@ -2514,6 +2520,30 @@ begin
     where p.eleam_id is not null
       and p.rol in ('admin_eleam', 'funcionario')
     group by p.eleam_id
+  ),
+  residentes_capacidad as (
+    select
+      r.eleam_id,
+      count(*) as residentes_totales,
+      count(*) filter (where r.estado in ('activo', 'hospitalizado')) as residentes_activos
+    from public.residentes r
+    where r.eleam_id is not null
+    group by r.eleam_id
+  ),
+  camas_capacidad as (
+    select
+      c.eleam_id,
+      count(*) as camas_totales,
+      count(*) filter (
+        where exists (
+          select 1
+          from public.cama_asignaciones ca
+          where ca.cama_id = c.id and ca.fecha_fin is null
+        )
+      ) as camas_ocupadas
+    from public.camas c
+    where c.eleam_id is not null
+    group by c.eleam_id
   )
   select
     e.id,
@@ -2522,10 +2552,16 @@ begin
     coalesce(u.usuarios_sin_primer_ingreso, 0)::bigint,
     coalesce(us.registros, 0)::bigint,
     coalesce(us.modulos_activos, 0)::bigint,
-    us.ultima_actividad
+    us.ultima_actividad,
+    coalesce(rc.residentes_totales, 0)::bigint,
+    coalesce(rc.residentes_activos, 0)::bigint,
+    coalesce(cc.camas_totales, 0)::bigint,
+    coalesce(cc.camas_ocupadas, 0)::bigint
   from public.eleams e
   left join usuarios u on u.eleam_id = e.id
-  left join uso us on us.eleam_id = e.id;
+  left join uso us on us.eleam_id = e.id
+  left join residentes_capacidad rc on rc.eleam_id = e.id
+  left join camas_capacidad cc on cc.eleam_id = e.id;
 end;
 $$;
 

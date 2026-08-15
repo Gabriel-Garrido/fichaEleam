@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { chileDateKey } from "../../utils/dateUtils";
 
 export const TRACE_TYPE_LABEL = {
   cuidado: "Cuidado",
@@ -82,9 +83,7 @@ export const TRACE_QUICK_RANGES = {
 };
 
 export function isoDate(value = new Date()) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.valueOf())) return "";
-  return date.toISOString().slice(0, 10);
+  return chileDateKey(value);
 }
 
 export function getTraceQuickRange(rangeKey = "30d", now = new Date()) {
@@ -182,7 +181,7 @@ export function eventMatchesTraceQuery(event, query = "") {
 
 export function groupTraceEventsByDate(events = []) {
   return events.reduce((groups, event) => {
-    const key = event.occurredAt?.slice?.(0, 10) || "sin_fecha";
+    const key = chileDateKey(event.occurredAt) || "sin_fecha";
     if (!groups[key]) groups[key] = [];
     groups[key].push(event);
     return groups;

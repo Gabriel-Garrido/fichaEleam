@@ -54,6 +54,13 @@ describe("resident traceability helpers", () => {
     expect(groups["2026-05-14"]).toHaveLength(2);
   });
 
+  it("mantiene en el día chileno un registro nocturno expresado en UTC", () => {
+    const groups = groupTraceEventsByDate([
+      normalizeTraceEvent({ id: "night", tipo: "signos", fecha_hora: "2026-08-16T02:30:00.000Z" }),
+    ]);
+    expect(groups["2026-08-15"]).toHaveLength(1);
+  });
+
   it("builds operational summary and keeps pending events first", () => {
     const events = [
       normalizeTraceEvent({ id: "done", tipo: "cuidado", estado: "cumplida", fecha_hora: "2026-05-14T09:00:00.000Z" }),

@@ -12,6 +12,7 @@ function verifyJwtFor(functionName) {
 describe("Supabase Edge Function authentication contract", () => {
   it.each([
     "create-demo-user",
+    "manage-demo-engagement",
     "create-staff-user",
     "update-staff-user",
     "delete-staff-user",

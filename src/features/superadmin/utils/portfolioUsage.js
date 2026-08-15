@@ -41,7 +41,20 @@ export function indexPortfolioUsage(rows = []) {
   return Object.fromEntries(rows.map((row) => [row.eleamId, row]));
 }
 
-export function canResendDemoAccess(eleam, usage) {
-  return eleam?.plan === "demo"
-    && usage?.adminDemoSinPrimerIngreso === true;
+export function canSendDemoRecovery(eleam, engagement) {
+  return eleam?.plan === "demo" && engagement?.canSendRecovery === true;
+}
+
+export function canReactivateDemo(eleam, engagement) {
+  return eleam?.plan === "demo" && engagement?.needsReactivation === true;
+}
+
+export function demoLoginLabel(engagement) {
+  if (!engagement) return "Acceso no disponible";
+  if (engagement.neverSignedIn) return "Nunca ha ingresado";
+  if (!engagement.lastSignInAt) return "Sin ingreso registrado";
+  const days = usageDaysSince(engagement.lastSignInAt);
+  if (days === 0) return "Ingresó hoy";
+  if (days === 1) return "Ingresó ayer";
+  return `Último ingreso hace ${days} días`;
 }

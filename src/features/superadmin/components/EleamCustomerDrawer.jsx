@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   CRM_STATE_MAP, RIESGO_MAP, PLAN_LABEL,
   formatCLP, formatDate, daysUntil,
@@ -8,6 +9,7 @@ import InteractionTimeline from "./InteractionTimeline";
 import CrmTasksPanel from "./CrmTasksPanel";
 import EleamUsagePanel from "./EleamUsagePanel";
 import HelpTooltip from "../../../components/HelpTooltip";
+import { canReactivateDemo, canSendDemoRecovery, demoLoginLabel } from "../utils/portfolioUsage";
 
 // Tooltips: solo en campos no obvios. Cada texto especifica la columna
 // exacta en BD y cómo se interpreta el valor.
@@ -86,7 +88,11 @@ export default function EleamCustomerDrawer({
   onClose, onEdit, onRegisterPayment,
   onCreateTask, onCompleteTask, onCreateInteraction,
   usageDays = 30,
+  portfolioUsage = [], demoEngagement = [],
+  onSendDemoRecovery, onReactivateDemo, demoAction,
 }) {
+  const [tab, setTab] = useState("summary");
+  useEffect(() => setTab("summary"), [eleamId]);
   if (!eleamId) return null;
 
   const eleam = slot?.detail;
@@ -98,6 +104,9 @@ export default function EleamCustomerDrawer({
     if (!t.fecha_vencimiento) return false;
     return t.fecha_vencimiento < todayStr;
   }).length;
+  const usage = portfolioUsage.find((item) => item.eleamId === eleamId) ?? {};
+  const engagement = demoEngagement.find((item) => item.eleamId === eleamId) ?? null;
+  const demoBusy = demoAction?.id === eleamId;
 
   return (
     <Modal
@@ -152,8 +161,22 @@ export default function EleamCustomerDrawer({
           </div>
         ) : (
           <div className="p-4 space-y-4">
-            <section className="rounded-xl border border-slate-100 bg-white p-4">
+            <nav className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1" aria-label="Secciones del cliente">
+              {[["summary", "Resumen"], ["usage", "Uso"], ["followup", "Seguimiento"]].map(([key, label]) => (
+                <button key={key} type="button" onClick={() => setTab(key)} aria-pressed={tab === key} className={`min-h-10 rounded-lg px-3 py-2 text-sm font-semibold ${tab === key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{label}</button>
+              ))}
+            </nav>
+
+            {tab === "usage" && <section className="rounded-xl border border-slate-100 bg-white p-4">
               <EleamUsagePanel eleamId={eleam.id} initialDays={usageDays} />
+            </section>}
+
+            {tab === "summary" && <>
+            <section className="grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-white p-4 sm:grid-cols-4">
+              <Stat label="Residentes" value={`${usage.residentesActivos ?? 0}/${usage.residentesTotales ?? 0}`} />
+              <Stat label="Camas ocupadas" value={`${usage.camasOcupadas ?? 0}/${usage.camasTotales ?? 0}`} />
+              <Stat label="Usuarios con actividad" value={`${usage.usuariosActivos ?? 0}/${usage.usuariosTotales ?? 0}`} />
+              <Stat label={eleam.plan === "demo" ? "Último ingreso" : "Registros del período"} value={eleam.plan === "demo" ? demoLoginLabel(engagement) : (usage.registros ?? 0).toLocaleString("es-CL")} />
             </section>
 
             {/* Banner demo activo */}
@@ -209,6 +232,8 @@ export default function EleamCustomerDrawer({
               >
                 Registrar pago
               </button>
+              {canReactivateDemo(eleam, engagement) && <button type="button" disabled={demoBusy} onClick={() => onReactivateDemo?.(eleam)} className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-50">{demoAction?.type === "reactivate" && demoBusy ? "Reactivando…" : "Reactivar demo"}</button>}
+              {canSendDemoRecovery(eleam, engagement) && <button type="button" disabled={demoBusy} onClick={() => onSendDemoRecovery?.(eleam)} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50">{demoAction?.type === "email" && demoBusy ? "Enviando…" : "Enviar correo para retomar"}</button>}
             </div>
 
             {/* Contacto */}
@@ -287,8 +312,10 @@ export default function EleamCustomerDrawer({
                 </div>
               )}
             </section>
+            </>}
 
             {/* Historial de pagos */}
+            {tab === "followup" && <>
             <section className="bg-white border border-slate-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-slate-700 text-sm">Historial de pagos</h3>
@@ -349,6 +376,7 @@ export default function EleamCustomerDrawer({
                 onCreate={onCreateInteraction}
               />
             </section>
+            </>}
           </div>
         )}
     </Modal>

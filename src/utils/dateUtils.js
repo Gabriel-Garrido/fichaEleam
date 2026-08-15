@@ -1,3 +1,5 @@
+export const CHILE_TIME_ZONE = "America/Santiago";
+
 // Devuelve la fecha actual local en formato ISO (YYYY-MM-DD).
 // Es la fuente canónica para todos los selectores de fecha de la app.
 export function todayIso(now = new Date()) {
@@ -33,8 +35,31 @@ export function formatDateTime(iso) {
     return new Date(iso).toLocaleString("es-CL", {
       day: "2-digit", month: "2-digit", year: "numeric",
       hour: "2-digit", minute: "2-digit",
+      timeZone: CHILE_TIME_ZONE,
     });
   } catch { return "—"; }
+}
+
+// Los controles datetime-local no incluyen zona horaria. Antes de enviarlos a
+// una columna timestamptz se convierten desde la hora local del dispositivo a
+// un instante UTC inequívoco; así PostgreSQL no los interpreta como UTC plano.
+export function localDateTimeToIso(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.valueOf()) ? null : date.toISOString();
+}
+
+export function chileDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.valueOf())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: CHILE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
 }
 
 // Diferencia relativa en español a partir de un ISO date (YYYY-MM-DD).

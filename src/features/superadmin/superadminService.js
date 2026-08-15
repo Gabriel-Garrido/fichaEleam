@@ -325,20 +325,8 @@ export async function getPortfolioUsage(days = 30) {
     throw new Error("La ventana de uso debe estar entre 1 y 365 días.");
   }
 
-  const [usageResult, pendingAdminsResult] = await Promise.all([
-    supabase.rpc("superadmin_portfolio_usage", { p_days: windowDays }),
-    supabase
-      .from("profiles")
-      .select("eleam_id")
-      .eq("rol", "admin_eleam")
-      .eq("must_reset_password", true),
-  ]);
+  const usageResult = await supabase.rpc("superadmin_portfolio_usage", { p_days: windowDays });
   if (usageResult.error) throw usageResult.error;
-  if (pendingAdminsResult.error) throw pendingAdminsResult.error;
-
-  const pendingAdminEleams = new Set(
-    (pendingAdminsResult.data ?? []).map((profile) => profile.eleam_id).filter(Boolean),
-  );
 
   return (usageResult.data ?? []).map((row) => ({
     eleamId: row.eleam_id,
@@ -348,8 +336,47 @@ export async function getPortfolioUsage(days = 30) {
     registros: Number(row.registros ?? 0),
     modulosActivos: Number(row.modulos_activos ?? 0),
     ultimaActividad: row.ultima_actividad ?? null,
-    adminDemoSinPrimerIngreso: pendingAdminEleams.has(row.eleam_id),
+    residentesTotales: Number(row.residentes_totales ?? 0),
+    residentesActivos: Number(row.residentes_activos ?? 0),
+    camasTotales: Number(row.camas_totales ?? 0),
+    camasOcupadas: Number(row.camas_ocupadas ?? 0),
   }));
+}
+
+async function invokeDemoEngagement(body) {
+  const { data, error } = await supabase.functions.invoke("manage-demo-engagement", { body });
+  if (error) await throwEdgeFunctionError(error, "No se pudo gestionar el demo");
+  if (data?.ok === false || data?.error) {
+    const normalized = new Error(data.message || data.error || "No se pudo gestionar el demo.");
+    normalized.code = data.code || "demo_engagement_error";
+    throw normalized;
+  }
+  return data;
+}
+
+export async function getDemoEngagementOverview() {
+  const data = await invokeDemoEngagement({ action: "list" });
+  return (data?.items ?? []).map((item) => ({
+    eleamId: item.eleam_id,
+    adminProfileId: item.admin_profile_id,
+    adminEmail: item.admin_email,
+    lastSignInAt: item.last_sign_in_at,
+    neverSignedIn: item.never_signed_in === true,
+    inactiveDays: item.inactive_days == null ? null : Number(item.inactive_days),
+    accessActive: item.access_active === true,
+    needsReactivation: item.needs_reactivation === true,
+    accountAvailable: item.account_available === true,
+    lastRecoveryEmailAt: item.last_recovery_email_at,
+    canSendRecovery: item.can_send_recovery === true,
+  }));
+}
+
+export async function sendDemoRecoveryEmail(eleamId) {
+  return invokeDemoEngagement({ action: "send_recovery", eleam_id: eleamId });
+}
+
+export async function reactivateDemoAccess(eleamId) {
+  return invokeDemoEngagement({ action: "reactivate", eleam_id: eleamId });
 }
 
 export async function getEleamDetail(eleamId) {
@@ -595,37 +622,6 @@ export async function grantDemoAccess(leadId) {
     _already_active: data.already_active === true,
     _repaired_existing_auth_user: data.repaired_existing_auth_user === true,
   };
-}
-
-export async function resendDemoAccessForEleam(eleamId) {
-  if (!eleamId) throw new Error("ELEAM requerido para reenviar el acceso.");
-
-  const { data: adminProfile, error: profileError } = await supabase
-    .from("profiles")
-    .select("id, email")
-    .eq("eleam_id", eleamId)
-    .eq("rol", "admin_eleam")
-    .limit(1)
-    .maybeSingle();
-  if (profileError) throw profileError;
-  if (!adminProfile) {
-    throw new Error("No encontramos un administrador asociado a este demo.");
-  }
-
-  const { data: lead, error: leadError } = await supabase
-    .from("demo_leads")
-    .select("id, email")
-    .eq("demo_user_id", adminProfile.id)
-    .eq("estado", "demo_activo")
-    .order("demo_access_granted_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (leadError) throw leadError;
-  if (!lead) {
-    throw new Error("No encontramos la solicitud de demo aprobada asociada a este administrador.");
-  }
-
-  return grantDemoAccess(lead.id);
 }
 
 // Etiquetas amigables por página pública. La clave es el valor `elemento` que

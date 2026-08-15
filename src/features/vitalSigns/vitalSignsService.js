@@ -1,5 +1,6 @@
 import { supabase } from "../../services/supabaseConfig";
 import { withResidentLocation } from "../beds/bedsUtils";
+import { localDateTimeToIso } from "../../utils/dateUtils";
 
 const TURNOS = ["mañana", "tarde", "noche"];
 
@@ -45,9 +46,12 @@ export const createVitalSigns = async (payload) => {
     seguimientoTurno: payload.seguimiento_turno,
   });
 
+  const fechaHora = localDateTimeToIso(payload.fecha_hora);
+  if (!fechaHora) throw new Error("La fecha y hora del registro no es válida.");
+
   const { data, error } = await supabase.rpc("registrar_signos_vitales", {
     p_residente_id: payload.residente_id,
-    p_fecha_hora: payload.fecha_hora,
+    p_fecha_hora: fechaHora,
     p_turno: payload.turno || null,
     p_presion_sistolica: payload.presion_sistolica ?? null,
     p_presion_diastolica: payload.presion_diastolica ?? null,

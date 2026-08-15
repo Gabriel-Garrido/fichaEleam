@@ -69,6 +69,7 @@ Este documento resume los cambios consolidados en la experiencia del ELEAM, su s
 - Los textos y campos cambian según la categoría para guiar una nota objetiva que incluya hallazgo, atención realizada, respuesta del residente y continuidad. En cambios clínicos, dolor y piel o heridas se exige documentar la atención y respuesta.
 - No existe una pestaña paralela de Registro de evolución: los registros guardados se consultan junto con toda la trazabilidad en **Historial**.
 - Historial permite buscar por texto, seleccionar un período rápido y aplicar tipo, estado o fechas personalizadas sólo cuando son necesarios.
+- Las horas ingresadas en signos vitales y evolución se convierten a un instante UTC antes de guardarse y se muestran y agrupan explícitamente con la zona `America/Santiago`, evitando desfases de tres o cuatro horas según el horario de Chile.
 - La carga progresiva y los detalles bajo demanda permiten consultar antecedentes sin saturar la pantalla ni el backend.
 - No se ofrece eliminación directa, para proteger la continuidad del historial clínico.
 - Los accesos antiguos `/observations` y `/observations/new` redirigen a la ficha correspondiente o a la selección de residentes, por lo que los enlaces existentes no quedan rotos.
@@ -142,6 +143,17 @@ Este documento resume los cambios consolidados en la experiencia del ELEAM, su s
 - Al cerrar una guía, el foco vuelve al botón que la abrió. Los tooltips declaran su relación accesible, se cierran con Escape y no quedan desalineados al desplazar o redimensionar la pantalla.
 - Las métricas con explicación usan la misma ayuda accesible y visible en teclado, en lugar de depender del tooltip nativo del navegador.
 
+## Superadmin y recuperación de demos
+
+- El resumen general muestra primero seis indicadores esenciales y los clientes que necesitan atención. Los indicadores secundarios quedan en un bloque desplegable para reducir la carga visual.
+- La vista **Clientes** concentra búsqueda, capacidad, ocupación, actividad, último ingreso y estado del plan. Los filtros comerciales menos frecuentes quedan en **Más filtros**.
+- Cada cliente muestra residentes activos y totales, camas ocupadas y totales, usuarios con actividad y registros del período mediante una única consulta agregada, evitando consultas por establecimiento.
+- El detalle del ELEAM se divide en **Resumen**, **Uso** y **Seguimiento**. Contacto, suscripción, pagos, tareas e interacciones ya no aparecen simultáneamente.
+- En cuentas demo, el último ingreso del administrador se obtiene de Supabase Auth. Si nunca ingresó o lleva más de 10 días sin hacerlo, Superadmin puede enviar un correo personalizado para retomar la prueba.
+- El correo conserva un único llamado a la acción, distingue acceso con Google y contraseña, y genera enlaces personales desde el backend. Se permite un envío cada 24 horas para evitar contactos repetidos.
+- Los demos vencidos pueden reactivarse por 14 días. La operación exige sesión Superadmin, rechaza cuentas que no sean demo y deja trazabilidad en las interacciones CRM.
+- La Edge Function `manage-demo-engagement` nunca expone la API administrativa de Auth al navegador y requiere JWT. Antes de publicar esta versión debe aplicarse `20260815203000_expand_superadmin_portfolio_usage.sql` y desplegarse la función.
+
 ## Despliegue
 
 ### Estado al 15 de agosto de 2026
@@ -150,21 +162,22 @@ Desplegadas el 15 de agosto de 2026 y verificadas como `ACTIVE` en Supabase `gzv
 
 | Edge Function | Versión | Validación JWT |
 | --- | ---: | --- |
-| `create-demo-user` | 40 | Sí |
-| `create-staff-user` | 38 | Sí |
-| `update-staff-user` | 5 | Sí |
-| `delete-staff-user` | 33 | Sí |
-| `mp-create-subscription` | 39 | Sí |
-| `mp-cancel-subscription` | 38 | Sí |
-| `mp-webhook` | 41 | No; valida la firma de MercadoPago |
-| `send-crm-email-campaign` | 12 | Sí |
-| `send-resident-payment-receipt` | 2 | Sí |
-| `track-landing-event` | 28 | No; endpoint público con validación de payload y límites |
-| `crm-unsubscribe` | 9 | No; enlace público firmado de desuscripción |
+| `create-demo-user` | 41 | Sí |
+| `create-staff-user` | 39 | Sí |
+| `update-staff-user` | 6 | Sí |
+| `delete-staff-user` | 34 | Sí |
+| `manage-demo-engagement` | 1 | Sí |
+| `mp-create-subscription` | 40 | Sí |
+| `mp-cancel-subscription` | 39 | Sí |
+| `mp-webhook` | 42 | No; valida la firma de MercadoPago |
+| `send-crm-email-campaign` | 13 | Sí |
+| `send-resident-payment-receipt` | 3 | Sí |
+| `track-landing-event` | 29 | No; endpoint público con validación de payload y límites |
+| `crm-unsubscribe` | 10 | No; enlace público firmado de desuscripción |
 
 El despliegue incluyó los módulos compartidos de correo, autenticación y validación de vigencia. Se retiró de producción `invite-funcionario`, función histórica eliminada del repositorio en mayo de 2026 y reemplazada por `create-staff-user`, para no conservar un endpoint sin uso. Las migraciones SQL se aplican por separado y no deben considerarse desplegadas sólo por publicar las Edge Functions.
 
-La preparación para producción finalizó con `npm audit` sin vulnerabilidades, 555 pruebas aprobadas, typecheck de las Edge Functions, auditoría de contratos Supabase, build de producción y auditoría SEO correctos.
+La preparación para producción finalizó con 565 pruebas aprobadas, typecheck de las Edge Functions, auditoría de contratos Supabase, build de producción y auditoría SEO correctos.
 
 1. Aplicar [`supabase_schema.sql`](./supabase_schema.sql) en la instancia Supabase.
 2. Desplegar las Edge Functions modificadas.

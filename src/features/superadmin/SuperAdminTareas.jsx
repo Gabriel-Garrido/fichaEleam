@@ -37,7 +37,7 @@ export default function SuperAdminTareas() {
   if (loading) return <Loading message="Cargando tareas..." />;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-7xl px-4 py-6">
       <SuperAdminPageHeader
         title="Tareas CRM"
         description="Seguimientos comerciales, onboarding, renovaciones y soporte."
@@ -46,4 +46,3 @@ export default function SuperAdminTareas() {
     </div>
   );
 }
-
