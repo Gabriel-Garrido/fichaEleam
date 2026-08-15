@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useLayoutEffect, cloneElement } from "react";
+import { useState, useEffect, useId, useRef, useLayoutEffect, cloneElement } from "react";
 import { createPortal } from "react-dom";
 
 const GAP = 8;
@@ -48,6 +48,7 @@ export default function Tooltip({
   const closeTimer = useRef(null);
   const closingTimer = useRef(null);
   const phaseRef = useRef("closed");
+  const tooltipId = useId();
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => () => { clearTimeout(openTimer.current); clearTimeout(closeTimer.current); clearTimeout(closingTimer.current); }, []);
@@ -98,16 +99,19 @@ export default function Tooltip({
     setPhase("open");
   }, [phase]);
 
-  // Close on Escape and scroll
+  // Close on Escape, scroll and viewport changes so the tooltip never stays misplaced.
   useEffect(() => {
     if (phase === "closed") return;
     const onEsc = (e) => { if (e.key === "Escape") closeNow(); };
     const onScroll = () => closeNow();
+    const onResize = () => closeNow();
     document.addEventListener("keydown", onEsc);
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    window.addEventListener("resize", onResize, { passive: true });
     return () => {
       document.removeEventListener("keydown", onEsc);
       window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("resize", onResize);
     };
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -120,6 +124,7 @@ export default function Tooltip({
   const tooltip = isVisible
     ? createPortal(
         <div
+          id={tooltipId}
           ref={tipRef}
           role="tooltip"
           onMouseEnter={clearTimers}
@@ -170,8 +175,7 @@ export default function Tooltip({
         }}
       >
         {cloneElement(children, {
-          "aria-expanded": isOpen,
-          "aria-haspopup": "true",
+          "aria-describedby": isVisible ? tooltipId : undefined,
         })}
       </span>
       {tooltip}

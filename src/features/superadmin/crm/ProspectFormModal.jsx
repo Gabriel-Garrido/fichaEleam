@@ -257,7 +257,7 @@ export default function ProspectFormModal({ isOpen, prospect, lists = [], defaul
           </div>
         </FormSection>
 
-        <FormSection title="Decisor y seguimiento" description="World-class selling requiere saber quién decide, quién influye y qué riesgo bloquea el cierre.">
+        <FormSection title="Decisor y seguimiento" description="Identifica quién decide, quién influye y qué podría retrasar el cierre para ordenar el seguimiento.">
           <FormGrid columns={3}>
             <TextField id="cargo_contacto" name="cargo_contacto" label="Cargo contacto" value={form.cargo_contacto} onChange={handleChange} placeholder="Administración, TENS, dirección..." error={errors.cargo_contacto} maxLength={120} />
             <TextField id="decision_maker_nombre" name="decision_maker_nombre" label="Nombre decisor" value={form.decision_maker_nombre} onChange={handleChange} placeholder="Nombre y apellido" error={errors.decision_maker_nombre} maxLength={160} />

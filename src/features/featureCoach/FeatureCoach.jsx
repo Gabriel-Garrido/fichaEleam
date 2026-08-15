@@ -19,15 +19,13 @@ export default function FeatureCoach({ featureId, controller, standalone = false
   const state = controller ?? fallback;
   const { isOpen, dismiss, open, enabled } = state;
   const panelRef = useRef(null);
-  const ctaRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return undefined;
     const panel = panelRef.current;
-    const node = ctaRef.current;
     window.requestAnimationFrame(() => {
       panel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      node?.focus({ preventScroll: true });
+      panel?.focus({ preventScroll: true });
     });
     const handleKey = (event) => {
       if (event.key === "Escape") {
@@ -58,7 +56,7 @@ export default function FeatureCoach({ featureId, controller, standalone = false
     );
   }
 
-  const coach = getCoach(featureId, auth?.rol);
+  const coach = getCoach(featureId, auth);
   if (!coach) return null;
 
   const titleId = `feature-coach-${featureId}-title`;
@@ -66,9 +64,10 @@ export default function FeatureCoach({ featureId, controller, standalone = false
   return (
     <section
       ref={panelRef}
+      tabIndex={-1}
       role="region"
       aria-labelledby={titleId}
-      className="relative mb-5 overflow-hidden rounded-2xl border border-teal-100 bg-white shadow-lg ring-1 ring-teal-100/60 animate-slide-in"
+      className="relative mb-5 overflow-hidden rounded-2xl border border-teal-100 bg-white shadow-lg outline-none ring-1 ring-teal-100/60 animate-slide-in"
     >
       <header className="flex items-start gap-3 bg-gradient-to-br from-teal-700 to-teal-600 px-4 py-3.5 text-white sm:px-5 sm:py-4">
         <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/15 ring-1 ring-white/20">
@@ -140,7 +139,6 @@ export default function FeatureCoach({ featureId, controller, standalone = false
 
         <div className="flex justify-end">
           <button
-            ref={ctaRef}
             type="button"
             onClick={dismiss}
             className="inline-flex w-full min-h-11 items-center justify-center rounded-xl bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 sm:w-auto sm:min-h-10"

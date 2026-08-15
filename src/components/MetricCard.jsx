@@ -1,3 +1,5 @@
+import HelpTooltip from "./HelpTooltip";
+
 const TONE_CLASSES = {
   slate: "border-slate-200 bg-white text-slate-900",
   amber: "border-amber-200 bg-amber-50 text-amber-900",
@@ -26,9 +28,12 @@ export default function MetricCard({
   const toneCls = TONE_CLASSES[tone] ?? TONE_CLASSES.slate;
   const sizeCls = SIZE_CLASSES[size] ?? SIZE_CLASSES.md;
   return (
-    <div className={`rounded-2xl border ${sizeCls.wrap} ${toneCls} ${className}`} title={tooltip}>
+    <div className={`rounded-2xl border ${sizeCls.wrap} ${toneCls} ${className}`}>
       <div className={`${compact ? "text-sm leading-5 break-words" : `${sizeCls.value} font-semibold tabular-nums`}`}>{value}</div>
-      <div className={`${sizeCls.label} font-medium opacity-70`}>{label}</div>
+      <div className="flex items-center gap-1">
+        <span className={`${sizeCls.label} font-medium opacity-70`}>{label}</span>
+        {tooltip ? <HelpTooltip label={`Ayuda sobre ${String(label).toLowerCase()}`}>{tooltip}</HelpTooltip> : null}
+      </div>
     </div>
   );
 }

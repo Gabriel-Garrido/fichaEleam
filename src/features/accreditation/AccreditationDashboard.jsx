@@ -112,6 +112,7 @@ export default function AccreditationDashboard() {
       title="Preparación documental DS20"
       description={`Reúne documentos, completa registros y detecta brechas antes de una revisión${eleam?.nombre ? ` · ${eleam.nombre}` : ""}.`}
       actions={<Link to="/cumplimiento/reporte" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 sm:w-auto">Abrir carpeta de revisión</Link>}
+      coachFeatureId="cumplimiento"
       className="space-y-5"
     >
       <RegulatoryNotice />

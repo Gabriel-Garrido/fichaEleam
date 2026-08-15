@@ -357,7 +357,7 @@ export default function StaffCompetenciesTab({ onAddWithAccess = null, onDeactiv
           </section>
 
           {detailView === "documentos" && <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
-            <div className="mb-4 flex items-start gap-2"><div><h3 className="text-base font-bold text-slate-900">Competencias</h3><p className="mt-1 text-xs leading-5 text-slate-500">Registra las competencias verificadas y su vigencia según la función.</p></div><HelpTooltip label="Ayuda sobre competencias">Este registro ayuda a mantener la matriz de competencias exigida para el equipo. Conserva los certificados y el plan anual en la sección Cumplimiento.</HelpTooltip></div>
+            <div className="mb-4 flex items-start gap-2"><div><h3 className="text-base font-bold text-slate-900">Competencias</h3><p className="mt-1 text-xs leading-5 text-slate-500">{isAdminEleam ? "Registra las competencias verificadas y su vigencia según la función." : "Consulta las competencias verificadas y su vigencia según la función."}</p></div><HelpTooltip label="Ayuda sobre competencias">Este registro mantiene ordenada la matriz de competencias del equipo. Los certificados y el plan anual se conservan en Cumplimiento.</HelpTooltip></div>
             <div className="mb-5 grid items-end gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-4">
               <FieldLabel label="Competencia">
                 <select className={inputClass} value={competencyDraft.competencia} disabled={saving || !isAdminEleam} onChange={(e) => setCompetencyDraft((p) => ({ ...p, competencia: e.target.value }))}>

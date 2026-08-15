@@ -79,24 +79,62 @@ describe("coachCatalog", () => {
   });
 
   it("hasCoach detects existing and missing ids", () => {
-    expect(hasCoach("dashboard")).toBe(true);
+    expect(hasCoach("personnel")).toBe(true);
     expect(hasCoach("does-not-exist")).toBe(false);
     expect(hasCoach(null)).toBe(false);
   });
 
   it("getCoach strips roleOverrides when no rol provided", () => {
-    const coach = getCoach("dashboard");
+    const coach = getCoach("personnel");
     expect(coach).not.toHaveProperty("roleOverrides");
     expect(coach.title).toBeTruthy();
   });
 
   it("getCoach merges roleOverrides when rol matches", () => {
-    const adminCoach = getCoach("dashboard", "admin_eleam");
-    expect(adminCoach.title).toBe("El pulso de tu ELEAM");
-    expect(adminCoach).not.toHaveProperty("roleOverrides");
+    const staffCoach = getCoach("personnel", "funcionario");
+    expect(staffCoach.title).toBe("Consulta el equipo y la cobertura");
+    expect(staffCoach).not.toHaveProperty("roleOverrides");
   });
 
   it("getCoach returns null for missing featureId", () => {
     expect(getCoach("missing")).toBeNull();
+  });
+
+  it("oculta pasos que la persona no puede ejecutar", () => {
+    const readOnly = { rol: "funcionario", can: () => false };
+    expect(getCoach("turnos", readOnly).steps.map((step) => step.title)).toEqual(["Consulta o imprime"]);
+    expect(getCoach("accreditation-requisito", readOnly).steps.map((step) => step.title)).toEqual(["Revisa el requisito"]);
+  });
+
+  it("muestra sólo las acciones alternativas autorizadas", () => {
+    const validator = {
+      rol: "funcionario",
+      can: (permission) => permission === "validar_medicamentos_controlados",
+    };
+    const titles = getCoach("emar", validator).steps.map((step) => step.title);
+    expect(titles).toContain("Valida si corresponde");
+    expect(titles).toContain("Revisa antes de entregar");
+    expect(titles).not.toContain("Administra u omite");
+  });
+
+  it("adapta Equipo y oculta Suscripción a funcionarios", () => {
+    const staff = { rol: "funcionario", can: () => false };
+    expect(getCoach("team", staff).title).toBe("Consulta el directorio del equipo");
+    expect(getCoach("subscription", staff)).toBeNull();
+  });
+
+  it("no muestra una ayuda vacía cuando ningún paso está autorizado", () => {
+    const noAccess = { rol: "funcionario", can: () => false };
+    COACHES.__empty_test__ = {
+      title: "Ayuda restringida",
+      description: "Contenido de prueba.",
+      steps: [{ title: "Edita", text: "Acción restringida.", permission: "editar" }],
+      benefit: "Contenido de prueba.",
+    };
+    try {
+      expect(getCoach("__empty_test__", noAccess)).toBeNull();
+    } finally {
+      delete COACHES.__empty_test__;
+    }
   });
 });

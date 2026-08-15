@@ -191,6 +191,7 @@ export default function StaffDirectory() {
       eyebrow="Personal"
       title="Equipo"
       description="Agrega personas y mantén al día su información, cursos y permisos."
+      coachFeatureId="team"
     >
       <PersonnelNav />
       {canManage && (loading ? <Loading message="Cargando accesos del equipo..." /> : loadError ? (

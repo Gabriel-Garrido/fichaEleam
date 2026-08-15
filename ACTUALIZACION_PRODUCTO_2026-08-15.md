@@ -133,18 +133,38 @@ Este documento resume los cambios consolidados en la experiencia del ELEAM, su s
 - Las políticas que modifican permisos por área o acción ahora exigen además que el ELEAM conserve acceso operativo vigente.
 - Se actualizaron React Router y dependencias transitivas de build afectadas por avisos de seguridad; `npm audit` finaliza sin vulnerabilidades conocidas.
 
+## Ayudas y guías contextuales
+
+- Las guías se abren únicamente cuando la persona presiona **Ayuda**; no interrumpen el trabajo ni reaparecen de forma automática.
+- Cada vista muestra sólo instrucciones que corresponden al rol y a los permisos efectivos. Si no existe contenido útil para esa persona, el acceso a la guía se oculta.
+- Se retiraron recorridos que apuntaban a pantallas o acciones que ya no existen y se conectaron las ayudas vigentes de Equipo y Cumplimiento.
+- Los textos distinguen claramente entre consultar y registrar. Las ayudas de lectura no invitan a ejecutar acciones bloqueadas.
+- Al cerrar una guía, el foco vuelve al botón que la abrió. Los tooltips declaran su relación accesible, se cierran con Escape y no quedan desalineados al desplazar o redimensionar la pantalla.
+- Las métricas con explicación usan la misma ayuda accesible y visible en teclado, en lugar de depender del tooltip nativo del navegador.
+
 ## Despliegue
 
 ### Estado al 15 de agosto de 2026
 
-Desplegadas y verificadas como `ACTIVE` en Supabase `gzvjqzilaxlnzmjkcrbw`, todas con validación JWT habilitada:
+Desplegadas el 15 de agosto de 2026 y verificadas como `ACTIVE` en Supabase `gzvjqzilaxlnzmjkcrbw`:
 
-- `create-demo-user` v39.
-- `create-staff-user` v37.
-- `update-staff-user` v4.
-- `delete-staff-user` v32.
+| Edge Function | Versión | Validación JWT |
+| --- | ---: | --- |
+| `create-demo-user` | 40 | Sí |
+| `create-staff-user` | 38 | Sí |
+| `update-staff-user` | 5 | Sí |
+| `delete-staff-user` | 33 | Sí |
+| `mp-create-subscription` | 39 | Sí |
+| `mp-cancel-subscription` | 38 | Sí |
+| `mp-webhook` | 41 | No; valida la firma de MercadoPago |
+| `send-crm-email-campaign` | 12 | Sí |
+| `send-resident-payment-receipt` | 2 | Sí |
+| `track-landing-event` | 28 | No; endpoint público con validación de payload y límites |
+| `crm-unsubscribe` | 9 | No; enlace público firmado de desuscripción |
 
-El despliegue incluyó los módulos compartidos de correo, autenticación y validación de vigencia. Las migraciones SQL se aplican por separado y no deben considerarse desplegadas sólo por publicar las Edge Functions.
+El despliegue incluyó los módulos compartidos de correo, autenticación y validación de vigencia. Se retiró de producción `invite-funcionario`, función histórica eliminada del repositorio en mayo de 2026 y reemplazada por `create-staff-user`, para no conservar un endpoint sin uso. Las migraciones SQL se aplican por separado y no deben considerarse desplegadas sólo por publicar las Edge Functions.
+
+La preparación para producción finalizó con `npm audit` sin vulnerabilidades, 555 pruebas aprobadas, typecheck de las Edge Functions, auditoría de contratos Supabase, build de producción y auditoría SEO correctos.
 
 1. Aplicar [`supabase_schema.sql`](./supabase_schema.sql) en la instancia Supabase.
 2. Desplegar las Edge Functions modificadas.

@@ -12,7 +12,6 @@ export default function FeatureCoachTrigger({ featureId, controller, className =
     <button
       type="button"
       onClick={open}
-      title="Abrir ayuda de esta pantalla"
       aria-label="Abrir ayuda de esta pantalla"
       className={`inline-flex min-h-11 sm:min-h-10 items-center gap-1.5 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-semibold text-teal-700 transition-colors hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${className}`}
     >

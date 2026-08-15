@@ -1,39 +1,4 @@
 export const COACHES = {
-  dashboard: {
-    icon: "home",
-    eyebrow: "Inicio",
-    title: "Tu día, en una pantalla",
-    description: "Lo urgente primero: alertas clínicas, pendientes del turno y residentes a vigilar.",
-    steps: [
-      { title: "Mira las alertas", text: "Vencidos, medicamentos y eventos quedan resaltados arriba." },
-      { title: "Entra al turno", text: "Un toque en Tareas o Medicamentos y ves lo de ahora." },
-    ],
-    benefit: "Empiezas el turno sabiendo qué hacer, sin revisar cuadernos.",
-    roleOverrides: {
-      admin_eleam: {
-        title: "El pulso de tu ELEAM",
-        description: "Ocupación, equipo, clínica y acreditación en un solo vistazo.",
-        steps: [
-          { title: "Lee los indicadores", text: "Residentes, alertas y vencimientos en tarjetas claras." },
-          { title: "Actúa sobre lo crítico", text: "Cada alerta te lleva a resolverla en 1 clic." },
-        ],
-        benefit: "Decides con datos al día y frenas los problemas antes de que escalen.",
-      },
-    },
-  },
-
-  establishment: {
-    icon: "beds",
-    eyebrow: "Establecimiento",
-    title: "La instalación, ordenada",
-    description: "Capacidad, habitaciones, camas y documentos físicos conectados con la carpeta SEREMI.",
-    steps: [
-      { title: "Registra habitaciones", text: "Define código, sector y las camas que contiene cada una." },
-      { title: "Completa la evidencia", text: "Los planos y certificados se cargan una sola vez en Cumplimiento." },
-    ],
-    benefit: "Ves ocupación y evidencia del inmueble sin navegar por módulos separados.",
-  },
-
   personnel: {
     icon: "team",
     eyebrow: "Personal",
@@ -44,18 +9,17 @@ export const COACHES = {
       { title: "Planifica la dotación", text: "El calendario avisa si algún turno queda bajo el mínimo exigido." },
     ],
     benefit: "Mantienes la nómina fiscalizable sin una matriz de permisos difícil de administrar.",
-  },
-
-  compliance: {
-    icon: "compliance",
-    eyebrow: "Cumplimiento SEREMI",
-    title: "Todo lo fiscalizable, conectado",
-    description: "Requisitos, documentos, protocolos, reclamos y emergencias organizados por obligación.",
-    steps: [
-      { title: "Revisa las brechas", text: "Empieza por los requisitos vencidos o sin evidencia." },
-      { title: "Abre la carpeta", text: "Cada evidencia queda asociada al requisito que demuestra." },
-    ],
-    benefit: "Preparas una fiscalización desde una sola entrada y sin duplicar documentos.",
+    roleOverrides: {
+      funcionario: {
+        title: "Consulta el equipo y la cobertura",
+        description: "Directorio, competencias, capacitación y dotación disponibles para consulta.",
+        steps: [
+          { title: "Abre el directorio", text: "Consulta cargos, competencias y cursos registrados por persona." },
+          { title: "Revisa la dotación", text: "El calendario muestra la cobertura planificada para cada turno." },
+        ],
+        benefit: "Encuentras la información del equipo sin acceder a configuraciones administrativas.",
+      },
+    },
   },
 
   turnos: {
@@ -64,7 +28,7 @@ export const COACHES = {
     title: "Pasa el turno sin perder nada",
     description: "Historial trazable y resumen operativo para el siguiente equipo.",
     steps: [
-      { title: "Crea una entrega", text: "El sistema junta medicamentos, tareas y signos por ti." },
+      { title: "Crea una entrega", text: "El sistema junta medicamentos, tareas y signos por ti.", permission: "registrar_entregas_turno" },
       { title: "Consulta o imprime", text: "Queda identificada por responsable y disponible para el equipo entrante." },
     ],
     benefit: "Adiós a las hojas sueltas y las entregas verbales que se pierden.",
@@ -73,13 +37,13 @@ export const COACHES = {
   "turnos-nuevo": {
     icon: "shift",
     eyebrow: "Nueva entrega",
-    title: "Arma la entrega en 3 minutos",
+    title: "Completa una entrega clara",
     description: "El turno llega precargado. Sólo agregas información que no esté ya en los pendientes automáticos.",
     steps: [
       { title: "Revisa lo precargado", text: "Medicamentos, tareas y signos ya consolidados." },
       { title: "Deja instrucciones", text: "Registra sólo lo que el siguiente equipo debe conocer o ejecutar." },
     ],
-    benefit: "Tu cierre de turno pasa de 20 minutos a 3, y queda trazado.",
+    benefit: "El cierre queda breve, completo y trazado para el equipo entrante.",
   },
 
   "turnos-detalle": {
@@ -101,8 +65,8 @@ export const COACHES = {
     description: "Una bandeja con cuidados, signos, medicamentos y seguimientos del turno.",
     steps: [
       { title: "Filtra lo accionable", text: "Pendientes, vencidas o por validar." },
-      { title: "Cierra en 1 clic", text: "Cumplida, omitida o reprogramada, desde la misma fila." },
-      { title: "Activa seguimiento", text: "Cuando el equipo deba revisar la evolución en otro turno." },
+      { title: "Resuelve desde la lista", text: "Registra sólo las acciones autorizadas para tu función.", anyPermissions: ["completar_tareas_cuidado", "administrar_medicamentos", "validar_medicamentos_controlados", "crear_signos_vitales", "crear_observaciones"] },
+      { title: "Activa seguimiento", text: "Cuando el equipo deba revisar la evolución en otro turno.", permission: "crear_observaciones" },
     ],
     benefit: "El equipo trabaja contra una lista clara. Nada se pierde.",
   },
@@ -114,9 +78,9 @@ export const COACHES = {
     description: "El kardex del turno con dosis, vía y alertas de stock.",
     steps: [
       { title: "Filtra por turno", text: "Ves solo lo programado en ese horario." },
-      { title: "Administra u omite", text: "Con lote y dosis reales, o motivo de omisión." },
-      { title: "Doble firma si aplica", text: "Controlados esperan validación de un segundo usuario." },
-      { title: "Cierra antes de entregar", text: "Revisa pendientes, vencidas y registros por validar." },
+      { title: "Administra u omite", text: "Con lote y dosis reales, o motivo de omisión.", permission: "administrar_medicamentos" },
+      { title: "Valida si corresponde", text: "Los controlados requieren la confirmación de un segundo usuario.", permission: "validar_medicamentos_controlados" },
+      { title: "Revisa antes de entregar", text: "Comprueba pendientes, vencidas y registros por validar.", anyPermissions: ["administrar_medicamentos", "validar_medicamentos_controlados"] },
     ],
     benefit: "Menos errores de medicación, con stock auditado y cada dosis trazada.",
   },
@@ -146,19 +110,6 @@ export const COACHES = {
     benefit: "El ingreso queda validado y disponible al instante para el equipo.",
   },
 
-  "residents-detail": {
-    icon: "residents",
-    eyebrow: "Ficha del residente",
-    title: "Todo sobre tu residente",
-    description: "Datos, salud, plan de cuidado, medicación y trazabilidad, juntos.",
-    steps: [
-      { title: "Ordena los medicamentos", text: "Usa Tratamiento y recetas, Recepción y stock, o Administraciones." },
-      { title: "Aplica escalas", text: "Barthel, Katz, MNA, MMSE y Tinetti desde la pestaña de salud." },
-      { title: "Completa el Ingreso DS 20", text: "Consentimiento, red de salud y persona significativa." },
-    ],
-    benefit: "Accedes al 360° del residente en segundos, sin planillas dispersas.",
-  },
-
   "residents-edit": {
     icon: "residents",
     eyebrow: "Editar residente",
@@ -178,7 +129,7 @@ export const COACHES = {
     description: "Disponibles, ocupadas, reservadas o fuera de servicio, en una vista.",
     steps: [
       { title: "Mira el panorama", text: "Disponibles, ocupadas y en mantención arriba." },
-      { title: "Asigna o transfiere", text: "Desde la misma cama, con validación automática." },
+      { title: "Asigna o transfiere", text: "Desde la misma cama, con validación automática.", permission: "asignar_camas" },
     ],
     benefit: "Coordinas la ocupación sin reuniones ni planillas paralelas.",
   },
@@ -190,7 +141,7 @@ export const COACHES = {
     description: "Historial por residente con rangos clínicos automáticos.",
     steps: [
       { title: "Lee los colores", text: "Verde normal, ámbar atención, rojo crítico." },
-      { title: "Registra uno nuevo", text: "Con guía por parámetro y feedback en vivo." },
+      { title: "Registra uno nuevo", text: "Con guía por parámetro y avisos de rango en vivo.", permission: "crear_signos_vitales" },
     ],
     benefit: "Detectas tendencias antes de que se vuelvan emergencias.",
   },
@@ -207,30 +158,6 @@ export const COACHES = {
     benefit: "Cada control queda con contexto clínico y alertas automáticas.",
   },
 
-  observations: {
-    icon: "observations",
-    eyebrow: "Registro de evolución",
-    title: "Evolución y seguimientos en cada ficha",
-    description: "Observaciones clínicas y de cuidado ordenadas por residente y fecha.",
-    steps: [
-      { title: "Filtra por tipo", text: "Caídas, curaciones, visitas médicas y más." },
-      { title: "Registra sin salir", text: "El residente ya está identificado dentro de su ficha." },
-    ],
-    benefit: "El siguiente turno arranca con contexto completo, sin notas sueltas.",
-  },
-
-  "observations-new": {
-    icon: "observations",
-    eyebrow: "Registro de evolución",
-    title: "Documenta lo que ocurrió",
-    description: "Tipo, descripción y acciones tomadas. Marca seguimiento si aplica.",
-    steps: [
-      { title: "Elige el tipo", text: "Clínica, cuidados, psicosocial u otras." },
-      { title: "Activa seguimiento", text: "Define fecha y turno de revisión si hace falta." },
-    ],
-    benefit: "Tus observaciones se vuelven acciones rastreables, no notas perdidas.",
-  },
-
   "adverse-events": {
     icon: "alert",
     eyebrow: "Eventos adversos",
@@ -238,7 +165,7 @@ export const COACHES = {
     description: "Caídas, errores y lesiones con severidad, línea de tiempo y cierre.",
     steps: [
       { title: "Prioriza por severidad", text: "Leve, moderado, grave o crítico." },
-      { title: "Cierra con conclusiones", text: "Solo personal autorizado." },
+      { title: "Cierra con conclusiones", text: "Documenta el resultado cuando el caso esté resuelto.", permission: "cerrar_eventos_adversos" },
     ],
     benefit: "Mantienes trazabilidad reglamentaria con historial inmutable.",
   },
@@ -261,8 +188,9 @@ export const COACHES = {
     title: "La historia completa del evento",
     description: "Acciones, contactos, derivaciones y cierre, en orden cronológico.",
     steps: [
-      { title: "Agrega acciones", text: "Cada una se firma y queda en la línea de tiempo." },
-      { title: "Cierra con conclusiones", text: "Cuando el caso está resuelto." },
+      { title: "Revisa la línea de tiempo", text: "Responsables, acciones y cambios aparecen en orden cronológico." },
+      { title: "Agrega acciones", text: "Cada una se firma y queda en la línea de tiempo.", permission: "editar_eventos_adversos" },
+      { title: "Cierra con conclusiones", text: "Cuando el caso está resuelto.", permission: "cerrar_eventos_adversos" },
     ],
     benefit: "Trabajas el caso con método clínico, sin perder el hilo entre turnos.",
   },
@@ -285,22 +213,11 @@ export const COACHES = {
     title: "Preparados ante cualquier emergencia",
     description: "Plan, escenarios, simulacros e inventario en un solo lugar, como exige el DS 20.",
     steps: [
-      { title: "Crea el plan base", text: "Objetivo, alcance y fechas de aprobación y revisión." },
-      { title: "Documenta escenarios", text: "Incendio, sismo, evacuación: cada uno con su procedimiento." },
-      { title: "Registra simulacros", text: "Fecha, participantes, resultado y acciones de mejora." },
+      { title: "Revisa el plan vigente", text: "Consulta responsables, procedimientos y recursos para cada emergencia." },
+      { title: "Mantén el plan al día", text: "Actualiza aprobación, revisión, escenarios e inventario.", permission: "gestionar_emergencias" },
+      { title: "Registra simulacros", text: "Fecha, participantes, resultado y acciones de mejora.", permission: "registrar_simulacros" },
     ],
     benefit: "Tu plan de emergencias queda listo para la fiscalización SEREMI.",
-    roleOverrides: {
-      funcionario: {
-        title: "Conoce el plan y registra simulacros",
-        description: "Los procedimientos ante emergencias y el registro de los ejercicios realizados.",
-        steps: [
-          { title: "Estudia los escenarios", text: "Incendio, sismo, evacuación: cada uno con su procedimiento." },
-          { title: "Registra simulacros", text: "Fecha, participantes, resultado y acciones de mejora." },
-        ],
-        benefit: "Sabes qué hacer en una emergencia y cada ejercicio queda trazado.",
-      },
-    },
   },
 
   reclamos: {
@@ -322,7 +239,7 @@ export const COACHES = {
     description: "Documentos, protocolos y registros ordenados para una fiscalización.",
     steps: [
       { title: "Abre un ámbito", text: "Verás juntos todos los puntos que pertenecen al mismo tema." },
-      { title: "Completa lo pendiente", text: "Cada punto explica en palabras simples qué respaldo falta." },
+      { title: "Completa lo pendiente", text: "Cada punto explica en palabras simples qué respaldo falta.", anyPermissions: ["subir_acreditacion", "editar_acreditacion"] },
       { title: "Emite el reporte", text: "La vista para fiscalización conserva el mismo orden de la pantalla." },
     ],
     benefit: "Preparas la revisión sin mantener listas paralelas.",
@@ -363,26 +280,15 @@ export const COACHES = {
     },
   },
 
-  accreditation: {
-    icon: "accreditation",
-    eyebrow: "Carpeta SEREMI",
-    title: "Carpeta SEREMI DS 20 al día",
-    description: "Los ámbitos del reporte, desplegables y con lenguaje sencillo.",
-    steps: [
-      { title: "Abre un ámbito", text: "Revisa sus puntos sin salir de la carpeta." },
-      { title: "Completa un punto", text: "Sube o revisa el respaldo desde una sola acción." },
-    ],
-    benefit: "Tu carpeta lista el día de la fiscalización, sin folders perdidos.",
-  },
-
   "accreditation-requisito": {
     icon: "accreditation",
     eyebrow: "Requisito SEREMI",
     title: "Gestiona un requisito completo",
     description: "Evidencias versionadas, observaciones, auditoría y estados.",
     steps: [
-      { title: "Sube el documento", text: "PDF, imagen o Word; se versiona solo." },
-      { title: "Cambia el estado", text: "Vigente, no aplica o pendiente, con justificación." },
+      { title: "Revisa el requisito", text: "Consulta qué exige, el respaldo esperado y su historial." },
+      { title: "Sube el documento", text: "PDF, imagen o Word; se versiona solo.", permission: "subir_acreditacion" },
+      { title: "Cambia el estado", text: "Vigente, no aplica o pendiente, con justificación.", permission: "editar_acreditacion" },
     ],
     benefit: "Cada requisito queda trazado: quién subió qué y cuándo cambió.",
   },
@@ -394,7 +300,7 @@ export const COACHES = {
     description: "Observaciones internas o de fiscalización, con su subsanación.",
     steps: [
       { title: "Filtra por estado", text: "Abiertas, en proceso o cerradas." },
-      { title: "Cierra con evidencia", text: "Con nota de subsanación y responsable." },
+      { title: "Cierra con respaldo", text: "Registra la subsanación y su responsable.", roles: ["admin_eleam"] },
     ],
     benefit: "Reduces el riesgo de multas gestionando hallazgos con plazos claros.",
   },
@@ -408,23 +314,35 @@ export const COACHES = {
       { title: "Revisa el resumen", text: "Datos del ELEAM y porcentaje global." },
       { title: "Guarda como PDF", text: "Ctrl+P para tener tu copia digital." },
     ],
-    benefit: "Si llega la fiscalización, tienes la carpeta lista en 2 minutos.",
+    benefit: "Ante una fiscalización, presentas la carpeta en un orden claro y consistente.",
   },
 
   team: {
     icon: "team",
     eyebrow: "Equipo",
     title: "Equipo del establecimiento",
-    description: "Crea cuentas y registra la dotación y competencias DS 20.",
+    description: "Registra personas con o sin acceso y mantén sus antecedentes DS 20.",
     steps: [
-      { title: "Crea funcionarios", text: "Email, nombre y cargo; el sistema envía el acceso." },
-      { title: "Registra la dotación", text: "Mantén cargos y turnos del equipo en un solo lugar." },
-      { title: "Registra competencias", text: "Mantén certificados y capacitaciones al día." },
+      { title: "Elige el tipo de registro", text: "Da acceso sólo a quien necesite iniciar sesión." },
+      { title: "Configura el acceso", text: "Asigna únicamente las áreas y acciones necesarias." },
+      { title: "Mantén sus antecedentes", text: "Actualiza función, competencias y capacitación." },
     ],
     benefit: "Cada persona ve solo lo suyo, con sus credenciales al día.",
+    roleOverrides: {
+      funcionario: {
+        title: "Consulta el directorio del equipo",
+        description: "Información, competencias y cursos registrados para cada persona.",
+        steps: [
+          { title: "Busca una persona", text: "Usa nombre, cargo o correo para abrir su ficha." },
+          { title: "Revisa sus antecedentes", text: "Consulta función, competencias y capacitación registrada." },
+        ],
+        benefit: "Encuentras antecedentes del equipo sin ver controles de acceso o permisos.",
+      },
+    },
   },
 
   subscription: {
+    roles: ["admin_eleam"],
     icon: "payment",
     eyebrow: "Suscripción",
     title: "Tu plan y pagos",
@@ -442,13 +360,35 @@ export function hasCoach(featureId) {
   return Boolean(featureId && COACHES[featureId]);
 }
 
-export function getCoach(featureId, rol) {
+function isAllowed(rule, auth) {
+  if (!auth || typeof auth === "string") return true;
+  if (rule.roles?.length && !rule.roles.includes(auth.rol)) return false;
+  if (rule.permission && (typeof auth.can !== "function" || !auth.can(rule.permission))) return false;
+  if (rule.anyPermissions?.length && (typeof auth.can !== "function" || !rule.anyPermissions.some((permission) => auth.can(permission)))) return false;
+  return true;
+}
+
+function withoutAccessMetadata(value) {
+  const visible = { ...value };
+  delete visible.roles;
+  delete visible.permission;
+  delete visible.anyPermissions;
+  return visible;
+}
+
+export function getCoach(featureId, authOrRole) {
   if (!hasCoach(featureId)) return null;
   const base = COACHES[featureId];
+  if (!isAllowed(base, authOrRole)) return null;
+  const rol = typeof authOrRole === "string" ? authOrRole : authOrRole?.rol;
   const override = rol ? base.roleOverrides?.[rol] : null;
   const merged = override ? { ...base, ...override } : { ...base };
   delete merged.roleOverrides;
-  return merged;
+  const steps = (merged.steps ?? [])
+    .filter((step) => isAllowed(step, authOrRole))
+    .map(withoutAccessMetadata);
+  if (steps.length === 0) return null;
+  return { ...withoutAccessMetadata(merged), steps };
 }
 
 export function listCoachIds() {
