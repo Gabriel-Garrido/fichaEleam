@@ -1,5 +1,6 @@
 export const DEMO_INACTIVITY_DAYS = 10;
 export const DEMO_REACTIVATION_DAYS = 14;
+export const DEMO_RESTART_DAYS = 30;
 export const RECOVERY_EMAIL_COOLDOWN_HOURS = 24;
 
 export function daysSince(value: string | null | undefined, now = Date.now()): number | null {
@@ -32,4 +33,8 @@ export function recoveryEmailIsCoolingDown(lastSentAt: string | null | undefined
   const timestamp = new Date(lastSentAt).getTime();
   return Number.isFinite(timestamp)
     && now - timestamp < RECOVERY_EMAIL_COOLDOWN_HOURS * 3600000;
+}
+
+export function hasPaidPlan(plan: string | null | undefined): boolean {
+  return plan === "mensual" || plan === "anual";
 }

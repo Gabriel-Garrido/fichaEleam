@@ -9,7 +9,7 @@ import InteractionTimeline from "./InteractionTimeline";
 import CrmTasksPanel from "./CrmTasksPanel";
 import EleamUsagePanel from "./EleamUsagePanel";
 import HelpTooltip from "../../../components/HelpTooltip";
-import { canReactivateDemo, canSendDemoRecovery, demoLoginLabel } from "../utils/portfolioUsage";
+import { demoLoginLabel, demoRestartInvitationState } from "../utils/portfolioUsage";
 
 // Tooltips: solo en campos no obvios. Cada texto especifica la columna
 // exacta en BD y cómo se interpreta el valor.
@@ -89,7 +89,7 @@ export default function EleamCustomerDrawer({
   onCreateTask, onCompleteTask, onCreateInteraction,
   usageDays = 30,
   portfolioUsage = [], demoEngagement = [],
-  onSendDemoRecovery, onReactivateDemo, demoAction,
+  onInviteDemoRestart, demoAction,
 }) {
   const [tab, setTab] = useState("summary");
   useEffect(() => setTab("summary"), [eleamId]);
@@ -107,6 +107,7 @@ export default function EleamCustomerDrawer({
   const usage = portfolioUsage.find((item) => item.eleamId === eleamId) ?? {};
   const engagement = demoEngagement.find((item) => item.eleamId === eleamId) ?? null;
   const demoBusy = demoAction?.id === eleamId;
+  const invitationState = eleam ? demoRestartInvitationState(eleam, engagement) : { visible: false, disabled: true, reason: "" };
 
   return (
     <Modal
@@ -232,8 +233,7 @@ export default function EleamCustomerDrawer({
               >
                 Registrar pago
               </button>
-              {canReactivateDemo(eleam, engagement) && <button type="button" disabled={demoBusy} onClick={() => onReactivateDemo?.(eleam)} className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-50">{demoAction?.type === "reactivate" && demoBusy ? "Reactivando…" : "Reactivar demo"}</button>}
-              {canSendDemoRecovery(eleam, engagement) && <button type="button" disabled={demoBusy} onClick={() => onSendDemoRecovery?.(eleam)} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50">{demoAction?.type === "email" && demoBusy ? "Enviando…" : "Enviar correo para retomar"}</button>}
+              {invitationState.visible && <button type="button" disabled={demoBusy || invitationState.disabled} title={invitationState.reason || "Ver correo y reiniciar el demo por 30 días"} onClick={() => onInviteDemoRestart?.(eleam)} className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">{demoAction?.type === "restart_invitation" && demoBusy ? "Enviando…" : invitationState.reason || "Invitar a demo · 30 días"}</button>}
             </div>
 
             {/* Contacto */}

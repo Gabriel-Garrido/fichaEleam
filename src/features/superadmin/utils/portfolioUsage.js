@@ -49,6 +49,17 @@ export function canReactivateDemo(eleam, engagement) {
   return eleam?.plan === "demo" && engagement?.needsReactivation === true;
 }
 
+export function hasPaidPlan(eleam) {
+  return eleam?.plan === "mensual" || eleam?.plan === "anual";
+}
+
+export function demoRestartInvitationState(eleam, engagement) {
+  if (hasPaidPlan(eleam)) return { visible: false, disabled: true, reason: "Plan pagado" };
+  if (!engagement?.accountAvailable) return { visible: true, disabled: true, reason: "Sin administrador con acceso" };
+  if (engagement.restartInvitationCoolingDown) return { visible: true, disabled: true, reason: "Invitación enviada hoy" };
+  return { visible: true, disabled: false, reason: "" };
+}
+
 export function demoLoginLabel(engagement) {
   if (!engagement) return "Acceso no disponible";
   if (engagement.neverSignedIn) return "Nunca ha ingresado";

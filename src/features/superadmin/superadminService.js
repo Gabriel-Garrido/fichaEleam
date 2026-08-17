@@ -366,17 +366,20 @@ export async function getDemoEngagementOverview() {
     accessActive: item.access_active === true,
     needsReactivation: item.needs_reactivation === true,
     accountAvailable: item.account_available === true,
+    canRestartDemo: item.can_restart_demo === true,
+    restartInvitationCoolingDown: item.restart_invitation_cooling_down === true,
     lastRecoveryEmailAt: item.last_recovery_email_at,
     canSendRecovery: item.can_send_recovery === true,
   }));
 }
 
-export async function sendDemoRecoveryEmail(eleamId) {
-  return invokeDemoEngagement({ action: "send_recovery", eleam_id: eleamId });
+export async function getDemoRestartInvitationPreview(eleamId) {
+  const data = await invokeDemoEngagement({ action: "preview_restart_invitation", eleam_id: eleamId });
+  return data?.preview ?? null;
 }
 
-export async function reactivateDemoAccess(eleamId) {
-  return invokeDemoEngagement({ action: "reactivate", eleam_id: eleamId });
+export async function sendDemoRestartInvitation(eleamId) {
+  return invokeDemoEngagement({ action: "restart_invitation", eleam_id: eleamId });
 }
 
 export async function getEleamDetail(eleamId) {

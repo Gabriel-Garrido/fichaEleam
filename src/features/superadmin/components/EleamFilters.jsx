@@ -5,7 +5,7 @@ function chipLabel(key, value) {
   if (key === "plan") return `Plan: ${PLAN_LABEL[value] ?? value}`;
   if (key === "pagoActivo") return value === "si" ? "Acceso activo" : "Sin acceso";
   if (key === "riesgo") return `Riesgo: ${RIESGO_MAP[value]?.label ?? value}`;
-  if (key === "uso") return ({ con_uso: "Con actividad", sin_uso: "Sin actividad", activos_7d: "Actividad reciente", sin_activar: "Acceso pendiente", demo_recuperar: "Demos por recuperar" })[value] ?? value;
+  if (key === "uso") return ({ con_uso: "Con actividad", sin_uso: "Sin actividad", activos_7d: "Actividad reciente", sin_activar: "Acceso pendiente", demo_recuperar: "Sin plan pagado" })[value] ?? value;
   return value;
 }
 
@@ -26,7 +26,7 @@ export default function EleamFilters({ filters, setFilters, count }) {
         <label className="block">
           <span className="mb-1.5 block text-xs font-semibold text-slate-600">Actividad</span>
           <select value={filters.uso ?? ""} onChange={(event) => set({ uso: event.target.value || undefined })} className={selectClass}>
-            <option value="">Cualquier nivel</option><option value="demo_recuperar">Demos por recuperar</option><option value="activos_7d">Actividad reciente</option><option value="con_uso">Con actividad</option><option value="sin_uso">Sin actividad</option><option value="sin_activar">Acceso pendiente</option>
+            <option value="">Cualquier nivel</option><option value="demo_recuperar">Sin plan pagado</option><option value="activos_7d">Actividad reciente</option><option value="con_uso">Con actividad</option><option value="sin_uso">Sin actividad</option><option value="sin_activar">Acceso pendiente</option>
           </select>
         </label>
         <label className="block">

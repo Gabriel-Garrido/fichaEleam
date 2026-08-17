@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Loading from "../../components/Loading";
 import { useToast } from "../../components/Toast";
-import { useConfirm } from "../../components/ConfirmDialog";
 import { useFilterParams } from "../../hooks/useFilterParams";
 import EleamFilters from "./components/EleamFilters";
 import EleamTable from "./components/EleamTable";
@@ -11,6 +10,7 @@ import EleamCustomerDrawer from "./components/EleamCustomerDrawer";
 import PortfolioUsageOverview from "./components/PortfolioUsageOverview";
 import PaymentModal from "./components/PaymentModal";
 import SuperAdminPageHeader from "./components/SuperAdminPageHeader";
+import DemoRestartInvitationModal from "./components/DemoRestartInvitationModal";
 import { indexPortfolioUsage, usageDaysSince } from "./utils/portfolioUsage";
 import {
   createCrmTask,
@@ -23,15 +23,14 @@ import {
   getEleamInteractions,
   getEleamPayments,
   getPortfolioUsage,
-  reactivateDemoAccess,
-  sendDemoRecoveryEmail,
+  getDemoRestartInvitationPreview,
+  sendDemoRestartInvitation,
   updateEleam,
   registerPayment,
 } from "./superadminService";
 
 export default function SuperAdminClientes() {
   const toast = useToast();
-  const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
   const [eleams, setEleams] = useState([]);
   // Mapeo bidireccional URL ↔ filtros (claves cortas en URL, mismo shape para EleamFilters).
@@ -73,6 +72,10 @@ export default function SuperAdminClientes() {
   const [demoEngagement, setDemoEngagement] = useState([]);
   const [demoError, setDemoError] = useState("");
   const [demoAction, setDemoAction] = useState(null);
+  const [invitationTarget, setInvitationTarget] = useState(null);
+  const [invitationPreview, setInvitationPreview] = useState(null);
+  const [invitationPreviewLoading, setInvitationPreviewLoading] = useState(false);
+  const [invitationPreviewError, setInvitationPreviewError] = useState("");
 
   const refresh = async () => {
     setLoading(true);
@@ -156,7 +159,7 @@ export default function SuperAdminClientes() {
         if (filters.uso === "sin_uso" && !(usage?.usuariosTotales > 0 && usage?.registros === 0)) return false;
         if (filters.uso === "activos_7d" && !(lastDays != null && lastDays <= 7)) return false;
         if (filters.uso === "sin_activar" && !(usage?.usuariosSinPrimerIngreso > 0)) return false;
-        if (filters.uso === "demo_recuperar" && !(engagementByEleam[e.id]?.canSendRecovery || engagementByEleam[e.id]?.needsReactivation)) return false;
+        if (filters.uso === "demo_recuperar" && !engagementByEleam[e.id]?.canRestartDemo) return false;
       }
       return true;
     });
@@ -217,37 +220,37 @@ export default function SuperAdminClientes() {
     }
   };
 
-  const handleSendDemoRecovery = async (eleam) => {
+  const handleOpenDemoRestartInvitation = async (eleam) => {
     if (!eleam?.id || demoAction) return;
-    setDemoAction({ id: eleam.id, type: "email" });
+    setInvitationTarget(eleam);
+    setInvitationPreview(null);
+    setInvitationPreviewError("");
+    setInvitationPreviewLoading(true);
     try {
-      const result = await sendDemoRecoveryEmail(eleam.id);
-      toast(`Correo para retomar la demo enviado a ${result.email}.`, "success");
-      await refreshClientAfterDemoAction(eleam.id);
+      const preview = await getDemoRestartInvitationPreview(eleam.id);
+      if (!preview) throw new Error("No pudimos preparar la vista previa.");
+      setInvitationPreview(preview);
     } catch (err) {
       console.error(err);
-      toast(err.message || "No se pudo enviar el correo de recuperación.", "error");
+      setInvitationPreviewError(err.message || "No se pudo preparar la invitación.");
     } finally {
-      setDemoAction(null);
+      setInvitationPreviewLoading(false);
     }
   };
 
-  const handleReactivateDemo = async (eleam) => {
-    if (!eleam?.id || demoAction) return;
-    const accepted = await confirm({
-      title: "Reactivar demo",
-      message: `Se habilitará nuevamente el acceso de ${eleam.nombre} por 14 días. Después podrás enviar el correo para que retome la prueba.`,
-      confirmText: "Reactivar 14 días",
-    });
-    if (!accepted) return;
-    setDemoAction({ id: eleam.id, type: "reactivate" });
+  const handleConfirmDemoRestartInvitation = async () => {
+    const eleam = invitationTarget;
+    if (!eleam?.id || demoAction || !invitationPreview) return;
+    setDemoAction({ id: eleam.id, type: "restart_invitation" });
     try {
-      await reactivateDemoAccess(eleam.id);
-      toast("Demo reactivado por 14 días.", "success");
+      const result = await sendDemoRestartInvitation(eleam.id);
+      toast(`Demo reiniciado por 30 días e invitación enviada a ${result.email}.`, "success");
+      setInvitationTarget(null);
+      setInvitationPreview(null);
       await refreshClientAfterDemoAction(eleam.id);
     } catch (err) {
       console.error(err);
-      toast(err.message || "No se pudo reactivar el demo.", "error");
+      toast(err.message || "No se pudo reiniciar el demo y enviar la invitación.", "error");
     } finally {
       setDemoAction(null);
     }
@@ -282,8 +285,7 @@ export default function SuperAdminClientes() {
           portfolioUsage={portfolioUsage}
           usageDays={usageDays}
           demoEngagement={demoEngagement}
-          onSendDemoRecovery={handleSendDemoRecovery}
-          onReactivateDemo={handleReactivateDemo}
+          onInviteDemoRestart={handleOpenDemoRestartInvitation}
           demoAction={demoAction}
         />
       </div>
@@ -302,9 +304,22 @@ export default function SuperAdminClientes() {
         usageDays={usageDays}
         portfolioUsage={portfolioUsage}
         demoEngagement={demoEngagement}
-        onSendDemoRecovery={handleSendDemoRecovery}
-        onReactivateDemo={handleReactivateDemo}
+        onInviteDemoRestart={handleOpenDemoRestartInvitation}
         demoAction={demoAction}
+      />
+      <DemoRestartInvitationModal
+        eleam={invitationTarget}
+        preview={invitationPreview}
+        loading={invitationPreviewLoading}
+        sending={demoAction?.type === "restart_invitation"}
+        error={invitationPreviewError}
+        onClose={() => {
+          if (demoAction) return;
+          setInvitationTarget(null);
+          setInvitationPreview(null);
+          setInvitationPreviewError("");
+        }}
+        onConfirm={handleConfirmDemoRestartInvitation}
       />
     </div>
   );

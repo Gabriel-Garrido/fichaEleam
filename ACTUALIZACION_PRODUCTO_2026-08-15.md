@@ -149,9 +149,9 @@ Este documento resume los cambios consolidados en la experiencia del ELEAM, su s
 - La vista **Clientes** concentra búsqueda, capacidad, ocupación, actividad, último ingreso y estado del plan. Los filtros comerciales menos frecuentes quedan en **Más filtros**.
 - Cada cliente muestra residentes activos y totales, camas ocupadas y totales, usuarios con actividad y registros del período mediante una única consulta agregada, evitando consultas por establecimiento.
 - El detalle del ELEAM se divide en **Resumen**, **Uso** y **Seguimiento**. Contacto, suscripción, pagos, tareas e interacciones ya no aparecen simultáneamente.
-- En cuentas demo, el último ingreso del administrador se obtiene de Supabase Auth. Si nunca ingresó o lleva más de 10 días sin hacerlo, Superadmin puede enviar un correo personalizado para retomar la prueba.
-- El correo conserva un único llamado a la acción, distingue acceso con Google y contraseña, y genera enlaces personales desde el backend. Se permite un envío cada 24 horas para evitar contactos repetidos.
-- Los demos vencidos pueden reactivarse por 14 días. La operación exige sesión Superadmin, rechaza cuentas que no sean demo y deja trazabilidad en las interacciones CRM.
+- En cuentas sin plan mensual o anual, el último ingreso del administrador se obtiene de Supabase Auth y siempre se ofrece una única acción para invitarlo a reiniciar el demo, esté activo o vencido.
+- Antes de confirmar se muestra la vista previa exacta del destinatario, asunto, mensaje y CTA. Al aceptar, el demo comienza nuevamente por 30 días y el correo se envía con acceso adaptado para Google o contraseña.
+- El correo es breve, conserva un único llamado a la acción y se permite un envío cada 24 horas para evitar contactos repetidos. Las cuentas con plan pagado son rechazadas nuevamente por el backend y no pueden degradarse a demo.
 - La Edge Function `manage-demo-engagement` nunca expone la API administrativa de Auth al navegador y requiere JWT. Antes de publicar esta versión debe aplicarse `20260815203000_expand_superadmin_portfolio_usage.sql` y desplegarse la función.
 
 ## Despliegue
@@ -166,7 +166,7 @@ Desplegadas el 15 de agosto de 2026 y verificadas como `ACTIVE` en Supabase `gzv
 | `create-staff-user` | 39 | Sí |
 | `update-staff-user` | 6 | Sí |
 | `delete-staff-user` | 34 | Sí |
-| `manage-demo-engagement` | 1 | Sí |
+| `manage-demo-engagement` | 2 | Sí |
 | `mp-create-subscription` | 40 | Sí |
 | `mp-cancel-subscription` | 39 | Sí |
 | `mp-webhook` | 42 | No; valida la firma de MercadoPago |
@@ -177,7 +177,7 @@ Desplegadas el 15 de agosto de 2026 y verificadas como `ACTIVE` en Supabase `gzv
 
 El despliegue incluyó los módulos compartidos de correo, autenticación y validación de vigencia. Se retiró de producción `invite-funcionario`, función histórica eliminada del repositorio en mayo de 2026 y reemplazada por `create-staff-user`, para no conservar un endpoint sin uso. Las migraciones SQL se aplican por separado y no deben considerarse desplegadas sólo por publicar las Edge Functions.
 
-La preparación para producción finalizó con 565 pruebas aprobadas, typecheck de las Edge Functions, auditoría de contratos Supabase, build de producción y auditoría SEO correctos.
+La preparación para producción finalizó con 567 pruebas aprobadas, typecheck de las Edge Functions, auditoría de contratos Supabase, build de producción y auditoría SEO correctos.
 
 1. Aplicar [`supabase_schema.sql`](./supabase_schema.sql) en la instancia Supabase.
 2. Desplegar las Edge Functions modificadas.

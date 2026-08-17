@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
   canSendDemoRecovery,
+  hasPaidPlan,
   isDemoAccessActive,
   recoveryEmailIsCoolingDown,
 } from "./demoEngagement.ts";
@@ -21,4 +22,12 @@ Deno.test("considera activo sólo un demo vigente y habilitado", () => {
 Deno.test("impide repetir el correo durante veinticuatro horas", () => {
   assertEquals(recoveryEmailIsCoolingDown("2026-08-15T00:00:01Z", NOW), true);
   assertEquals(recoveryEmailIsCoolingDown("2026-08-14T11:59:59Z", NOW), false);
+});
+
+Deno.test("distingue planes pagados de demos y cuentas sin plan", () => {
+  assertEquals(hasPaidPlan("mensual"), true);
+  assertEquals(hasPaidPlan("anual"), true);
+  assertEquals(hasPaidPlan("demo"), false);
+  assertEquals(hasPaidPlan("inactivo"), false);
+  assertEquals(hasPaidPlan(null), false);
 });

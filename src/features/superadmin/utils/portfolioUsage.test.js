@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canReactivateDemo,
   canSendDemoRecovery,
+  demoRestartInvitationState,
   demoLoginLabel,
   indexPortfolioUsage,
   portfolioUsageState,
@@ -54,5 +55,14 @@ describe("portfolio usage", () => {
   it("explica el último ingreso real del administrador demo", () => {
     expect(demoLoginLabel({ neverSignedIn: true })).toBe("Nunca ha ingresado");
     expect(demoLoginLabel(null)).toBe("Acceso no disponible");
+  });
+
+  it("ofrece reinicio sólo a cuentas sin plan pagado y evita reenvíos", () => {
+    expect(demoRestartInvitationState({ plan: "demo" }, { accountAvailable: true })).toMatchObject({ visible: true, disabled: false });
+    expect(demoRestartInvitationState({ plan: "inactivo" }, { accountAvailable: true })).toMatchObject({ visible: true, disabled: false });
+    expect(demoRestartInvitationState({ plan: null }, { accountAvailable: false })).toMatchObject({ visible: true, disabled: true, reason: "Sin administrador con acceso" });
+    expect(demoRestartInvitationState({ plan: "demo" }, { accountAvailable: true, restartInvitationCoolingDown: true })).toMatchObject({ visible: true, disabled: true, reason: "Invitación enviada hoy" });
+    expect(demoRestartInvitationState({ plan: "mensual" }, { accountAvailable: true })).toMatchObject({ visible: false });
+    expect(demoRestartInvitationState({ plan: "anual" }, { accountAvailable: true })).toMatchObject({ visible: false });
   });
 });

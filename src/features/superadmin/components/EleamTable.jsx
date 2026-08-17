@@ -1,8 +1,7 @@
 import HelpTooltip from "../../../components/HelpTooltip";
 import { PLAN_LABEL } from "../utils/superadminFormatters";
 import {
-  canReactivateDemo,
-  canSendDemoRecovery,
+  demoRestartInvitationState,
   demoLoginLabel,
   indexPortfolioUsage,
   portfolioUsageState,
@@ -46,28 +45,22 @@ function UsageBadge({ usage }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${STATE_STYLE[state.tone]}`}>{state.label}</span>;
 }
 
-function DemoActions({ eleam, engagement, onSend, onReactivate, action, compact = false }) {
-  const sending = action?.id === eleam.id && action.type === "email";
-  const reactivating = action?.id === eleam.id && action.type === "reactivate";
+function DemoActions({ eleam, engagement, onInvite, action, compact = false }) {
+  const sending = action?.id === eleam.id && action.type === "restart_invitation";
   const busy = Boolean(action);
-  const showEmail = canSendDemoRecovery(eleam, engagement);
-  const showReactivate = canReactivateDemo(eleam, engagement);
-  const sentToday = usageDaysSince(engagement?.lastRecoveryEmailAt) === 0;
-  if (!showEmail && !showReactivate) {
-    return sentToday ? <span className={`text-xs font-semibold text-emerald-700 ${compact ? "mt-3 inline-block" : ""}`}>Correo enviado hoy</span> : null;
-  }
+  const state = demoRestartInvitationState(eleam, engagement);
+  if (!state.visible) return null;
   return (
     <div className={`flex flex-wrap gap-2 ${compact ? "mt-3" : "justify-end"}`}>
-      {showReactivate && (
-        <button type="button" disabled={busy} onClick={() => onReactivate?.(eleam)} className="min-h-10 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-100 disabled:opacity-50">
-          {reactivating ? "Reactivando…" : "Reactivar 14 días"}
-        </button>
-      )}
-      {showEmail && (
-        <button type="button" disabled={busy} onClick={() => onSend?.(eleam)} className="min-h-10 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
-          {sending ? "Enviando…" : "Enviar correo"}
-        </button>
-      )}
+      <button
+        type="button"
+        disabled={busy || state.disabled}
+        title={state.reason || "Ver el correo antes de reiniciar el demo"}
+        onClick={() => onInvite?.(eleam)}
+        className="min-h-10 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+      >
+        {sending ? "Enviando…" : state.reason || "Invitar · 30 días gratis"}
+      </button>
     </div>
   );
 }
@@ -78,8 +71,7 @@ export default function EleamTable({
   portfolioUsage = [],
   usageDays = 30,
   demoEngagement = [],
-  onSendDemoRecovery,
-  onReactivateDemo,
+  onInviteDemoRestart,
   demoAction,
 }) {
   const usageByEleam = indexPortfolioUsage(portfolioUsage);
@@ -121,7 +113,7 @@ export default function EleamTable({
               </div>
               <span className="mt-3 inline-flex min-h-10 items-center text-sm font-bold text-teal-700">Ver detalle →</span>
             </button>
-            <DemoActions compact eleam={eleam} engagement={engagement} onSend={onSendDemoRecovery} onReactivate={onReactivateDemo} action={demoAction} />
+            <DemoActions compact eleam={eleam} engagement={engagement} onInvite={onInviteDemoRestart} action={demoAction} />
           </article>
         ))}
       </div>
@@ -147,7 +139,7 @@ export default function EleamTable({
                 <td className="px-3 py-4"><p className={`font-semibold ${eleam.plan === "demo" && (engagement?.neverSignedIn || (engagement?.inactiveDays ?? 0) > 10) ? "text-amber-700" : "text-slate-700"}`}>{eleam.plan === "demo" ? demoLoginLabel(engagement) : timeAgo(usage.ultimaActividad)}</p><p className="mt-1 text-xs text-slate-500">{usage.usuariosActivos}/{usage.usuariosTotales} usuarios con actividad</p></td>
                 <td className="px-3 py-4"><p className="font-semibold text-slate-700">{PLAN_LABEL[eleam.plan] ?? eleam.plan ?? "Sin plan"}</p><p className={`mt-0.5 text-xs font-semibold ${eleam.pago_activo ? "text-emerald-700" : "text-rose-700"}`}>{eleam.pago_activo ? "Acceso activo" : "Sin acceso"}</p></td>
                 <td className="px-4 py-4 text-right" onClick={(event) => event.stopPropagation()}>
-                  <DemoActions eleam={eleam} engagement={engagement} onSend={onSendDemoRecovery} onReactivate={onReactivateDemo} action={demoAction} />
+                  <DemoActions eleam={eleam} engagement={engagement} onInvite={onInviteDemoRestart} action={demoAction} />
                   <button type="button" onClick={() => onOpen(eleam)} className="mt-2 min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Ver detalle</button>
                 </td>
               </tr>
