@@ -43,7 +43,7 @@ async function getLastRecoveryByEleam(sb: ReturnType<typeof adminClient>, eleamI
 
 async function getDemoContext(sb: ReturnType<typeof adminClient>, eleamId: string) {
   const { data: eleam, error: eleamError } = await sb.from("eleams")
-    .select("id, nombre, plan, pago_activo, subscription_status, fecha_vencimiento_suscripcion")
+    .select("id, nombre, email_admin, plan, pago_activo, subscription_status, fecha_vencimiento_suscripcion")
     .eq("id", eleamId)
     .maybeSingle();
   if (eleamError) throw eleamError;
@@ -51,15 +51,15 @@ async function getDemoContext(sb: ReturnType<typeof adminClient>, eleamId: strin
   if (hasPaidPlan(eleam.plan)) return { error: "Este ELEAM ya tiene un plan de pago y no puede reiniciar un demo." } as const;
 
   const { data: admin, error: profileError } = await sb.from("profiles")
-    .select("id, nombre, email, creado_en")
+    .select("id, nombre, email, acceso_activo, creado_en")
     .eq("eleam_id", eleamId)
     .eq("rol", "admin_eleam")
-    .eq("acceso_activo", true)
+    .order("acceso_activo", { ascending: false })
     .order("creado_en", { ascending: true })
     .limit(1)
     .maybeSingle();
   if (profileError) throw profileError;
-  if (!admin?.email) return { error: "El demo no tiene un administrador activo con correo." } as const;
+  if (!admin?.email) return { error: "El ELEAM no tiene un administrador asociado con correo." } as const;
   const { data: authData, error: authError } = await sb.auth.admin.getUserById(admin.id);
   if (authError || !authData.user) return { error: "No pudimos consultar el acceso del administrador demo." } as const;
   return { eleam, admin, authUser: authData.user } as const;
@@ -84,7 +84,7 @@ async function getAuthUsersById(sb: ReturnType<typeof adminClient>, ids: string[
 
 async function listDemoStatuses(sb: ReturnType<typeof adminClient>) {
   const { data: allEleams, error: eleamError } = await sb.from("eleams")
-    .select("id, nombre, plan, pago_activo, subscription_status, fecha_vencimiento_suscripcion")
+    .select("id, nombre, email_admin, plan, pago_activo, subscription_status, fecha_vencimiento_suscripcion")
     .order("creado_en", { ascending: false });
   if (eleamError) throw eleamError;
   const eleams = (allEleams ?? []).filter((item) => !hasPaidPlan(item.plan));
@@ -92,8 +92,9 @@ async function listDemoStatuses(sb: ReturnType<typeof adminClient>) {
   if (!ids.length) return [];
 
   const [{ data: profiles, error: profilesError }, lastRecovery] = await Promise.all([
-    sb.from("profiles").select("id, eleam_id, nombre, email, creado_en")
-      .in("eleam_id", ids).eq("rol", "admin_eleam").eq("acceso_activo", true)
+    sb.from("profiles").select("id, eleam_id, nombre, email, acceso_activo, creado_en")
+      .in("eleam_id", ids).eq("rol", "admin_eleam")
+      .order("acceso_activo", { ascending: false })
       .order("creado_en", { ascending: true }),
     getLastRecoveryByEleam(sb, ids),
   ]);
@@ -118,8 +119,8 @@ async function listDemoStatuses(sb: ReturnType<typeof adminClient>) {
       inactive_days: inactiveDays,
       access_active: accessActive,
       needs_reactivation: Boolean(admin && authUser) && !accessActive,
-      account_available: Boolean(admin && authUser),
-      can_restart_demo: Boolean(admin && authUser),
+      account_available: Boolean(admin),
+      can_restart_demo: Boolean(admin),
       restart_invitation_cooling_down: recoveryEmailIsCoolingDown(lastRecoveryEmailAt),
       last_recovery_email_at: lastRecoveryEmailAt,
       can_send_recovery: Boolean(admin && authUser)
@@ -184,6 +185,18 @@ Deno.serve(async (req) => {
         : await generateAccessLink(sb, admin.email);
       if (!linkResult.link) return fail(req, linkResult.error ?? "No se pudo generar el acceso.", 502, "access_link_error");
 
+      const now = new Date().toISOString();
+      const { error: authRestoreError } = await sb.auth.admin.updateUserById(admin.id, { ban_duration: "none" });
+      if (authRestoreError) return fail(req, "No pudimos restaurar el acceso del administrador.", 502, "access_restore_error");
+      const { error: profileRestoreError } = await sb.from("profiles").update({
+        acceso_activo: true,
+        desactivado_en: null,
+        desactivado_por: null,
+        motivo_desactivacion: null,
+        restaurado_en: now,
+      }).eq("id", admin.id).eq("eleam_id", eleamId).eq("rol", "admin_eleam");
+      if (profileRestoreError) throw profileRestoreError;
+
       const expiresAt = new Date(Date.now() + DEMO_RESTART_DAYS * 86400000).toISOString();
       const { error: updateError } = await sb.from("eleams").update({
         plan: "demo",
@@ -213,7 +226,6 @@ Deno.serve(async (req) => {
       });
       if (!emailResult.sent) return fail(req, "El demo fue reiniciado, pero el correo no pudo enviarse. Intenta nuevamente.", 502, "email_failed");
 
-      const now = new Date().toISOString();
       const [{ error: leadError }, { error: interactionError }, { error: contactError }] = await Promise.all([
         sb.from("demo_leads").update({ estado: "demo_activo", demo_expires_at: expiresAt }).eq("demo_user_id", admin.id),
         sb.from("crm_interactions").insert({

@@ -55,8 +55,7 @@ export function hasPaidPlan(eleam) {
 
 export function demoRestartInvitationState(eleam, engagement) {
   if (hasPaidPlan(eleam)) return { visible: false, disabled: true, reason: "Plan pagado" };
-  if (!engagement?.accountAvailable) return { visible: true, disabled: true, reason: "Sin administrador con acceso" };
-  if (engagement.restartInvitationCoolingDown) return { visible: true, disabled: true, reason: "Invitación enviada hoy" };
+  if (engagement?.restartInvitationCoolingDown) return { visible: true, disabled: true, reason: "Invitación enviada hoy" };
   return { visible: true, disabled: false, reason: "" };
 }
 
