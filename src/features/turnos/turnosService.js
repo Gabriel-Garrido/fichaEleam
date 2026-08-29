@@ -1,15 +1,16 @@
 import { supabase } from "../../services/supabaseConfig";
 import { recordOverallStatus, recordOverallLabel, VITAL_DEFS } from "../vitalSigns/vitalRanges";
-import { CARE_OPEN_STATUSES, isCareTaskOverdue, listCareTasks, getSessionProfile, todayIso, currentTurno } from "../carePlans/carePlansService";
+import { CARE_OPEN_STATUSES, isCareTaskOverdue, listCareTasks, getSessionProfile, prepareShiftTasks, todayIso, currentTurno } from "../carePlans/carePlansService";
 import { listMedicationAdministrations } from "../emar/emarService";
 import { formatBedLocation, withResidentLocation } from "../beds/bedsUtils";
+import { residentWasCreatedByDate } from "../vitalSigns/vitalSignsService";
 
 export const TURNOS = ["mañana", "tarde", "noche"];
 
 export { todayIso, currentTurno };
 
 const RESIDENT_TURNO_SELECT = `
-  id, nombre, apellido, nivel_dependencia, estado, cama_actual_id,
+  id, nombre, apellido, nivel_dependencia, estado, cama_actual_id, creado_en,
   cama_actual:camas!residentes_cama_actual_id_fkey(
     id, codigo, nombre, tipo, estado,
     habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
@@ -73,14 +74,14 @@ function criticalDetails(record) {
 }
 
 
-async function loadActiveResidents() {
+async function loadActiveResidents(fecha) {
   const { data, error } = await supabase
     .from("residentes")
     .select(RESIDENT_TURNO_SELECT)
     .eq("estado", "activo")
     .order("apellido", { ascending: true });
   if (error) throw error;
-  return (data ?? []).map(withResidentLocation);
+  return (data ?? []).filter((resident) => residentWasCreatedByDate(resident, fecha)).map(withResidentLocation);
 }
 
 async function loadVitals(fecha) {
@@ -107,6 +108,7 @@ async function loadVitals(fecha) {
 async function loadObservations(fecha, turno) {
   const { start, end } = dayBounds(fecha);
   const recent = recentBounds(fecha, 3);
+  const turnosHastaAhora = TURNOS.slice(0, TURNOS.indexOf(turno) + 1);
   const [today, incidents, followups] = await Promise.all([
     supabase
       .from("observaciones_diarias")
@@ -126,10 +128,11 @@ async function loadObservations(fecha, turno) {
       .from("observaciones_diarias")
       .select(`id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas, requiere_seguimiento, seguimiento_fecha, seguimiento_turno, seguimiento_estado, residentes(${RESIDENT_TURNO_SELECT})`)
       .eq("requiere_seguimiento", true)
-      .eq("seguimiento_fecha", fecha)
-      .eq("seguimiento_turno", turno)
+      .or(`seguimiento_fecha.lt.${fecha},and(seguimiento_fecha.eq.${fecha},seguimiento_turno.in.(${turnosHastaAhora.join(",")}))`)
       .eq("seguimiento_estado", "pendiente")
-      .order("fecha_hora", { ascending: true }),
+      .order("seguimiento_fecha", { ascending: true })
+      .order("fecha_hora", { ascending: true })
+      .limit(200),
   ]);
   if (today.error) throw today.error;
   if (incidents.error) throw incidents.error;
@@ -158,7 +161,7 @@ function isDueNow(row, status = "pendiente") {
 
 async function loadCareTurno(fecha, turno) {
   try {
-    const rows = await listCareTasks({ fecha, turno, estado: null, generate: true, limit: 300 });
+    const rows = await listCareTasks({ fecha, turno, estado: null, generate: false, limit: 300, carryLimit: 300 });
     const resumen = summarizeRows(rows, ["pendiente", "cumplida", "omitida", "reprogramada", "cancelada"]);
     resumen.pendientes_operativos = rows.filter((row) => CARE_OPEN_STATUSES.includes(row.estado)).length;
     resumen.vencidas = rows.filter((row) => isCareTaskOverdue(row)).length;
@@ -202,7 +205,7 @@ async function loadCareTurno(fecha, turno) {
 
 async function loadEmarTurno(fecha, turno) {
   try {
-    const rows = await listMedicationAdministrations({ fecha, turno, estado: null, generate: true, limit: 300 });
+    const rows = await listMedicationAdministrations({ fecha, turno, estado: null, generate: false, limit: 300, carryLimit: 200 });
     const resumen = summarizeRows(rows, ["pendiente", "administrado", "omitido", "pendiente_validacion", "validado", "cancelado"]);
     resumen.controlados = rows.filter((row) => row.indicacion?.es_controlado).length;
     resumen.vencidas = rows.filter((row) => isDueNow(row)).length;
@@ -255,10 +258,11 @@ async function loadEmarTurno(fecha, turno) {
 }
 
 export async function buildTurnoSummary({ fecha = todayIso(), turno = currentTurno() } = {}) {
-  const [residentes, signos, obs, careTurno, emarTurno] = await Promise.all([
-    loadActiveResidents(),
-    loadVitals(fecha),
-    loadObservations(fecha, turno),
+  const [[residentes, signos, obs]] = await Promise.all([
+    Promise.all([loadActiveResidents(fecha), loadVitals(fecha), loadObservations(fecha, turno)]),
+    prepareShiftTasks({ fecha, turno }),
+  ]);
+  const [careTurno, emarTurno] = await Promise.all([
     loadCareTurno(fecha, turno),
     loadEmarTurno(fecha, turno),
   ]);

@@ -152,8 +152,16 @@ export const SEGUIMIENTO_TIPO_LABEL = {
 
 const SEGUIMIENTO_HORA = { "mañana": "09:00", tarde: "15:00", noche: "22:00" };
 
-export function normalizeSeguimiento(obs) {
+export function compareOperationalSlots(leftDate, leftTurn, rightDate, rightTurn) {
+  const turnOrder = { "mañana": 0, tarde: 1, noche: 2 };
+  const dateCompare = String(leftDate ?? "").localeCompare(String(rightDate ?? ""));
+  if (dateCompare !== 0) return dateCompare;
+  return (turnOrder[leftTurn] ?? 9) - (turnOrder[rightTurn] ?? 9);
+}
+
+export function normalizeSeguimiento(obs, selectedDate = obs?.seguimiento_fecha, selectedTurn = obs?.seguimiento_turno) {
   const hora = SEGUIMIENTO_HORA[obs.seguimiento_turno] ?? "09:00";
+  const carry = compareOperationalSlots(obs.seguimiento_fecha, obs.seguimiento_turno, selectedDate, selectedTurn) < 0;
   return {
     key: `seg:${obs.id}`,
     source: "seguimiento",
@@ -168,8 +176,8 @@ export function normalizeSeguimiento(obs) {
     meta: SEGUIMIENTO_TIPO_LABEL[obs.tipo] ?? obs.tipo ?? "",
     detail: obs.descripcion,
     priority: "alta",
-    overdue: false,
-    carry: false,
+    overdue: carry,
+    carry,
     open: true,
     dueWindow: null,
     requiresFollowUp: false,

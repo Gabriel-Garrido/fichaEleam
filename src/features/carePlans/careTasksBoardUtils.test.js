@@ -8,6 +8,7 @@ import {
   normalizeTaskType,
   normalizeTaskView,
   normalizeSeguimiento,
+  compareOperationalSlots,
   sortWorkItemsByUrgency,
 } from "./careTasksBoardUtils";
 
@@ -71,6 +72,17 @@ describe("careTasksBoardUtils board helpers", () => {
     ]);
 
     expect(sorted.map((item) => item.key)).toEqual(["seg:obs-1", "care"]);
+  });
+
+  it("keeps overdue follow-ups visible in later operational slots", () => {
+    expect(compareOperationalSlots("2026-05-14", "noche", "2026-05-15", "mañana")).toBeLessThan(0);
+    expect(compareOperationalSlots("2026-05-15", "tarde", "2026-05-15", "mañana")).toBeGreaterThan(0);
+    expect(normalizeSeguimiento({
+      id: "old",
+      seguimiento_fecha: "2026-05-14",
+      seguimiento_turno: "noche",
+      residentes: {},
+    }, "2026-05-15", "mañana")).toMatchObject({ carry: true, overdue: true });
   });
 
   it("chooses the highest-signal turn focus", () => {

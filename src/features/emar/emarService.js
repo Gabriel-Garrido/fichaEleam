@@ -167,6 +167,7 @@ function isMissingRpc(error) {
 }
 
 export async function generateMedicationAdministrations({ fecha = todayIso(), turno = null } = {}) {
+  if (fecha !== todayIso()) return 0;
   const { data, error } = await supabase.rpc("generar_administraciones_medicamentos", {
     p_fecha: fecha,
     p_turno: turno,
@@ -182,26 +183,28 @@ export async function listMedicationAdministrations({
   residenteId = null,
   generate = true,
   limit = 200,
+  carryLimit = Math.min(limit, 200),
   includeCarryOver = true,
 } = {}) {
   if (generate) await generateMedicationAdministrations({ fecha, turno });
+  const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  const safeCarryLimit = Math.min(Math.max(Number(carryLimit) || 100, 1), 500);
 
   let query = supabase
     .from("medicamentos_administraciones")
     .select(ADMIN_SELECT)
     .eq("fecha", fecha)
     .order("hora", { ascending: true })
-    .limit(limit);
+    .limit(safeLimit);
 
   if (turno) query = query.eq("turno", turno);
   if (estado) query = query.eq("estado", estado);
   if (residenteId) query = query.eq("residente_id", residenteId);
 
-  const { data, error } = await query;
-  if (error) throw error;
-  const currentRows = (data ?? []).map((row) => ({ ...normalizeAdministrationRow(row), _arrastre: false }));
-
   if (!includeCarryOver || !turno || (estado && !["pendiente", "pendiente_validacion"].includes(estado))) {
+    const { data, error } = await query;
+    if (error) throw error;
+    const currentRows = (data ?? []).map((row) => ({ ...normalizeAdministrationRow(row), _arrastre: false }));
     return currentRows;
   }
 
@@ -214,7 +217,7 @@ export async function listMedicationAdministrations({
     .lt("fecha", fecha)
     .order("fecha", { ascending: true })
     .order("hora", { ascending: true })
-    .limit(100);
+    .limit(safeCarryLimit);
   if (residenteId) older = older.eq("residente_id", residenteId);
   carryQueries.push(older);
 
@@ -227,12 +230,14 @@ export async function listMedicationAdministrations({
       .eq("fecha", fecha)
       .in("turno", previous)
       .order("hora", { ascending: true })
-      .limit(100);
+      .limit(safeCarryLimit);
     if (residenteId) sameDay = sameDay.eq("residente_id", residenteId);
     carryQueries.push(sameDay);
   }
 
-  const carryResults = await Promise.all(carryQueries);
+  const [currentResult, ...carryResults] = await Promise.all([query, ...carryQueries]);
+  if (currentResult.error) throw currentResult.error;
+  const currentRows = (currentResult.data ?? []).map((row) => ({ ...normalizeAdministrationRow(row), _arrastre: false }));
   const carryRows = [];
   for (const result of carryResults) {
     if (result.error) throw result.error;
@@ -622,8 +627,8 @@ export async function listPendingControlledReconciliations() {
   return data ?? [];
 }
 
-export async function getEmarSummary({ fecha = todayIso(), turno = null } = {}) {
-  const rows = await listMedicationAdministrations({ fecha, turno, generate: true, limit: 500 });
+export async function getEmarSummary({ fecha = todayIso(), turno = null, generate = true } = {}) {
+  const rows = await listMedicationAdministrations({ fecha, turno, generate, limit: 500 });
   return rows.reduce((acc, row) => {
     acc.total += 1;
     acc[row.estado] = (acc[row.estado] ?? 0) + 1;

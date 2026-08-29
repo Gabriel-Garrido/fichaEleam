@@ -4,7 +4,7 @@ import {
   getObservaciones,
   buildResumen,
 } from "../accreditation/accreditationService";
-import { currentTurno, getCareTaskSummary, todayIso } from "../carePlans/carePlansService";
+import { currentTurno, getCareTaskSummary, prepareShiftTasks, todayIso } from "../carePlans/carePlansService";
 import { getEmarSummary } from "../emar/emarService";
 import { calcAge } from "../residents/residentUtils";
 import { getBedOccupancySummary } from "../beds/bedsService";
@@ -215,6 +215,7 @@ export async function getPendingFollowUps(limit = 10) {
     .from("observaciones_diarias")
     .select("id, residente_id, fecha_hora, tipo, descripcion, residentes(nombre, apellido)")
     .eq("requiere_seguimiento", true)
+    .eq("seguimiento_estado", "pendiente")
     .order("fecha_hora", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -238,9 +239,10 @@ async function getRecentIncidents() {
 async function getOperationalTurnSummary() {
   const fecha = todayIso();
   const turno = currentTurno();
+  await prepareShiftTasks({ fecha, turno });
   const [care, emar] = await Promise.all([
-    getCareTaskSummary({ fecha, turno }),
-    getEmarSummary({ fecha, turno }),
+    getCareTaskSummary({ fecha, turno, generate: false }),
+    getEmarSummary({ fecha, turno, generate: false }),
   ]);
   return { fecha, turno, care, emar };
 }

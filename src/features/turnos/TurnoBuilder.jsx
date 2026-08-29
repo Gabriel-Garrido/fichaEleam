@@ -140,6 +140,7 @@ export default function TurnoBuilder() {
           <input
             type="date"
             value={fecha}
+            max={todayIso()}
             onChange={(e) => setFecha(e.target.value)}
             className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
           />

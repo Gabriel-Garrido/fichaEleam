@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFilterParams } from "../../hooks/useFilterParams";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import PageLayout from "../../layout/PageLayout";
@@ -16,6 +16,7 @@ import {
   listCareTasks,
   nextFollowUpSlot,
   preferredAssignedTurno,
+  prepareShiftTasks,
   todayIso,
 } from "./carePlansService";
 import {
@@ -31,6 +32,7 @@ import {
   VITALS_TURN_HOUR,
   buildTaskMetrics,
   getTaskProgress,
+  getTurnFocus,
   matchesFilter,
   normalizeTaskView,
   normalizeTaskType,
@@ -96,8 +98,10 @@ export default function CareTasksPage() {
     schema: { fecha: "date", turno: "string", view: "string", filter: "string", type: "string", q: "string" },
     defaults: { fecha: todayIso(), turno: currentTurno(), view: "pendientes", filter: "", type: "", q: "" },
   });
-  const fecha = pageFilters.fecha || todayIso();
-  const turno = pageFilters.turno || currentTurno();
+  const currentDate = todayIso();
+  const requestedDate = pageFilters.fecha || currentDate;
+  const fecha = requestedDate > currentDate ? currentDate : requestedDate;
+  const turno = CARE_TURNOS.includes(pageFilters.turno) ? pageFilters.turno : currentTurno();
   const view = normalizeTaskView(pageFilters.view || pageFilters.filter);
   const searchQuery = pageFilters.q ?? "";
   const taskType = normalizeTaskType(pageFilters.type);
@@ -116,6 +120,7 @@ export default function CareTasksPage() {
   const [seguimientoModal, setSeguimientoModal] = useState(null);
   const [assignedTurnos, setAssignedTurnos] = useState([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(true);
+  const loadRequestRef = useRef(0);
 
   const canComplete = can("completar_tareas_cuidado");
   const canAdminister = can("administrar_medicamentos");
@@ -128,6 +133,8 @@ export default function CareTasksPage() {
     let active = true;
     async function resolveAssignedShift() {
       setAssignmentsLoading(true);
+      setLoading(true);
+      setAllItems([]);
       if (!currentUserId) { setAssignmentsLoading(false); return; }
       try {
         const assignments = await listMyShiftAssignments({ fecha, profileId: currentUserId });
@@ -151,36 +158,46 @@ export default function CareTasksPage() {
   }, [currentUserId, fecha]);
 
   const load = async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError("");
     try {
-      const [careRows, medRows, pendingVitals, seguimientos] = await Promise.all([
-        listCareTasks({ fecha, turno, estado: null, limit: 500 }),
-        listMedicationAdministrations({ fecha, turno, estado: null, limit: 500 }),
-        getPendingVitalSignsResidents(fecha, turno).catch(() => []),
-        getPendingSeguimientos(fecha, turno).catch(() => []),
+      const preparation = prepareShiftTasks({ fecha, turno });
+      const supportingData = Promise.all([
+        getPendingVitalSignsResidents(fecha, turno),
+        getPendingSeguimientos(fecha, turno),
+      ]);
+      await preparation;
+      const [[careRows, medRows], [pendingVitals, seguimientos]] = await Promise.all([
+        Promise.all([
+          listCareTasks({ fecha, turno, estado: null, generate: false, limit: 500, carryLimit: 500 }),
+          listMedicationAdministrations({ fecha, turno, estado: null, generate: false, limit: 500, carryLimit: 200 }),
+        ]),
+        supportingData,
       ]);
       const normalized = [
-        ...seguimientos.map(normalizeSeguimiento),
+        ...seguimientos.map((item) => normalizeSeguimiento(item, fecha, turno)),
         ...pendingVitals.map((r) => normalizeVitalTask(r, fecha, turno)),
         ...careRows.map(normalizeCareTask),
         ...medRows.map(normalizeMedication),
       ];
-      const sorted = sortWorkItemsByUrgency(normalized);
-      setAllItems(sorted);
+      if (requestId !== loadRequestRef.current) return;
+      setAllItems(normalized);
       setLastLoaded(new Date());
     } catch (err) {
       console.error(err);
+      if (requestId !== loadRequestRef.current) return;
       setError("No pudimos cargar las tareas del turno.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (assignmentsLoading) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fecha, turno]);
+  }, [fecha, turno, assignmentsLoading]);
 
   const items = useMemo(() => {
     return sortWorkItemsByUrgency(
@@ -192,11 +209,12 @@ export default function CareTasksPage() {
   }, [allItems, view, taskType, debouncedQuery]);
 
   const metrics = useMemo(() => buildTaskMetrics(allItems), [allItems]);
+  const turnFocus = useMemo(() => getTurnFocus(metrics), [metrics]);
   const handleCareClose = async ({ action, notas, motivo, seguimiento, seguimientoFecha, seguimientoTurno }) => {
     if (!careModal) return;
     setSaving(true);
     try {
-      await completeCareTask({
+      const updated = await completeCareTask({
         id: careModal.row.id,
         estado: action,
         notas,
@@ -205,9 +223,13 @@ export default function CareTasksPage() {
         seguimientoFecha,
         seguimientoTurno,
       });
+      if (!updated?.id) throw new Error("El servidor no devolvió la tarea actualizada.");
+      setAllItems((current) => current.map((item) => item.key === `care:${updated.id}`
+        ? normalizeCareTask({ ...item.row, ...updated, residentes: item.row.residentes, actividad: item.row.actividad, horario: item.row.horario, _arrastre: item.row._arrastre })
+        : item));
       toast(action === "cumplida" ? "Tarea marcada como cumplida." : "Omisión registrada.", "success");
       setCareModal(null);
-      await load();
+      setLastLoaded(new Date());
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo cerrar la tarea.", "error");
@@ -219,11 +241,12 @@ export default function CareTasksPage() {
   const handleMedicationSubmit = async (payload) => {
     setSaving(true);
     try {
+      let updated;
       if (payload.action === "validar") {
-        await validateControlledAdministration({ id: payload.row.id, notas: payload.notas });
+        updated = await validateControlledAdministration({ id: payload.row.id, notas: payload.notas });
         toast("Registro de medicamento validado.", "success");
       } else {
-        await administerMedication({
+        updated = await administerMedication({
           id: payload.row.id,
           estado: payload.action,
           loteId: payload.loteId,
@@ -236,8 +259,12 @@ export default function CareTasksPage() {
         });
         toast(payload.action === "administrado" ? "Administración registrada." : "Omisión registrada.", "success");
       }
+      if (!updated?.id) throw new Error("El servidor no devolvió el registro actualizado.");
+      setAllItems((current) => current.map((item) => item.key === `med:${updated.id}`
+        ? normalizeMedication({ ...item.row, ...updated, residentes: item.row.residentes, indicacion: item.row.indicacion, horario: item.row.horario, lote: item.row.lote, _arrastre: item.row._arrastre })
+        : item));
       setMedModal(null);
-      await load();
+      setLastLoaded(new Date());
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo guardar el registro de medicamento.", "error");
@@ -256,8 +283,9 @@ export default function CareTasksPage() {
         await resolverSeguimiento(id, { notas });
         toast("Seguimiento finalizado correctamente.", "success");
       }
+      setAllItems((current) => current.filter((item) => item.key !== `seg:${id}`));
       setSeguimientoModal(null);
-      await load();
+      setLastLoaded(new Date());
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo resolver el seguimiento.", "error");
@@ -272,9 +300,12 @@ export default function CareTasksPage() {
       const toNum = (v) => (v !== "" ? parseFloat(v) : null);
       const toInt = (v) => (v !== "" ? parseInt(v, 10) : null);
       const hora = VITALS_TURN_HOUR[row.turno] ?? "08:00";
+      const measuredAt = row.fecha === todayIso()
+        ? new Date().toISOString()
+        : new Date(`${row.fecha}T${hora}`).toISOString();
       await createVitalSigns({
         residente_id: row.residente_id,
-        fecha_hora: new Date(`${row.fecha}T${hora}`).toISOString(),
+        fecha_hora: measuredAt,
         turno: row.turno,
         presion_sistolica: toInt(form.presion_sistolica),
         presion_diastolica: toInt(form.presion_diastolica),
@@ -292,8 +323,9 @@ export default function CareTasksPage() {
         seguimiento_turno: seguimiento ? seguimientoTurno : null,
       });
       toast(seguimiento ? "Signos vitales registrados con seguimiento pendiente." : "Signos vitales registrados.", "success");
+      setAllItems((current) => current.filter((item) => item.key !== `vitals:${row.residente_id}`));
       setVitalsModal(null);
-      await load();
+      setLastLoaded(new Date());
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo registrar los signos vitales.", "error");
@@ -339,6 +371,7 @@ export default function CareTasksPage() {
               <input
                 type="date"
                 value={fecha}
+                max={currentDate}
                 onChange={(e) => setFecha(e.target.value)}
                 className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-base outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
               />
@@ -428,6 +461,13 @@ export default function CareTasksPage() {
         <TaskMetric label="Progreso" value={loading ? "…" : `${getTaskProgress(metrics).completed}/${getTaskProgress(metrics).total}`} tone={loading ? "slate" : "teal"} loading={loading} />
       </section>
 
+      {!loading && !error && (
+        <section aria-live="polite" className={`rounded-2xl border px-4 py-3 ${turnFocus.tone === "rose" ? "border-rose-200 bg-rose-50 text-rose-900" : turnFocus.tone === "sky" ? "border-sky-200 bg-sky-50 text-sky-900" : turnFocus.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-teal-200 bg-teal-50 text-teal-900"}`}>
+          <p className="text-sm font-bold">{turnFocus.title}</p>
+          <p className="mt-0.5 text-xs leading-5 opacity-80">{turnFocus.detail}</p>
+        </section>
+      )}
+
       {error && (
         <div className="flex flex-col gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between">
           <span>{error}</span>
@@ -466,7 +506,7 @@ export default function CareTasksPage() {
                   ? "No quedan pendientes ni vencidas para este turno."
                   : metrics.total > 0
                     ? "El turno tiene tareas cargadas, pero ninguna coincide con el filtro seleccionado."
-                    : "Configura actividades en Plan de cuidado o indicaciones de medicamentos desde la ficha del residente."
+                    : "No hay trabajo programado para este turno. Las tareas comienzan cuando el residente y su pauta existen en FichaEleam."
               }
               icon={
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="h-6 w-6">
@@ -563,14 +603,12 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div className="w-12 shrink-0 text-center"><p className="text-base font-bold tabular-nums text-slate-900">{item.hora?.slice(0, 5) || "—"}</p><p className="mt-0.5 text-[10px] font-bold uppercase text-slate-400">Hora</p></div>
-          <div className="min-w-0 border-l border-slate-100 pl-3">
+          <div className="min-w-0 flex-1 border-l border-slate-100 pl-3">
             <p className="truncate text-sm font-bold text-slate-950">{residentName(item.resident)}</p>
             <p className="mt-0.5 truncate text-xs text-slate-500">{item.resident?.ubicacion_label || "Ubicación no registrada"}</p>
             <h3 className="mt-2 min-w-0 text-sm font-semibold text-slate-800">{item.title}</h3>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${typeBadgeClass}`}>
-              {item.typeLabel}
-            </span>
+              <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${typeBadgeClass}`}>{item.typeLabel}</span>
             {(!item.open || item.estado === "pendiente_validacion" || item.estado === "reprogramada") && <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[item.estado] ?? STATUS_TONE.pendiente}`}>{item.statusLabel}</span>}
             {item.overdue && (
               <span
@@ -588,28 +626,16 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
                 Requiere doble firma
               </span>
             )}
+            </div>
+            {item.meta && <p className="mt-2 text-xs font-medium text-slate-600">{item.meta}</p>}
+            {item.detail && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.detail}</p>}
+            {isCare && item.dueWindow && item.open && <p className="mt-1 text-xs text-slate-500">Ventana hasta {item.dueWindow}</p>}
+            {isCare && item.requiresFollowUp && <p className="mt-1 text-xs text-amber-700">Esta rutina requiere un control adicional al cierre.</p>}
+            {isCare && item.estado === "reprogramada" && item.row.reprogramada_para && <p className="mt-1 text-xs text-sky-700">Reprogramada para {new Date(item.row.reprogramada_para).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}</p>}
+            {isMed && item.dueWindow && item.estado === "pendiente" && <p className="mt-1 text-xs text-slate-500">Ventana hasta {item.dueWindow}</p>}
+            {isMed && item.estado === "pendiente_validacion" && <p className="mt-1 text-xs text-sky-700">Requiere validación de un segundo usuario autorizado.</p>}
+            {item.row.notas && <p className="mt-1 text-xs text-slate-400">Notas: {item.row.notas}</p>}
           </div>
-          {item.meta && <p className="mt-2 text-xs font-medium text-slate-600">{item.meta}</p>}
-          {item.detail && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.detail}</p>}
-          {isCare && item.dueWindow && item.open && (
-            <p className="mt-1 text-xs text-slate-500">Ventana hasta {item.dueWindow}</p>
-          )}
-          {isCare && item.requiresFollowUp && (
-            <p className="mt-1 text-xs text-amber-700">Esta rutina requiere un control adicional al cierre.</p>
-          )}
-          {isCare && item.estado === "reprogramada" && item.row.reprogramada_para && (
-            <p className="mt-1 text-xs text-sky-700">
-              Reprogramada para {new Date(item.row.reprogramada_para).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}
-            </p>
-          )}
-          {isMed && item.dueWindow && item.estado === "pendiente" && (
-            <p className="mt-1 text-xs text-slate-500">Ventana hasta {item.dueWindow}</p>
-          )}
-          {isMed && item.estado === "pendiente_validacion" && (
-            <p className="mt-1 text-xs text-sky-700">Requiere validación de un segundo usuario autorizado.</p>
-          )}
-          {item.row.notas && <p className="mt-1 text-xs text-slate-400">Notas: {item.row.notas}</p>}
-        </div>
         </div>
         <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:shrink-0 lg:flex-wrap lg:justify-end">
           {isVitals && item.open && canCreateVitals && (
@@ -640,6 +666,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
               <button type="button" onClick={() => onCareAction("omitida")} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:min-w-[7rem]">No realizada</button>
             </>
           )}
+          {isCare && item.open && !canComplete && <span className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600">Sin permiso para cerrar</span>}
           {isMed && item.estado === "pendiente" && canAdminister && (
             <>
               <button
@@ -653,6 +680,7 @@ export function WorkItemRow({ item, canComplete, canAdminister, canValidate, can
               <button type="button" onClick={() => onMedicationAction("omitido")} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:min-w-[7rem]">No administrado</button>
             </>
           )}
+          {isMed && item.estado === "pendiente" && !canAdminister && <span className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">Sin permiso para administrar</span>}
           {isMed && item.estado === "pendiente_validacion" && canValidateThis && (
             <button
               type="button"
@@ -728,6 +756,7 @@ function FollowUpFields({
             <input
               type="date"
               value={fecha}
+              min={todayIso()}
               onChange={(e) => onFechaChange(e.target.value)}
               required
               className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
@@ -912,6 +941,7 @@ export function RescheduleCareTaskModal({ modal, saving, onClose, onSubmit }) {
             <input
               type="date"
               value={fecha}
+              min={todayIso()}
               onChange={(e) => {
                 const value = e.target.value;
                 setFecha(value);
@@ -1595,6 +1625,7 @@ export function SeguimientoModal({ modal, saving, onClose, onSubmit }) {
                 <input
                   type="date"
                   value={nuevaFecha}
+                  min={todayIso()}
                   onChange={(e) => setNuevaFecha(e.target.value)}
                   required
                   className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"

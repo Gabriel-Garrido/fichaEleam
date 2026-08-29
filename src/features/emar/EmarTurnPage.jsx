@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFilterParams } from "../../hooks/useFilterParams";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import PageLayout from "../../layout/PageLayout";
@@ -74,8 +74,10 @@ export default function EmarTurnPage() {
     schema: { fecha: "date", turno: "string", estado: "string", q: "string" },
     defaults: { fecha: todayIso(), turno: currentTurno(), estado: "ahora", q: "" },
   });
-  const fecha = emarFilters.fecha || todayIso();
-  const turno = emarFilters.turno || currentTurno();
+  const currentDate = todayIso();
+  const requestedDate = emarFilters.fecha || currentDate;
+  const fecha = requestedDate > currentDate ? currentDate : requestedDate;
+  const turno = EMAR_TURNOS.includes(emarFilters.turno) ? emarFilters.turno : currentTurno();
   const estado = emarFilters.estado || "ahora";
   const searchQuery = emarFilters.q ?? "";
   const debouncedQuery = useDebouncedValue(searchQuery, 200);
@@ -87,12 +89,14 @@ export default function EmarTurnPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null);
+  const loadRequestRef = useRef(0);
 
   const canAdminister = can("administrar_medicamentos");
   const canValidate = can("validar_medicamentos_controlados");
   const currentUserId = profile?.id ?? null;
 
   const load = async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError("");
     try {
@@ -101,12 +105,13 @@ export default function EmarTurnPage() {
         turno,
         estado: null,
       });
+      if (requestId !== loadRequestRef.current) return;
       setRows(data);
     } catch (err) {
       console.error(err);
-    setError("No pudimos cargar los medicamentos del turno.");
+      if (requestId === loadRequestRef.current) setError("No pudimos cargar los medicamentos del turno.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   };
 
@@ -146,11 +151,12 @@ export default function EmarTurnPage() {
   const handleSubmit = async (payload) => {
     setSaving(true);
     try {
+      let updated;
       if (payload.action === "validar") {
-        await validateControlledAdministration({ id: payload.row.id, notas: payload.notas });
+        updated = await validateControlledAdministration({ id: payload.row.id, notas: payload.notas });
         toast("Registro de medicamento validado.", "success");
       } else {
-        await administerMedication({
+        updated = await administerMedication({
           id: payload.row.id,
           estado: payload.action,
           loteId: payload.loteId,
@@ -161,8 +167,11 @@ export default function EmarTurnPage() {
         });
         toast(payload.action === "administrado" ? "Administración registrada." : "Omisión registrada.", "success");
       }
+      if (!updated?.id) throw new Error("El servidor no devolvió el registro actualizado.");
+      setRows((current) => current.map((row) => row.id === updated.id
+        ? { ...row, ...updated, residentes: row.residentes, indicacion: row.indicacion, horario: row.horario, lote: row.lote }
+        : row));
       setModal(null);
-      await load();
     } catch (err) {
       console.error(err);
       toast(err.message || "No se pudo guardar el registro de medicamento.", "error");
@@ -253,6 +262,7 @@ export default function EmarTurnPage() {
             <input
               type="date"
               value={fecha}
+              max={currentDate}
               onChange={(e) => setFecha(e.target.value)}
               className="mt-1 w-full min-h-11 sm:min-h-10 rounded-xl border border-slate-200 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             />

@@ -1,5 +1,6 @@
 import { supabase } from "../../services/supabaseConfig";
 import { localDateTimeToIso } from "../../utils/dateUtils";
+import { withResidentLocation } from "../beds/bedsUtils";
 
 const OBSERVATION_SELECT = `
   id, residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas,
@@ -16,7 +17,13 @@ export const getObservations = async (
   const safeOffset = Math.max(Number(offset) || 0, 0);
   let query = supabase
     .from("observaciones_diarias")
-    .select(`${OBSERVATION_SELECT}, residentes(nombre, apellido)`)
+    .select(`${OBSERVATION_SELECT}, residentes(
+      id, nombre, apellido, cama_actual_id,
+      cama_actual:camas!residentes_cama_actual_id_fkey(
+        id, codigo, nombre, tipo, estado,
+        habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+      )
+    )`)
     .order("fecha_hora", { ascending: false })
     .range(safeOffset, safeOffset + safeLimit - 1);
 
@@ -98,20 +105,29 @@ export const deleteObservation = async (id) => {
 };
 
 export const getPendingSeguimientos = async (fecha, turno, { residenteId = null } = {}) => {
+  const turnosHastaAhora = ["mañana", "tarde", "noche"].slice(0, ["mañana", "tarde", "noche"].indexOf(turno) + 1);
+  if (!fecha || turnosHastaAhora.length === 0) return [];
   let query = supabase
     .from("observaciones_diarias")
-    .select(`${OBSERVATION_SELECT}, residentes(nombre, apellido)`)
+    .select(`${OBSERVATION_SELECT}, residentes(
+      id, nombre, apellido, cama_actual_id,
+      cama_actual:camas!residentes_cama_actual_id_fkey(
+        id, codigo, nombre, tipo, estado,
+        habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
+      )
+    )`)
     .eq("requiere_seguimiento", true)
     .eq("seguimiento_estado", "pendiente")
-    .eq("seguimiento_fecha", fecha)
-    .eq("seguimiento_turno", turno)
-    .order("creado_en", { ascending: true });
+    .or(`seguimiento_fecha.lt.${fecha},and(seguimiento_fecha.eq.${fecha},seguimiento_turno.in.(${turnosHastaAhora.join(",")}))`)
+    .order("seguimiento_fecha", { ascending: true })
+    .order("creado_en", { ascending: true })
+    .limit(200);
 
   if (residenteId) query = query.eq("residente_id", residenteId);
 
   const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => ({ ...row, residentes: withResidentLocation(row.residentes) }));
 };
 
 export const resolverSeguimiento = async (id, { notas = null } = {}) => {
@@ -119,17 +135,14 @@ export const resolverSeguimiento = async (id, { notas = null } = {}) => {
   if (!cleanNotes) {
     throw new Error("Debes registrar la evolución antes de finalizar el seguimiento.");
   }
-  const { data, error } = await supabase
-    .from("observaciones_diarias")
-    .update({
-      seguimiento_estado: "resuelto",
-      acciones_tomadas: cleanNotes,
-    })
-    .eq("id", id)
-    .select(OBSERVATION_SELECT)
-    .single();
+  const { data, error } = await supabase.rpc("gestionar_seguimiento_observacion", {
+    p_observacion_id: id,
+    p_notas: cleanNotes,
+    p_nueva_fecha: null,
+    p_nuevo_turno: null,
+  });
   if (error) throw error;
-  return data;
+  return data?.resuelta;
 };
 
 export const continuarSeguimiento = async (id, { notas = null, nuevaFecha, nuevoTurno } = {}) => {
@@ -140,38 +153,12 @@ export const continuarSeguimiento = async (id, { notas = null, nuevaFecha, nuevo
   if (!nuevaFecha || !nuevoTurno) {
     throw new Error("Debes indicar fecha y turno para continuar el seguimiento.");
   }
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const { data: original, error: resolveError } = await supabase
-    .from("observaciones_diarias")
-    .update({
-      seguimiento_estado: "resuelto",
-      acciones_tomadas: cleanNotes,
-    })
-    .eq("id", id)
-    .select(OBSERVATION_SELECT)
-    .single();
-  if (resolveError) throw resolveError;
-
-  const nuevaDescripcion = `Seguimiento de: ${original.descripcion}\n\nEvolución: ${cleanNotes}`;
-
-  const { data: nueva, error: createError } = await supabase
-    .from("observaciones_diarias")
-    .insert({
-      residente_id: original.residente_id,
-      fecha_hora: new Date().toISOString(),
-      turno: nuevoTurno,
-      tipo: original.tipo,
-      descripcion: nuevaDescripcion,
-      requiere_seguimiento: true,
-      seguimiento_fecha: nuevaFecha,
-      seguimiento_turno: nuevoTurno,
-      seguimiento_estado: "pendiente",
-      registrado_por: user?.id,
-    })
-    .select(OBSERVATION_SELECT)
-    .single();
-  if (createError) throw createError;
-
-  return { resuelta: original, nueva };
+  const { data, error } = await supabase.rpc("gestionar_seguimiento_observacion", {
+    p_observacion_id: id,
+    p_notas: cleanNotes,
+    p_nueva_fecha: nuevaFecha,
+    p_nuevo_turno: nuevoTurno,
+  });
+  if (error) throw error;
+  return data;
 };

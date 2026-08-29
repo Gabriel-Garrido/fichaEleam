@@ -382,6 +382,141 @@ create index if not exists idx_observaciones_seguimiento_turno
 create index if not exists idx_observaciones_residente_seguimiento_turno
   on public.observaciones_diarias(residente_id, seguimiento_estado, seguimiento_fecha, seguimiento_turno)
   where requiere_seguimiento = true;
+create index if not exists idx_observaciones_pending_slot
+  on public.observaciones_diarias(seguimiento_fecha, seguimiento_turno, residente_id)
+  where requiere_seguimiento = true and seguimiento_estado = 'pendiente';
+
+create or replace function public.validate_pending_followup_slot()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.requiere_seguimiento = true
+     and new.seguimiento_estado = 'pendiente'
+     and new.seguimiento_fecha < (now() at time zone 'America/Santiago')::date then
+    raise exception 'El seguimiento pendiente no puede programarse en una fecha pasada' using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_observaciones_validate_pending_slot on public.observaciones_diarias;
+create trigger trg_observaciones_validate_pending_slot
+  before insert or update of requiere_seguimiento, seguimiento_estado, seguimiento_fecha, seguimiento_turno
+  on public.observaciones_diarias
+  for each row execute function public.validate_pending_followup_slot();
+
+-- Resolucion/continuacion atomica de seguimientos operativos. El bloqueo de
+-- fila evita duplicados ante reintentos o acciones concurrentes.
+create or replace function public.gestionar_seguimiento_observacion(
+  p_observacion_id uuid,
+  p_notas text,
+  p_nueva_fecha date default null,
+  p_nuevo_turno text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_original public.observaciones_diarias%rowtype;
+  v_resuelta public.observaciones_diarias%rowtype;
+  v_nueva public.observaciones_diarias%rowtype;
+  v_eleam_id uuid;
+  v_notas text := nullif(trim(coalesce(p_notas, '')), '');
+  v_continuar boolean := p_nueva_fecha is not null and p_nuevo_turno is not null;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+  if v_notas is null then
+    raise exception 'Debes registrar la evolucion del seguimiento' using errcode = 'P0001';
+  end if;
+  if char_length(v_notas) > 4000 then
+    raise exception 'La evolucion no puede superar 4000 caracteres' using errcode = 'P0001';
+  end if;
+  if (p_nueva_fecha is null) <> (p_nuevo_turno is null) then
+    raise exception 'Debes indicar fecha y turno para continuar el seguimiento' using errcode = 'P0001';
+  end if;
+  if v_continuar and p_nuevo_turno not in ('mañana','tarde','noche') then
+    raise exception 'Turno invalido' using errcode = 'P0001';
+  end if;
+  if v_continuar and p_nueva_fecha < (now() at time zone 'America/Santiago')::date then
+    raise exception 'El seguimiento pendiente no puede programarse en una fecha pasada' using errcode = 'P0001';
+  end if;
+
+  select *
+  into v_original
+  from public.observaciones_diarias
+  where id = p_observacion_id
+  for update;
+
+  if not found then
+    raise exception 'Seguimiento no encontrado' using errcode = 'P0001';
+  end if;
+
+  select r.eleam_id into v_eleam_id
+  from public.residentes r
+  where r.id = v_original.residente_id;
+
+  if not public.is_superadmin() and (
+    v_eleam_id is null
+    or v_eleam_id is distinct from public.my_eleam_id()
+    or not public.eleam_has_access(v_eleam_id)
+    or not (
+      public.funcionario_can('crear_observaciones')
+      or public.funcionario_can('editar_observaciones')
+    )
+  ) then
+    raise exception 'No autorizado para gestionar este seguimiento' using errcode = '42501';
+  end if;
+
+  if not v_original.requiere_seguimiento or v_original.seguimiento_estado <> 'pendiente' then
+    raise exception 'Este seguimiento ya fue gestionado. Actualiza la lista para ver su estado.' using errcode = 'P0001';
+  end if;
+
+  update public.observaciones_diarias
+  set seguimiento_estado = 'resuelto',
+      acciones_tomadas = v_notas,
+      actualizado_en = now()
+  where id = v_original.id
+    and seguimiento_estado = 'pendiente'
+  returning * into v_resuelta;
+
+  if v_continuar then
+    insert into public.observaciones_diarias (
+      residente_id, fecha_hora, turno, tipo, descripcion, acciones_tomadas,
+      requiere_seguimiento, seguimiento_fecha, seguimiento_turno,
+      seguimiento_estado, visible_familiar, resumen_familiar, registrado_por
+    ) values (
+      v_original.residente_id,
+      now(),
+      p_nuevo_turno,
+      v_original.tipo,
+      left(
+        'Continuacion de seguimiento: ' || left(v_original.descripcion, 1800)
+        || E'\n\nEvolucion previa: ' || v_notas,
+        6000
+      ),
+      null,
+      true,
+      p_nueva_fecha,
+      p_nuevo_turno,
+      'pendiente',
+      false,
+      null,
+      (select auth.uid())
+    )
+    returning * into v_nueva;
+
+    return jsonb_build_object('resuelta', to_jsonb(v_resuelta), 'nueva', to_jsonb(v_nueva));
+  end if;
+
+  return jsonb_build_object('resuelta', to_jsonb(v_resuelta), 'nueva', null);
+end;
+$$;
 create index if not exists idx_observaciones_familiar
   on public.observaciones_diarias(residente_id, fecha_hora desc)
   where visible_familiar = true;
@@ -924,6 +1059,25 @@ create index if not exists idx_tareas_cuidado_horario_fecha_original
   on public.tareas_cuidado(horario_id, (coalesce(fecha_original, fecha)));
 create index if not exists idx_tareas_cuidado_fechas_programadas
   on public.tareas_cuidado using gin(fechas_programadas);
+
+create or replace function public.sync_care_task_reprogrammed_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.estado = 'reprogramada' then
+    new.reprogramada_para := (new.fecha + new.hora) at time zone 'America/Santiago';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_tareas_cuidado_reprogrammed_at on public.tareas_cuidado;
+create trigger trg_tareas_cuidado_reprogrammed_at
+  before insert or update of estado, fecha, hora, reprogramada_para
+  on public.tareas_cuidado
+  for each row execute function public.sync_care_task_reprogrammed_at();
 
 create table if not exists public.plan_cuidado_audit (
   id             uuid primary key default gen_random_uuid(),
@@ -6367,8 +6521,12 @@ begin
     raise exception 'Debe iniciar sesion' using errcode = '42501';
   end if;
 
+  if v_eleam_id is null then
+    raise exception 'Debes tener un ELEAM asociado para generar tareas' using errcode = '42501';
+  end if;
+
   if not public.is_superadmin() then
-    if v_eleam_id is null or not public.eleam_has_access(v_eleam_id) then
+    if not public.eleam_has_access(v_eleam_id) then
       raise exception 'ELEAM sin acceso activo' using errcode = '42501';
     end if;
 
@@ -6379,6 +6537,11 @@ begin
 
   if p_turno is not null and p_turno not in ('mañana','tarde','noche') then
     raise exception 'Turno invalido' using errcode = 'P0001';
+  end if;
+
+  -- Consultar el historial o una fecha futura nunca debe crear trabajo nuevo.
+  if p_fecha is distinct from (now() at time zone 'America/Santiago')::date then
+    return 0;
   end if;
 
   insert into public.tareas_cuidado (
@@ -6396,10 +6559,11 @@ begin
     and a.activo = true
     and p.estado = 'activo'
     and r.estado = 'activo'
-    -- fecha_ingreso es un antecedente histórico. Las obligaciones digitales
-    -- comienzan cuando el residente fue creado en FichaEleam.
-    and p_fecha >= (r.creado_en at time zone 'America/Santiago')::date
-    and (public.is_superadmin() or h.eleam_id = v_eleam_id)
+    -- La obligación comienza cuando existen el residente y la pauta digital.
+    and ((p_fecha + h.hora) at time zone 'America/Santiago') >= greatest(
+      r.creado_en, h.creado_en, a.creado_en, p.creado_en
+    )
+    and h.eleam_id = v_eleam_id
     and (p_turno is null or h.turno = p_turno)
     and (
       h.frecuencia = 'diaria'
@@ -6663,7 +6827,7 @@ begin
         ) as d
         where d is not null
       ),
-      reprogramada_para = (p_fecha + p_hora)::timestamptz,
+      reprogramada_para = (p_fecha + p_hora) at time zone 'America/Santiago',
       notas = nullif(trim(coalesce(p_notas, '')), ''),
       requiere_seguimiento = v_requires_followup,
       cumplida_por = null,
@@ -6912,7 +7076,7 @@ begin
             ) as d
             where d is not null
           ),
-          reprogramada_para = (v_next_date + v_next_hour)::timestamptz,
+          reprogramada_para = (v_next_date + v_next_hour) at time zone 'America/Santiago',
           motivo_omision = null,
           notas = left(concat_ws(E'\n', nullif(trim(coalesce(v_task.notas, '')), ''), 'Traspasada en entrega de turno: ' || v_reason, v_note), 2000),
           cumplida_por = null,
@@ -7240,8 +7404,12 @@ begin
     raise exception 'Debe iniciar sesion' using errcode = '42501';
   end if;
 
+  if v_eleam_id is null then
+    raise exception 'Debes tener un ELEAM asociado para generar tareas' using errcode = '42501';
+  end if;
+
   if not public.is_superadmin() then
-    if v_eleam_id is null or not public.eleam_has_access(v_eleam_id) then
+    if not public.eleam_has_access(v_eleam_id) then
       raise exception 'ELEAM sin acceso activo' using errcode = '42501';
     end if;
 
@@ -7252,6 +7420,10 @@ begin
 
   if p_turno is not null and p_turno not in ('mañana','tarde','noche') then
     raise exception 'Turno invalido' using errcode = 'P0001';
+  end if;
+
+  if p_fecha is distinct from (now() at time zone 'America/Santiago')::date then
+    return 0;
   end if;
 
   insert into public.medicamentos_administraciones (
@@ -7267,10 +7439,12 @@ begin
   where h.activo = true
     and i.estado = 'activo'
     and r.estado = 'activo'
-    and p_fecha >= (r.creado_en at time zone 'America/Santiago')::date
+    and ((p_fecha + h.hora) at time zone 'America/Santiago') >= greatest(
+      r.creado_en, h.creado_en, i.creado_en
+    )
     and p_fecha >= i.fecha_inicio
     and (i.fecha_fin is null or p_fecha <= i.fecha_fin)
-    and (public.is_superadmin() or h.eleam_id = v_eleam_id)
+    and h.eleam_id = v_eleam_id
     and (p_turno is null or h.turno = p_turno)
     and (
       h.frecuencia = 'diaria'
@@ -7282,6 +7456,34 @@ begin
 
   get diagnostics v_count = row_count;
   return v_count;
+end;
+$$;
+
+-- Genera cuidados y medicamentos del turno en una sola llamada. Las funciones
+-- internas son idempotentes y sólo escriben para la fecha operativa de Chile.
+create or replace function public.preparar_trabajo_turno(
+  p_fecha date default ((now() at time zone 'America/Santiago')::date),
+  p_turno text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_cuidados integer;
+  v_medicamentos integer;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Debe iniciar sesion' using errcode = '42501';
+  end if;
+  if p_turno is not null and p_turno not in ('mañana','tarde','noche') then
+    raise exception 'Turno invalido' using errcode = 'P0001';
+  end if;
+
+  v_cuidados := public.generar_tareas_cuidado(p_fecha, p_turno);
+  v_medicamentos := public.generar_administraciones_medicamentos(p_fecha, p_turno);
+  return jsonb_build_object('cuidados', v_cuidados, 'medicamentos', v_medicamentos);
 end;
 $$;
 
@@ -8932,6 +9134,10 @@ grant execute on function public.guardar_entrega_turno(uuid, date, text, jsonb, 
 
 revoke all on function public.generar_administraciones_medicamentos(date, text) from public;
 grant execute on function public.generar_administraciones_medicamentos(date, text) to authenticated;
+revoke all on function public.preparar_trabajo_turno(date, text) from public;
+grant execute on function public.preparar_trabajo_turno(date, text) to authenticated;
+revoke all on function public.gestionar_seguimiento_observacion(uuid, text, date, text) from public;
+grant execute on function public.gestionar_seguimiento_observacion(uuid, text, date, text) to authenticated;
 
 revoke all on function public.guardar_indicacion_medicamento_con_horarios(uuid, jsonb, jsonb) from public;
 grant execute on function public.guardar_indicacion_medicamento_con_horarios(uuid, jsonb, jsonb) to authenticated;
