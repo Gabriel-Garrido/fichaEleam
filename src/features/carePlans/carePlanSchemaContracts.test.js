@@ -25,6 +25,11 @@ describe("care plan schema contracts", () => {
     expect(schema).toContain("where requiere_seguimiento = true");
   });
 
+  it("never creates operational tasks before the resident exists in FichaEleam", () => {
+    const guard = "p_fecha >= (r.creado_en at time zone 'America/Santiago')::date";
+    expect(schema.split(guard).length - 1).toBeGreaterThanOrEqual(2);
+  });
+
   it("requires an authorized and complete technical review", () => {
     expect(schema).toContain("validar_planes_cuidado  boolean not null default false");
     expect(schema).toContain("create or replace function public.revisar_plan_cuidado");

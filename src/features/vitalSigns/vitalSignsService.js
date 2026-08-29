@@ -3,6 +3,25 @@ import { withResidentLocation } from "../beds/bedsUtils";
 import { localDateTimeToIso } from "../../utils/dateUtils";
 
 const TURNOS = ["mañana", "tarde", "noche"];
+const CHILE_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Santiago",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+export function chileDateFromTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return null;
+  const parts = Object.fromEntries(CHILE_DATE_FORMATTER.formatToParts(date).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function residentWasCreatedByDate(resident, date) {
+  const createdDate = chileDateFromTimestamp(resident?.creado_en);
+  return Boolean(createdDate && date && createdDate <= date);
+}
 
 const VITAL_SIGNS_SELECT = `
   id, residente_id, fecha_hora, turno,
@@ -93,7 +112,7 @@ export const getPendingVitalSignsResidents = async (fecha, turno) => {
   const { data: residents, error: resError } = await supabase
     .from("residentes")
     .select(`
-      id, nombre, apellido, nivel_dependencia, cama_actual_id,
+      id, nombre, apellido, nivel_dependencia, cama_actual_id, creado_en,
       cama_actual:camas!residentes_cama_actual_id_fkey(
         id, codigo, nombre, tipo, estado,
         habitacion:habitaciones!camas_habitacion_id_fkey(id, codigo, nombre, piso, sector, estado)
@@ -103,6 +122,8 @@ export const getPendingVitalSignsResidents = async (fecha, turno) => {
     .order("apellido");
   if (resError) throw resError;
   if (!residents?.length) return [];
+  const eligibleResidents = residents.filter((resident) => residentWasCreatedByDate(resident, fecha));
+  if (!eligibleResidents.length) return [];
 
   const { data: existing, error: vsError } = await supabase
     .from("signos_vitales")
@@ -110,9 +131,9 @@ export const getPendingVitalSignsResidents = async (fecha, turno) => {
     .gte("fecha_hora", new Date(fecha + "T00:00:00").toISOString())
     .lte("fecha_hora", new Date(fecha + "T23:59:59").toISOString())
     .eq("turno", turno)
-    .in("residente_id", residents.map((r) => r.id));
+    .in("residente_id", eligibleResidents.map((r) => r.id));
   if (vsError) throw vsError;
 
   const recorded = new Set((existing ?? []).map((r) => r.residente_id));
-  return residents.map(withResidentLocation).filter((r) => !recorded.has(r.id));
+  return eligibleResidents.map(withResidentLocation).filter((r) => !recorded.has(r.id));
 };

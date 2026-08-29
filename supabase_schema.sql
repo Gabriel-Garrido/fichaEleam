@@ -6396,6 +6396,9 @@ begin
     and a.activo = true
     and p.estado = 'activo'
     and r.estado = 'activo'
+    -- fecha_ingreso es un antecedente histórico. Las obligaciones digitales
+    -- comienzan cuando el residente fue creado en FichaEleam.
+    and p_fecha >= (r.creado_en at time zone 'America/Santiago')::date
     and (public.is_superadmin() or h.eleam_id = v_eleam_id)
     and (p_turno is null or h.turno = p_turno)
     and (
@@ -7264,6 +7267,7 @@ begin
   where h.activo = true
     and i.estado = 'activo'
     and r.estado = 'activo'
+    and p_fecha >= (r.creado_en at time zone 'America/Santiago')::date
     and p_fecha >= i.fecha_inicio
     and (i.fecha_fin is null or p_fecha <= i.fecha_fin)
     and (public.is_superadmin() or h.eleam_id = v_eleam_id)
