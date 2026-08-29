@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Badge from "../../components/Badge";
 import EmptyState from "../../components/EmptyState";
 import HelpTooltip from "../../components/HelpTooltip";
@@ -9,11 +9,12 @@ import {
   getResidentTraceDetail,
   getTraceQuickRange,
   groupTraceEventsByDate,
+  isoDate,
   listResidentTraceability,
 } from "./residentTraceabilityService";
 
 const PAGE_SIZE = 25;
-const TRACE_FILTER_TYPES = ["todos", "datos", "cama", "salud", "cuidado", "medicamentos", "signos", "observaciones", "seguimientos"];
+const TRACE_FILTER_TYPES = ["todos", "datos", "cama", "salud", "cuidado", "medicamentos", "signos", "observaciones", "seguimientos", "incidentes", "pagos", "reclamos"];
 const TRACE_FILTER_STATUSES = [
   ["", "Todos los estados"],
   ["pendiente", "Pendientes"],
@@ -60,8 +61,12 @@ export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 })
   const [details, setDetails] = useState({});
   const [detailLoading, setDetailLoading] = useState(null);
   const [detailError, setDetailError] = useState("");
+  const cursorRef = useRef(null);
+  const loadRequestRef = useRef(0);
+  const detailRequestRef = useRef(0);
 
-  const load = useCallback(async ({ append = false, offset = 0 } = {}) => {
+  const load = useCallback(async ({ append = false } = {}) => {
+    const requestId = ++loadRequestRef.current;
     append ? setLoadingMore(true) : setLoading(true);
     setError("");
     try {
@@ -73,25 +78,39 @@ export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 })
         estado: filters.estado || null,
         query: filters.query,
         limit: PAGE_SIZE + 1,
-        offset,
+        cursor: append ? cursorRef.current : null,
       });
+      if (requestId !== loadRequestRef.current) return;
       const page = data.slice(0, PAGE_SIZE);
       setHasMore(data.length > PAGE_SIZE);
-      setEvents((current) => append ? [...current, ...page] : page);
+      const last = page.at(-1);
+      cursorRef.current = last ? { fecha: last.cursorDate, clave: last.cursorKey } : null;
+      setEvents((current) => {
+        if (!append) return page;
+        const byKey = new Map(current.map((item) => [item.key, item]));
+        page.forEach((item) => byKey.set(item.key, item));
+        return [...byKey.values()];
+      });
       if (!append) {
         setOpenEvent(null);
-        setDetails({});
       }
     } catch (loadError) {
       console.error(loadError);
-      setError("No se pudo cargar el historial del residente.");
+      if (requestId === loadRequestRef.current) setError("No se pudo cargar el historial del residente. Revisa tu conexión e inténtalo nuevamente.");
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (requestId === loadRequestRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [filters, residenteId]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
+  useEffect(() => {
+    setDetails({});
+    setOpenEvent(null);
+    cursorRef.current = null;
+  }, [residenteId, refreshKey]);
 
   const grouped = useMemo(() => groupTraceEventsByDate(events), [events]);
   const days = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
@@ -124,8 +143,10 @@ export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 })
   const activeFilterCount = Number(filters.tipo !== "todos") + Number(Boolean(filters.estado)) + Number(Boolean(filters.query));
 
   const toggleDetail = async (event) => {
+    const requestId = ++detailRequestRef.current;
     if (openEvent === event.key) {
       setOpenEvent(null);
+      setDetailLoading(null);
       return;
     }
     setOpenEvent(event.key);
@@ -138,12 +159,13 @@ export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 })
         entity: event.entity,
         eventId: event.entityId ?? event.id,
       });
+      if (requestId !== detailRequestRef.current) return;
       setDetails((current) => ({ ...current, [event.key]: detail }));
     } catch (loadError) {
       console.error(loadError);
-      setDetailError("No se pudo cargar el detalle de este registro.");
+      if (requestId === detailRequestRef.current) setDetailError("No se pudo cargar el detalle de este registro.");
     } finally {
-      setDetailLoading(null);
+      if (requestId === detailRequestRef.current) setDetailLoading(null);
     }
   };
 
@@ -156,11 +178,12 @@ export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 })
               <h2 className="text-base font-semibold text-slate-950">Historial del residente</h2>
               <HelpTooltip label="Ayuda sobre el historial">Cada registro conserva fecha y responsable. Los detalles se consultan sólo al abrirlo para mantener la pantalla rápida.</HelpTooltip>
             </div>
-            <p className="mt-1 text-sm text-slate-500">Cambios de datos, cama, salud y actividad clínica ordenados desde el más reciente.</p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">Actividad clínica, cuidados, medicamentos, cambios de ficha, cama e incidentes en una sola línea de tiempo. Cobranza y reclamos aparecen únicamente con el permiso correspondiente.</p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            {events.length} registro{events.length === 1 ? "" : "s"} cargado{events.length === 1 ? "" : "s"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{events.length} visible{events.length === 1 ? "" : "s"}</span>
+            <button type="button" onClick={() => load()} disabled={loading} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Actualizar</button>
+          </div>
         </div>
 
         <form onSubmit={applyFilters} className="mt-4 space-y-3">
@@ -197,9 +220,9 @@ export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 })
         </form>
       </section>
 
-      {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
+      {error && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span><button type="button" onClick={() => load()} className="min-h-10 rounded-xl border border-rose-200 bg-white px-3 font-semibold hover:bg-rose-100">Reintentar</button></div>}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section aria-busy={loading} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="space-y-3 p-4" role="status"><p className="text-xs text-slate-500">Cargando historial…</p>{[0, 1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl bg-slate-100" />)}</div>
         ) : events.length === 0 ? (
@@ -228,7 +251,7 @@ export default function ResidentTraceabilityTab({ residenteId, refreshKey = 0 })
         )}
       </section>
 
-      {hasMore && <div className="flex justify-center"><button type="button" disabled={loadingMore} onClick={() => load({ append: true, offset: events.length })} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">{loadingMore ? "Cargando…" : "Cargar registros anteriores"}</button></div>}
+      {hasMore && <div className="flex justify-center"><button type="button" disabled={loadingMore} onClick={() => load({ append: true })} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60">{loadingMore ? "Cargando…" : "Cargar registros anteriores"}</button></div>}
     </div>
   );
 }
@@ -241,7 +264,7 @@ function TraceEventRow({ event, open, detail, loading, error, onClick }) {
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="text-sm font-semibold text-slate-950">{event.title}</h4>
             <Badge tone={mapTraceToneToBadge(event.typeTone)} size="xs">{event.typeLabel}</Badge>
-            {event.statusGroup === "pendiente" && <Badge tone="amber" size="xs">{event.statusLabel}</Badge>}
+            {event.status !== "realizado" && <Badge tone={mapTraceToneToBadge(event.statusTone)} size="xs">{event.statusLabel}</Badge>}
           </div>
           <p className="mt-1 text-xs text-slate-500">{formatTraceDateTime(event.occurredAt)} · {event.actorName || "Responsable no disponible"}</p>
         </div>
@@ -276,7 +299,7 @@ function detailEntries(value, prefix = "") {
 }
 
 function humanizeKey(value) {
-  const labels = { datos_iniciales: "Datos registrados", datos_anteriores: "Datos anteriores", cambios: "Cambios", seccion: "Sección", accion: "Acción", tipo: "Categoría", descripcion: "Evolución observada", acciones_tomadas: "Atención, respuesta y plan", motivo_omision: "Motivo", requiere_seguimiento: "Requiere seguimiento", seguimiento_fecha: "Fecha de seguimiento", seguimiento_turno: "Turno de seguimiento", seguimiento_estado: "Estado del seguimiento", reprogramada_para: "Reprogramada para", fecha_programada: "Fecha", fecha_realizada: "Fecha de atención", centro_atencion: "Centro o lugar de atención", especialidad: "Atención o especialidad", profesional: "Profesional que atendió", acompanante: "Quién acompañó", familia_informada: "Familia o persona significativa informada", coordinacion_familia: "Coordinación realizada", resultado: "Observaciones e indicaciones", proximo_control: "Próximo control", presion_arterial: "Presión arterial", saturacion_oxigeno: "Saturación de oxígeno", frecuencia_cardiaca: "Frecuencia cardíaca", frecuencia_respiratoria: "Frecuencia respiratoria" };
+  const labels = { datos_iniciales: "Datos registrados", datos_anteriores: "Datos anteriores", cambios: "Cambios", seccion: "Sección", accion: "Acción", registro: "Registro", detalle: "Detalle", tipo: "Categoría", categoria: "Categoría", severidad: "Severidad", estado: "Estado", descripcion: "Descripción", acciones_tomadas: "Atención, respuesta y plan", acciones_inmediatas: "Acciones inmediatas", causas_probables: "Causas probables", motivo_omision: "Motivo", requiere_seguimiento: "Requiere seguimiento", seguimiento_fecha: "Fecha de seguimiento", seguimiento_turno: "Turno de seguimiento", seguimiento_estado: "Estado del seguimiento", reprogramada_para: "Reprogramada para", fecha_evento: "Fecha del evento", hora_evento: "Hora del evento", fecha_compromiso_cierre: "Compromiso de cierre", fecha_cierre: "Cierre", familia_notificada: "Familia notificada", medio_notificacion: "Medio de notificación", fecha_programada: "Fecha", fecha_realizada: "Fecha de atención", centro_atencion: "Centro o lugar de atención", especialidad: "Atención o especialidad", profesional: "Profesional que atendió", acompanante: "Quién acompañó", familia_informada: "Familia o persona significativa informada", coordinacion_familia: "Coordinación realizada", resultado: "Observaciones e indicaciones", proximo_control: "Próximo control", presion_arterial: "Presión arterial", saturacion_oxigeno: "Saturación de oxígeno", frecuencia_cardiaca: "Frecuencia cardíaca", frecuencia_respiratoria: "Frecuencia respiratoria" };
   return labels[value] ?? value.replaceAll("_", " ").replace(/^./, (char) => char.toUpperCase());
 }
 
@@ -284,7 +307,7 @@ function formatDetailValue(value) {
   if (value == null || value === "") return "Sin información";
   if (typeof value === "boolean") return value ? "Sí" : "No";
   if (Array.isArray(value)) return value.length ? value.join(", ") : "Sin información";
-  const labels = { observacion_general: "Estado general", cambio_clinico: "Cambio clínico o síntoma", dolor: "Dolor", piel_heridas: "Piel o heridas", conducta_animo: "Conducta o estado de ánimo", control: "Control de salud", derivacion: "Derivación", urgencia: "Atención de urgencia", teleconsulta: "Teleconsulta", otro: "Otra atención", programado: "Programada", realizado: "Realizada", cancelado: "Cancelada", inasistente: "No asistió" };
+  const labels = { observacion_general: "Estado general", cambio_clinico: "Cambio clínico o síntoma", dolor: "Dolor", piel_heridas: "Piel o heridas", conducta_animo: "Conducta o estado de ánimo", control: "Control de salud", derivacion: "Derivación", urgencia: "Atención de urgencia", teleconsulta: "Teleconsulta", otro: "Otra atención", programado: "Programada", registrado: "Registrado", en_revision: "En revisión", en_seguimiento: "En seguimiento", realizado: "Realizada", cerrado: "Cerrado", cancelado: "Cancelada", inasistente: "No asistió", leve: "Leve", moderado: "Moderado", grave: "Grave", critico: "Crítico", caida_con_lesion: "Caída con lesión", caida_sin_lesion: "Caída sin lesión", error_medicacion: "Error de medicación", lesion_por_presion: "Lesión por presión", reaccion_alergica: "Reacción alérgica" };
   if (labels[value]) return labels[value];
   if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(value))) return "Registro vinculado";
   if (/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(String(value))) {
@@ -295,7 +318,7 @@ function formatDetailValue(value) {
 }
 
 function FilterDate({ label, value, onChange }) {
-  return <label className="text-xs font-semibold text-slate-600">{label}<input type="date" value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-normal" /></label>;
+  return <label className="text-xs font-semibold text-slate-600">{label}<input type="date" value={value} max={isoDate()} onChange={(event) => onChange(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-normal" /></label>;
 }
 
 function FilterSelect({ label, value, onChange, options }) {

@@ -216,7 +216,9 @@ El formulario de evolución ofrece sólo categorías clínicas que no cuentan co
 
 El registro de controles y derivaciones conserva el centro de atención, fecha, motivo, situación, observaciones e indicaciones profesionales y, cuando corresponde, acompañamiento, continuidad y coordinación con la familia o persona significativa. El formulario muestra únicamente los campos aplicables al estado de la atención y deja su trazabilidad en Historial.
 
-La pestaña **Historial** reúne modificaciones de la ficha, cambios de cama, consentimientos, red y controles de salud, valoraciones, cuidados, medicamentos, signos vitales y evolución. La consulta inicial carga sólo 25 resúmenes; el detalle se solicita al backend únicamente cuando el usuario abre un registro. Búsqueda, períodos rápidos y filtros avanzados se aplican de forma explícita y no repiten consultas cuando sus valores no cambian.
+La pestaña **Historial** reúne modificaciones de la ficha, cambios de cama, consentimientos, red y controles de salud, valoraciones, cuidados, medicamentos, recetas, stock, signos vitales, evolución y eventos adversos. Reclamos y cobranza se incorporan únicamente para quienes cuentan con sus permisos específicos. Las modificaciones o eliminaciones clínicas generan revisiones inmutables en la base de datos y los eventos adversos se auditan en la misma transacción que el cambio.
+
+La consulta inicial carga sólo 25 resúmenes mediante un cursor estable, sin volver a recorrer páginas anteriores; el detalle se solicita al backend únicamente cuando el usuario abre un registro y se conserva en memoria durante la sesión. Búsqueda, períodos rápidos y filtros avanzados se aplican de forma explícita. La interfaz descarta respuestas obsoletas, evita duplicados y mantiene una acción de reintento ante fallas de red.
 
 ### Medicamentos y eMAR
 

@@ -30,6 +30,20 @@ describe("resident traceability helpers", () => {
     });
   });
 
+  it("uses the server cursor as the stable event key", () => {
+    expect(normalizeTraceEvent({
+      id: "7",
+      tipo: "incidentes",
+      clave_cursor: "incidente_audit:7",
+      fecha_hora: "2026-08-29T20:00:00Z",
+    })).toMatchObject({
+      key: "incidente_audit:7",
+      cursorKey: "incidente_audit:7",
+      cursorDate: "2026-08-29T20:00:00Z",
+      typeLabel: "Eventos adversos",
+    });
+  });
+
   it("filters events by searchable text", () => {
     const event = normalizeTraceEvent({
       id: "2",

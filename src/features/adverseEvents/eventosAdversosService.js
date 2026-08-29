@@ -104,11 +104,10 @@ export async function createAdverseEvent(payload, { eleamId } = {}) {
     .select(EVENT_SELECT)
     .single();
   if (error) throw error;
-  await writeAudit("create", data.id, { eleamId, detalle: { categoria: data.categoria, severidad: data.severidad } });
   return data;
 }
 
-export async function updateAdverseEvent(id, payload, { eleamId } = {}) {
+export async function updateAdverseEvent(id, payload) {
   const { data, error } = await supabase
     .from("eventos_adversos")
     .update(payload)
@@ -116,11 +115,10 @@ export async function updateAdverseEvent(id, payload, { eleamId } = {}) {
     .select(EVENT_SELECT)
     .single();
   if (error) throw error;
-  await writeAudit("update", id, { eleamId, detalle: payload });
   return data;
 }
 
-export async function cancelAdverseEvent(id, motivo, { eleamId } = {}) {
+export async function cancelAdverseEvent(id, motivo) {
   const { data, error } = await supabase
     .from("eventos_adversos")
     .update({ estado: "cancelado", conclusiones: motivo || null })
@@ -128,7 +126,6 @@ export async function cancelAdverseEvent(id, motivo, { eleamId } = {}) {
     .select(EVENT_SELECT)
     .single();
   if (error) throw error;
-  await writeAudit("cancel", id, { eleamId, detalle: { motivo } });
   return data;
 }
 
@@ -179,7 +176,7 @@ export async function listEventActions(eventId) {
   return data ?? [];
 }
 
-export async function addEventAction(eventId, payload, { eleamId } = {}) {
+export async function addEventAction(eventId, payload) {
   const { data: { user } } = await supabase.auth.getUser();
   const insertable = {
     evento_id: eventId,
@@ -193,7 +190,6 @@ export async function addEventAction(eventId, payload, { eleamId } = {}) {
     .select(ACCION_SELECT)
     .single();
   if (error) throw error;
-  await writeAudit("add_action", eventId, { eleamId, detalle: { tipo: payload.tipo } });
   return data;
 }
 
@@ -207,29 +203,4 @@ export async function listEventAudit(eventId) {
     .order("realizado_en", { ascending: false });
   if (error) throw error;
   return data ?? [];
-}
-
-async function writeAudit(accion, eventId, { eleamId, detalle = null } = {}) {
-  if (!eventId) return;
-  const { data: { user } } = await supabase.auth.getUser();
-  await supabase
-    .from("eventos_adversos_audit")
-    .insert({
-      eleam_id: eleamId ?? null,
-      evento_id: eventId,
-      accion,
-      detalle: detalle ? sanitizeDetalle(detalle) : null,
-      realizado_por: user?.id ?? null,
-    });
-}
-
-function sanitizeDetalle(detalle) {
-  // Evita guardar datos enormes (descripciones, conclusiones largas) en el audit.
-  const out = {};
-  for (const [k, v] of Object.entries(detalle)) {
-    if (v == null) continue;
-    if (typeof v === "string") out[k] = v.slice(0, 200);
-    else out[k] = v;
-  }
-  return out;
 }

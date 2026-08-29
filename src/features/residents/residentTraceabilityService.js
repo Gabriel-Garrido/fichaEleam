@@ -10,6 +10,9 @@ export const TRACE_TYPE_LABEL = {
   cama: "Cama",
   datos: "Datos personales",
   salud: "Salud y documentos",
+  incidentes: "Eventos adversos",
+  pagos: "Cobranza",
+  reclamos: "Reclamos",
   auditoria: "Registro interno",
 };
 
@@ -40,6 +43,9 @@ export const TRACE_TYPE_TONE = {
   cama: "indigo",
   datos: "slate",
   salud: "teal",
+  incidentes: "rose",
+  pagos: "emerald",
+  reclamos: "amber",
   auditoria: "rose",
 };
 
@@ -73,6 +79,11 @@ const TECHNICAL_ENTITY_LABEL = {
   plan_cuidado_audit: "Registro de plan de cuidado",
   medicamentos_audit: "Registro de medicamentos",
   camas_audit: "Registro de cama",
+  eventos_adversos: "Evento adverso",
+  eventos_adversos_acciones: "Acción de evento adverso",
+  eventos_adversos_audit: "Modificación de evento adverso",
+  resident_payment_audit: "Registro de cobranza",
+  residentes_audit: "Cambio en la ficha",
 };
 
 export const TRACE_QUICK_RANGES = {
@@ -143,7 +154,7 @@ export function normalizeTraceEvent(event = {}) {
   const title = sanitizeTraceDetail(event.titulo) ?? entityLabel ?? "Evento";
   return {
     id: event.id,
-    key: `${type}:${event.id}`,
+    key: event.clave_cursor ?? `${type}:${event.id}`,
     type,
     typeLabel: TRACE_TYPE_LABEL[type] ?? type,
     typeTone: TRACE_TYPE_TONE[type] ?? "slate",
@@ -158,6 +169,8 @@ export function normalizeTraceEvent(event = {}) {
     entity: event.entidad ?? null,
     entityLabel,
     entityId: event.entidad_id ?? null,
+    cursorDate: event.fecha_hora ?? event.occurred_at ?? event.realizado_en ?? null,
+    cursorKey: event.clave_cursor ?? null,
     priority: Number.isFinite(Number(event.prioridad_visual))
       ? Number(event.prioridad_visual)
       : PENDING_STATUSES.has(status) ? 0 : 1,
@@ -230,11 +243,11 @@ export async function listResidentTraceability({
   estado = null,
   query = null,
   limit = 26,
-  offset = 0,
+  cursor = null,
 } = {}) {
   if (!residenteId) return [];
 
-  const { data, error } = await supabase.rpc("listar_historial_residente_paginado", {
+  const { data, error } = await supabase.rpc("listar_historial_residente_cursor", {
     p_residente_id: residenteId,
     p_desde: desde || null,
     p_hasta: hasta || null,
@@ -242,7 +255,8 @@ export async function listResidentTraceability({
     p_estado: estado || null,
     p_busqueda: query?.trim() || null,
     p_limit: limit,
-    p_offset: offset,
+    p_cursor_fecha: cursor?.fecha ?? null,
+    p_cursor_clave: cursor?.clave ?? null,
   });
   if (error) throw error;
   return (data ?? []).map(normalizeTraceEvent);
@@ -250,7 +264,7 @@ export async function listResidentTraceability({
 
 export async function getResidentTraceDetail({ residenteId, entity, eventId }) {
   if (!residenteId || !entity || !eventId) throw new Error("Evento de historial incompleto.");
-  const { data, error } = await supabase.rpc("obtener_detalle_historial_residente", {
+  const { data, error } = await supabase.rpc("obtener_detalle_historial_residente_v2", {
     p_residente_id: residenteId,
     p_entidad: entity,
     p_evento_id: String(eventId),

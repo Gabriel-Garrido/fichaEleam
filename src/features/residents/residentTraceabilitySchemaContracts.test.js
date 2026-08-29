@@ -19,6 +19,49 @@ describe("resident traceability schema contracts", () => {
     expect(schema).toContain("p_busqueda text default null");
     expect(schema).toContain("p_offset integer default 0");
     expect(schema).toContain("create or replace function public.obtener_detalle_historial_residente");
+    expect(schema).toContain("create or replace function public.listar_historial_residente_cursor");
+    expect(schema).toContain("p_cursor_fecha timestamptz default null");
+    expect(schema).toContain("p_cursor_clave text default null");
+    expect(schema).toContain("create or replace function public.obtener_detalle_historial_residente_v2");
+  });
+
+  it("uses keyset pagination and avoids duplicate mutable task rows", () => {
+    const cursorFeed = schema.slice(
+      schema.lastIndexOf("create or replace function public.listar_historial_residente_cursor"),
+      schema.lastIndexOf("create or replace function public.obtener_detalle_historial_residente_v2"),
+    );
+    expect(cursorFeed).toContain("source.fecha_hora < p_cursor_fecha");
+    expect(cursorFeed).toContain("source.clave < coalesce(p_cursor_clave, '')");
+    expect(cursorFeed).not.toContain("offset v_offset");
+    expect(cursorFeed).toContain("from public.plan_cuidado_audit pa");
+    expect(cursorFeed).toContain("from public.medicamentos_audit ma");
+    expect(cursorFeed).not.toContain("from public.tareas_cuidado t\n");
+    expect(cursorFeed).not.toContain("from public.medicamentos_administraciones ma\n");
+  });
+
+  it("covers incidents, claims and authorized billing without exposing restricted details", () => {
+    for (const source of [
+      "eventos_adversos",
+      "eventos_adversos_acciones",
+      "eventos_adversos_audit",
+      "resident_payment_audit",
+      "reclamos_sugerencias",
+    ]) expect(schema).toContain(source);
+    expect(schema).toContain("v_can_payments boolean := public.can_access_feature('resident_payments')");
+    expect(schema).toContain("v_can_claims boolean := public.can_access_feature('compliance')");
+    expect(schema).toContain("No autorizado a ver cobranza");
+  });
+
+  it("audits clinical revisions and adverse events inside the database transaction", () => {
+    expect(schema).toContain("create trigger trg_signos_vitales_resident_revision");
+    expect(schema).toContain("create trigger trg_observaciones_resident_revision");
+    expect(schema).toContain("create trigger trg_eventos_adversos_audit_db");
+    expect(schema).toContain("create trigger trg_eventos_adversos_acciones_audit_db");
+    expect(schema).toContain("revoke insert, update, delete on public.eventos_adversos_audit from authenticated");
+    expect(schema).toContain("create trigger trg_medicamentos_recetas_audit");
+    expect(schema).toContain("create trigger trg_medicamentos_stock_lotes_audit");
+    expect(schema).toContain("'receta_adjuntada'");
+    expect(schema).toContain("revoke execute on function public.obtener_detalle_historial_residente(uuid, text, text) from authenticated");
   });
 
   it("audits resident and related record changes without duplicating bed synchronization", () => {
