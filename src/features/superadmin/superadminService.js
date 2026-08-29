@@ -367,6 +367,10 @@ export async function getDemoEngagementOverview() {
     needsReactivation: item.needs_reactivation === true,
     accountAvailable: item.account_available === true,
     canRestartDemo: item.can_restart_demo === true,
+    demoDaysRemaining: Number(item.demo_days_remaining ?? 0),
+    activeReminderCoolingDown: item.active_reminder_cooling_down === true,
+    lastActiveReminderAt: item.last_active_reminder_at,
+    canSendActiveReminder: item.can_send_active_reminder === true,
     restartInvitationCoolingDown: item.restart_invitation_cooling_down === true,
     lastRecoveryEmailAt: item.last_recovery_email_at,
     canSendRecovery: item.can_send_recovery === true,
@@ -380,6 +384,15 @@ export async function getDemoRestartInvitationPreview(eleamId) {
 
 export async function sendDemoRestartInvitation(eleamId) {
   return invokeDemoEngagement({ action: "restart_invitation", eleam_id: eleamId });
+}
+
+export async function getDemoActiveReminderPreview(eleamId) {
+  const data = await invokeDemoEngagement({ action: "preview_active_reminder", eleam_id: eleamId });
+  return data?.preview ?? null;
+}
+
+export async function sendDemoActiveReminder(eleamId) {
+  return invokeDemoEngagement({ action: "send_active_reminder", eleam_id: eleamId });
 }
 
 export async function getEleamDetail(eleamId) {

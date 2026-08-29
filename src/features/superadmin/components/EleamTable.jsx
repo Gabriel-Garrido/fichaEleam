@@ -2,6 +2,7 @@ import HelpTooltip from "../../../components/HelpTooltip";
 import { PLAN_LABEL } from "../utils/superadminFormatters";
 import {
   demoRestartInvitationState,
+  demoActiveReminderState,
   demoLoginLabel,
   indexPortfolioUsage,
   portfolioUsageState,
@@ -45,21 +46,25 @@ function UsageBadge({ usage }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${STATE_STYLE[state.tone]}`}>{state.label}</span>;
 }
 
-function DemoActions({ eleam, engagement, onInvite, action, compact = false }) {
-  const sending = action?.id === eleam.id && action.type === "restart_invitation";
+function DemoActions({ eleam, engagement, onInvite, onRemind, action, compact = false }) {
+  const inviting = action?.id === eleam.id && action.type === "restart_invitation";
+  const reminding = action?.id === eleam.id && action.type === "active_reminder";
   const busy = Boolean(action);
-  const state = demoRestartInvitationState(eleam, engagement);
-  if (!state.visible) return null;
+  const reminderState = demoActiveReminderState(eleam, engagement);
+  const invitationState = demoRestartInvitationState(eleam, engagement);
+  const state = reminderState.visible ? reminderState : invitationState;
+  const isReminder = reminderState.visible;
+  if (!reminderState.visible && !invitationState.visible) return null;
   return (
     <div className={`flex flex-wrap gap-2 ${compact ? "mt-3" : "justify-end"}`}>
       <button
         type="button"
         disabled={busy || state.disabled}
-        title={state.reason || "Ver el correo antes de reiniciar el demo"}
-        onClick={() => onInvite?.(eleam)}
+        title={state.reason || (isReminder ? `Enviar un recordatorio con los ${engagement?.demoDaysRemaining ?? 0} días restantes` : "Ver el correo antes de reiniciar el demo")}
+        onClick={() => isReminder ? onRemind?.(eleam) : onInvite?.(eleam)}
         className="min-h-10 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
       >
-        {sending ? "Enviando…" : state.reason || "Invitar · 30 días gratis"}
+        {inviting || reminding ? "Enviando…" : state.reason || (isReminder ? `Recordar demo · ${engagement?.demoDaysRemaining ?? 0}d` : "Invitar · 30 días gratis")}
       </button>
     </div>
   );
@@ -72,6 +77,7 @@ export default function EleamTable({
   usageDays = 30,
   demoEngagement = [],
   onInviteDemoRestart,
+  onRemindActiveDemo,
   demoAction,
 }) {
   const usageByEleam = indexPortfolioUsage(portfolioUsage);
@@ -113,7 +119,7 @@ export default function EleamTable({
               </div>
               <span className="mt-3 inline-flex min-h-10 items-center text-sm font-bold text-teal-700">Ver detalle →</span>
             </button>
-            <DemoActions compact eleam={eleam} engagement={engagement} onInvite={onInviteDemoRestart} action={demoAction} />
+            <DemoActions compact eleam={eleam} engagement={engagement} onInvite={onInviteDemoRestart} onRemind={onRemindActiveDemo} action={demoAction} />
           </article>
         ))}
       </div>
@@ -139,7 +145,7 @@ export default function EleamTable({
                 <td className="px-3 py-4"><p className={`font-semibold ${eleam.plan === "demo" && (engagement?.neverSignedIn || (engagement?.inactiveDays ?? 0) > 10) ? "text-amber-700" : "text-slate-700"}`}>{eleam.plan === "demo" ? demoLoginLabel(engagement) : timeAgo(usage.ultimaActividad)}</p><p className="mt-1 text-xs text-slate-500">{usage.usuariosActivos}/{usage.usuariosTotales} usuarios con actividad</p></td>
                 <td className="px-3 py-4"><p className="font-semibold text-slate-700">{PLAN_LABEL[eleam.plan] ?? eleam.plan ?? "Sin plan"}</p><p className={`mt-0.5 text-xs font-semibold ${eleam.pago_activo ? "text-emerald-700" : "text-rose-700"}`}>{eleam.pago_activo ? "Acceso activo" : "Sin acceso"}</p></td>
                 <td className="px-4 py-4 text-right" onClick={(event) => event.stopPropagation()}>
-                  <DemoActions eleam={eleam} engagement={engagement} onInvite={onInviteDemoRestart} action={demoAction} />
+                  <DemoActions eleam={eleam} engagement={engagement} onInvite={onInviteDemoRestart} onRemind={onRemindActiveDemo} action={demoAction} />
                   <button type="button" onClick={() => onOpen(eleam)} className="mt-2 min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Ver detalle</button>
                 </td>
               </tr>

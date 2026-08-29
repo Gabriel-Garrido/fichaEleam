@@ -7,6 +7,7 @@ const service = readFileSync("src/features/superadmin/superadminService.js", "ut
 const edge = readFileSync("supabase/functions/manage-demo-engagement/index.ts", "utf8");
 const schema = readFileSync("supabase_schema.sql", "utf8");
 const invitationModal = readFileSync("src/features/superadmin/components/DemoRestartInvitationModal.jsx", "utf8");
+const reminderModal = readFileSync("src/features/superadmin/components/DemoActiveReminderModal.jsx", "utf8");
 
 describe("contratos UX y seguridad de Superadmin", () => {
   it("divide el detalle del cliente para no mostrar todo simultáneamente", () => {
@@ -28,7 +29,16 @@ describe("contratos UX y seguridad de Superadmin", () => {
     expect(edge).toContain("recoveryEmailIsCoolingDown");
     expect(edge).toContain('action === "preview_restart_invitation"');
     expect(edge).toContain('action === "restart_invitation"');
+    expect(edge).toContain('action === "preview_active_reminder"');
+    expect(edge).toContain('action === "send_active_reminder"');
     expect(edge).toContain("hasPaidPlan(eleam.plan)");
+  });
+
+  it("muestra los días restantes y una vista previa antes de recordar un demo activo", () => {
+    expect(reminderModal).toContain("Vista previa del recordatorio");
+    expect(reminderModal).toContain("preview.subject");
+    expect(reminderModal).toContain("Enviar recordatorio");
+    expect(table).toContain("demoDaysRemaining");
   });
 
   it("muestra el correo exacto antes de reiniciar y enviar", () => {

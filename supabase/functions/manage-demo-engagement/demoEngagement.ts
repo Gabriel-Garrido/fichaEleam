@@ -3,6 +3,13 @@ export const DEMO_REACTIVATION_DAYS = 14;
 export const DEMO_RESTART_DAYS = 30;
 export const RECOVERY_EMAIL_COOLDOWN_HOURS = 24;
 
+export function demoDaysRemaining(value: string | null | undefined, now = Date.now()): number {
+  if (!value) return 0;
+  const expiresAt = new Date(value).getTime();
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) return 0;
+  return Math.max(1, Math.ceil((expiresAt - now) / 86400000));
+}
+
 export function daysSince(value: string | null | undefined, now = Date.now()): number | null {
   if (!value) return null;
   const timestamp = new Date(value).getTime();

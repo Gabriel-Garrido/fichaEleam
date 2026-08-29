@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
   canSendDemoRecovery,
+  demoDaysRemaining,
   hasPaidPlan,
   isDemoAccessActive,
   recoveryEmailIsCoolingDown,
@@ -17,6 +18,13 @@ Deno.test("permite recuperar demos sin ingreso o con más de diez días", () => 
 Deno.test("considera activo sólo un demo vigente y habilitado", () => {
   assertEquals(isDemoAccessActive({ pago_activo: true, subscription_status: "activo", fecha_vencimiento_suscripcion: "2026-08-20T00:00:00Z" }, NOW), true);
   assertEquals(isDemoAccessActive({ pago_activo: true, subscription_status: "activo", fecha_vencimiento_suscripcion: "2026-08-10T00:00:00Z" }, NOW), false);
+});
+
+Deno.test("calcula días restantes redondeando cualquier fracción como día disponible", () => {
+  assertEquals(demoDaysRemaining("2026-08-16T12:00:00Z", NOW), 1);
+  assertEquals(demoDaysRemaining("2026-08-20T00:00:00Z", NOW), 5);
+  assertEquals(demoDaysRemaining("2026-08-15T11:59:59Z", NOW), 0);
+  assertEquals(demoDaysRemaining(null, NOW), 0);
 });
 
 Deno.test("impide repetir el correo durante veinticuatro horas", () => {

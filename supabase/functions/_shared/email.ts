@@ -806,6 +806,73 @@ export function demoRestartInvitationEmail({
 </body></html>`;
 }
 
+export function demoActiveReminderCopy({
+  nombre,
+  eleamNombre,
+  remainingDays,
+  accessMethod,
+}: {
+  nombre: string;
+  eleamNombre: string;
+  remainingDays: number;
+  accessMethod: DemoAccessMethod;
+}) {
+  const dayLabel = remainingDays === 1 ? "1 día" : `${remainingDays} días`;
+  return {
+    subject: `${nombre}, aún tienes ${dayLabel} para aprovechar FichaEleam`,
+    heading: `Tu demo sigue activo por ${dayLabel}`,
+    greeting: `Hola, ${nombre}.`,
+    body: `La demo de ${eleamNombre} continúa activa y conserva toda la información registrada. Te quedan ${dayLabel} para probar cómo FichaEleam simplifica el trabajo diario y mantiene ordenados los respaldos del DS 20.`,
+    cta: "Continuar usando mi demo",
+    accessHint: accessMethod === "google"
+      ? "Ingresa con Google usando el mismo correo que recibió este recordatorio."
+      : "Usa el acceso personal del botón para entrar de forma segura.",
+  };
+}
+
+export function demoActiveReminderEmail({
+  nombre,
+  email,
+  eleamNombre,
+  remainingDays,
+  accessMethod,
+  accessUrl,
+}: {
+  nombre: string;
+  email: string;
+  eleamNombre: string;
+  remainingDays: number;
+  accessMethod: DemoAccessMethod;
+  accessUrl: string;
+}): string {
+  const copy = demoActiveReminderCopy({ nombre, eleamNombre, remainingDays, accessMethod });
+  const safeEmail = escapeHtml(email);
+  const safeSubject = escapeHtml(copy.subject);
+  const safeHeading = escapeHtml(copy.heading);
+  const safeGreeting = escapeHtml(copy.greeting);
+  const safeBody = escapeHtml(copy.body);
+  const safeCta = escapeHtml(copy.cta);
+  const safeHint = escapeHtml(copy.accessHint);
+  const safeAccessUrl = escapeHtml(accessUrl);
+  return `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeSubject}</title></head>
+<body style="margin:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#1e293b">
+  <div style="max-width:560px;margin:32px auto;background:#fff;border:1px solid #dbe7e5;border-radius:18px;overflow:hidden">
+    <div style="background:#0f766e;padding:26px 32px;color:#fff">
+      <p style="margin:0 0 7px;color:#99f6e4;font-size:12px;font-weight:700;letter-spacing:.08em">FICHAELEAM</p>
+      <h1 style="margin:0;font-size:24px;line-height:1.25">${safeHeading}</h1>
+    </div>
+    <div style="padding:28px 32px">
+      <p style="margin:0 0 14px"><strong>${safeGreeting}</strong></p>
+      <p style="margin:0 0 22px;color:#475569;line-height:1.65">${safeBody}</p>
+      <a href="${safeAccessUrl}" style="display:block;background:#0f766e;color:#fff;text-align:center;text-decoration:none;padding:15px 20px;border-radius:11px;font-weight:800">${safeCta}</a>
+      <p style="margin:18px 0 0;color:#64748b;font-size:13px;line-height:1.55">${safeHint}</p>
+      <p style="margin:12px 0 0;color:#94a3b8;font-size:12px">Recordatorio enviado a ${safeEmail}. Si necesitas ayuda, responde este correo.</p>
+    </div>
+  </div>
+</body></html>`;
+}
+
 export function buildCrmUnsubscribePage(reason: string, email?: string | null): string {
   const safeEmail = email ? escapeHtml(email) : "";
   let title = "Operación inválida";

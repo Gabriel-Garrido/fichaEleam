@@ -9,7 +9,7 @@ import InteractionTimeline from "./InteractionTimeline";
 import CrmTasksPanel from "./CrmTasksPanel";
 import EleamUsagePanel from "./EleamUsagePanel";
 import HelpTooltip from "../../../components/HelpTooltip";
-import { demoLoginLabel, demoRestartInvitationState } from "../utils/portfolioUsage";
+import { demoActiveReminderState, demoLoginLabel, demoRestartInvitationState } from "../utils/portfolioUsage";
 
 // Tooltips: solo en campos no obvios. Cada texto especifica la columna
 // exacta en BD y cómo se interpreta el valor.
@@ -89,7 +89,7 @@ export default function EleamCustomerDrawer({
   onCreateTask, onCompleteTask, onCreateInteraction,
   usageDays = 30,
   portfolioUsage = [], demoEngagement = [],
-  onInviteDemoRestart, demoAction,
+  onInviteDemoRestart, onRemindActiveDemo, demoAction,
 }) {
   const [tab, setTab] = useState("summary");
   useEffect(() => setTab("summary"), [eleamId]);
@@ -108,6 +108,7 @@ export default function EleamCustomerDrawer({
   const engagement = demoEngagement.find((item) => item.eleamId === eleamId) ?? null;
   const demoBusy = demoAction?.id === eleamId;
   const invitationState = eleam ? demoRestartInvitationState(eleam, engagement) : { visible: false, disabled: true, reason: "" };
+  const reminderState = eleam ? demoActiveReminderState(eleam, engagement) : { visible: false, disabled: true, reason: "" };
 
   return (
     <Modal
@@ -234,6 +235,7 @@ export default function EleamCustomerDrawer({
                 Registrar pago
               </button>
               {invitationState.visible && <button type="button" disabled={demoBusy || invitationState.disabled} title={invitationState.reason || "Ver correo y reiniciar el demo por 30 días"} onClick={() => onInviteDemoRestart?.(eleam)} className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">{demoAction?.type === "restart_invitation" && demoBusy ? "Enviando…" : invitationState.reason || "Invitar a demo · 30 días"}</button>}
+              {reminderState.visible && <button type="button" disabled={demoBusy || reminderState.disabled} title={reminderState.reason || `Enviar recordatorio con ${engagement?.demoDaysRemaining ?? 0} días restantes`} onClick={() => onRemindActiveDemo?.(eleam)} className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">{demoAction?.type === "active_reminder" && demoBusy ? "Enviando…" : reminderState.reason || `Recordar demo · ${engagement?.demoDaysRemaining ?? 0} días`}</button>}
             </div>
 
             {/* Contacto */}

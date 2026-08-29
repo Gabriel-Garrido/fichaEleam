@@ -2,6 +2,8 @@ import { preflight, jsonResponse } from "../_shared/cors.ts";
 import { adminClient, getCallerProfile } from "../_shared/supabase.ts";
 import {
   demoRecoveryEmail,
+  demoActiveReminderCopy,
+  demoActiveReminderEmail,
   demoRestartInvitationCopy,
   demoRestartInvitationEmail,
   sendEmail,
@@ -10,6 +12,7 @@ import {
 import { generateAccessLink, getAppUrl, GMAIL_RE, UUID_RE } from "../_shared/provisioning.ts";
 import {
   canSendDemoRecovery,
+  demoDaysRemaining,
   daysSince,
   DEMO_REACTIVATION_DAYS,
   DEMO_RESTART_DAYS,
@@ -19,6 +22,7 @@ import {
 } from "./demoEngagement.ts";
 
 const RECOVERY_MARKER = "[RECUPERACION_DEMO]";
+const ACTIVE_REMINDER_MARKER = "[RECORDATORIO_DEMO_ACTIVO]";
 
 function fail(req: Request, message: string, status = 400, code = "demo_engagement_error") {
   return jsonResponse(req, { ok: false, code, message }, status);
@@ -31,6 +35,23 @@ async function getLastRecoveryByEleam(sb: ReturnType<typeof adminClient>, eleamI
     .in("eleam_id", eleamIds)
     .eq("tipo", "correo")
     .like("resumen", `${RECOVERY_MARKER}%`)
+    .order("creado_en", { ascending: false })
+    .limit(1000);
+  if (error) throw error;
+  const result = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (row.eleam_id && !result.has(row.eleam_id)) result.set(row.eleam_id, row.creado_en);
+  }
+  return result;
+}
+
+async function getLastActiveReminderByEleam(sb: ReturnType<typeof adminClient>, eleamIds: string[]) {
+  if (!eleamIds.length) return new Map<string, string>();
+  const { data, error } = await sb.from("crm_interactions")
+    .select("eleam_id, creado_en")
+    .in("eleam_id", eleamIds)
+    .eq("tipo", "correo")
+    .like("resumen", `${ACTIVE_REMINDER_MARKER}%`)
     .order("creado_en", { ascending: false })
     .limit(1000);
   if (error) throw error;
@@ -91,12 +112,13 @@ async function listDemoStatuses(sb: ReturnType<typeof adminClient>) {
   const ids = (eleams ?? []).map((item) => item.id);
   if (!ids.length) return [];
 
-  const [{ data: profiles, error: profilesError }, lastRecovery] = await Promise.all([
+  const [{ data: profiles, error: profilesError }, lastRecovery, lastActiveReminder] = await Promise.all([
     sb.from("profiles").select("id, eleam_id, nombre, email, acceso_activo, creado_en")
       .in("eleam_id", ids).eq("rol", "admin_eleam")
       .order("acceso_activo", { ascending: false })
       .order("creado_en", { ascending: true }),
     getLastRecoveryByEleam(sb, ids),
+    getLastActiveReminderByEleam(sb, ids),
   ]);
   if (profilesError) throw profilesError;
   const adminByEleam = new Map<string, typeof profiles[number]>();
@@ -108,7 +130,9 @@ async function listDemoStatuses(sb: ReturnType<typeof adminClient>) {
     const authUser = admin ? authUsersById.get(admin.id) : null;
     const lastSignInAt = authUser?.last_sign_in_at ?? null;
     const lastRecoveryEmailAt = lastRecovery.get(eleam.id) ?? null;
+    const lastActiveReminderAt = lastActiveReminder.get(eleam.id) ?? null;
     const accessActive = isDemoAccessActive(eleam);
+    const remainingDays = demoDaysRemaining(eleam.fecha_vencimiento_suscripcion);
     const inactiveDays = daysSince(lastSignInAt);
     return {
       eleam_id: eleam.id,
@@ -121,6 +145,13 @@ async function listDemoStatuses(sb: ReturnType<typeof adminClient>) {
       needs_reactivation: Boolean(admin && authUser) && !accessActive,
       account_available: Boolean(admin),
       can_restart_demo: Boolean(admin),
+      demo_days_remaining: remainingDays,
+      active_reminder_cooling_down: recoveryEmailIsCoolingDown(lastActiveReminderAt),
+      last_active_reminder_at: lastActiveReminderAt,
+      can_send_active_reminder: eleam.plan === "demo"
+        && Boolean(admin && authUser)
+        && accessActive
+        && !recoveryEmailIsCoolingDown(lastActiveReminderAt),
       restart_invitation_cooling_down: recoveryEmailIsCoolingDown(lastRecoveryEmailAt),
       last_recovery_email_at: lastRecoveryEmailAt,
       can_send_recovery: Boolean(admin && authUser)
@@ -155,6 +186,60 @@ Deno.serve(async (req) => {
       return fail(req, context.error, 409, "invalid_demo");
     }
     const { eleam, admin, authUser } = context;
+
+    if (action === "preview_active_reminder" || action === "send_active_reminder") {
+      if (eleam.plan !== "demo" || !isDemoAccessActive(eleam)) {
+        return fail(req, "Este ELEAM no tiene un demo activo.", 409, "active_demo_required");
+      }
+      const remainingDays = demoDaysRemaining(eleam.fecha_vencimiento_suscripcion);
+      const lastReminder = (await getLastActiveReminderByEleam(sb, [eleamId])).get(eleamId) ?? null;
+      if (action === "send_active_reminder" && recoveryEmailIsCoolingDown(lastReminder)) {
+        return fail(req, "Ya se envió un recordatorio durante las últimas 24 horas.", 429, "email_cooldown");
+      }
+      const accessMethod: DemoAccessMethod = GMAIL_RE.test(admin.email) ? "google" : "password";
+      const copy = demoActiveReminderCopy({
+        nombre: admin.nombre || "Hola",
+        eleamNombre: eleam.nombre,
+        remainingDays,
+        accessMethod,
+      });
+      if (action === "preview_active_reminder") {
+        return jsonResponse(req, { ok: true, action, preview: { to: admin.email, remaining_days: remainingDays, ...copy } });
+      }
+      const linkResult = accessMethod === "google"
+        ? { link: `${getAppUrl()}/login`, error: null }
+        : await generateAccessLink(sb, admin.email);
+      if (!linkResult.link) return fail(req, linkResult.error ?? "No se pudo generar el acceso.", 502, "access_link_error");
+      const emailResult = await sendEmail({
+        to: admin.email,
+        subject: copy.subject,
+        html: demoActiveReminderEmail({
+          nombre: admin.nombre || "Hola",
+          email: admin.email,
+          eleamNombre: eleam.nombre,
+          remainingDays,
+          accessMethod,
+          accessUrl: linkResult.link,
+        }),
+        replyTo: "soporte@fichaeleam.cl",
+      });
+      if (!emailResult.sent) return fail(req, "El correo no pudo enviarse. Intenta nuevamente.", 502, "email_failed");
+      const now = new Date().toISOString();
+      const [{ error: interactionError }, { error: contactError }] = await Promise.all([
+        sb.from("crm_interactions").insert({
+          eleam_id: eleamId,
+          tipo: "correo",
+          canal: "email",
+          resumen: `${ACTIVE_REMINDER_MARKER} Demo activo: ${remainingDays} días restantes; correo enviado a ${admin.email}`,
+          resultado: "positivo",
+          creado_por: user.id,
+        }),
+        sb.from("eleams").update({ ultimo_contacto: now }).eq("id", eleamId),
+      ]);
+      if (interactionError) console.error("active demo reminder interaction", interactionError);
+      if (contactError) console.error("active demo reminder last contact", contactError);
+      return jsonResponse(req, { ok: true, action, email: admin.email, remaining_days: remainingDays, sent_at: now });
+    }
 
     if (action === "preview_restart_invitation") {
       const accessMethod: DemoAccessMethod = GMAIL_RE.test(admin.email) ? "google" : "password";

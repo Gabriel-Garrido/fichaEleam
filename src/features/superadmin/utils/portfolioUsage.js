@@ -55,7 +55,15 @@ export function hasPaidPlan(eleam) {
 
 export function demoRestartInvitationState(eleam, engagement) {
   if (hasPaidPlan(eleam)) return { visible: false, disabled: true, reason: "Plan pagado" };
+  if (eleam?.plan === "demo" && engagement?.accessActive) return { visible: false, disabled: true, reason: "Demo activo" };
   if (engagement?.restartInvitationCoolingDown) return { visible: true, disabled: true, reason: "Invitación enviada hoy" };
+  return { visible: true, disabled: false, reason: "" };
+}
+
+export function demoActiveReminderState(eleam, engagement) {
+  if (eleam?.plan !== "demo" || engagement?.accessActive !== true) return { visible: false, disabled: true, reason: "Demo inactivo" };
+  if (!engagement?.accountAvailable) return { visible: false, disabled: true, reason: "Sin cuenta asociada" };
+  if (engagement.activeReminderCoolingDown) return { visible: true, disabled: true, reason: "Recordatorio enviado hoy" };
   return { visible: true, disabled: false, reason: "" };
 }
 

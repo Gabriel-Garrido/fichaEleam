@@ -11,6 +11,7 @@ import PortfolioUsageOverview from "./components/PortfolioUsageOverview";
 import PaymentModal from "./components/PaymentModal";
 import SuperAdminPageHeader from "./components/SuperAdminPageHeader";
 import DemoRestartInvitationModal from "./components/DemoRestartInvitationModal";
+import DemoActiveReminderModal from "./components/DemoActiveReminderModal";
 import { indexPortfolioUsage, usageDaysSince } from "./utils/portfolioUsage";
 import {
   createCrmTask,
@@ -25,6 +26,8 @@ import {
   getPortfolioUsage,
   getDemoRestartInvitationPreview,
   sendDemoRestartInvitation,
+  getDemoActiveReminderPreview,
+  sendDemoActiveReminder,
   updateEleam,
   registerPayment,
 } from "./superadminService";
@@ -76,6 +79,10 @@ export default function SuperAdminClientes() {
   const [invitationPreview, setInvitationPreview] = useState(null);
   const [invitationPreviewLoading, setInvitationPreviewLoading] = useState(false);
   const [invitationPreviewError, setInvitationPreviewError] = useState("");
+  const [reminderTarget, setReminderTarget] = useState(null);
+  const [reminderPreview, setReminderPreview] = useState(null);
+  const [reminderPreviewLoading, setReminderPreviewLoading] = useState(false);
+  const [reminderPreviewError, setReminderPreviewError] = useState("");
 
   const refresh = async () => {
     setLoading(true);
@@ -256,6 +263,43 @@ export default function SuperAdminClientes() {
     }
   };
 
+  const handleOpenActiveDemoReminder = async (eleam) => {
+    if (!eleam?.id || demoAction) return;
+    setReminderTarget(eleam);
+    setReminderPreview(null);
+    setReminderPreviewError("");
+    setReminderPreviewLoading(true);
+    try {
+      const preview = await getDemoActiveReminderPreview(eleam.id);
+      if (!preview) throw new Error("No pudimos preparar la vista previa.");
+      setReminderPreview(preview);
+    } catch (err) {
+      console.error(err);
+      setReminderPreviewError(err.message || "No se pudo preparar el recordatorio.");
+    } finally {
+      setReminderPreviewLoading(false);
+    }
+  };
+
+  const handleConfirmActiveDemoReminder = async () => {
+    const eleam = reminderTarget;
+    if (!eleam?.id || demoAction || !reminderPreview) return;
+    setDemoAction({ id: eleam.id, type: "active_reminder" });
+    try {
+      const result = await sendDemoActiveReminder(eleam.id);
+      const days = result.remaining_days === 1 ? "1 día restante" : `${result.remaining_days} días restantes`;
+      toast(`Recordatorio enviado a ${result.email}: ${days}.`, "success");
+      setReminderTarget(null);
+      setReminderPreview(null);
+      await refreshClientAfterDemoAction(eleam.id);
+    } catch (err) {
+      console.error(err);
+      toast(err.message || "No se pudo enviar el recordatorio.", "error");
+    } finally {
+      setDemoAction(null);
+    }
+  };
+
   if (loading) return <Loading message="Cargando clientes..." />;
 
   return (
@@ -286,6 +330,7 @@ export default function SuperAdminClientes() {
           usageDays={usageDays}
           demoEngagement={demoEngagement}
           onInviteDemoRestart={handleOpenDemoRestartInvitation}
+          onRemindActiveDemo={handleOpenActiveDemoReminder}
           demoAction={demoAction}
         />
       </div>
@@ -305,6 +350,7 @@ export default function SuperAdminClientes() {
         portfolioUsage={portfolioUsage}
         demoEngagement={demoEngagement}
         onInviteDemoRestart={handleOpenDemoRestartInvitation}
+        onRemindActiveDemo={handleOpenActiveDemoReminder}
         demoAction={demoAction}
       />
       <DemoRestartInvitationModal
@@ -320,6 +366,20 @@ export default function SuperAdminClientes() {
           setInvitationPreviewError("");
         }}
         onConfirm={handleConfirmDemoRestartInvitation}
+      />
+      <DemoActiveReminderModal
+        eleam={reminderTarget}
+        preview={reminderPreview}
+        loading={reminderPreviewLoading}
+        sending={demoAction?.type === "active_reminder"}
+        error={reminderPreviewError}
+        onClose={() => {
+          if (demoAction) return;
+          setReminderTarget(null);
+          setReminderPreview(null);
+          setReminderPreviewError("");
+        }}
+        onConfirm={handleConfirmActiveDemoReminder}
       />
     </div>
   );
