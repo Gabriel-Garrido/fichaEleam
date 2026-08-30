@@ -10,7 +10,6 @@ import { getOpenAdverseEventsCount } from "../adverseEvents/eventosAdversosServi
 import {
   CARE_TURN_PERMISSIONS,
   MEDICATION_TURN_PERMISSIONS,
-  canUseFeatureAction,
 } from "../permissions/accessRules";
 import {
   currentShift, todayDateLong, isSameDay,
@@ -31,13 +30,28 @@ export default function AdminDashboard() {
   const [adverseCount, setAdverseCount] = useState({ total: 0, gravesOCriticos: 0 });
   const [adverseLoading, setAdverseLoading] = useState(true);
   const [adverseError, setAdverseError] = useState(false);
+  const canUse = (featureId, permission = null) =>
+    canFeature(featureId) && (!permission || can(permission));
+  const canResidents = canFeature("residents");
+  const canOpenTurnTasks = canResidents
+    && CARE_TURN_PERMISSIONS.some((permission) => can(permission));
+  const canWorkOnCare = canUse("residents", "completar_tareas_cuidado");
+  const canResolveFollowUps = canUse("residents", "crear_observaciones");
+  const canWorkOnMedications = canResidents
+    && MEDICATION_TURN_PERMISSIONS.some((permission) => can(permission));
+  const dashboardAccess = useMemo(() => ({
+    residents: canResidents,
+    compliance: canFeature("compliance"),
+    personnel: canFeature("personnel"),
+    operational: canOpenTurnTasks || canWorkOnMedications,
+  }), [canFeature, canOpenTurnTasks, canResidents, canWorkOnMedications]);
 
   useEffect(() => {
     let cancelled = false;
     setLoadError(false);
     setLoading(true);
     setData(null);
-    loadDashboard(eleam?.id)
+    loadDashboard(dashboardAccess)
       .then((nextData) => { if (!cancelled) setData(nextData); })
       .catch((err) => {
         if (!cancelled) {
@@ -47,10 +61,10 @@ export default function AdminDashboard() {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [eleam?.id, reloadKey]);
+  }, [dashboardAccess, reloadKey]);
 
   useEffect(() => {
-    if (!eleam?.id) { setAdverseCount({ total: 0, gravesOCriticos: 0 }); setAdverseLoading(false); return; }
+    if (!eleam?.id || !canResidents) { setAdverseCount({ total: 0, gravesOCriticos: 0 }); setAdverseLoading(false); return; }
     let cancelled = false;
     setAdverseLoading(true);
     setAdverseError(false);
@@ -59,7 +73,7 @@ export default function AdminDashboard() {
       .catch(() => { if (!cancelled) setAdverseError(true); })
       .finally(() => { if (!cancelled) setAdverseLoading(false); });
     return () => { cancelled = true; };
-  }, [eleam?.id]);
+  }, [canResidents, eleam?.id]);
 
   const stats   = data?.residentStats ?? null;
   const errors  = data?.errors ?? {};
@@ -110,17 +124,9 @@ export default function AdminDashboard() {
     return { stale, highDependency };
   }, [data]);
 
-  const canUse = (featureId, permission = null) =>
-    canFeature(featureId) && (!permission || can(permission));
-  const canUseAny = (featureId, permissions) =>
-    canUseFeatureAction({ canFeature, can }, featureId, permissions);
-
-  const canWorkOnCare = canUseAny("residents", CARE_TURN_PERMISSIONS);
-  const canWorkOnMedications = canUseAny("residents", MEDICATION_TURN_PERMISSIONS);
-
   const mainQuickActions = [
     canUse("residents", "registrar_entregas_turno") && { iconId: "shift", label: "Entrega de turno", description: "Deja el resumen para el siguiente equipo.", route: "/operacion/turnos/nuevo" },
-    canWorkOnCare && { iconId: "tasks", label: "Cuidados", description: "Revisa y completa tareas del turno.", route: "/operacion/cuidados" },
+    canOpenTurnTasks && { iconId: "tasks", label: "Tareas del turno", description: "Revisa los registros y pendientes que puedes realizar.", route: "/operacion/cuidados" },
     canWorkOnMedications && { iconId: "meds", label: "Medicamentos", description: "Administra o valida lo programado.", route: "/operacion/medicamentos" },
   ].filter(Boolean);
   const initialLoading = (loading || adverseLoading) && !loadError;
@@ -181,8 +187,12 @@ export default function AdminDashboard() {
         ds20Staffing={data?.ds20Staffing ?? []}
         adverseEvents={adverseCount}
         loading={loading}
+        incomplete={adverseError || Object.values(errors).some(Boolean)}
         navigate={navigate}
         canFeature={canFeature}
+        canCare={canWorkOnCare}
+        canFollowUps={canResolveFollowUps}
+        canMedications={canWorkOnMedications}
       />
 
       <section aria-labelledby="dashboard-status-title">
@@ -234,7 +244,6 @@ export default function AdminDashboard() {
 
       {canUse("residents") && (canWorkOnCare || canWorkOnMedications) && <OperationalTurnPanel
         loading={loading}
-        incomplete={adverseError || Object.keys(errors).length > 0}
         summary={operational}
         navigate={navigate}
         canCare={canWorkOnCare}

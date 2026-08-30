@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const dashboard = readFileSync(new URL("./AdminDashboard.jsx", import.meta.url), "utf8");
 const panels = readFileSync(new URL("./DashboardPanels.jsx", import.meta.url), "utf8");
+const service = readFileSync(new URL("./dashboardService.js", import.meta.url), "utf8");
 
 describe("dashboard simple y orientado al turno", () => {
   it("ubica las acciones principales antes que alertas e indicadores", () => {
@@ -23,5 +24,14 @@ describe("dashboard simple y orientado al turno", () => {
     expect(panels).toContain("chip.visible && chip.value > 0");
     expect(dashboard).toContain("Más información");
     expect(dashboard).toContain("<details");
+  });
+
+  it("consulta únicamente las áreas habilitadas y filtra acciones granulares", () => {
+    expect(dashboard).toContain("loadDashboard(dashboardAccess)");
+    expect(service).toContain('enabled("residents")');
+    expect(service).toContain('enabled("compliance")');
+    expect(service).toContain('enabled("personnel")');
+    expect(panels).toContain("visible: canMedications");
+    expect(panels).toContain("visible: canFollowUps");
   });
 });

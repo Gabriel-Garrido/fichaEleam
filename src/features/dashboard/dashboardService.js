@@ -7,7 +7,6 @@ import {
 import { currentTurno, getCareTaskSummary, prepareShiftTasks, todayIso } from "../carePlans/carePlansService";
 import { getEmarSummary } from "../emar/emarService";
 import { calcAge } from "../residents/residentUtils";
-import { getBedOccupancySummary } from "../beds/bedsService";
 import { withResidentLocation } from "../beds/bedsUtils";
 
 // Resumen para el dashboard del ELEAM: porcentaje global, por ámbito,
@@ -30,23 +29,6 @@ async function getAccreditationSummary() {
     requisitosConEvidencia: resumen.requisitosConEvidencia,
     evidenciasVigentes: resumen.evidenciasVigentes,
     observaciones:  obs ?? [],
-  };
-}
-
-async function getTeamSummary(eleamId) {
-  if (!eleamId) {
-    return { total: 0, admins: 0, funcionarios: 0 };
-  }
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("rol")
-    .eq("eleam_id", eleamId);
-  if (error) throw error;
-  const rows = data ?? [];
-  return {
-    total: rows.length,
-    admins: rows.filter((r) => r.rol === "admin_eleam").length,
-    funcionarios: rows.filter((r) => r.rol === "funcionario").length,
   };
 }
 
@@ -101,41 +83,6 @@ async function getResidentStats() {
     edadPromedio:   avgAge,
     dependencia,
     sexos,
-  };
-}
-
-async function getTodayVitalSignsCount() {
-  const { count, error } = await supabase
-    .from("signos_vitales")
-    .select("id", { count: "exact", head: true })
-    .gte("fecha_hora", startOfToday())
-    .lt("fecha_hora", startOfTomorrow());
-  if (error) throw error;
-  return count ?? 0;
-}
-
-async function getTodayObservationsCount() {
-  const { count, error } = await supabase
-    .from("observaciones_diarias")
-    .select("id", { count: "exact", head: true })
-    .gte("fecha_hora", startOfToday())
-    .lt("fecha_hora", startOfTomorrow());
-  if (error) throw error;
-  return count ?? 0;
-}
-
-async function getActivationActivitySummary() {
-  const [vitals, observations, shifts] = await Promise.all([
-    supabase.from("signos_vitales").select("id", { count: "exact", head: true }),
-    supabase.from("observaciones_diarias").select("id", { count: "exact", head: true }),
-    supabase.from("turno_entregas").select("id", { count: "exact", head: true }),
-  ]);
-  if (vitals.error) throw vitals.error;
-  if (observations.error) throw observations.error;
-  if (shifts.error) throw shifts.error;
-  return {
-    clinicalRecords: (vitals.count ?? 0) + (observations.count ?? 0),
-    shiftHandoffs: shifts.count ?? 0,
   };
 }
 
@@ -222,20 +169,6 @@ export async function getPendingFollowUps(limit = 10) {
   return data ?? [];
 }
 
-// Incidentes/caídas de los últimos 7 días — útil como indicador de seguridad.
-async function getRecentIncidents() {
-  const since = startOfDaysAgo(7);
-  const { data, error } = await supabase
-    .from("observaciones_diarias")
-    .select("id, residente_id, fecha_hora, tipo, descripcion, residentes(nombre, apellido)")
-    .in("tipo", ["caida", "incidente"])
-    .gte("fecha_hora", since)
-    .order("fecha_hora", { ascending: false })
-    .limit(10);
-  if (error) throw error;
-  return data ?? [];
-}
-
 async function getOperationalTurnSummary() {
   const fecha = todayIso();
   const turno = currentTurno();
@@ -292,78 +225,52 @@ async function getDs20StaffingComplianceToday() {
   return data ?? [];
 }
 
-export async function loadDashboard(eleamId = null) {
-  const [
-    residentStatsResult,
-    signosHoyResult,
-    observacionesHoyResult,
-    activityByShiftResult,
-    latestVitalsResult,
-    followUpsResult,
-    incidentsResult,
-    expiringResult,
-    acreditacionResult,
-    operationalResult,
-    bedsResult,
-    assessmentsResult,
-    ds20ResidentsResult,
-    ds20StaffingResult,
-    teamResult,
-    activationActivityResult,
-  ] = await Promise.allSettled([
-    getResidentStats(),
-    getTodayVitalSignsCount(),
-    getTodayObservationsCount(),
-    getTodayActivityByShift(),
-    getActiveResidentsLatestVitals(),
-    getPendingFollowUps(),
-    getRecentIncidents(),
-    getExpiringDocuments(30),
-    getAccreditationSummary(),
-    getOperationalTurnSummary(),
-    getBedOccupancySummary(),
-    getPendingClinicalAssessments(30),
-    getDs20ResidentCompliance(),
-    getDs20StaffingComplianceToday(),
-    getTeamSummary(eleamId),
-    getActivationActivitySummary(),
-  ]);
-
-  const ok = (r) => r.status === "fulfilled";
+export async function loadDashboard(access = {}) {
+  const enabled = (key) => access[key] !== false;
+  const tasks = {
+    ...(enabled("residents") ? {
+      residentStats: getResidentStats(),
+      activityByShift: getTodayActivityByShift(),
+      latestVitals: getActiveResidentsLatestVitals(),
+      followUps: getPendingFollowUps(),
+      assessments: getPendingClinicalAssessments(30),
+      ds20Residents: getDs20ResidentCompliance(),
+    } : {}),
+    ...(enabled("compliance") ? {
+      expiring: getExpiringDocuments(30),
+      acreditacion: getAccreditationSummary(),
+    } : {}),
+    ...(enabled("operational") ? { operational: getOperationalTurnSummary() } : {}),
+    ...(enabled("personnel") ? { ds20Staffing: getDs20StaffingComplianceToday() } : {}),
+  };
+  const names = Object.keys(tasks);
+  const settled = await Promise.allSettled(Object.values(tasks));
+  const results = Object.fromEntries(names.map((name, index) => [name, settled[index]]));
+  const value = (name, fallback) => results[name]?.status === "fulfilled" ? results[name].value : fallback;
+  const failed = (name) => Boolean(results[name] && results[name].status === "rejected");
 
   return {
-    residentStats:        ok(residentStatsResult)    ? residentStatsResult.value    : null,
-    signosHoy:            ok(signosHoyResult)        ? signosHoyResult.value        : 0,
-    observacionesHoy:     ok(observacionesHoyResult) ? observacionesHoyResult.value : 0,
-    activityByShift:      ok(activityByShiftResult)  ? activityByShiftResult.value  : null,
-    latestVitalsByResident:ok(latestVitalsResult)    ? latestVitalsResult.value     : [],
-    pendingFollowUps:     ok(followUpsResult)        ? followUpsResult.value        : [],
-    recentIncidents:      ok(incidentsResult)        ? incidentsResult.value        : [],
-    expiringDocuments:    ok(expiringResult)         ? expiringResult.value         : [],
-    acreditacionSummary:  ok(acreditacionResult)     ? acreditacionResult.value     : null,
-    operationalSummary:   ok(operationalResult)      ? operationalResult.value      : null,
-    bedSummary:           ok(bedsResult)             ? bedsResult.value             : null,
-    pendingAssessments:   ok(assessmentsResult)      ? assessmentsResult.value      : [],
-    ds20Residents:        ok(ds20ResidentsResult)    ? ds20ResidentsResult.value    : [],
-    ds20Staffing:         ok(ds20StaffingResult)     ? ds20StaffingResult.value     : [],
-    teamSummary:          ok(teamResult)             ? teamResult.value             : { total: 0, admins: 0, funcionarios: 0 },
-    activationActivity:   ok(activationActivityResult) ? activationActivityResult.value : { clinicalRecords: 0, shiftHandoffs: 0 },
+    residentStats: value("residentStats", null),
+    activityByShift: value("activityByShift", null),
+    latestVitalsByResident: value("latestVitals", []),
+    pendingFollowUps: value("followUps", []),
+    expiringDocuments: value("expiring", []),
+    acreditacionSummary: value("acreditacion", null),
+    operationalSummary: value("operational", null),
+    pendingAssessments: value("assessments", []),
+    ds20Residents: value("ds20Residents", []),
+    ds20Staffing: value("ds20Staffing", []),
     errors: {
-      residentStats:    !ok(residentStatsResult),
-      actividad:        !ok(signosHoyResult) || !ok(observacionesHoyResult),
-      activityByShift:  !ok(activityByShiftResult),
-      latestVitals:     !ok(latestVitalsResult),
-      followUps:        !ok(followUpsResult),
-      incidents:        !ok(incidentsResult),
-      expiring:         !ok(expiringResult),
-      acreditacion:     !ok(acreditacionResult),
-      operational:       !ok(operationalResult),
-      beds:              !ok(bedsResult),
-      assessments:       !ok(assessmentsResult),
-      ds20Residents:     !ok(ds20ResidentsResult),
-      ds20Staffing:      !ok(ds20StaffingResult),
-      team:              !ok(teamResult),
-      activation:        !ok(activationActivityResult),
+      residentStats: failed("residentStats"),
+      activityByShift: failed("activityByShift"),
+      latestVitals: failed("latestVitals"),
+      followUps: failed("followUps"),
+      expiring: failed("expiring"),
+      acreditacion: failed("acreditacion"),
+      operational: failed("operational"),
+      assessments: failed("assessments"),
+      ds20Residents: failed("ds20Residents"),
+      ds20Staffing: failed("ds20Staffing"),
     },
   };
 }

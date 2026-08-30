@@ -6,6 +6,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
 import Loading from "../../components/Loading";
+import TabBar from "../../components/TabBar";
 import { FeatureCoach } from "../featureCoach";
 import {
   getRequisitoEleam,
@@ -1172,27 +1173,16 @@ export default function AccreditationRequisito() {
         </div>
       </header>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-200">
-        {[
-          { key: "evidencia", label: `Evidencias (${docs.length})` },
-          { key: "observaciones", label: `Observaciones (${observaciones.length})` },
-          { key: "historial", label: `Historial (${audit.length})` },
-        ].map((t) => (
-          <button
-            type="button"
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              tab === t.key
-                ? "border-teal-700 text-teal-700"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <TabBar
+        label="Contenido del requisito"
+        tabs={[
+          { id: "evidencia", label: "Evidencias", badge: docs.length },
+          { id: "observaciones", label: "Observaciones", badge: observaciones.length },
+          { id: "historial", label: "Historial", badge: audit.length },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
 
       {/* Evidencias */}
       {tab === "evidencia" && (

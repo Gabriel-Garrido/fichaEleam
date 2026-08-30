@@ -29,6 +29,9 @@ export function CriticalAlerts({
   incomplete = false,
   navigate,
   canFeature,
+  canCare = false,
+  canFollowUps = false,
+  canMedications = false,
 }) {
   if (loading) return null;
 
@@ -43,13 +46,13 @@ export function CriticalAlerts({
     const days = daysUntil(d.fecha_vencimiento);
     return days != null && days <= 7;
   }) : [];
-  const emarUrgent = canResidents ? (operational?.emar?.pendiente_validacion ?? 0) + (operational?.emar?.vencidas ?? 0) : 0;
-  const careUrgent = canResidents ? operational?.care?.vencidas ?? 0 : 0;
+  const emarUrgent = canMedications ? (operational?.emar?.pendiente_validacion ?? 0) + (operational?.emar?.vencidas ?? 0) : 0;
+  const careUrgent = canCare ? operational?.care?.vencidas ?? 0 : 0;
   const overdueAssessments = canResidents ? assessments.filter((a) => a.dias_restantes == null || a.dias_restantes < 0) : [];
   const assessmentsCount = overdueAssessments.length;
   const ds20ResidentPending = canResidents ? ds20Residents.filter((item) => (item.pendientes ?? 0) > 0) : [];
   const ds20StaffingIssues = canPersonnel ? ds20Staffing.filter((item) => item.incumple) : [];
-  const visibleFollowUps = canResidents ? followUps : [];
+  const visibleFollowUps = canFollowUps ? followUps : [];
   const adverseOpen = canResidents ? adverseEvents?.total ?? 0 : 0;
   const adverseSerious = canResidents ? adverseEvents?.gravesOCriticos ?? 0 : 0;
   const totalAlertas = critical.length + visibleFollowUps.length + docs7d.length + emarUrgent + careUrgent + assessmentsCount + ds20ResidentPending.length + ds20StaffingIssues.length + adverseOpen;
@@ -92,7 +95,7 @@ export function CriticalAlerts({
         {[
           {
             label: "Medicamentos urgentes",
-            visible: canResidents,
+            visible: canMedications,
             value: emarUrgent,
             tone: "rose",
             onClick: emarUrgent ? () => navigate("/operacion/medicamentos") : null,
@@ -140,7 +143,7 @@ export function CriticalAlerts({
           },
           {
             label: "Tareas vencidas",
-            visible: canResidents,
+            visible: canCare,
             value: careUrgent,
             tone: "amber",
             onClick: careUrgent ? () => navigate("/operacion/cuidados") : null,
@@ -148,7 +151,7 @@ export function CriticalAlerts({
           },
           {
             label: "Seguimientos pendientes",
-            visible: canResidents,
+            visible: canFollowUps,
             value: visibleFollowUps.length,
             tone: "amber",
             onClick: visibleFollowUps.length ? () => navigate("/operacion/cuidados") : null,

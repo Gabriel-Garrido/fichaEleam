@@ -1,16 +1,10 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { ROLE_LABELS } from "../navigation/navigationConfig";
+import { matchesNavigationItem } from "../navigation/navigationConfig";
 import NavIcon from "../components/NavIcon";
 
 const HOVER_PREVIEW_DELAY_MS = 300;
-
-function isActive(path, pathname) {
-  if (!path) return false;
-  if (path === "/superadmin") return pathname === "/superadmin";
-  const base = path.split("?")[0];
-  return base === "/" ? pathname === "/" : pathname === base || pathname.startsWith(`${base}/`);
-}
 
 function getInitials(nombre) {
   if (!nombre) return "?";
@@ -83,23 +77,23 @@ export default function DesktopSidebar({ collapsed, onToggle, sections, auth, on
           </div>
         </button>
 
-        {isPinnedOpen && (
+        {expanded && (
           <button
             type="button"
             onClick={onToggle}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
-            aria-label="Contraer menú"
-            title="Contraer menú"
+            aria-label={isPinnedOpen ? "Contraer menú" : "Fijar menú abierto"}
+            title={isPinnedOpen ? "Contraer menú" : "Fijar menú abierto"}
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              <path strokeLinecap="round" strokeLinejoin="round" d={isPinnedOpen ? "M15.75 19.5L8.25 12l7.5-7.5" : "M8.25 4.5l7.5 7.5-7.5 7.5"} />
             </svg>
           </button>
         )}
       </div>
 
       {/* ── Navigation ───────────────────────────────────────── */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+      <nav aria-label="Navegación principal" className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
         {sections.map((section) => (
           <div key={section.id} className="mb-5">
             {expanded && (
@@ -109,7 +103,7 @@ export default function DesktopSidebar({ collapsed, onToggle, sections, auth, on
             )}
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const active = isActive(item.path, location.pathname);
+                const active = matchesNavigationItem(item, location.pathname);
 
                 if (item.disabled) {
                   return (
@@ -133,6 +127,7 @@ export default function DesktopSidebar({ collapsed, onToggle, sections, auth, on
                     key={item.id}
                     type="button"
                     onClick={() => navigate(item.path)}
+                    aria-current={active ? "page" : undefined}
                     title={expanded ? item.description : `${item.label}${item.description ? `: ${item.description}` : ""}`}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm outline-none transition-all duration-100 focus-visible:ring-2 focus-visible:ring-teal-500/40 ${
                       active
@@ -152,7 +147,7 @@ export default function DesktopSidebar({ collapsed, onToggle, sections, auth, on
             </div>
           </div>
         ))}
-      </div>
+      </nav>
 
       {/* ── User profile ─────────────────────────────────────── */}
       <div className="shrink-0 space-y-1 border-t border-slate-100 p-3">

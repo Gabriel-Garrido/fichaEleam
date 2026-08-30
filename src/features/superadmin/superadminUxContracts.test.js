@@ -11,9 +11,10 @@ const reminderModal = readFileSync("src/features/superadmin/components/DemoActiv
 
 describe("contratos UX y seguridad de Superadmin", () => {
   it("divide el detalle del cliente para no mostrar todo simultáneamente", () => {
-    expect(drawer).toContain('["summary", "Resumen"]');
-    expect(drawer).toContain('["usage", "Uso"]');
-    expect(drawer).toContain('["followup", "Seguimiento"]');
+    expect(drawer).toContain('{ id: "summary", label: "Resumen" }');
+    expect(drawer).toContain('{ id: "usage", label: "Uso" }');
+    expect(drawer).toContain('{ id: "followup", label: "Seguimiento" }');
+    expect(drawer).toContain('label="Secciones del cliente"');
   });
 
   it("muestra capacidad y último ingreso en la cartera", () => {

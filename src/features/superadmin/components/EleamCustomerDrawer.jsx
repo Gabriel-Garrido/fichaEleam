@@ -9,6 +9,7 @@ import InteractionTimeline from "./InteractionTimeline";
 import CrmTasksPanel from "./CrmTasksPanel";
 import EleamUsagePanel from "./EleamUsagePanel";
 import HelpTooltip from "../../../components/HelpTooltip";
+import TabBar from "../../../components/TabBar";
 import { demoActiveReminderState, demoLoginLabel, demoRestartInvitationState } from "../utils/portfolioUsage";
 
 // Tooltips: solo en campos no obvios. Cada texto especifica la columna
@@ -163,11 +164,15 @@ export default function EleamCustomerDrawer({
           </div>
         ) : (
           <div className="p-4 space-y-4">
-            <nav className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1" aria-label="Secciones del cliente">
-              {[["summary", "Resumen"], ["usage", "Uso"], ["followup", "Seguimiento"]].map(([key, label]) => (
-                <button key={key} type="button" onClick={() => setTab(key)} aria-pressed={tab === key} className={`min-h-10 rounded-lg px-3 py-2 text-sm font-semibold ${tab === key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{label}</button>
-              ))}
-            </nav>
+            <TabBar
+              tabs={[{ id: "summary", label: "Resumen" }, { id: "usage", label: "Uso" }, { id: "followup", label: "Seguimiento" }]}
+              active={tab}
+              onChange={setTab}
+              label="Secciones del cliente"
+              tone="slate"
+              compact
+              className="mb-4"
+            />
 
             {tab === "usage" && <section className="rounded-xl border border-slate-100 bg-white p-4">
               <EleamUsagePanel eleamId={eleam.id} initialDays={usageDays} />

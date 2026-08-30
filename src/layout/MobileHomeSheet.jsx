@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ROLE_LABELS } from "../navigation/navigationConfig";
+import { matchesNavigationItem } from "../navigation/navigationConfig";
 import NavIcon from "../components/NavIcon";
-
-function isActive(path, pathname) {
-  if (!path) return false;
-  if (path === "/superadmin") return pathname === "/superadmin";
-  const base = path.split("?")[0];
-  return pathname === base || pathname.startsWith(`${base}/`);
-}
 
 function getInitials(nombre) {
   if (!nombre) return "?";
@@ -28,11 +22,11 @@ const ROLE_THEME = {
   superadmin:  { from: "from-slate-700",  to: "to-slate-900",  chip: "bg-slate-200 text-slate-800 ring-slate-300" },
 };
 
-export default function MobileHomeSheet({ open, onClose, sections, auth, quickActions, onLogout, onNavigate }) {
+export default function MobileHomeSheet({ open, onClose, sections, auth, quickActions, primaryItemIds = [], onLogout, onNavigate }) {
   const location = useLocation();
   const [query, setQuery] = useState("");
   const sheetRef = useRef(null);
-  const searchRef = useRef(null);
+  const closeRef = useRef(null);
   const previousFocusRef = useRef(null);
 
   useEffect(() => {
@@ -50,7 +44,7 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
   useEffect(() => {
     if (!open) return;
     previousFocusRef.current = document.activeElement;
-    const focusFrame = window.requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }));
+    const focusFrame = window.requestAnimationFrame(() => closeRef.current?.focus({ preventScroll: true }));
     const handler = (e) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -94,6 +88,14 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
     );
   }, [sections]);
 
+  const primaryIds = useMemo(() => new Set(primaryItemIds), [primaryItemIds]);
+  const secondarySections = useMemo(() => sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !primaryIds.has(item.id)),
+    }))
+    .filter((section) => section.items.length > 0), [primaryIds, sections]);
+
   // Las acciones rápidas que llevan a la misma ruta que un ítem del menú son
   // redundantes: se filtran para que cada destino aparezca una sola vez.
   const dedupedQuickActions = useMemo(() => {
@@ -101,9 +103,17 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
     return quickActions.filter((action) => !navPaths.has(action.path));
   }, [flatNav, quickActions]);
 
+  const searchableItems = useMemo(() => {
+    const byPath = new Map();
+    for (const item of [...flatNav, ...dedupedQuickActions]) {
+      if (!byPath.has(item.path)) byPath.set(item.path, item);
+    }
+    return [...byPath.values()];
+  }, [dedupedQuickActions, flatNav]);
+
   const normalizedQuery = query.trim().toLowerCase();
   const filteredNav = normalizedQuery
-    ? flatNav.filter((item) => item.label?.toLowerCase().includes(normalizedQuery))
+    ? searchableItems.filter((item) => `${item.label ?? ""} ${item.description ?? ""}`.toLowerCase().includes(normalizedQuery))
     : null;
 
   if (!open) return null;
@@ -124,6 +134,16 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
         {/* Drag handle */}
         <div className="flex justify-center pt-2.5 pb-1.5">
           <div className="h-1.5 w-11 rounded-full bg-slate-200" aria-hidden="true" />
+        </div>
+
+        <div className="flex items-center justify-between px-4 pb-2">
+          <div>
+            <h2 className="text-base font-bold text-slate-950">Más opciones</h2>
+            <p className="text-xs text-slate-500">Solo se muestran las áreas habilitadas para tu cuenta.</p>
+          </div>
+          <button ref={closeRef} type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-slate-100 text-slate-600 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500" aria-label="Cerrar menú">
+            <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
         </div>
 
         {/* Scrollable body */}
@@ -183,7 +203,6 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" />
             </svg>
             <input
-              ref={searchRef}
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -211,7 +230,7 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
                       <LauncherTile
                         key={item.id}
                         item={item}
-                        active={isActive(item.path, location.pathname)}
+                        active={matchesNavigationItem(item, location.pathname)}
                         onClick={() => onNavigate(item.path)}
                       />
                     )
@@ -248,7 +267,7 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
                 </div>
               )}
 
-              {sections.map((section) => (
+              {secondarySections.map((section) => (
                 <div key={section.id} className="mb-5">
                   <SectionLabel label={section.label} />
                   <div className="grid grid-cols-3 gap-2 min-[400px]:grid-cols-4">
@@ -259,7 +278,7 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
                         <LauncherTile
                           key={item.id}
                           item={item}
-                          active={isActive(item.path, location.pathname)}
+                          active={matchesNavigationItem(item, location.pathname)}
                           onClick={() => onNavigate(item.path)}
                         />
                       )
@@ -267,6 +286,11 @@ export default function MobileHomeSheet({ open, onClose, sections, auth, quickAc
                   </div>
                 </div>
               ))}
+              {secondarySections.length === 0 && dedupedQuickActions.length === 0 && (
+                <p className="mb-5 rounded-2xl bg-slate-50 p-4 text-center text-sm leading-6 text-slate-500">
+                  Tus áreas principales ya están disponibles en la barra inferior.
+                </p>
+              )}
             </>
           )}
 

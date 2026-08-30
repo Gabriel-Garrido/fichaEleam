@@ -2,8 +2,6 @@
 // de datos mantienen sus propios controles como defensa en profundidad.
 export const CARE_TURN_PERMISSIONS = Object.freeze([
   "completar_tareas_cuidado",
-  "administrar_medicamentos",
-  "validar_medicamentos_controlados",
   "crear_signos_vitales",
   "crear_observaciones",
 ]);

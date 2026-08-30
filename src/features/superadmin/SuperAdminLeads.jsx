@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
+import TabBar from "../../components/TabBar";
 import { LeadsSkeletonList } from "../../components/Skeleton";
 import LeadsPanel from "./components/LeadsPanel";
 import LandingMetrics from "./components/LandingMetrics";
@@ -67,10 +68,10 @@ export default function SuperAdminLeads() {
     return updated;
   }, []);
 
-  const TABS = [
-    { key: "prospect",  label: "Funnel comercial" },
-    { key: "leads",     label: "Leads landing", badge: loading ? null : leads.length },
-    { key: "metricas",  label: "Métricas landing" },
+  const tabs = [
+    { id: "prospect",  label: "Funnel comercial" },
+    { id: "leads",     label: "Leads landing", badge: loading ? null : leads.length },
+    { id: "metricas",  label: "Métricas landing" },
   ];
 
   return (
@@ -99,30 +100,7 @@ export default function SuperAdminLeads() {
         }
       />
 
-      {/* Tab bar */}
-      <div className="mb-5 flex items-center gap-2 flex-wrap border-b border-slate-100 pb-3">
-        {TABS.map(({ key, label, badge }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`relative inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
-              tab === key
-                ? "bg-slate-900 text-white"
-                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {label}
-            {badge != null && badge > 0 && (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                tab === key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
-              }`}>
-                {badge}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <TabBar tabs={tabs} active={tab} onChange={setTab} label="Gestión de oportunidades" tone="slate" />
 
       {tab === "leads" && (
         loading ? (

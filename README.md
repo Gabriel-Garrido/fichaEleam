@@ -180,7 +180,11 @@ El catálogo frontend está en `src/features/permissions/featureCatalog.js`. Las
 
 Para funcionarios, los permisos de área son **explícitos y cerrados por defecto**: si no existe una autorización habilitada, el área no aparece en la navegación, no se ofrecen enlaces ni tarjetas relacionadas, sus rutas rechazan el acceso directo y Supabase bloquea sus tablas y archivos con RLS. Si ninguna área está habilitada, la sesión abre `/sin-permisos` con una explicación clara, sin redirigir a una pantalla no autorizada.
 
+La navegación de escritorio y móvil se genera desde el mismo catálogo de roles, áreas y permisos. En móvil, la barra inferior se completa dinámicamente con hasta cuatro áreas autorizadas y **Más** reúne únicamente destinos secundarios y acciones rápidas disponibles, sin duplicar los accesos principales. En escritorio, los flujos internos mantienen activa su área de origen y la preferencia de menú contraído queda guardada en el dispositivo. Los perfiles de plataforma y los vinculados a un ELEAM reciben menús separados.
+
 El editor de permisos mantiene consistencia automáticamente: habilitar una acción habilita su área; deshabilitar el área elimina sus acciones asociadas. Los permisos de acción también se validan en las rutas sensibles y nuevamente en PostgreSQL/RPC. Solo `admin_eleam` puede cambiar permisos de funcionarios. Los administradores mantienen las áreas disponibles salvo que una configuración del establecimiento las deshabilite expresamente; `superadmin` conserva el acceso global de plataforma.
+
+El dashboard aplica el mismo alcance antes de consultar: no solicita estadísticas clínicas, dotación, documentos ni trabajo del turno cuando el perfil no tiene habilitada el área o la acción correspondiente. Esto evita información irrelevante, errores por permisos y consultas innecesarias al backend.
 
 La feature `resident_payments` es una excepción intencional al acceso global de plataforma: corresponde a la administración interna de cada ELEAM y permanece separada de `/superadmin/pagos`. Los funcionarios necesitan autorización explícita para verla y permisos independientes para registrar, enviar o anular. La función `administrativo` propone lectura, registro y envío; la anulación queda desactivada por defecto.
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getMobileBottomNav, getNavigationSections, getQuickActions } from "./navigationConfig";
+import { getMobileBottomNav, getNavigationSections, getQuickActions, matchesNavigationItem } from "./navigationConfig";
 
 function authFor(role, overrides = {}) {
   return {
@@ -78,5 +78,44 @@ describe("navigationConfig role workflows", () => {
     const sections = getNavigationSections(authFor("admin_eleam"));
     const items = sections.flatMap((section) => section.items.map((item) => item.id));
     expect(items).toEqual(["dashboard", "establishment", "residents", "personnel", "compliance", "resident_payments"]);
+  });
+
+  it("rellena la navegación móvil con las áreas realmente habilitadas", () => {
+    const auth = authFor("funcionario", {
+      canFeature: (featureId) => featureId === "establishment",
+    });
+    expect(slotIds(getMobileBottomNav(auth))).toEqual(["establishment", "__home__"]);
+  });
+
+  it("separa la navegación operativa de la plataforma en perfiles superadmin vinculados a un ELEAM", () => {
+    const auth = authFor("superadmin", {
+      profile: { eleam_id: "e1" },
+    });
+    const sections = getNavigationSections(auth);
+    expect(sections.map((section) => section.id)).toEqual(["producto"]);
+    expect(slotIds(getMobileBottomNav(auth))).toEqual([
+      "dashboard",
+      "residents",
+      "__home__",
+      "personnel",
+      "compliance",
+    ]);
+  });
+
+  it("mantiene activa Residentes en sus flujos clínicos relacionados", () => {
+    const residents = getNavigationSections(authFor("admin_eleam"))
+      .flatMap((section) => section.items)
+      .find((item) => item.id === "residents");
+    expect(matchesNavigationItem(residents, "/residents/r1")).toBe(true);
+    expect(matchesNavigationItem(residents, "/operacion/cuidados")).toBe(true);
+    expect(matchesNavigationItem(residents, "/eventos-adversos/nuevo")).toBe(true);
+    expect(matchesNavigationItem(residents, "/cumplimiento")).toBe(false);
+  });
+
+  it("muestra Tareas del turno a quien puede realizar al menos uno de sus registros", () => {
+    const auth = authFor("funcionario", {
+      can: (permission) => permission === "crear_signos_vitales",
+    });
+    expect(getQuickActions(auth).map((item) => item.id)).toContain("daily-care");
   });
 });

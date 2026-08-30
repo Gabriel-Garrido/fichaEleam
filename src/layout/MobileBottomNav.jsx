@@ -1,19 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import MobileHomeSheet from "./MobileHomeSheet";
 import NavIcon from "../components/NavIcon";
-
-function isActive(path, pathname) {
-  if (!path) return false;
-  if (path === "/superadmin") return pathname === "/superadmin";
-  const base = path.split("?")[0];
-  return pathname === base || pathname.startsWith(`${base}/`);
-}
+import { matchesNavigationItem } from "../navigation/navigationConfig";
 
 export default function MobileBottomNav({ slots, sections, quickActions, auth, onLogout }) {
   const [homeOpen, setHomeOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => { setHomeOpen(false); }, [location.pathname]);
 
   const go = (path) => {
     navigate(path);
@@ -23,7 +19,23 @@ export default function MobileBottomNav({ slots, sections, quickActions, auth, o
   const items = Array.isArray(slots) ? slots : [];
   if (items.length === 0) return null;
 
-  const gridCols = items.length >= 5 ? "grid-cols-5" : items.length === 4 ? "grid-cols-4" : "grid-cols-3";
+  const gridCols = {
+    1: "grid-cols-1",
+    2: "grid-cols-2",
+    3: "grid-cols-3",
+    4: "grid-cols-4",
+    5: "grid-cols-5",
+  }[Math.min(items.length, 5)] ?? "grid-cols-3";
+  const maxWidth = {
+    1: "max-w-24",
+    2: "max-w-48",
+    3: "max-w-xs",
+    4: "max-w-sm",
+    5: "max-w-md",
+  }[Math.min(items.length, 5)] ?? "max-w-md";
+  const primaryItemIds = items
+    .filter((slot) => slot.type === "nav")
+    .map((slot) => slot.item.id);
 
   return (
     <>
@@ -31,7 +43,7 @@ export default function MobileBottomNav({ slots, sections, quickActions, auth, o
         aria-label="Navegación principal"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_28px_rgba(15,23,42,0.08)] backdrop-blur-md print:hidden lg:hidden"
       >
-        <div className={`mx-auto grid max-w-md ${gridCols} items-end gap-1`}>
+        <div className={`mx-auto grid ${maxWidth} ${gridCols} items-end gap-1`}>
           {items.map((slot, idx) => {
             if (slot.type === "home") {
               return (
@@ -50,7 +62,7 @@ export default function MobileBottomNav({ slots, sections, quickActions, auth, o
               <NavButton
                 key={item.id}
                 item={item}
-                active={isActive(item.path, location.pathname)}
+                active={matchesNavigationItem(item, location.pathname)}
                 onClick={() => go(item.path)}
               />
             );
@@ -64,6 +76,7 @@ export default function MobileBottomNav({ slots, sections, quickActions, auth, o
         sections={sections}
         auth={auth}
         quickActions={quickActions}
+        primaryItemIds={primaryItemIds}
         onLogout={onLogout}
         onNavigate={go}
       />
@@ -119,7 +132,7 @@ function HomeButton({ active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      aria-label="Abrir menú principal"
+      aria-label="Abrir más opciones"
       aria-expanded={active}
       className="tap-highlight-none mx-auto -mt-7 flex flex-col items-center gap-1"
     >
@@ -130,10 +143,10 @@ function HomeButton({ active, onClick }) {
             : "from-teal-700 to-teal-600 shadow-teal-900/30"
         }`}
       >
-        <NavIcon id="home" className="h-6 w-6 text-white" />
+        <NavIcon id="more" className="h-6 w-6 text-white" />
       </span>
       <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-teal-700">
-        Menú
+        Más
       </span>
     </button>
   );

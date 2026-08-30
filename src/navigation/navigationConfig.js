@@ -45,6 +45,15 @@ const PRODUCT_ITEMS = [
     requiresEleam: true,
     requiresActive: true,
     mobile: true,
+    activePrefixes: [
+      "/residents",
+      "/vital-signs",
+      "/observations",
+      "/eventos-adversos",
+      "/operacion/cuidados",
+      "/operacion/medicamentos",
+      "/operacion/turnos",
+    ],
   },
   {
     id: "personnel",
@@ -86,12 +95,12 @@ const PRODUCT_ITEMS = [
 ];
 
 const PLATFORM_ITEMS = [
-  { id: "superadmin", label: "Resumen", icon: "overview", path: "/superadmin", roles: ["superadmin"] },
-  { id: "superadmin-clientes", label: "Clientes", icon: "clients", path: "/superadmin/clientes", roles: ["superadmin"] },
-  { id: "superadmin-leads", label: "Leads", icon: "leads", path: "/superadmin/leads", roles: ["superadmin"] },
-  { id: "superadmin-pagos", label: "Pagos", icon: "payments_sa", path: "/superadmin/pagos", roles: ["superadmin"] },
-  { id: "superadmin-tareas", label: "Tareas", icon: "tasks", path: "/superadmin/tareas", roles: ["superadmin"] },
-  { id: "blog-admin", label: "Blog", icon: "blog", path: "/superadmin/blog", roles: ["superadmin"] },
+  { id: "superadmin", label: "Resumen", icon: "overview", path: "/superadmin", roles: ["superadmin"], requiresPlatform: true, mobile: true },
+  { id: "superadmin-clientes", label: "Clientes", icon: "clients", path: "/superadmin/clientes", roles: ["superadmin"], requiresPlatform: true, mobile: true },
+  { id: "superadmin-leads", label: "Leads", icon: "leads", path: "/superadmin/leads", roles: ["superadmin"], requiresPlatform: true, mobile: true },
+  { id: "superadmin-pagos", label: "Pagos", icon: "payments_sa", path: "/superadmin/pagos", roles: ["superadmin"], requiresPlatform: true, mobile: true },
+  { id: "superadmin-tareas", label: "Tareas", icon: "tasks", path: "/superadmin/tareas", roles: ["superadmin"], requiresPlatform: true, mobile: true },
+  { id: "blog-admin", label: "Blog", icon: "blog", path: "/superadmin/blog", roles: ["superadmin"], requiresPlatform: true, mobile: true },
 ];
 
 export const NAV_SECTIONS = [
@@ -115,8 +124,8 @@ export const QUICK_ACTIONS = [
   {
     id: "daily-care",
     featureId: "residents",
-    label: "Cuidados del turno",
-    description: "Registrar tareas programadas",
+    label: "Tareas del turno",
+    description: "Abrir los registros y pendientes autorizados",
     icon: "tasks",
     path: "/operacion/cuidados",
     roles: ["admin_eleam", "funcionario", "superadmin"],
@@ -154,6 +163,7 @@ function itemAllowed(item, auth) {
   if (!auth?.user || !auth?.rol) return false;
   if (!item.roles?.includes(auth.rol)) return false;
   if (item.requiresEleam && !auth.profile?.eleam_id) return false;
+  if (item.requiresPlatform && auth.profile?.eleam_id) return false;
   if (item.requiresActive && !hasAccess(auth)) return false;
   if (item.featureId && typeof auth.canFeature === "function" && !auth.canFeature(item.featureId)) return false;
   if (item.permission && typeof auth.can === "function" && !auth.can(item.permission)) return false;
@@ -161,13 +171,24 @@ function itemAllowed(item, auth) {
   return true;
 }
 
-export const HOME_SLOT = "__home__";
-
 export const MOBILE_BOTTOM_NAV = {
-  admin_eleam: ["dashboard", "residents", HOME_SLOT, "personnel", "compliance"],
-  funcionario: ["dashboard", "residents", HOME_SLOT, "personnel", "compliance"],
-  superadmin: ["superadmin", "superadmin-clientes", HOME_SLOT, "superadmin-leads", "superadmin-tareas"],
+  eleam: ["dashboard", "residents", "personnel", "compliance", "establishment", "resident_payments"],
+  platform: ["superadmin", "superadmin-clientes", "superadmin-leads", "superadmin-tareas", "superadmin-pagos", "blog-admin"],
 };
+
+export function matchesNavigationItem(item, pathname) {
+  if (!item?.path || !pathname) return false;
+  if (item.path === "/superadmin") return pathname === "/superadmin";
+  const prefixes = item.activePrefixes?.length ? item.activePrefixes : [item.path.split("?")[0]];
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function withMenuSlot(items) {
+  const navSlots = items.slice(0, 4).map((item) => ({ type: "nav", item }));
+  const middle = Math.ceil(navSlots.length / 2);
+  navSlots.splice(middle, 0, { type: "home" });
+  return navSlots;
+}
 
 export function getMobileBottomNav(auth) {
   if (!auth?.user || !auth?.rol) return [];
@@ -186,18 +207,14 @@ export function getMobileBottomNav(auth) {
     ];
   }
 
-  const slots = MOBILE_BOTTOM_NAV[auth.rol];
-  if (!slots) return [];
+  const mode = auth.profile?.eleam_id ? "eleam" : auth.isSuperadmin ? "platform" : null;
+  const priorityIds = MOBILE_BOTTOM_NAV[mode];
+  if (!priorityIds) return [];
   const itemById = new Map(NAV_SECTIONS.flatMap((section) => section.items).map((item) => [item.id, item]));
-
-  const resolved = slots.map((slot) => {
-    if (slot === HOME_SLOT) return { type: "home" };
-    const item = itemById.get(slot);
-    return item && itemAllowed(item, auth) ? { type: "nav", item } : null;
-  }).filter(Boolean);
-
-  if (!resolved.some((slot) => slot.type === "home")) resolved.push({ type: "home" });
-  return resolved;
+  const allowed = priorityIds
+    .map((id) => itemById.get(id))
+    .filter((item) => item && itemAllowed(item, auth));
+  return withMenuSlot(allowed);
 }
 
 export function getNavigationSections(auth) {

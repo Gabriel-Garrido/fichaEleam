@@ -8,12 +8,26 @@ import { logout } from "../features/auth/authService";
 import { getPrivateRouteTitle } from "../routes/privateRouteMetadata";
 import Loading from "../components/Loading";
 
+const SIDEBAR_PREFERENCE_KEY = "fichaeleam.sidebar.collapsed";
+
 export default function AppShell({ children }) {
   const auth = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { sections, bottomNavSlots, quickActions } = useNavigationItems();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true"; }
+    catch { return false; }
+  });
+
+  const toggleSidebar = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try { window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, String(next)); }
+      catch { /* La navegación sigue funcionando sin almacenamiento local. */ }
+      return next;
+    });
+  };
 
   useEffect(() => {
     document.title = `${getPrivateRouteTitle(location.pathname)} · FichaEleam`;
@@ -40,7 +54,7 @@ export default function AppShell({ children }) {
     <div className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950">
       <DesktopSidebar
         collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
+        onToggle={toggleSidebar}
         sections={sections}
         auth={auth}
         onLogout={handleLogout}
