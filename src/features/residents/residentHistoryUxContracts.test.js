@@ -15,7 +15,14 @@ describe("historial del residente simple y eficiente", () => {
     expect(tab).toContain("toggleDetail");
     expect(tab).toContain("getResidentTraceDetail");
     expect(tab).toContain("Ver detalle");
-    expect(service).toContain('"obtener_detalle_historial_residente_v2"');
+    expect(service).toContain('"obtener_detalle_historial_residente_v3"');
+  });
+
+  it("renders complex revisions without exposing technical identifiers or storage paths", () => {
+    expect(tab).toContain("diffObjectEntries");
+    expect(tab).toContain("TECHNICAL_DETAIL_KEYS");
+    expect(tab).toContain("ATTACHMENT_DETAIL_KEYS");
+    expect(tab).toContain('return value ? "Archivo adjunto" : "Sin archivo"');
   });
 
   it("applies advanced filters explicitly instead of querying on every keystroke", () => {

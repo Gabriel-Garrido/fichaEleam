@@ -284,12 +284,30 @@ function TraceDetail({ value }) {
   return <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">{detailEntries(value).map(([label, content], index) => <div key={`${label}-${index}`} className="min-w-0"><dt className="text-xs font-semibold text-slate-500">{label}</dt><dd className="mt-0.5 break-words text-sm text-slate-800">{content}</dd></div>)}</dl>;
 }
 
+const TECHNICAL_DETAIL_KEYS = new Set([
+  "id", "eleam_id", "residente_id", "entidad_id", "plan_id", "actividad_id",
+  "indicacion_id", "horario_id", "lote_id", "administracion_id", "observacion_id",
+  "creado_por", "actualizado_por", "registrado_por", "evaluado_por", "subido_por",
+  "administrado_por", "validado_por", "cumplida_por", "cerrado_por",
+  "creado_en", "actualizado_en",
+]);
+const ATTACHMENT_DETAIL_KEYS = new Set(["storage_path", "pdf_storage_path", "documento_path", "firma_data_url"]);
+
 function detailEntries(value, prefix = "") {
   return Object.entries(value).flatMap(([key, item]) => {
-    if (key === "id" || key.endsWith("_id")) return [];
+    if (TECHNICAL_DETAIL_KEYS.has(key) || key.endsWith("_id")) return [];
     const label = [prefix, humanizeKey(key)].filter(Boolean).join(" · ");
+    if (ATTACHMENT_DETAIL_KEYS.has(key)) {
+      if (item && typeof item === "object" && (Object.hasOwn(item, "anterior") || Object.hasOwn(item, "nuevo"))) {
+        return [[label, `${formatAttachmentValue(item.anterior)} → ${formatAttachmentValue(item.nuevo)}`]];
+      }
+      return [[label, formatAttachmentValue(item)]];
+    }
     if (item && typeof item === "object" && !Array.isArray(item)) {
       if (Object.hasOwn(item, "anterior") || Object.hasOwn(item, "nuevo")) {
+        if (isPlainObject(item.anterior) || isPlainObject(item.nuevo)) {
+          return diffObjectEntries(item.anterior, item.nuevo, label);
+        }
         return [[label, `${formatDetailValue(item.anterior)} → ${formatDetailValue(item.nuevo)}`]];
       }
       return detailEntries(item, label);
@@ -298,16 +316,38 @@ function detailEntries(value, prefix = "") {
   });
 }
 
+function diffObjectEntries(previous, next, prefix) {
+  const before = isPlainObject(previous) ? previous : {};
+  const after = isPlainObject(next) ? next : {};
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+  return keys.flatMap((key) => {
+    if (TECHNICAL_DETAIL_KEYS.has(key) || key.endsWith("_id")) return [];
+    const oldValue = before[key];
+    const newValue = after[key];
+    if (JSON.stringify(oldValue) === JSON.stringify(newValue)) return [];
+    return detailEntries({ [key]: { anterior: oldValue, nuevo: newValue } }, prefix);
+  });
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatAttachmentValue(value) {
+  return value ? "Archivo adjunto" : "Sin archivo";
+}
+
 function humanizeKey(value) {
-  const labels = { datos_iniciales: "Datos registrados", datos_anteriores: "Datos anteriores", cambios: "Cambios", seccion: "Sección", accion: "Acción", registro: "Registro", detalle: "Detalle", tipo: "Categoría", categoria: "Categoría", severidad: "Severidad", estado: "Estado", descripcion: "Descripción", acciones_tomadas: "Atención, respuesta y plan", acciones_inmediatas: "Acciones inmediatas", causas_probables: "Causas probables", motivo_omision: "Motivo", requiere_seguimiento: "Requiere seguimiento", seguimiento_fecha: "Fecha de seguimiento", seguimiento_turno: "Turno de seguimiento", seguimiento_estado: "Estado del seguimiento", reprogramada_para: "Reprogramada para", fecha_evento: "Fecha del evento", hora_evento: "Hora del evento", fecha_compromiso_cierre: "Compromiso de cierre", fecha_cierre: "Cierre", familia_notificada: "Familia notificada", medio_notificacion: "Medio de notificación", fecha_programada: "Fecha", fecha_realizada: "Fecha de atención", centro_atencion: "Centro o lugar de atención", especialidad: "Atención o especialidad", profesional: "Profesional que atendió", acompanante: "Quién acompañó", familia_informada: "Familia o persona significativa informada", coordinacion_familia: "Coordinación realizada", resultado: "Observaciones e indicaciones", proximo_control: "Próximo control", presion_arterial: "Presión arterial", saturacion_oxigeno: "Saturación de oxígeno", frecuencia_cardiaca: "Frecuencia cardíaca", frecuencia_respiratoria: "Frecuencia respiratoria" };
+  const labels = { datos_iniciales: "Datos registrados", datos_anteriores: "Datos anteriores", cambios: "Cambios", seccion: "Sección", accion: "Acción", registro: "Registro", detalle: "Detalle", nombre: "Nombre", apellido: "Apellidos", rut: "RUT", fecha_nacimiento: "Fecha de nacimiento", sexo: "Sexo", nacionalidad: "Nacionalidad", estado_civil: "Estado civil", direccion_anterior: "Domicilio previo", prevision: "Previsión de salud", diagnostico_principal: "Diagnóstico principal", diagnosticos_secundarios: "Diagnósticos secundarios", alergias: "Alergias", grupo_sanguineo: "Grupo sanguíneo", fecha_ingreso: "Fecha de ingreso", fecha_egreso: "Fecha de egreso", motivo_egreso: "Motivo de egreso", nivel_dependencia: "Dependencia", condicion_salud_grave: "Condición de salud grave", condicion_salud_grave_detalle: "Detalle de condición grave", indice_barthel: "Índice de Barthel", escala_katz: "Escala de Katz", ubicacion_anterior: "Ubicación anterior", ubicacion_nueva: "Nueva ubicación", ubicacion_actual: "Ubicación", tipo: "Categoría", categoria: "Categoría", severidad: "Severidad", estado: "Estado", descripcion: "Descripción", acciones_tomadas: "Atención, respuesta y plan", acciones_inmediatas: "Acciones inmediatas", causas_probables: "Causas probables", motivo_omision: "Motivo", requiere_seguimiento: "Requiere seguimiento", seguimiento_fecha: "Fecha de seguimiento", seguimiento_turno: "Turno de seguimiento", seguimiento_estado: "Estado del seguimiento", reprogramada_para: "Reprogramada para", fecha_evento: "Fecha del evento", hora_evento: "Hora del evento", fecha_compromiso_cierre: "Compromiso de cierre", fecha_cierre: "Cierre", familia_notificada: "Familia notificada", medio_notificacion: "Medio de notificación", fecha_programada: "Fecha", fecha_realizada: "Fecha de atención", centro_atencion: "Centro o lugar de atención", especialidad: "Atención o especialidad", profesional: "Profesional que atendió", acompanante: "Quién acompañó", familia_informada: "Familia o persona significativa informada", coordinacion_familia: "Coordinación realizada", resultado: "Observaciones e indicaciones", proximo_control: "Próximo control", presion_arterial: "Presión arterial", saturacion_oxigeno: "Saturación de oxígeno", frecuencia_cardiaca: "Frecuencia cardíaca", frecuencia_respiratoria: "Frecuencia respiratoria", pdf_storage_path: "Consentimiento firmado", documento_path: "Documento adjunto", storage_path: "Archivo adjunto" };
   return labels[value] ?? value.replaceAll("_", " ").replace(/^./, (char) => char.toUpperCase());
 }
 
 function formatDetailValue(value) {
   if (value == null || value === "") return "Sin información";
   if (typeof value === "boolean") return value ? "Sí" : "No";
-  if (Array.isArray(value)) return value.length ? value.join(", ") : "Sin información";
-  const labels = { observacion_general: "Estado general", cambio_clinico: "Cambio clínico o síntoma", dolor: "Dolor", piel_heridas: "Piel o heridas", conducta_animo: "Conducta o estado de ánimo", control: "Control de salud", derivacion: "Derivación", urgencia: "Atención de urgencia", teleconsulta: "Teleconsulta", otro: "Otra atención", programado: "Programada", registrado: "Registrado", en_revision: "En revisión", en_seguimiento: "En seguimiento", realizado: "Realizada", cerrado: "Cerrado", cancelado: "Cancelada", inasistente: "No asistió", leve: "Leve", moderado: "Moderado", grave: "Grave", critico: "Crítico", caida_con_lesion: "Caída con lesión", caida_sin_lesion: "Caída sin lesión", error_medicacion: "Error de medicación", lesion_por_presion: "Lesión por presión", reaccion_alergica: "Reacción alérgica" };
+  if (Array.isArray(value)) return value.length ? value.map((item) => isPlainObject(item) ? "Registro asociado" : item).join(", ") : "Sin información";
+  if (isPlainObject(value)) return "Información registrada";
+  const labels = { insert: "Registro creado", update: "Datos actualizados", delete: "Registro eliminado", creado: "Registro creado", actualizado: "Datos actualizados", eliminado: "Registro eliminado", observacion_general: "Estado general", cambio_clinico: "Cambio clínico o síntoma", dolor: "Dolor", piel_heridas: "Piel o heridas", conducta_animo: "Conducta o estado de ánimo", control: "Control de salud", derivacion: "Derivación", urgencia: "Atención de urgencia", teleconsulta: "Teleconsulta", otro: "Otra atención", programado: "Programada", registrado: "Registrado", en_revision: "En revisión", en_seguimiento: "En seguimiento", realizado: "Realizada", cerrado: "Cerrado", cancelado: "Cancelada", inasistente: "No asistió", leve: "Leve", moderado: "Moderado", grave: "Grave", critico: "Crítico", caida_con_lesion: "Caída con lesión", caida_sin_lesion: "Caída sin lesión", error_medicacion: "Error de medicación", lesion_por_presion: "Lesión por presión", reaccion_alergica: "Reacción alérgica", activo: "Activo", hospitalizado: "Hospitalizado", egresado: "Egresado", fallecido: "Fallecido", autovalente: "Autovalente", total: "Dependencia total" };
   if (labels[value]) return labels[value];
   if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(value))) return "Registro vinculado";
   if (/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(String(value))) {

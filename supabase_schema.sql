@@ -187,6 +187,8 @@ create index if not exists idx_residentes_audit_residente_fecha
   where residente_id is not null;
 create index if not exists idx_residentes_audit_eleam_fecha
   on public.residentes_audit(eleam_id, realizado_en desc);
+create index if not exists idx_residentes_audit_entity
+  on public.residentes_audit(entidad, entidad_id);
 
 insert into public.residentes_audit (
   eleam_id, residente_id, entidad, entidad_id, titulo, accion, cambios, realizado_por, realizado_en
@@ -1099,6 +1101,8 @@ create index if not exists idx_plan_cuidado_audit_eleam
 create index if not exists idx_plan_cuidado_audit_residente_fecha
   on public.plan_cuidado_audit(residente_id, realizado_en desc)
   where residente_id is not null;
+create index if not exists idx_plan_cuidado_audit_entity
+  on public.plan_cuidado_audit(entidad, entidad_id);
 
 create table if not exists public.medicamentos_indicaciones (
   id                         uuid primary key default gen_random_uuid(),
@@ -1350,6 +1354,8 @@ create index if not exists idx_medicamentos_audit_eleam
 create index if not exists idx_medicamentos_audit_residente_fecha
   on public.medicamentos_audit(residente_id, realizado_en desc)
   where residente_id is not null;
+create index if not exists idx_medicamentos_audit_entity
+  on public.medicamentos_audit(entidad, entidad_id);
 
 do $$
 begin
@@ -8739,7 +8745,7 @@ create trigger trg_resident_consents_resident_audit
 drop trigger if exists trg_resident_health_network_resident_audit on public.resident_health_network;
 create trigger trg_resident_health_network_resident_audit
   after insert or update or delete on public.resident_health_network
-  for each row execute function public.audit_resident_related_changes('Red de salud modificada');
+  for each row execute function public.audit_resident_related_changes('Red de salud');
 
 drop trigger if exists trg_health_controls_resident_audit on public.health_controls;
 create trigger trg_health_controls_resident_audit
@@ -13043,3 +13049,64 @@ revoke all on function public.obtener_detalle_historial_residente_v2(uuid, text,
 grant execute on function public.obtener_detalle_historial_residente_v2(uuid, text, text) to authenticated;
 revoke execute on function public.listar_historial_residente_paginado(uuid, date, date, text[], text, text, integer, integer) from authenticated;
 revoke execute on function public.obtener_detalle_historial_residente(uuid, text, text) from authenticated;
+
+-- Los cambios operativos se canalizan por RPC atómicas que validan permisos,
+-- actualizan relaciones y escriben auditoría en la misma transacción.
+revoke insert, update, delete on public.cama_asignaciones from authenticated;
+revoke insert, update, delete on public.tareas_cuidado from authenticated;
+revoke insert, update, delete on public.medicamentos_indicaciones from authenticated;
+revoke insert, update, delete on public.medicamentos_horarios from authenticated;
+revoke insert, update, delete on public.medicamentos_administraciones from authenticated;
+revoke insert, update, delete on public.medicamentos_stock_movimientos from authenticated;
+revoke insert, update, delete on public.medicamentos_conciliaciones from authenticated;
+
+create or replace function public.obtener_detalle_historial_residente_v3(
+  p_residente_id uuid,
+  p_entidad text,
+  p_evento_id text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_base jsonb;
+  v_detail jsonb;
+begin
+  v_base := public.obtener_detalle_historial_residente_v2(p_residente_id, p_entidad, p_evento_id);
+  if p_entidad <> 'camas_audit' then return v_base; end if;
+
+  select jsonb_strip_nulls(jsonb_build_object(
+    'accion', ca.accion,
+    'ubicacion_anterior', case
+      when ca.accion = 'traslado' then concat_ws(' · ', nullif(h_old.nombre, ''), nullif(c_old.nombre, ''), 'Cama ' || c_old.codigo)
+      when ca.accion in ('liberacion','liberacion_hospitalizacion','liberacion_automatica')
+        then concat_ws(' · ', nullif(h_current.nombre, ''), nullif(c_current.nombre, ''), 'Cama ' || c_current.codigo)
+      else null end,
+    'ubicacion_nueva', case
+      when ca.accion in ('liberacion','liberacion_hospitalizacion','liberacion_automatica') then 'Sin cama asignada'
+      when ca.accion in ('asignacion','asignacion_confirmada','traslado')
+        then concat_ws(' · ', nullif(h_current.nombre, ''), nullif(c_current.nombre, ''), 'Cama ' || c_current.codigo)
+      else null end,
+    'ubicacion_actual', case
+      when ca.accion = 'reserva_hospitalizacion'
+        then concat_ws(' · ', nullif(h_current.nombre, ''), nullif(c_current.nombre, ''), 'Cama ' || c_current.codigo)
+      else null end,
+    'motivo', ca.detalle->>'motivo',
+    'notas', ca.detalle->>'notas'
+  )) into v_detail
+  from public.camas_audit ca
+  left join public.camas c_current on c_current.id = ca.cama_id
+  left join public.habitaciones h_current on h_current.id = c_current.habitacion_id
+  left join public.camas c_old on c_old.id = nullif(ca.detalle->>'cama_anterior_id', '')::uuid
+  left join public.habitaciones h_old on h_old.id = c_old.habitacion_id
+  where ca.id = p_evento_id::uuid and ca.residente_id = p_residente_id;
+
+  return coalesce(v_detail, v_base);
+end;
+$$;
+
+revoke all on function public.obtener_detalle_historial_residente_v3(uuid, text, text) from public;
+grant execute on function public.obtener_detalle_historial_residente_v3(uuid, text, text) to authenticated;

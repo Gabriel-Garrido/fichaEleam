@@ -23,6 +23,7 @@ describe("resident traceability schema contracts", () => {
     expect(schema).toContain("p_cursor_fecha timestamptz default null");
     expect(schema).toContain("p_cursor_clave text default null");
     expect(schema).toContain("create or replace function public.obtener_detalle_historial_residente_v2");
+    expect(schema).toContain("create or replace function public.obtener_detalle_historial_residente_v3");
   });
 
   it("uses keyset pagination and avoids duplicate mutable task rows", () => {
@@ -90,6 +91,23 @@ describe("resident traceability schema contracts", () => {
     ]) {
       expect(schema).toContain(trigger);
     }
+  });
+
+  it("recovers legacy resident events and closes direct-write audit bypasses", () => {
+    const migration = readFileSync(join(cwd(), "supabase/migrations/20260830010000_close_resident_traceability_gaps.sql"), "utf8");
+    for (const source of [
+      "evaluaciones_clinicas", "resident_consents", "resident_health_network",
+      "health_controls", "persona_significativa", "actividades_sociales",
+      "cama_asignaciones", "planes_cuidado", "tareas_cuidado",
+      "medicamentos_indicaciones", "medicamentos_administraciones", "medicamentos_stock_lotes",
+    ]) expect(migration).toContain(source);
+    for (const table of [
+      "cama_asignaciones", "tareas_cuidado", "medicamentos_indicaciones",
+      "medicamentos_horarios", "medicamentos_administraciones",
+      "medicamentos_stock_movimientos", "medicamentos_conciliaciones",
+    ]) expect(migration).toContain(`revoke insert, update, delete on public.${table} from authenticated`);
+    expect(migration).toContain("ubicacion_anterior");
+    expect(migration).toContain("ubicacion_nueva");
   });
 
   it("keeps list payloads compact and loads details separately", () => {

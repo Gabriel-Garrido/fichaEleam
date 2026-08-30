@@ -264,7 +264,7 @@ export async function listResidentTraceability({
 
 export async function getResidentTraceDetail({ residenteId, entity, eventId }) {
   if (!residenteId || !entity || !eventId) throw new Error("Evento de historial incompleto.");
-  const { data, error } = await supabase.rpc("obtener_detalle_historial_residente_v2", {
+  const { data, error } = await supabase.rpc("obtener_detalle_historial_residente_v3", {
     p_residente_id: residenteId,
     p_entidad: entity,
     p_evento_id: String(eventId),

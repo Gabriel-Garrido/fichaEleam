@@ -220,6 +220,8 @@ La pestaña **Historial** reúne modificaciones de la ficha, cambios de cama, co
 
 La consulta inicial carga sólo 25 resúmenes mediante un cursor estable, sin volver a recorrer páginas anteriores; el detalle se solicita al backend únicamente cuando el usuario abre un registro y se conserva en memoria durante la sesión. Búsqueda, períodos rápidos y filtros avanzados se aplican de forma explícita. La interfaz descarta respuestas obsoletas, evita duplicados y mantiene una acción de reintento ante fallas de red.
 
+Los cambios de ficha personal, valoración, consentimiento, red y controles de salud, persona significativa, actividades y cama se auditan en la base de datos. Las tareas y operaciones de medicamentos que requieren varias actualizaciones sólo pueden ejecutarse mediante flujos transaccionales auditados; la migración de trazabilidad incorpora además registros preexistentes que no contaban con un evento histórico, sin duplicar los que ya estaban respaldados.
+
 ### Medicamentos y eMAR
 
 La ficha del residente mantiene solo tres espacios: **Tratamiento y recetas**, **Recepción y stock** y **Administraciones**. Las recetas en PDF, JPG, PNG o WEBP (máximo 3 MB) quedan asociadas directamente a cada indicación y conservan el historial; cada lote registra recepción, ubicación, vencimiento y movimientos auditados. Los controles especiales y la doble validación aparecen dentro del stock solo cuando el medicamento los requiere. La orientación normativa y los respaldos físicos se gestionan exclusivamente en Cumplimiento.
