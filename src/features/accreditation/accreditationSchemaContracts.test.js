@@ -24,4 +24,15 @@ describe("DS20 accreditation schema contracts", () => {
     expect(schema).toContain("when 'DS20-A12-REPORTE-SENAMA' then 'Art. 12 letra t'");
     expect(schema).toContain("renueva automática y sucesivamente mientras no sea dejada sin efecto");
   });
+
+  it("keeps document validity automatic, atomic and manually overridable", () => {
+    const migration = readFileSync(join(cwd(), "supabase/migrations/20260830020000_automatic_compliance_document_validity.sql"), "utf8");
+    expect(migration).toContain("estado_modo text not null default 'automatico'");
+    expect(migration).toContain("create or replace function public.acred_sincronizar_vigencias");
+    expect(migration).toContain("doc.fecha_vencimiento <= v_today then 'vencido'");
+    expect(migration).toContain("create or replace function public.acred_registrar_documento");
+    expect(migration).toContain("create or replace function public.acred_establecer_estado_manual");
+    expect(migration).toContain("create or replace function public.acred_reactivar_estado_automatico");
+    expect(migration).toContain("revoke insert, update, delete on public.acred_documentos from authenticated");
+  });
 });

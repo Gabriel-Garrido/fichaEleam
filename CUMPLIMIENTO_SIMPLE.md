@@ -33,6 +33,20 @@ Los requisitos obligatorios no permiten “No aplica”. Esa opción se reserva 
 
 El sistema tampoco inventa vencimientos. Solo exige fecha para obligaciones con periodicidad expresa dentro de esta matriz: reporte trimestral SENAMA, plan anual de capacitación e inventario anual de bienes personales. En otros documentos se puede registrar voluntariamente la fecha indicada por su emisor.
 
+## Vigencia de documentos
+
+En los requisitos de evidencia **documental** o **mixta**, FichaEleam mantiene el estado según el documento actual:
+
+- al cargar un respaldo cuya fecha sigue vigente, el punto queda **Vigente**;
+- si la fecha informada es hoy o ya pasó, el archivo se conserva y el punto queda **Vencido**;
+- al llegar la fecha de vencimiento, la matriz y el detalle sincronizan el estado automáticamente;
+- si se archiva el documento actual y existen versiones anteriores, queda **Requiere actualización**;
+- un documento nuevo reemplaza la versión anterior sin borrar el historial.
+
+Antes de guardar se muestra el resultado esperado. La fecha de emisión no puede estar en el futuro y el vencimiento no puede ser anterior a ella. La carga admite los formatos documentales e imágenes indicados en pantalla hasta 10 MB; si el archivo excede ese límite, se recomienda reducirlo con [iLovePDF](https://www.ilovepdf.com/es/comprimir_pdf) y volver a cargarlo.
+
+Un usuario con permiso para editar Cumplimiento puede aplicar un **ajuste manual** cuando exista una excepción verificable. El motivo y el responsable quedan en auditoría y el estado no vuelve a cambiar por fecha hasta seleccionar **Volver a actualización automática** o cargar un nuevo documento. Los puntos calculados desde registros operativos no muestran carga documental.
+
 ## Protocolos incluidos
 
 La vista enfocada `/cumplimiento/protocolos` conserva únicamente los protocolos documentales administrados directamente en esta sección. Se abre desde el ámbito correspondiente y ya no repite accesos a emergencias, reclamos ni al reporte:

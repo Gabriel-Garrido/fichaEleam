@@ -19,16 +19,18 @@ import {
   setRequisitoEstado,
   marcarNoAplica,
   marcarVigente,
+  reactivarEstadoAutomatico,
   asignarResponsable,
   crearObservacion,
   cerrarObservacion,
   estadoMeta,
   diasHasta,
   validateFile,
+  getDocumentValidity,
   MAX_EVIDENCE_FILE_SIZE_BYTES,
 } from "./accreditationService";
 import { isValidUUID } from "../../utils/validators";
-import { formatDate } from "../../utils/dateUtils";
+import { chileDateKey, formatDate, formatDateOnly } from "../../utils/dateUtils";
 import { friendlyError } from "../../utils/errorMessages";
 import { evidencePresentation, requirementNextAction } from "./complianceGuidance";
 
@@ -100,7 +102,7 @@ function getDueBadge(fechaVencimiento) {
     };
   }
   if (dias === 0) {
-    return { label: "Vence hoy", cls: "bg-amber-50 text-amber-800 border-amber-200" };
+    return { label: "Vencido desde hoy", cls: "bg-rose-50 text-rose-700 border-rose-200" };
   }
   if (dias <= 30) {
     return { label: `Vence en ${dias} días`, cls: "bg-amber-50 text-amber-800 border-amber-200" };
@@ -120,11 +122,12 @@ function DetailTile({ label, children, action }) {
   );
 }
 
-function StateActions({ re, onChange, canEdit }) {
+function StateActions({ re, onChange, onRestoreAutomatic, canEdit }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState("");
   const [naMotivo, setNaMotivo] = useState("");
   const [fechaVenc, setFechaVenc] = useState(re.fecha_vencimiento ?? "");
+  const [manualReason, setManualReason] = useState("");
   const [busy, setBusy] = useState(false);
   const currentMeta = estadoMeta(re.estado);
   const dueBadge = getDueBadge(re.fecha_vencimiento);
@@ -138,6 +141,7 @@ function StateActions({ re, onChange, canEdit }) {
     busy ||
     !selected ||
     (selected === "no_aplica" && !naMotivo.trim()) ||
+    (selected !== "no_aplica" && !manualReason.trim()) ||
     (needsFechaVencimiento && !fechaVenc);
 
   const submitChange = async () => {
@@ -145,18 +149,26 @@ function StateActions({ re, onChange, canEdit }) {
     setBusy(true);
     try {
       if (selected === "no_aplica") {
-        await onChange({ noAplica: naMotivo.trim() });
+        await onChange({ noAplica: naMotivo.trim(), manualReason });
         setNaMotivo("");
       } else if (selected === "vigente") {
-        await onChange({ vigente: fechaVenc || null });
+        await onChange({ vigente: fechaVenc || null, manualReason });
       } else if (selected === "pendiente") {
-        await onChange({ estado: selected, fecha_vencimiento: null, no_aplica_motivo: null });
+        await onChange({ estado: selected, fecha_vencimiento: null, no_aplica_motivo: null, estado_manual_motivo: manualReason });
       } else {
-        await onChange({ estado: selected, no_aplica_motivo: null });
+        await onChange({ estado: selected, no_aplica_motivo: null, estado_manual_motivo: manualReason });
       }
       setOpen(false);
       setSelected("");
+      setManualReason("");
     }
+    finally { setBusy(false); }
+  };
+
+  const restoreAutomatic = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await onRestoreAutomatic?.(); }
     finally { setBusy(false); }
   };
 
@@ -167,6 +179,9 @@ function StateActions({ re, onChange, canEdit }) {
           <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Estado actual</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StatePill estado={re.estado} />
+            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${re.estado_modo === "manual" ? "border-violet-200 bg-violet-50 text-violet-800" : "border-teal-200 bg-teal-50 text-teal-800"}`}>
+              {re.estado_modo === "manual" ? "Ajuste manual" : "Actualización automática"}
+            </span>
             {dueBadge && (
               <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${dueBadge.cls}`}>
                 {dueBadge.label}
@@ -176,22 +191,24 @@ function StateActions({ re, onChange, canEdit }) {
           <p className="mt-2 text-sm text-slate-600">
             {STATUS_DESCRIPTIONS[re.estado] ?? currentMeta.label}
           </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            {re.estado_modo === "manual"
+              ? "Este estado se mantendrá hasta que vuelvas al cálculo automático o cargues un nuevo documento."
+              : "FichaEleam lo mantiene al día según el documento actual y su fecha de vencimiento."}
+          </p>
+          {re.estado_modo === "manual" && re.estado_manual_motivo && <p className="mt-1 text-xs font-medium text-violet-800">Motivo: {re.estado_manual_motivo}</p>}
           {re.fecha_vencimiento && (
             <p className="mt-1 text-xs text-slate-500">
               Fecha de vencimiento: {formatDate(re.fecha_vencimiento)}
             </p>
           )}
         </div>
-        {canEdit && (
-          <Button
-            type="button"
-            onClick={() => setOpen((value) => !value)}
-            disabled={busy}
-            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50"
-          >
-            {open ? "Cerrar cambio" : "Cambiar estado"}
+        {canEdit && <div className="flex w-full flex-col gap-2 sm:w-auto">
+          <Button type="button" onClick={() => setOpen((value) => !value)} disabled={busy} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50">
+            {open ? "Cerrar ajuste" : re.estado_modo === "manual" ? "Cambiar ajuste" : "Ajustar manualmente"}
           </Button>
-        )}
+          {re.estado_modo === "manual" && <button type="button" disabled={busy} onClick={restoreAutomatic} className="min-h-9 text-xs font-semibold text-teal-700 hover:underline disabled:opacity-50">Volver a actualización automática</button>}
+        </div>}
       </div>
 
       {re.no_aplica_motivo && (
@@ -206,7 +223,7 @@ function StateActions({ re, onChange, canEdit }) {
           <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-bold text-slate-800">Selecciona el nuevo estado</p>
-              <p className="text-xs text-slate-500">El cambio quedará registrado como última revisión del requisito.</p>
+              <p className="text-xs text-slate-500">Este ajuste tendrá prioridad sobre la fecha del documento hasta que vuelvas al modo automático.</p>
             </div>
           </div>
 
@@ -269,6 +286,14 @@ function StateActions({ re, onChange, canEdit }) {
             </div>
           )}
 
+          {selected && selected !== "no_aplica" && (
+            <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-violet-700">Motivo del ajuste *</label>
+              <textarea required rows={2} value={manualReason} onChange={(event) => setManualReason(event.target.value)} className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm" placeholder="Ej. revisión interna pendiente o antecedente verificado fuera de la plataforma." />
+              <p className="mt-1 text-xs leading-5 text-violet-800">Quedará asociado a tu nombre para explicar por qué se reemplazó temporalmente el cálculo automático.</p>
+            </div>
+          )}
+
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
@@ -276,6 +301,7 @@ function StateActions({ re, onChange, canEdit }) {
                 setOpen(false);
                 setSelected("");
                 setNaMotivo("");
+                setManualReason("");
                 setFechaVenc(re.fecha_vencimiento ?? "");
               }}
               className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
@@ -336,6 +362,10 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [notas, setNotas] = useState("");
   const [busy, setBusy] = useState(false);
+  const today = chileDateKey();
+  const validityPreview = requiereVenc && !fechaVencimiento
+    ? null
+    : getDocumentValidity({ vigente: true, fecha_vencimiento: fechaVencimiento || null }, today);
 
   const resetForm = () => {
     setFile(null);
@@ -378,6 +408,8 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
     e.preventDefault();
     const err = validateFile(file);
     if (err) return toast(err, "error");
+    if (fechaEmision && fechaEmision > today) return toast("La fecha de emisión no puede estar en el futuro.", "error");
+    if (fechaEmision && fechaVencimiento && fechaVencimiento < fechaEmision) return toast("La fecha de vencimiento no puede ser anterior a la emisión.", "error");
     setBusy(true);
     try {
       await uploadEvidence({
@@ -386,9 +418,11 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
         fechaEmision,
         fechaVencimiento,
         notas,
-        reemplazo: hasVigente,
       });
-      toast(hasVigente ? "Documento reemplazado" : "Documento subido", "success");
+      toast(validityPreview?.status === "vencido"
+        ? "Documento guardado. Como su vigencia terminó, el punto quedó marcado como vencido."
+        : hasVigente ? "Documento reemplazado y estado actualizado automáticamente." : "Documento subido y estado actualizado automáticamente.",
+      validityPreview?.status === "vencido" ? "info" : "success");
       resetForm();
       setOpen(false);
       onUploaded?.();
@@ -498,7 +532,7 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-xs uppercase font-semibold text-teal-700 mb-1 block">Fecha emisión</label>
-          <Input type="date" value={fechaEmision} onChange={(e) => setFechaEmision(e.target.value)} />
+          <Input type="date" value={fechaEmision} max={today} onChange={(e) => setFechaEmision(e.target.value)} />
         </div>
         <div>
           <label className="text-xs uppercase font-semibold text-teal-700 mb-1 block">
@@ -509,8 +543,23 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
             value={fechaVencimiento}
             onChange={(e) => setFechaVencimiento(e.target.value)}
             required={requiereVenc}
+            min={fechaEmision || undefined}
           />
         </div>
+      </div>
+
+      <div className={`rounded-xl border p-3 ${validityPreview?.status === "vencido" ? "border-rose-200 bg-rose-50 text-rose-900" : validityPreview?.status === "por_vencer" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
+        <p className="text-xs font-bold uppercase tracking-wide">Estado al guardar</p>
+        <p className="mt-1 text-sm font-semibold">
+          {!validityPreview
+            ? "Indica la fecha de vencimiento para calcular el estado."
+            : validityPreview.status === "vencido"
+              ? "El documento ya está vencido: se conservará, pero no marcará cumplimiento."
+              : fechaVencimiento
+                ? `Respaldo listo hasta el ${formatDateOnly(fechaVencimiento)}.`
+                : "Respaldo listo, sin fecha de vencimiento."}
+        </p>
+        <p className="mt-1 text-xs leading-5">FichaEleam actualizará el punto automáticamente según esta fecha. Podrás ajustarlo manualmente si existe una situación excepcional.</p>
       </div>
 
       <div>
@@ -544,6 +593,14 @@ function UploadForm({ reId, requiereVenc, onUploaded, hasVigente }) {
 }
 
 function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
+  const validity = getDocumentValidity(doc);
+  const validityClass = {
+    vigente: "bg-emerald-100 text-emerald-700",
+    por_vencer: "bg-amber-100 text-amber-800",
+    vencido: "bg-rose-100 text-rose-800",
+    historico: "bg-slate-100 text-slate-600",
+    desconocido: "bg-slate-100 text-slate-700",
+  }[validity.status];
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
@@ -551,15 +608,9 @@ function DocumentItem({ doc, onView, onArchive, isAdmin, isVigente }) {
           <span className="text-[10px] uppercase font-bold tracking-wide text-slate-400">
             v{doc.version}
           </span>
-          {isVigente ? (
-            <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-              Vigente
-            </span>
-          ) : (
-            <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-              Histórico
-            </span>
-          )}
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${validityClass}`}>
+            {isVigente ? validity.label : "Histórico"}
+          </span>
         </div>
         <p className="text-sm font-semibold text-slate-800 truncate" title={doc.archivo_nombre}>{doc.archivo_nombre}</p>
         <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 mt-1">
@@ -867,19 +918,29 @@ export default function AccreditationRequisito() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const handleStateChange = async ({ estado, noAplica, vigente, ...payload }) => {
+  const handleStateChange = async ({ estado, noAplica, vigente, manualReason, ...payload }) => {
     try {
       if (noAplica !== undefined) {
-        await marcarNoAplica(id, noAplica);
+        await marcarNoAplica(id, noAplica, manualReason);
       } else if (vigente !== undefined) {
-        await marcarVigente(id, vigente);
+        await marcarVigente(id, vigente, manualReason);
       } else {
-        await setRequisitoEstado(id, { estado, ...payload });
+        await setRequisitoEstado(id, { estado, ...payload, estado_manual_motivo: manualReason });
       }
       toast("Estado actualizado", "success");
       await loadAll();
     } catch (e) {
       toast(friendlyError(e, "No se pudo actualizar el estado. Intenta de nuevo."), "error");
+    }
+  };
+
+  const handleRestoreAutomatic = async () => {
+    try {
+      await reactivarEstadoAutomatico(id);
+      toast("Actualización automática reactivada", "success");
+      await loadAll();
+    } catch (error) {
+      toast(friendlyError(error, "No se pudo reactivar el cálculo automático."), "error");
     }
   };
 
@@ -949,6 +1010,7 @@ export default function AccreditationRequisito() {
 
   const r = re.requisito;
   const a = r.ambito;
+  const requiresDocument = r.tipo_evidencia === "documento" || r.tipo_evidencia === "mixta";
   const vigente = docs[0] ?? null;
   const canEditStatus = isAdminEleam || can("editar_acreditacion");
   const preparedItem = {
@@ -1042,12 +1104,12 @@ export default function AccreditationRequisito() {
         )}
 
         <div className="mt-5">
-          <StateActions re={re} onChange={handleStateChange} canEdit={canEditStatus} />
+          <StateActions re={re} onChange={handleStateChange} onRestoreAutomatic={handleRestoreAutomatic} canEdit={canEditStatus} />
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <DetailTile
-            label="Evidencia vigente"
+            label="Documento actual"
             action={vigente && (
               <button
                 type="button"
@@ -1066,7 +1128,7 @@ export default function AccreditationRequisito() {
                 </p>
               </div>
             ) : (
-              <p className="text-slate-500">Sin evidencia vigente.</p>
+              <p className="text-slate-500">Aún no hay un documento actual.</p>
             )}
           </DetailTile>
 
@@ -1135,7 +1197,14 @@ export default function AccreditationRequisito() {
       {/* Evidencias */}
       {tab === "evidencia" && (
         <section className="space-y-3">
-          {can("subir_acreditacion") && (
+          {requiresDocument && (
+            <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm leading-6 text-teal-950">
+              <p className="font-bold">La vigencia se mantiene automáticamente</p>
+              <p>Al cargar un documento, este punto quedará preparado mientras su fecha esté vigente. En la fecha de vencimiento cambiará a <strong>Vencido</strong>. Si necesitas una excepción, usa el ajuste manual del estado.</p>
+            </div>
+          )}
+
+          {can("subir_acreditacion") && requiresDocument && (
             <UploadForm
               reId={id}
               requiereVenc={r.requiere_vencimiento}
@@ -1144,11 +1213,13 @@ export default function AccreditationRequisito() {
             />
           )}
 
-          {docs.length === 0 ? (
+          {!requiresDocument && <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950"><p className="font-bold">Este punto se demuestra con registros de FichaEleam</p><p>Completa la fuente indicada arriba. No necesitas subir un documento para cambiar su avance automático.</p></div>}
+
+          {docs.length === 0 && requiresDocument ? (
             <div className="bg-white border border-slate-100 rounded-xl p-6 text-center text-slate-500">
               Aún no hay evidencias cargadas para este requisito.
             </div>
-          ) : (
+          ) : docs.length > 0 ? (
             <div className="space-y-2">
               {docs.map((d) => (
                 <DocumentItem
@@ -1161,7 +1232,7 @@ export default function AccreditationRequisito() {
                 />
               ))}
             </div>
-          )}
+          ) : null}
 
           {historial.filter((d) => !d.vigente).length > 0 && (
             <div className="pt-3">

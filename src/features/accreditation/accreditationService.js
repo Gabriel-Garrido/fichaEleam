@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseConfig";
+import { chileDateKey } from "../../utils/dateUtils";
 
 const SIGNED_URL_EXPIRY = 60 * 60; // 1 hora
 const ALLOWED_EXTENSIONS = new Set(["pdf", "doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png", "webp"]);
@@ -15,6 +16,7 @@ const AMBITO_SELECT = "id, codigo, nombre, descripcion, icono, norma_codigo, art
 const REQUISITO_ELEAM_SELECT = `
   id, eleam_id, requisito_id, estado, fecha_vencimiento,
   no_aplica_motivo, responsable_id, notas,
+  estado_modo, estado_manual_motivo, estado_manual_en, estado_manual_por,
   ultima_revision_en, ultima_revision_por, creado_en, actualizado_en
 `;
 const ACRED_DOCUMENT_SELECT = `
@@ -155,6 +157,7 @@ export async function getRequisitosEleam() {
     .from("acred_requisitos_eleam")
     .select(`
       id, estado, fecha_vencimiento, no_aplica_motivo, notas,
+      estado_modo, estado_manual_motivo, estado_manual_en, estado_manual_por,
       ultima_revision_en, ultima_revision_por,
       requisito:acred_requisitos!inner(
         id, codigo, nombre, descripcion, medio_verificador,
@@ -184,10 +187,12 @@ export async function getOperationalEvidence() {
 export async function getRequisitoEleam(reId) {
   // Fetch eleamId to scope the query explicitly — defense-in-depth alongside RLS.
   const { eleamId } = await getMyContext();
+  await markExpired(eleamId);
   const { data, error } = await supabase
     .from("acred_requisitos_eleam")
     .select(`
       id, estado, fecha_vencimiento, no_aplica_motivo, notas,
+      estado_modo, estado_manual_motivo, estado_manual_en, estado_manual_por,
       ultima_revision_en, ultima_revision_por,
       eleam_id, requisito_id,
       requisito:acred_requisitos!inner(
@@ -226,7 +231,8 @@ export async function provisionAccreditationRequirements() {
 async function markExpired(eleamIdOverride = null) {
   try {
     const eleamId = eleamIdOverride ?? (await getMyContext()).eleamId;
-    await supabase.rpc("acred_marcar_vencidos", { p_eleam_id: eleamId });
+    const { error } = await supabase.rpc("acred_sincronizar_vigencias", { p_eleam_id: eleamId });
+    if (error) throw error;
   } catch {
     // no-op
   }
@@ -237,8 +243,19 @@ async function markExpired(eleamIdOverride = null) {
 // ─────────────────────────────────────────────────────────────
 
 export async function setRequisitoEstado(reId, payload) {
-  const { userId, eleamId } = await getMyContext();
+  if (payload?.estado) {
+    const { data, error } = await supabase.rpc("acred_establecer_estado_manual", {
+      p_requisito_eleam_id: reId,
+      p_estado: payload.estado,
+      p_fecha_vencimiento: payload.fecha_vencimiento || null,
+      p_no_aplica_motivo: payload.no_aplica_motivo || null,
+      p_motivo: payload.estado_manual_motivo || null,
+    });
+    if (error) throw error;
+    return data;
+  }
 
+  const { userId, eleamId } = await getMyContext();
   const update = {
     ...payload,
     ultima_revision_en: new Date().toISOString(),
@@ -265,21 +282,31 @@ export async function setRequisitoEstado(reId, payload) {
   return data;
 }
 
-export async function marcarNoAplica(reId, motivo) {
+export async function marcarNoAplica(reId, motivo, manualReason = null) {
   if (!motivo?.trim()) throw new Error("Indica un motivo.");
   return setRequisitoEstado(reId, {
     estado: "no_aplica",
     no_aplica_motivo: motivo.trim(),
     fecha_vencimiento: null,
+    estado_manual_motivo: manualReason,
   });
 }
 
-export async function marcarVigente(reId, fechaVencimiento) {
+export async function marcarVigente(reId, fechaVencimiento, manualReason = null) {
   return setRequisitoEstado(reId, {
     estado: "vigente",
     fecha_vencimiento: fechaVencimiento || null,
     no_aplica_motivo: null,
+    estado_manual_motivo: manualReason,
   });
+}
+
+export async function reactivarEstadoAutomatico(reId) {
+  const { data, error } = await supabase.rpc("acred_reactivar_estado_automatico", {
+    p_requisito_eleam_id: reId,
+  });
+  if (error) throw error;
+  return data;
 }
 
 export async function asignarResponsable(reId, profileId) {
@@ -313,56 +340,30 @@ export async function getSignedUrl(storagePath) {
   return data.signedUrl;
 }
 
-export async function uploadEvidence({ reId, file, fechaEmision, fechaVencimiento, notas, reemplazo = false }) {
+export async function uploadEvidence({ reId, file, fechaEmision, fechaVencimiento, notas }) {
   const validateMsg = validateFile(file);
   if (validateMsg) throw new Error(validateMsg);
 
-  const { userId, eleamId } = await getMyContext();
-
-  // Calcular versión
-  let nextVersion = 1;
-  let toReplaceId = null;
-  if (reemplazo) {
-    const { data: vigente } = await supabase
-      .from("acred_documentos")
-      .select("id, version")
-      .eq("requisito_eleam_id", reId)
-      .eq("vigente", true)
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (vigente) {
-      nextVersion = (vigente.version ?? 1) + 1;
-      toReplaceId = vigente.id;
-    }
-  }
+  const { eleamId } = await getMyContext();
 
   const safeName   = sanitizeFilename(file.name);
-  const storagePath = `acreditacion/${eleamId}/req/${reId}/${Date.now()}_v${nextVersion}_${safeName}`;
+  const storagePath = `acreditacion/${eleamId}/req/${reId}/${Date.now()}_${safeName}`;
 
   const { error: uploadError } = await supabase.storage
     .from("documentos-acreditacion")
     .upload(storagePath, file, { contentType: file.type, upsert: false });
   if (uploadError) throw uploadError;
 
-  const { data, error } = await supabase
-    .from("acred_documentos")
-    .insert({
-      eleam_id:           eleamId,
-      requisito_eleam_id: reId,
-      version:            nextVersion,
-      vigente:            true,
-      storage_path:       storagePath,
-      archivo_nombre:     file.name.substring(0, 255),
-      archivo_tipo:       file.type,
-      archivo_tamanio:    file.size,
-      fecha_emision:      fechaEmision || null,
-      fecha_vencimiento:  fechaVencimiento || null,
-      notas:              notas?.trim() || null,
-      subido_por:         userId,
-    })
-    .select(ACRED_DOCUMENT_SELECT)
-    .single();
+  const { data, error } = await supabase.rpc("acred_registrar_documento", {
+    p_requisito_eleam_id: reId,
+    p_storage_path: storagePath,
+    p_archivo_nombre: file.name.substring(0, 255),
+    p_archivo_tipo: file.type || null,
+    p_archivo_tamanio: file.size,
+    p_fecha_emision: fechaEmision || null,
+    p_fecha_vencimiento: fechaVencimiento || null,
+    p_notas: notas?.trim() || null,
+  });
 
   if (error) {
     // limpiar archivo
@@ -370,53 +371,26 @@ export async function uploadEvidence({ reId, file, fechaEmision, fechaVencimient
     throw error;
   }
 
-  // Si era reemplazo, marcar el anterior como NO vigente.
-  if (toReplaceId) {
-    await supabase
-      .from("acred_documentos")
-      .update({
-        vigente: false,
-        reemplazado_por_id: data.id,
-        reemplazado_en: new Date().toISOString(),
-      })
-      .eq("id", toReplaceId)
-      .eq("eleam_id", eleamId);
-  }
-
-  // Si el documento trae fecha de vencimiento, sincronizarla en el requisito
-  // y dejarlo como vigente para la matriz fiscalizable.
-  const updateRequisito = {
-    estado: "vigente",
-    actualizado_en: new Date().toISOString(),
-    ultima_revision_en: new Date().toISOString(),
-    ultima_revision_por: userId,
-  };
-  if (fechaVencimiento) updateRequisito.fecha_vencimiento = fechaVencimiento;
-  await supabase
-    .from("acred_requisitos_eleam")
-    .update(updateRequisito)
-    .eq("id", reId);
-
-  await logAudit({
-    entidad: "documento",
-    entidadId: data.id,
-    accion: reemplazo ? "replace" : "create",
-    detalle: { version: nextVersion, archivo: data.archivo_nombre },
-  });
-
   return data;
 }
 
 // Borrado físico (solo admin); preferimos vigente=false para mantener historial.
 export async function archiveDocumento(docId) {
-  const { eleamId } = await getMyContext();
-  const { error } = await supabase
-    .from("acred_documentos")
-    .update({ vigente: false, reemplazado_en: new Date().toISOString() })
-    .eq("id", docId)
-    .eq("eleam_id", eleamId);
+  const { data, error } = await supabase.rpc("acred_archivar_documento", {
+    p_documento_id: docId,
+  });
   if (error) throw error;
-  await logAudit({ entidad: "documento", entidadId: docId, accion: "archive" });
+  return data;
+}
+
+export function getDocumentValidity(document, today = chileDateKey()) {
+  if (!document?.vigente) return { status: "historico", label: "Versión anterior", days: null };
+  if (!document.fecha_vencimiento) return { status: "vigente", label: "Sin vencimiento", days: null };
+  const days = dateOnlyDifference(document.fecha_vencimiento, today);
+  if (days == null) return { status: "desconocido", label: "Revisar fecha", days: null };
+  if (days <= 0) return { status: "vencido", label: days === 0 ? "Vencido desde hoy" : `Vencido hace ${Math.abs(days)} día${Math.abs(days) === 1 ? "" : "s"}`, days };
+  if (days <= 30) return { status: "por_vencer", label: `Vence en ${days} día${days === 1 ? "" : "s"}`, days };
+  return { status: "vigente", label: `Vigente por ${days} días`, days };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -467,10 +441,10 @@ export async function crearObservacion({ requisitoEleamId, origen, descripcion, 
 
   // Si la observación se vincula a un requisito, lo marcamos como observado.
   if (requisitoEleamId) {
-    await supabase
-      .from("acred_requisitos_eleam")
-      .update({ estado: "observado", actualizado_en: new Date().toISOString() })
-      .eq("id", requisitoEleamId);
+    await setRequisitoEstado(requisitoEleamId, {
+      estado: "observado",
+      estado_manual_motivo: "Existe una observación abierta que debe resolverse.",
+    });
   }
 
   await logAudit({
@@ -511,8 +485,8 @@ export async function cerrarObservacion(id, nota) {
     .single();
   if (error) throw error;
 
-  // Si la observación cerrada estaba vinculada a un requisito y no quedan
-  // observaciones abiertas para ese requisito, devolverlo a "pendiente".
+  // Al cerrar la última observación, vuelve al cálculo documental para que el
+  // estado corresponda a la evidencia y su fecha de vigencia actuales.
   if (data.requisito_eleam_id) {
     const { count } = await supabase
       .from("acred_observaciones")
@@ -520,11 +494,7 @@ export async function cerrarObservacion(id, nota) {
       .eq("requisito_eleam_id", data.requisito_eleam_id)
       .in("estado", ["abierta", "en_proceso"]);
     if ((count ?? 0) === 0) {
-      await supabase
-        .from("acred_requisitos_eleam")
-        .update({ estado: "pendiente", actualizado_en: new Date().toISOString() })
-        .eq("id", data.requisito_eleam_id)
-        .eq("estado", "observado");
+      await reactivarEstadoAutomatico(data.requisito_eleam_id);
     }
   }
 
@@ -654,11 +624,17 @@ export function isComplianceState(estado) {
 // ─────────────────────────────────────────────────────────────
 
 export function diasHasta(fechaIso) {
-  if (!fechaIso) return null;
-  const f = new Date(fechaIso);
-  if (Number.isNaN(f.valueOf())) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  f.setHours(0, 0, 0, 0);
-  return Math.ceil((f - today) / 86400000);
+  return fechaIso ? dateOnlyDifference(fechaIso, chileDateKey()) : null;
+}
+
+function dateOnlyDifference(targetIso, baseIso) {
+  const toUtcDay = (value) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? ""));
+    if (!match) return null;
+    return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  };
+  const target = toUtcDay(targetIso);
+  const base = toUtcDay(baseIso);
+  if (target == null || base == null) return null;
+  return Math.round((target - base) / 86400000);
 }

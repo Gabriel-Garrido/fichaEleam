@@ -244,6 +244,9 @@ function RequirementItem({ item, isLast, canEdit, canOpenSource, onOpen }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${toneClass}`}>{status.label}</span>
+          <span className={`text-xs font-semibold ${item.estado_modo === "manual" ? "text-violet-700" : "text-teal-700"}`}>
+            {item.estado_modo === "manual" ? "Ajuste manual" : item.requisito?.tipo_evidencia === "registro" ? "Cálculo desde registros" : "Vigencia automática"}
+          </span>
           {item.requisito?.obligatorio && <span className="text-xs font-medium text-slate-500">Obligatorio</span>}
           <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${evidenceTone}`}>{evidence.shortLabel}</span>
           {item.openObservations > 0 && <span className="text-xs font-semibold text-orange-700">{item.openObservations} observación{item.openObservations === 1 ? "" : "es"}</span>}

@@ -230,6 +230,8 @@ La ficha del residente mantiene solo tres espacios: **Tratamiento y recetas**, *
 
 La evidencia puede ser documental u operacional. La carpeta SEREMI reúne documentos cargados y registros producidos en Residentes, Personal y Establecimiento. Los módulos de emergencias, reclamos, protocolos y reportes complementan la matriz DS20.
 
+En los puntos documentales, el estado se calcula desde el documento actual: una carga dentro de vigencia deja el punto **Vigente** y, al llegar la fecha informada, pasa a **Vencido**. Archivar el respaldo actual deja el punto en **Requiere actualización**. Los usuarios autorizados pueden aplicar una excepción manual con motivo y volver luego a la actualización automática; cada cambio de documento, estado y modo queda auditado en la misma transacción.
+
 El RPC `ds20_operational_evidence_summary()` calcula automáticamente verificadores que sí pueden demostrarse con datos estructurados: consentimientos firmados, evaluaciones geriátricas vigentes, red de salud con controles y cobertura de cuidadores/TENS para siete días. El Registro de evolución aporta registros diarios fechados, responsables y seguimientos a la carpeta personal. En medicamentos informa indicaciones con receta, recepciones, usos y lotes trazables, siempre como apoyo parcial cuando aún se requiere revisión material o documental. Si no existen residentes o personal, informa **Sin datos** y nunca presume cumplimiento.
 
 ## Edge Functions
